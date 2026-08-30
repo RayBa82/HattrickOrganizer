@@ -717,16 +717,16 @@ public class OnlineWorker {
 	public static XMLTransferSearchParser.Page searchTransfers(TransferSearchQuery query) {
 		try {
 			HOMainFrame.instance().setWaitInformation();
-			final String xml = Connector.instance().getTransferSearch(query);
-			HOMainFrame.instance().setWaitInformation();
-			return XMLTransferSearchParser.parse(xml);
-		} catch (Exception e) {
-			HOLogger.instance().log(OnlineWorker.class, e);
-			String msg = getLangString("Downloadfehler") + " : Error searching transfers: "
-					+ e.getMessage();
+			return TransferSearchService.instance().search(query);
+		} catch (TransferSearchService.SearchFailed e) {
+			String msg = e.errorKey() != null
+					? getLangString(e.errorKey())
+					: getLangString("Downloadfehler") + " : " + e.getMessage();
 			setInfoMsg(msg, InfoPanel.FEHLERFARBE);
 			Helper.showMessage(HOMainFrame.instance(), msg, getLangString("Fehler"),
 					JOptionPane.ERROR_MESSAGE);
+		} finally {
+			HOMainFrame.instance().setWaitInformation();
 		}
 		return null;
 	}
