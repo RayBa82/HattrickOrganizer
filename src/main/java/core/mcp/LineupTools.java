@@ -1,6 +1,9 @@
 package core.mcp;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import core.gui.HOMainFrame;
+import core.gui.theme.GroupTeamFactory;
 import core.model.player.IMatchRoleID;
 import core.model.player.Player;
 import module.lineup.Lineup;
@@ -16,7 +19,8 @@ import java.util.concurrent.atomic.AtomicReference;
  * <p>
  * {@code evaluate_lineup} and {@code optimize_lineup} work on a scratch {@link Lineup} scored with a
  * private rating model, so a model can try any number of variants without touching, or being
- * polluted by, the live lineup. Only {@code apply_lineup} writes, and it does so on the EDT.
+ * polluted by, the live lineup. {@code apply_lineup} and {@code set_player_group} write, and
+ * they do so on the EDT.
  */
 public final class LineupTools {
 
@@ -60,7 +64,20 @@ public final class LineupTools {
                         "Write a lineup into HO. This changes what the Lineup tab shows and what HO "
                                 + "would upload; it does not send anything to Hattrick.",
                         lineupSchema(),
-                        LineupTools::apply)
+                        LineupTools::apply),
+                new McpTool("set_player_group",
+                        "File players under a squad group - the A/B/C team markers HO shows beside "
+                                + "them and the lineup assistant selects on. Pass an empty group to "
+                                + "take the listed players out of whatever group they are in. Only "
+                                + "the listed players change, so moving a squad means calling this "
+                                + "once per group; get_squad reports each player's current group.",
+                        McpTool.schema(McpTool.properties(
+                                        "playerIds", McpTool.prop("array", "player ids to file"),
+                                        "group", McpTool.prop("string",
+                                                "one of: " + String.join(", ", GroupTeamFactory.TEAMS_GROUPS)
+                                                        + " (the empty one clears the group)")),
+                                "playerIds", "group"),
+                        LineupTools::setPlayerGroup)
         );
     }
 
@@ -193,6 +210,53 @@ public final class LineupTools {
             model.storeLineup(team);
             return describe(team.getLineup(), ratingModel);
         });
+    }
+
+    private static JsonObject setPlayerGroup(JsonObject args) throws McpToolException {
+        final var model = McpJson.model();
+        final var group = group(McpJson.reqString(args, "group"));
+
+        // Resolve everyone up front: a bad id must not leave half the squad refiled.
+        final var players = new ArrayList<Player>();
+        for (final var id : McpJson.reqArray(args, "playerIds")) {
+            final var player = model.getCurrentPlayer(id.getAsInt());
+            if (player == null) {
+                throw new McpToolException("No player with id " + id.getAsInt() + " is in the squad. "
+                        + "Call get_squad for the ids HO knows about.");
+            }
+            players.add(player);
+        }
+
+        return onEdt(() -> {
+            final var changed = new JsonArray();
+            for (final var player : players) {
+                // The setter persists to SPIELERNOTIZEN itself - there is nothing else to store.
+                player.setTeamInfoSmilie(group);
+                final var json = new JsonObject();
+                json.addProperty("playerId", player.getPlayerId());
+                json.addProperty("name", player.getFullName());
+                json.addProperty("group", player.getTeamGroup());
+                changed.add(json);
+            }
+            // What HO's own group buttons do afterwards - the tables render the group icons.
+            final var lineupPanel = HOMainFrame.instance().getLineupPanel();
+            if (lineupPanel != null) {
+                lineupPanel.update();
+            }
+            final var result = new JsonObject();
+            result.add("players", changed);
+            return result;
+        });
+    }
+
+    private static String group(String group) throws McpToolException {
+        for (final var known : GroupTeamFactory.TEAMS_GROUPS) {
+            if (known.equals(group)) {
+                return known;
+            }
+        }
+        throw new McpToolException("Unknown group '" + group + "'. Use one of: "
+                + String.join(", ", GroupTeamFactory.TEAMS_GROUPS));
     }
 
     private static JsonObject describe(Lineup lineup, core.rating.RatingPredictionModel ratingModel) {

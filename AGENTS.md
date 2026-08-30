@@ -92,8 +92,11 @@ jpackage --type app-image --input "$PWD/build/install/XXX" --dest "$PWD/build/ma
 open build/macapp/HO.app
 
 # .dmg for handing around - reuses the app image above, no rebuild
-jpackage --type dmg --app-image "$PWD/build/macapp/HO.app" \
-  --dest "$PWD/build/macapp" --name HO --app-version 10.0
+rm -rf build/dmgroot && mkdir build/dmgroot
+cp -R build/macapp/HO.app build/dmgroot/
+ln -s /Applications build/dmgroot/Applications
+hdiutil create -volname "HO 10.0" -srcfolder build/dmgroot -ov -format UDZO \
+  -fs HFS+ build/macapp/HO-10.0.dmg
 ```
 
 - `--input`/`--dest` must be **absolute** — jpackage reports "main JAR not present in input directory"
@@ -106,6 +109,13 @@ jpackage --type dmg --app-image "$PWD/build/macapp/HO.app" \
 - `--icon` also wants an absolute path, and the file has to exist - there is no `HO.icns` in the
   repo, only `utils/buildResources/Logo.png`. Drop the flag entirely for the default Java icon.
 - Unsigned, so the first launch needs right-click -> Open (or `xattr -dr com.apple.quarantine HO.app`).
+- Do **not** use `jpackage --type dmg` here. It drives Finder over AppleScript to lay the volume out,
+  and the JDK 21 `DMGsetup.scpt` fails to match the `.app` (`"HO.app" ends with "/HO.app"` is never
+  true), so the app icon never gets positioned and Finder auto-places it on top of the *Applications*
+  icon at ~(390,130). Both icons overlap, and dragging the app onto Applications only works if you
+  happen to grab the top one. jpackage also makes *Applications* a Finder **alias file** rather than a
+  symlink. The `hdiutil` recipe above avoids both: real symlink, no `.DS_Store`, Finder auto-arranges.
+  Cost is the jpackage background image, which was generic anyway.
 
 ## Architecture
 

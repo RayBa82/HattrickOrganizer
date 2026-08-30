@@ -121,6 +121,7 @@ public final class McpJson {
         json.addProperty("form", p.getForm());
         json.addProperty("stamina", p.getStamina());
         json.addProperty("loyalty", p.getLoyalty());
+        json.addProperty("leadership", p.getLeadership());
         json.addProperty("motherclub", p.isHomeGrown());
         json.addProperty("specialty", p.getSpecialty());
         json.addProperty("specialtyName", p.getSpecialtyName());
@@ -129,6 +130,8 @@ public final class McpJson {
         json.addProperty("suspended", p.isRedCarded());
         json.addProperty("available", isAvailable(p));
         json.addProperty("transferListed", p.getTransferListed() > 0);
+        // The squad group the user filed him under ("A-Team" ... "F-Team", empty for none).
+        json.addProperty("group", p.getTeamGroup());
 
         // Integer levels for reading, level+subskill for judging how close a skill is to popping.
         final var skills = new JsonObject();
@@ -256,6 +259,13 @@ public final class McpJson {
             throw new IllegalArgumentException("Missing required argument: " + name);
         }
         return args.get(name).getAsInt();
+    }
+
+    public static String reqString(JsonObject args, String name) {
+        if (!args.has(name) || args.get(name).isJsonNull()) {
+            throw new IllegalArgumentException("Missing required argument: " + name);
+        }
+        return args.get(name).getAsString();
     }
 
     public static double reqDouble(JsonObject args, String name) {

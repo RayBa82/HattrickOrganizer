@@ -28,7 +28,7 @@ public final class TeamTools {
                 new McpTool("get_squad",
                         "Every player in the squad with skills, form, stamina, loyalty, TSI, wage "
                                 + "(in the user's currency, as get_team reports it), "
-                                + "specialty, injuries and cards, plus a positionRatings map giving "
+                                + "specialty, injuries, cards and squad group, plus a positionRatings map giving "
                                 + "what the player is worth in each of the fourteen field slots "
                                 + "(100 keeper through 113 left forward) at normal behaviour.",
                         McpTool.schema(new JsonObject()),

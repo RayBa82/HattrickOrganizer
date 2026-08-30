@@ -208,6 +208,13 @@ and that it could not tell what a rating had been computed against. Eleven tools
   downloads, so two evaluations are only comparable when the `hrfId` matches). Team spirit and confidence always did feed the numbers — the rating model is
   built from the `Team` object — they just were not reported, so two evaluations could not be
   compared honestly.
+- **`set_player_group`** files players under HO's squad groups (`Player.setTeamInfoSmilie`, values
+  `GroupTeamFactory.TEAMS_GROUPS`: `""` and `A-Team` … `F-Team`), and `get_squad`/`get_player` report
+  the current one as `group`. The setter persists to `SPIELERNOTIZEN` on its own, so there is no
+  store step; it lives in `LineupTools` for the `onEdt` hop, and refreshes the lineup panel
+  afterwards the way HO's own group buttons do. All ids are resolved before the first write so a bad
+  id cannot refile half the squad. Only the listed players change — moving an A/B split means one
+  call per group, which is why `get_squad` had to report `group` in the first place.
 - **`evaluate_lineup`/`apply_lineup` reject an injured or suspended player**, overridable with
   `allowUnavailable`. The check sits in `LineupTools.applySpec`, the one path both tools share. It
   reads `HOVerwaltung.instance().getModel()` directly rather than `McpJson.model()`: with no
