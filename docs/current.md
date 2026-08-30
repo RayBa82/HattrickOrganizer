@@ -150,3 +150,23 @@ the distribution's `logs/` and `db/`.
   them to the POEditor project before release, or other languages will show `!key!`.
 - Paging is deliberately not implemented (one page of 50). `ItemCount` is `-1` whenever more than 100
   players match, so exact totals are unavailable anyway.
+
+## MCP server
+
+Implemented per `docs/superpowers/plans/2026-08-30-mcp-server.md`:
+
+- The MCP server ships off by default and is enabled in Options → MCP server. It binds `127.0.0.1`
+  only and rejects any request carrying an `Origin` header or a non-loopback `Host`. **There is no
+  authentication beyond that** — while it is on, any process running as this user can read the squad
+  and write the lineup. That is the reason the switch is off by default.
+- The transfer market needs the unlock button pressed first, because CHPP forbids automated
+  scanning; the per-session cap bounds both callers.
+- Scratch lineups must always be scored on a private `RatingPredictionModel`, because
+  `LineupRatingCache` is keyed on `Lineup.ratingRevision` alone. **`optimize_lineup` is the known
+  exception**: `Lineup.optimizeLineup` → `LineupAssistant` fetches the shared model itself, so that
+  one tool does touch HO's own rating state. Fixing it means rewriting `LineupAssistant`.
+- The HTTP executor is deliberately single threaded: handlers call `DBManager`, and
+  `ConnectionManager` shares one JDBC `Statement` across all tables.
+- `McpServerPanel` writes both `UserParameter.instance()` and `UserParameter.temp()`, because it
+  takes effect immediately rather than on the options dialog's OK.
+- The new `ls.options.mcp.*` keys are English-only until a maintainer adds them to POEditor.
