@@ -132,3 +132,12 @@ these here.
   * License: MIT
   * For details, see [``docs/Licences/scribe/LICENSE.txt``](Licences/scribe/LICENSE.txt)
 
+## Create a local build
+./gradlew createVersion createDistribution
+cd build/install/XXX && java -jar HO.jar
+
+## Create HO.app
+./gradlew createVersion createDistribution
+jpackage --type app-image --input "$PWD/build/install/XXX" --dest "$PWD/build/macapp" \
+  --name HO --main-jar HO.jar --main-class core.HOLauncher --app-version 10.0 \
+  --arguments INSTALLED --icon HO.icns

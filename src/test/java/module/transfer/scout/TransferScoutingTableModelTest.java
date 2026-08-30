@@ -1,6 +1,7 @@
 package module.transfer.scout;
 
 import core.gui.model.UserColumnController.ColumnModelId;
+import core.model.TranslationFacility;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -19,5 +20,15 @@ class TransferScoutingTableModelTest {
 
         assertThat(search.id).isNotEqualTo(scout.id);
         assertThat(search.getColumns()).hasSameSizeAs(scout.getColumns());
+    }
+
+    /**
+     * The search panel hides the player id by switching the first column off, so it has to stay the
+     * first one.
+     */
+    @Test
+    void thePlayerIdIsTheFirstColumn() {
+        assertThat(new TransferScoutingTableModel(ColumnModelId.TRANSFERSEARCH).getColumns()[0].getColumnName())
+                .isEqualTo(TranslationFacility.tr("ls.player.id"));
     }
 }

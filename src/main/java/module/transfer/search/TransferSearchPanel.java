@@ -3,7 +3,6 @@ package module.transfer.search;
 import core.constants.player.PlayerAbility;
 import core.constants.player.PlayerSpeciality;
 import core.datatype.CBItem;
-import core.gui.HOMainFrame;
 import core.gui.comp.panel.ImagePanel;
 import core.gui.comp.table.FixedColumnsTable;
 import core.gui.model.UserColumnController;
@@ -13,6 +12,7 @@ import core.net.TransferSearchQuery;
 import core.util.AmountOfMoney;
 import core.util.Helper;
 import module.transfer.scout.ScoutEintrag;
+import module.transfer.scout.TransferEingabePanel;
 import module.transfer.scout.TransferScoutPanel;
 import module.transfer.scout.TransferScoutingTableModel;
 
@@ -27,30 +27,52 @@ import java.util.Vector;
 
 /**
  * Searches the transfer market through the CHPP transfersearch file and shows the hits in a scout
- * table. Hits are not part of the scout list until the user copies one over.
+ * table. The details of the selected hit are shown below the table in the same panel the scout tab
+ * uses, which is also where a hit is copied into the scout list.
  */
 public class TransferSearchPanel extends ImagePanel {
 
-    /** The scout list a hit is copied into. */
-    private final TransferScoutPanel scoutPanel;
+    /** The number of skills a CHPP transfer search accepts. */
+    private static final int MAX_SKILLS = 4;
 
     private final TransferScoutingTableModel resultsModel = emptyResultsModel();
-    private final FixedColumnsTable resultsTable = new FixedColumnsTable(resultsModel, 2);
+    private final FixedColumnsTable resultsTable = new FixedColumnsTable(resultsModel, 1);
     private final List<ScoutEintrag> results = new ArrayList<>();
 
-    private final JSpinner ageMin = new JSpinner(new SpinnerNumberModel(17, 17, 40, 1));
-    private final JSpinner ageMax = new JSpinner(new SpinnerNumberModel(20, 17, 40, 1));
-    private final JComboBox<TransferSearchQuery.Skill> skill = new JComboBox<>(TransferSearchQuery.Skill.values());
-    private final JComboBox<CBItem> skillMin = new JComboBox<>(PlayerAbility.ITEMS);
-    private final JComboBox<CBItem> skillMax = new JComboBox<>(PlayerAbility.ITEMS);
+    /** Details of the selected hit, and the Add button that copies it into the scout list. */
+    private final TransferEingabePanel details;
+
+    // Defaults are the age pair of Hattrick's own documented transfersearch example.
+    private final JSpinner ageMin = new JSpinner(new SpinnerNumberModel(20, 17, 40, 1));
+    private final JSpinner ageMax = new JSpinner(new SpinnerNumberModel(22, 17, 40, 1));
+    private final SkillRow[] skillRows = new SkillRow[MAX_SKILLS];
     private final JComboBox<CBItem> speciality = new JComboBox<>(PlayerSpeciality.ITEMS);
     private final JTextField maxPrice = new JTextField(10);
+    private final JButton addSkill = new JButton("+");
+    private final JButton removeSkill = new JButton("-");
     private final JButton search = new JButton(TranslationFacility.tr("ls.transfersearch.search"));
-    private final JButton addToScout = new JButton(TranslationFacility.tr("ls.transfersearch.addtoscout"));
     private final JLabel status = new JLabel(" ");
 
+    /** How many of the skill rows are in use, the first one always is. */
+    private int usedSkills = 1;
+
+    /** One searchable skill: which skill, and the level range it has to be in. */
+    private static class SkillRow {
+        final JLabel label = new JLabel(TranslationFacility.tr("ls.transfersearch.skill"));
+        final JComboBox<TransferSearchQuery.Skill> skill = new JComboBox<>(TransferSearchQuery.Skill.values());
+        final JComboBox<CBItem> min = new JComboBox<>(PlayerAbility.ITEMS);
+        final JComboBox<CBItem> max = new JComboBox<>(PlayerAbility.ITEMS);
+
+        void setVisible(boolean visible) {
+            label.setVisible(visible);
+            skill.setVisible(visible);
+            min.setVisible(visible);
+            max.setVisible(visible);
+        }
+    }
+
     public TransferSearchPanel(TransferScoutPanel scoutPanel) {
-        this.scoutPanel = scoutPanel;
+        this.details = new TransferEingabePanel(scoutPanel);
         initComponents();
     }
 
@@ -64,57 +86,127 @@ public class TransferSearchPanel extends ImagePanel {
     /**
      * The results model, emptied before the table is built over it. The model is a singleton of
      * {@link UserColumnController} and starts out with no data at all.
+     * <p>
+     * The player id is hidden here rather than in the model's constructor: {@code loadModel} turns
+     * every column it finds in the database back on, so a default set before the load is undone as
+     * soon as the user has saved the column layout once. It has to happen before {@code setValues},
+     * which is what builds the displayed-column list.
      */
     private static TransferScoutingTableModel emptyResultsModel() {
         final var model = UserColumnController.instance().getTransferSearchTableModel();
+        model.getColumns()[0].setDisplay(false);    // the id is only of interest in the details panel
         model.setValues(new Vector<>());
         return model;
     }
 
     private void initComponents() {
         setLayout(new BorderLayout());
+
+        // the skill rows have to exist before initForm() lays them out
+        for (int i = 0; i < skillRows.length; i++) {
+            final var row = skillRows[i] = new SkillRow();
+            // The skill combo shows the translated HO skill name
+            row.skill.setRenderer(new DefaultListCellRenderer() {
+                @Override
+                public Component getListCellRendererComponent(JList<?> list, Object value, int index,
+                                                              boolean isSelected, boolean cellHasFocus) {
+                    final var text = value == null ? ""
+                            : ((TransferSearchQuery.Skill) value).toPlayerSkill().getLanguageString();
+                    return super.getListCellRendererComponent(list, text, index, isSelected, cellHasFocus);
+                }
+            });
+            row.skill.setSelectedItem(TransferSearchQuery.Skill.PLAYMAKING);
+            Helper.setComboBoxFromID(row.min, 7);
+            Helper.setComboBoxFromID(row.max, 9);
+            row.setVisible(i < usedSkills);
+        }
+
+        final var split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, false,
+                resultsTable.getContainerComponent(), new JScrollPane(details));
+        split.setResizeWeight(0.5);
+
         add(initForm(), BorderLayout.NORTH);
-        add(resultsTable.getContainerComponent(), BorderLayout.CENTER);
+        add(split, BorderLayout.CENTER);
         add(status, BorderLayout.SOUTH);
 
-        // The skill combo shows the translated HO skill name
-        skill.setRenderer(new DefaultListCellRenderer() {
-            @Override
-            public Component getListCellRendererComponent(JList<?> list, Object value, int index,
-                                                          boolean isSelected, boolean cellHasFocus) {
-                final var text = value == null ? ""
-                        : ((TransferSearchQuery.Skill) value).toPlayerSkill().getLanguageString();
-                return super.getListCellRendererComponent(list, text, index, isSelected, cellHasFocus);
-            }
-        });
-        skill.setSelectedItem(TransferSearchQuery.Skill.PLAYMAKING);
-        Helper.setComboBoxFromID(skillMin, 7);
-        Helper.setComboBoxFromID(skillMax, 9);
+
+        addSkill.addActionListener(e -> setUsedSkills(usedSkills + 1));
+        removeSkill.addActionListener(e -> setUsedSkills(usedSkills - 1));
+        setUsedSkills(usedSkills);
 
         search.addActionListener(this::doSearch);
-        addToScout.addActionListener(this::doAddToScout);
-        addToScout.setEnabled(false);
-        resultsTable.addListSelectionListener(
-                e -> addToScout.setEnabled(resultsTable.getSelectedRow() > -1));
+        resultsTable.addListSelectionListener(e -> showDetails());
+        details.setScoutEintrag(null);
+    }
+
+    /**
+     * Shows or hides skill rows so that the first {@code count} of them are in use.
+     */
+    private void setUsedSkills(int count) {
+        usedSkills = Math.min(Math.max(count, 1), MAX_SKILLS);
+        for (int i = 0; i < skillRows.length; i++) {
+            skillRows[i].setVisible(i < usedSkills);
+        }
+        addSkill.setEnabled(usedSkills < MAX_SKILLS);
+        removeSkill.setEnabled(usedSkills > 1);
+        revalidate();
+        repaint();
     }
 
     private JPanel initForm() {
-        final var form = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 4));
+        final var form = new JPanel(new GridBagLayout());
         form.setOpaque(false);
-        form.add(new JLabel(TranslationFacility.tr("ls.player.age")));
-        form.add(ageMin);
-        form.add(ageMax);
-        form.add(new JLabel(TranslationFacility.tr("ls.transfersearch.skill")));
-        form.add(skill);
-        form.add(skillMin);
-        form.add(skillMax);
-        form.add(new JLabel(TranslationFacility.tr("ls.player.speciality")));
-        form.add(speciality);
+        final var c = new GridBagConstraints();
+        c.insets = new Insets(2, 4, 2, 4);
+        c.anchor = GridBagConstraints.WEST;
+
+        c.gridy = 0;
+        c.gridx = 0;
+        form.add(new JLabel(TranslationFacility.tr("ls.player.age")), c);
+        c.gridx = 1;
+        form.add(ageMin, c);
+        c.gridx = 2;
+        form.add(ageMax, c);
+        c.gridx = 3;
+        form.add(new JLabel(TranslationFacility.tr("ls.player.speciality")), c);
+        c.gridx = 4;
+        form.add(speciality, c);
+        c.gridx = 5;
         form.add(new JLabel(TranslationFacility.tr("ls.transfersearch.maxprice")
-                + " (" + AmountOfMoney.Companion.getCurrencyName() + ")"));
-        form.add(maxPrice);
-        form.add(search);
-        form.add(addToScout);
+                + " (" + AmountOfMoney.Companion.getCurrencyName() + ")"), c);
+        c.gridx = 6;
+        form.add(maxPrice, c);
+
+        for (final var row : skillRows) {
+            c.gridy++;
+            c.gridx = 0;
+            form.add(row.label, c);
+            c.gridx = 1;
+            c.gridwidth = 2;
+            form.add(row.skill, c);
+            c.gridwidth = 1;
+            c.gridx = 3;
+            form.add(row.min, c);
+            c.gridx = 4;
+            form.add(row.max, c);
+            if (row == skillRows[0]) {
+                c.gridx = 5;
+                form.add(addSkill, c);
+                c.gridx = 6;
+                form.add(removeSkill, c);
+            }
+        }
+
+        c.gridy++;
+        c.gridx = 0;
+        form.add(search, c);
+
+        // soak up the remaining width so the fields stay left aligned
+        c.gridx = 7;
+        c.gridy = 0;
+        c.weightx = 1.0;
+        c.fill = GridBagConstraints.HORIZONTAL;
+        form.add(Box.createHorizontalGlue(), c);
         return form;
     }
 
@@ -141,6 +233,7 @@ public class TransferSearchPanel extends ImagePanel {
         }
         resultsModel.setValues(new Vector<>(results));
         resultsTable.repaint();
+        details.setScoutEintrag(null);
         status.setText(resultText(page.itemCount()));
     }
 
@@ -160,17 +253,38 @@ public class TransferSearchPanel extends ImagePanel {
 
     private TransferSearchQuery buildQuery() {
         final var specialityId = ((CBItem) speciality.getSelectedItem()).getId();
-        return TransferSearchQuery.builder()
+        final var builder = TransferSearchQuery.builder()
                 .ageMin((Integer) ageMin.getValue())
                 .ageMax((Integer) ageMax.getValue())
-                .skillType1((TransferSearchQuery.Skill) skill.getSelectedItem())
-                .minSkillValue1(((CBItem) skillMin.getSelectedItem()).getId())
-                .maxSkillValue1(((CBItem) skillMax.getSelectedItem()).getId())
+                .skillType1(skillOf(0))
+                .minSkillValue1(minOf(0))
+                .maxSkillValue1(maxOf(0))
                 .specialty(specialityId == PlayerSpeciality.NO_SPECIALITY ? null : specialityId)
                 .priceMax(maxPriceOrNull(maxPrice.getText()))
                 .pageSize(50)
-                .pageIndex(0)
-                .build();
+                .pageIndex(0);
+        if (usedSkills > 1) {
+            builder.skillType2(skillOf(1)).minSkillValue2(minOf(1)).maxSkillValue2(maxOf(1));
+        }
+        if (usedSkills > 2) {
+            builder.skillType3(skillOf(2)).minSkillValue3(minOf(2)).maxSkillValue3(maxOf(2));
+        }
+        if (usedSkills > 3) {
+            builder.skillType4(skillOf(3)).minSkillValue4(minOf(3)).maxSkillValue4(maxOf(3));
+        }
+        return builder.build();
+    }
+
+    private TransferSearchQuery.Skill skillOf(int row) {
+        return (TransferSearchQuery.Skill) skillRows[row].skill.getSelectedItem();
+    }
+
+    private Integer minOf(int row) {
+        return ((CBItem) skillRows[row].min.getSelectedItem()).getId();
+    }
+
+    private Integer maxOf(int row) {
+        return ((CBItem) skillRows[row].max.getSelectedItem()).getId();
     }
 
     /**
@@ -196,12 +310,16 @@ public class TransferSearchPanel extends ImagePanel {
         }
     }
 
-    private void doAddToScout(ActionEvent event) {
+    /**
+     * Shows the selected hit in the details panel. The entry is duplicated so that editing it there
+     * does not change the search result.
+     */
+    private void showDetails() {
         final int row = resultsTable.getSelectedRow();
         if (row < 0) {
+            details.setScoutEintrag(null);
             return;
         }
-        scoutPanel.addScoutEintrag(results.get(resultsTable.convertRowIndexToModel(row)));
-        HOMainFrame.instance().setInformation(TranslationFacility.tr("ls.button.add"));
+        details.setScoutEintrag(results.get(resultsTable.convertRowIndexToModel(row)).duplicate());
     }
 }

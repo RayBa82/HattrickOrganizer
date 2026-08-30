@@ -64,3 +64,41 @@ Updates to a newer version should be documented here in the `Used Version` colum
 | youthplayerdetails     | Detailed information for a youth player                                                     | 1.2 (2022-03-03)         | -            |
 | youthplayerlist        | Youth Players.                                                                              | 1.2 (2022-03-03)         | 1.1          |
 | youthteamdetails       | Youth team information.                                                                     | 1.2 (2022-03-03)         | -            |
+
+## transfersearch — input parameters (version 1.1)
+
+Taken from the rendered CHPP docs page, saved under
+`docs/raw/Transfer Search » CHPP Files help » CHPP » Community » Hattrick_files/transfersearch.html`.
+
+| Parameter        | Req. | Type             | Default       | Notes |
+|------------------|------|------------------|---------------|-------|
+| `file`           | yes  | `transfersearch` |               | |
+| `version`        | no   | `1.1` / `1.0`    | 1.0           | |
+| `ageMin`         | yes  | unsigned int     |               | minimum age in years |
+| `ageDaysMin`     | no   | unsigned int     | 0             | |
+| `ageMax`         | yes  | unsigned int     |               | maximum age in years |
+| `ageDaysMax`     | no   | unsigned int     | 111           | |
+| `skillType1`     | yes  | SkillID          |               | main skill |
+| `minSkillValue1` | yes  | SkillLevel       |               | |
+| `maxSkillValue1` | yes  | SkillLevel       |               | |
+| `skillType2..4`  | no   | SkillID          | not specified | further skills |
+| `minSkillValue2..4` | no | SkillLevel      | not specified | |
+| `maxSkillValue2..4` | no | SkillLevel      | not specified | |
+| `specialty`      | no   | SpecialtyID      | not specified | |
+| `nativeCountryId`| no   | unsigned int     | not specified | country of birth |
+| `tsiMin`         | no   | unsigned int     | not specified | |
+| `tsiMax`         | no   | unsigned int     | not specified | |
+| `priceMin`       | no   | Money            | not specified | |
+| `priceMax`       | no   | Money            | not specified | |
+| `pageSize`       | no   | unsigned int     | 25            | max 100 |
+| `pageIndex`      | no   | unsigned int     | 0             | zero based |
+
+Server-side rules, per skill pair: max/min may differ by at most 4 levels; set pieces, leadership
+and experience need a minimum level of 5, keeper a minimum of 3. `SkillID`: 1 keeper, 2 stamina,
+3 set pieces, 4 defending, 5 scoring, 6 winger, 7 passing, 8 playmaking, 9 trainer (not searchable),
+10 leadership, 11 experience.
+
+Documented example: `?file=transfersearch&version=1.1&ageMin=20&ageMax=22&skillType1=8&minSkillValue1=7&maxSkillValue1=9`
+
+The file description states it is *not* meant to be polled by bots, only fetched on manual user
+request.

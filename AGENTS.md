@@ -71,7 +71,41 @@ produce every platform artefact into `build/artefacts` — Windows setup/archive
 (buildIds `1225`/`1224`), Unix archive/installer, rpm/deb, each with and without a bundled JRE.
 This needs an install4j licence (`INSTALL4J_LICENSE`) and `INSTALL4J_HOME`. `.github/workflows/release-dev.yml`
 runs it on every push to `master` and `release/**` and publishes a GitHub prerelease under the
-`dev`/`beta`/`stable` tag. For a local macOS `.app` without a licence, `jpackage` is the alternative.
+`dev`/`beta`/`stable` tag.
+
+Without an install4j licence, build a local macOS `.app` with the JDK's own `jpackage`:
+
+```bash
+./gradlew createVersion createDistribution
+
+# icon (optional) - no .icns is checked in, build one from the logo first
+mkdir -p build/HO.iconset
+for s in 16 32 128 256 512; do
+  sips -z $s $s utils/buildResources/Logo.png --out build/HO.iconset/icon_${s}x${s}.png
+  sips -z $((s*2)) $((s*2)) utils/buildResources/Logo.png --out build/HO.iconset/icon_${s}x${s}@2x.png
+done
+iconutil -c icns build/HO.iconset -o build/HO.icns
+
+jpackage --type app-image --input "$PWD/build/install/XXX" --dest "$PWD/build/macapp" \
+  --name HO --main-jar HO.jar --main-class core.HOLauncher --app-version 10.0 \
+  --arguments INSTALLED --icon "$PWD/build/HO.icns"
+open build/macapp/HO.app
+
+# .dmg for handing around - reuses the app image above, no rebuild
+jpackage --type dmg --app-image "$PWD/build/macapp/HO.app" \
+  --dest "$PWD/build/macapp" --name HO --app-version 10.0
+```
+
+- `--input`/`--dest` must be **absolute** — jpackage reports "main JAR not present in input directory"
+  for relative paths even when the jar is there.
+- `--arguments INSTALLED` is what makes the bundle usable: without it HO runs portable and writes
+  `db/`, `logs/` and `user.xml` into the launch working directory (`/` for a Finder launch). With it
+  everything lands in `~/Library/Application Support/HO`.
+- `prediction/` and `truststore.jks` are inside `Contents/app/` and resolve via the classpath
+  fallback, so no extra copying is needed.
+- `--icon` also wants an absolute path, and the file has to exist - there is no `HO.icns` in the
+  repo, only `utils/buildResources/Logo.png`. Drop the flag entirely for the default Java icon.
+- Unsigned, so the first launch needs right-click -> Open (or `xattr -dr com.apple.quarantine HO.app`).
 
 ## Architecture
 

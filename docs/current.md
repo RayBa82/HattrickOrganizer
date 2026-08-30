@@ -18,6 +18,28 @@ Tasks 1–5 of the plan, one commit each:
 
 No DB schema change, so no `DBManager.DBVersion` bump and no `DBUpdater` case — as the plan specified.
 
+### UI rework of the search tab
+
+A later pass on the same branch reworked `TransferSearchPanel`:
+
+- The search form moved from `FlowLayout` to `GridBagLayout`. In `BorderLayout.NORTH` a `FlowLayout`
+  gets the full width but only its *single-row* preferred height, so as soon as the window was
+  narrower than the whole row the wrapped controls were simply clipped away.
+- Up to four skill filters, the maximum `transfersearch` accepts. The extra rows are laid out but
+  invisible; `+`/`-` reveal and hide them, and `buildQuery()` fills `skillType2..4` only for the
+  visible ones. `TransferSearchQuery` already carried all four slots, so nothing changed there.
+- The hit details are shown below the table in a `JSplitPane`, in the very `TransferEingabePanel`
+  the scout tab uses — full skills, position ratings and player id. Its own Add/Replace button is
+  wired to the same `TransferScoutPanel`, so the panel's separate "add to scout" button is gone.
+  The selected entry is passed as a `duplicate()`, so editing it there does not alter the hit list.
+- The player id column is switched off in `TransferSearchPanel.emptyResultsModel()`. Doing it as a
+  default in `TransferScoutingTableModel`'s constructor does **not** work: `UserColumnsTable.loadModel`
+  calls `setDisplay(true)` for every column it finds in the database, so the default is undone as
+  soon as the user has saved the column layout once. It also has to happen before `setValues()` —
+  `HOTableModel.getDisplayedColumns()` caches its list on first use and never invalidates it.
+
+No new translation keys — the `+`/`-` buttons carry glyphs, every label reuses an existing key.
+
 **Verification status:** full suite green (541 tests, 41 suites, 0 failures). Task 6 of the plan
 (manual verification against the live CHPP API) is **not** complete — it is blocked on the bug below.
 
@@ -36,10 +58,13 @@ This is pre-existing behaviour, unrelated to the new tab.
 
 ## CHPP `transfersearch` — where the real spec lives
 
-`docs/chpp_files.md` lists the file and its version but **no input parameters**. The docs page
-`https://www.hattrick.org/Community/CHPP/NewDocs/File.aspx?name=transfersearch` renders them, but its
-`#input` / `#input2` divs are empty in the served HTML — saving the page (even via view-source) does
-not capture the parameter table. Line 1404 of that page loads it separately:
+The full input table now lives in `docs/chpp_files.md` ("transfersearch — input parameters").
+
+The docs page `https://www.hattrick.org/Community/CHPP/NewDocs/File.aspx?name=transfersearch` has
+empty `#input` / `#input2` divs in the *served* HTML — view-source does not capture the parameter
+table, but a **browser "save page as complete"** does, because the divs are filled in by then. Such a
+save is checked in under `docs/raw/Transfer Search » … Hattrick_files/transfersearch.html`. Line 1404
+of that page loads the spec separately:
 
 ```js
 $.ajax({ url: 'Files/' + filename + '.js', async: false,
@@ -76,60 +101,46 @@ Also worth recording: the file's own description says it is *"NOT meant to be fe
 automatically scan the transfer market, but instead upon manual user request"* — which is why the
 panel is button-only and deliberately **not** registered with `RefreshManager`. Keep it that way.
 
-## Open bug: Hattrick rejects `ageMin`
+## Hattrick rejects `ageMin` for a wide age range
 
-A search with the panel's default form values fails with:
+A search with playmaking 7-9 and age **17-20** fails:
 
 ```
-CHPP Fehler – 10 – Invalid parameter specified (10) Additional Info: ageMin
+CHPP Fehler - 10 - Invalid parameter specified (10) Additional Info: ageMin
 URL: https://chpp.hattrick.org/chppxml.ashx?file=transfersearch&version=1.1
      &ageMin=17&ageMax=20&skillType1=8&minSkillValue1=7&maxSkillValue1=9&pageSize=50&pageIndex=0
 ```
 
-The message is Hattrick's own error XML, passed through verbatim by `XMLCHPPPreParser.getError()`
-(`CHPP <Fehler> - <ErrorCode> - <Error>`).
+The identical search with age **20-22** - Hattrick's own documented example - returns hits. So the
+rejection is about the age *values*, and `ageMin` is simply the parameter Hattrick names.
 
-### Ruled out
+### Ruled out by experiment
 
-- **Parameter names** — `ageMin` is valid per the spec above. The earlier guess that it might be
-  `minAge`/`maxAge` was wrong.
-- **Skill and specialty mappings** — verified against `chppDataTypes.js`, see above.
-- **Transport** — `Connector.getTransferSearch()` builds the URL the same way as every other CHPP
-  file and goes through the shared, working `getCHPPWebFile()` OAuth path.
-- **Missing required parameters** — all five are present.
+- **Parameter names, skill and specialty mappings, transport, missing required parameters** - all
+  verified against the spec, and the same request shape works with a different age pair.
+- **Missing day bounds.** Sending `ageDaysMin=0&ageDaysMax=111` explicitly (the documented defaults,
+  which is what Hattrick's own web form always does) reached the server and changed nothing - the
+  17-20 search still failed.
 
-So Hattrick is rejecting a **value**, not a name.
+### Still open: floor or window width
 
-### Hypotheses
+The two surviving explanations are not yet separated:
 
-The failing call differs from the known-good documented example in the age pair alone
-(`17–20` vs `20–22`):
+- **Floor** - 17 is below the lowest accepted `ageMin`.
+- **Window width** - with `ageDaysMax` defaulting to 111, 17-20 is really 17y0d to 20y111d, a span of
+  3 years and 111 days, against 2 years and 111 days for the working example.
 
-- **A — age window too wide.** Omitting the day bounds means Hattrick applies `ageDaysMax=111`, so
-  `ageMin=17&ageMax=20` is really 17y0d → 20y111d, about **four years**. For comparison, the
-  website's own transfer search form (`/World/Transfers/`, ASP.NET `ddl*` fields) always sends four
-  explicit age fields and produced a one-year window in a working request:
-  `ddlAgeMin=19 ddlAgeDaysMin=0 ddlAgeMax=20 ddlAgeDaysMax=0`. Currently the stronger hypothesis.
-- **B — a floor.** 17 is below the lowest accepted `ageMin`. Hattrick would name the first parameter
-  of the pair either way, so the error text does not discriminate.
+**One probe separates them: age 17-19.** Works -> no floor, the span is the limit; fails -> 17 itself
+is rejected. If it is the span, `20-23` then shows whether the limit is a two-year window.
 
-Neither constraint is documented in the CHPP spec.
+Once known, encode it in `TransferSearchQuery.validationErrorKey()` with a test so it is caught
+client-side. Neither constraint is documented in the CHPP spec.
 
-### Next step
+The panel defaults are currently the documented example's `20-22` (`TransferSearchPanel.java:40-41`).
 
-One live call decides it — keep playmaking 7–9 and search **age 20–22** (the documented example):
-
-- Hits come back → hypothesis A. Fix: encode the real window limit in
-  `TransferSearchQuery.validationErrorKey()` with a test, and correct the spinner defaults in
-  `TransferSearchPanel.java:40-41` so it is caught client-side instead of round-tripping to Hattrick.
-- Same error → not the window. Next probe: 20–22 with explicit `ageDaysMin=0&ageDaysMax=0`, mirroring
-  what the website sends.
-
-`Connector.getCHPPWebFile()` logs the full outgoing URL at INFO (`getCHPPWebFile <url>`), so `logs/`
-has the exact request for any failing attempt.
-
-Note that the website form cannot be used as a substitute: it is cookie-authenticated HTML scraping
-against a different endpoint, not the OAuth CHPP API HO is built on.
+`Connector.getCHPPWebFile()` logs the full outgoing URL at INFO, so `logs/` has the exact request for
+any attempt. Note that `createDistribution` runs `clean` first, which deletes `build/` - including
+the distribution's `logs/` and `db/`.
 
 ## Follow-ups
 
