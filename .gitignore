@@ -163,3 +163,6 @@ truststore.jks
 /docs/md/release_notes.md
 /.mcp.json
 /.hybe
+/.codex/config.toml
+/mcp_config.json
+/.gemini/settings.json
