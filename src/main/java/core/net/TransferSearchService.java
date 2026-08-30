@@ -1,7 +1,11 @@
 package core.net;
 
 import core.file.xml.XMLTransferSearchParser;
+import core.model.UserParameter;
 import core.util.HOLogger;
+
+import java.time.Duration;
+import java.time.Instant;
 
 /**
  * Headless transfer market search.
@@ -50,6 +54,51 @@ public class TransferSearchService {
     }
 
     /**
+     * When the user's market search unlock expires. Null while locked. Deliberately in memory only:
+     * an unlock must not survive a restart.
+     */
+    private Instant marketUnlockedUntil;
+
+    /** Searches issued in this HO session, by either caller. Bounds total CHPP traffic. */
+    private int searchesThisSession;
+
+    /**
+     * Open market search for {@link core.model.UserParameter#mcpMarketUnlockMinutes} minutes.
+     * Only ever called from the options panel button - a human action in HO's own UI is the
+     * precondition CHPP asks for.
+     */
+    public synchronized void unlockMarketSearch() {
+        final var minutes = Math.max(1, UserParameter.instance().mcpMarketUnlockMinutes);
+        marketUnlockedUntil = Instant.now().plus(Duration.ofMinutes(minutes));
+    }
+
+    /** Seconds left on the unlock window, 0 if market search is locked. */
+    public synchronized long marketUnlockSecondsRemaining() {
+        if (marketUnlockedUntil == null) {
+            return 0;
+        }
+        final var remaining = Duration.between(Instant.now(), marketUnlockedUntil).toSeconds();
+        return Math.max(remaining, 0);
+    }
+
+    /**
+     * Search the transfer market on behalf of an MCP client.
+     * <p>
+     * Refuses unless the user has unlocked market search in HO, and unless the per-session cap has
+     * room left. The message says why, so the model can act on it rather than retrying.
+     */
+    public XMLTransferSearchParser.Page searchForAgent(TransferSearchQuery query) throws SearchFailed {
+        synchronized (this) {
+            if (marketUnlockSecondsRemaining() == 0) {
+                throw new SearchFailed(null, "Transfer market search is locked. Hattrick only allows "
+                        + "the market to be searched on an explicit user request, so the user has to "
+                        + "press \"unlock market search\" in HO's options under MCP server first.");
+            }
+        }
+        return search(query);
+    }
+
+    /**
      * Search the transfer market on behalf of the user, who asked for it in HO's own UI.
      *
      * @param query the search parameters
@@ -60,6 +109,15 @@ public class TransferSearchService {
         final var validationError = query.validationErrorKey();
         if (validationError != null) {
             throw new SearchFailed(validationError, "Invalid transfer search: " + validationError);
+        }
+        synchronized (this) {
+            final var cap = UserParameter.instance().mcpSearchesPerSession;
+            if (searchesThisSession >= cap) {
+                throw new SearchFailed(null, "The transfer search cap of " + cap + " searches per HO "
+                        + "session is used up. Raise it in HO's options under MCP server, or restart "
+                        + "HO, before searching again.");
+            }
+            searchesThisSession++;
         }
         try {
             return XMLTransferSearchParser.parse(fetch(query));

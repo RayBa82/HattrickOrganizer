@@ -110,6 +110,14 @@ public final class UserParameter extends Configuration {
     //Release Channel options
     public String ReleaseChannel = null;
 
+    //------MCP server (see docs/superpowers/specs/2026-08-30-mcp-server-design.md)---
+    public boolean mcpServerEnabled = false;
+    public int mcpServerPort = 8765;
+    /** How many transfer searches one HO session may issue in total. */
+    public int mcpSearchesPerSession = 20;
+    /** How long the "unlock market search" button keeps market search open, in minutes. */
+    public int mcpMarketUnlockMinutes = 30;
+
     //Whether or not the player analysis is packed vertically one below the other
     public boolean spieleranalyseVertikal = true;
     public boolean statistikAlleBeschriftung = true;
@@ -440,6 +448,10 @@ public final class UserParameter extends Configuration {
         map.put("aufstellungsAssistentPanel_notLast", String.valueOf(aufstellungsAssistentPanel_notLast));
         map.put("aufstellungsAssistentPanel_verletzt", String.valueOf(aufstellungsAssistentPanel_verletzt));
         map.put("xmlDownload", String.valueOf(xmlDownload));
+        map.put("mcpServerEnabled", String.valueOf(mcpServerEnabled));
+        map.put("mcpServerPort", String.valueOf(mcpServerPort));
+        map.put("mcpSearchesPerSession", String.valueOf(mcpSearchesPerSession));
+        map.put("mcpMarketUnlockMinutes", String.valueOf(mcpMarketUnlockMinutes));
 
         if (ReleaseChannel == null) {
             ReleaseChannel = "Stable";
@@ -685,6 +697,12 @@ public final class UserParameter extends Configuration {
         aufstellungsAssistentPanel_notLast = getBooleanValue(values, "aufstellungsAssistentPanel_notLast");
         aufstellungsAssistentPanel_verletzt = getBooleanValue(values, "aufstellungsAssistentPanel_verletzt");
         xmlDownload = getBooleanValue(values, "xmlDownload");
+        mcpServerEnabled = getBooleanValue(values, "mcpServerEnabled");
+        // Configuration.getIntValue returns 0 for a key an older database does not have yet,
+        // so 0 means "not configured" and the default applies.
+        mcpServerPort = orDefault(getIntValue(values, "mcpServerPort"), 8765);
+        mcpSearchesPerSession = orDefault(getIntValue(values, "mcpSearchesPerSession"), 20);
+        mcpMarketUnlockMinutes = orDefault(getIntValue(values, "mcpMarketUnlockMinutes"), 30);
         ReleaseChannel = getStringValue(values, "ReleaseChannel");
         fixtures = getBooleanValue(values, "fixtures");
         downloadCurrentMatchlist = getBooleanValue(values, "currentMatchlist");
@@ -921,5 +939,9 @@ public final class UserParameter extends Configuration {
             return LANGUAGE_GERMAN;
         }
         return legacyLanguage;
+    }
+
+    private static int orDefault(int value, int defaultValue) {
+        return value > 0 ? value : defaultValue;
     }
 }

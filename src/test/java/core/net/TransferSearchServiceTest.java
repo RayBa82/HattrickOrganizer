@@ -93,4 +93,39 @@ class TransferSearchServiceTest {
 
         assertThat(service.lastQueryString).isNull();   // never went out
     }
+
+    @Test
+    void searchForAgent_refusedWhileMarketSearchIsLocked() {
+        final var service = new StubService();
+
+        assertThatExceptionOfType(TransferSearchService.SearchFailed.class)
+                .isThrownBy(() -> service.searchForAgent(validQuery().build()))
+                .withMessageContaining("locked");
+
+        assertThat(service.lastQueryString).isNull();
+    }
+
+    @Test
+    void searchForAgent_succeedsWhileUnlocked() throws Exception {
+        final var service = new StubService();
+        service.unlockMarketSearch();
+
+        assertThat(service.searchForAgent(validQuery().build()).hits()).hasSize(1);
+        assertThat(service.marketUnlockSecondsRemaining()).isPositive();
+    }
+
+    @Test
+    void searchForAgent_refusesThe21stCallAndSaysSo() throws Exception {
+        final var service = new StubService();
+        service.unlockMarketSearch();
+        core.model.UserParameter.instance().mcpSearchesPerSession = 20;
+
+        for (int i = 0; i < 20; i++) {
+            service.searchForAgent(validQuery().build());
+        }
+
+        assertThatExceptionOfType(TransferSearchService.SearchFailed.class)
+                .isThrownBy(() -> service.searchForAgent(validQuery().build()))
+                .withMessageContaining("20");
+    }
 }
