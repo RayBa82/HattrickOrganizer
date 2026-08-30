@@ -126,7 +126,7 @@ public record TransferSearchQuery(
      * The query parameters of this search, unset ones omitted so that Hattrick applies its own
      * defaults. Starts with an ampersand, to be appended to the file and version parameters.
      */
-    String toQueryString() {
+    public String toQueryString() {
         final var query = new StringBuilder();
         append(query, "ageMin", ageMin);
         append(query, "ageMax", ageMax);
