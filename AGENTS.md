@@ -11,6 +11,9 @@ lineup rating, transfer scouting, statistics, …) on top of that local history.
 
 - Upstream: `https://github.com/ho-dev/HattrickOrganizer`, default branch `master`, LGPL 3.0.
 - User documentation: <https://ho.readthedocs.io/> (sources in `docs/*.rst`).
+- Developer notes: `docs/current.md` — state of the work currently in progress: what shipped, what is
+  blocked and why, and findings worth keeping. **Read it first when picking work back up, and update
+  it when you finish or block a piece of work.** `docs/chpp_files.md` lists the CHPP files HO uses.
 - Java 17 source/target, Kotlin JVM toolchain 17, Gradle 8.13 wrapper. CI builds on Temurin 17.
   Newer local JDKs work for running, but do not raise the language level.
 
