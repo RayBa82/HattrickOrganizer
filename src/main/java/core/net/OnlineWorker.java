@@ -706,6 +706,32 @@ public class OnlineWorker {
 	}
 
 	/**
+	 * Search the transfer market.
+	 * <p>
+	 * CHPP does not allow the transfer market to be scanned automatically, so this may only be
+	 * called on an explicit user request.
+	 *
+	 * @param query the search parameters
+	 * @return one page of search results, or null if the download failed
+	 */
+	public static XMLTransferSearchParser.Page searchTransfers(TransferSearchQuery query) {
+		try {
+			HOMainFrame.instance().setWaitInformation();
+			final String xml = Connector.instance().getTransferSearch(query);
+			HOMainFrame.instance().setWaitInformation();
+			return XMLTransferSearchParser.parse(xml);
+		} catch (Exception e) {
+			HOLogger.instance().log(OnlineWorker.class, e);
+			String msg = getLangString("Downloadfehler") + " : Error searching transfers: "
+					+ e.getMessage();
+			setInfoMsg(msg, InfoPanel.FEHLERFARBE);
+			Helper.showMessage(HOMainFrame.instance(), msg, getLangString("Fehler"),
+					JOptionPane.ERROR_MESSAGE);
+		}
+		return null;
+	}
+
+	/**
 	 * Uploads the given order to Hattrick
 	 *
 	 * @param matchId
