@@ -89,6 +89,8 @@ final class DBUpdater {
                     case 901:
 						updateDBv1000(DBVersion);
 					case 1000:
+						updateDBv1001(DBVersion);
+					case 1001:
 				}
 
 			} catch (Exception e) {
@@ -154,6 +156,13 @@ final class DBUpdater {
         hofTable.createTable();
 
 		updateDBVersion(dbVersion, 1000);
+	}
+
+	/** HO 10.0.1: the transfer listing corpus behind player valuation. */
+	private void updateDBv1001(int dbVersion) throws SQLException {
+		dbManager.getTable(TransferListingTable.TABLENAME).createTable();
+
+		updateDBVersion(dbVersion, 1001);
 	}
 
     private void updateDBv901(int dbVersion) throws SQLException {

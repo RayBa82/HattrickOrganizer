@@ -21,6 +21,7 @@ class DBInfo(private val databaseMetaData: DatabaseMetaData?) {
         return when (type) {
             Types.BOOLEAN -> "BOOLEAN"
             Types.BIT -> "BIT"
+            Types.BIGINT -> "BIGINT"
             Types.INTEGER -> "INTEGER"
             Types.CHAR -> "CHAR"
             Types.DATE -> "DATE"

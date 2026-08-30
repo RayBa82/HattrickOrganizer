@@ -60,12 +60,12 @@ import java.util.stream.Collectors;
 public class DBManager implements PersistenceManager {
 
 	/** database versions */
-	private static final int DBVersion = 1000; // HO 10.0 version
+	private static final int DBVersion = 1001; // HO 10.0 version
 	/**
 	 * Previous db version is used by development versions to ensure that db upgrade will rerun on each
 	 * new installed preliminary version
 	 */
-	private static final int previousDBVersion = 901;
+	private static final int previousDBVersion = 1000;
 	private static final double DBConfigVersion = 10d; // HO 10.0 version
 
 	/** 2004-06-14 11:00:00.0 */
@@ -281,6 +281,7 @@ public class DBManager implements PersistenceManager {
 		tables.put(SquadInfoTable.TABLENAME, new SquadInfoTable(connectionManager));
 		tables.put(HOColorTable.TABLENAME, new HOColorTable(connectionManager));
         tables.put(HallOfFamePlayersTable.TABLENAME, new HallOfFamePlayersTable(connectionManager));
+		tables.put(TransferListingTable.TABLENAME, new TransferListingTable(connectionManager));
 	}
 
 	/**
@@ -1511,6 +1512,19 @@ public class DBManager implements PersistenceManager {
 		loadPlayerInfo(ret);
 		return ret;
 
+	}
+
+	public void storeTransferListing(TransferListing listing) {
+		((TransferListingTable) getTable(TransferListingTable.TABLENAME)).storeListing(listing);
+	}
+
+	public List<TransferListing> loadUnresolvedTransferListings(int max) {
+		return ((TransferListingTable) getTable(TransferListingTable.TABLENAME)).loadUnresolved(max);
+	}
+
+	public void storeTransferListingSalePrice(int playerId, HODateTime observedAt, long salePrice) {
+		((TransferListingTable) getTable(TransferListingTable.TABLENAME))
+				.storeSalePrice(playerId, observedAt, salePrice);
 	}
 
 	/**
