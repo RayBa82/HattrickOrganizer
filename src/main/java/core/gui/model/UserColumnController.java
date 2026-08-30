@@ -53,7 +53,8 @@ public final class UserColumnController {
         TRAININGSETTINGSFUTURE(19),
         TRAININGSETTINGSPAST(20),
         TRAININGEFFECT(21),
-        HALL_OF_FAME(22);
+        HALL_OF_FAME(22),
+		TRANSFERSEARCH(23);
 
 		private final int value;
 		ColumnModelId(int value){this.value=value;}
@@ -87,6 +88,7 @@ public final class UserColumnController {
 	private TransferTableModel transferTableModel;
 	private PlayerTransferTableModel playerTransferTableModel;
 	private TransferScoutingTableModel transferScoutingTableModel;
+	private TransferScoutingTableModel transferSearchTableModel;
 
 	private SpecialEventsTableModel specialEventsTableModel;
 
@@ -135,6 +137,7 @@ public final class UserColumnController {
 		dbManager.loadHOColumModel(getTransferTableModel());
 		dbManager.loadHOColumModel(getPlayerTransferTableModel());
 		dbManager.loadHOColumModel(getTransferScoutingTableModel());
+		dbManager.loadHOColumModel(getTransferSearchTableModel());
 		dbManager.loadHOColumModel(getSpecialEventsTableModel());
         dbManager.loadHOColumModel(getTrainingProgressTableModel());
         dbManager.loadHOColumModel(getTrainingPredictionTableModel());
@@ -326,5 +329,17 @@ public final class UserColumnController {
 			transferScoutingTableModel = new TransferScoutingTableModel();
 		}
 		return transferScoutingTableModel;
+	}
+
+	/**
+	 * Column model of the transfer search results.
+	 * The results are shown in a table of the same kind as the scout list, but with its own column
+	 * settings, so that both tables can be configured independently.
+	 */
+	public TransferScoutingTableModel getTransferSearchTableModel(){
+		if (transferSearchTableModel==null){
+			transferSearchTableModel = new TransferScoutingTableModel(ColumnModelId.TRANSFERSEARCH);
+		}
+		return transferSearchTableModel;
 	}
 }

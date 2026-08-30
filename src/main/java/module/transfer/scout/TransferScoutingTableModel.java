@@ -43,7 +43,11 @@ public class TransferScoutingTableModel extends HOTableModel {
     private Vector<ScoutEintrag> m_vScoutEintraege;
 
     public TransferScoutingTableModel() {
-        super(UserColumnController.ColumnModelId.TRANSFERSCOUT, "TransferScout");
+        this(UserColumnController.ColumnModelId.TRANSFERSCOUT);
+    }
+
+    public TransferScoutingTableModel(UserColumnController.ColumnModelId columnModelId) {
+        super(columnModelId, "TransferScout");
         int id = 0;
         columns = new ArrayList<>(List.of(
                 new TransferScoutTableColumn(id++, "ls.player.id") {
