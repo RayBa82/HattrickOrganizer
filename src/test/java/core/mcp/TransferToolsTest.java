@@ -5,7 +5,10 @@ import core.constants.player.PlayerSkill;
 import core.constants.player.PlayerSpeciality;
 import core.model.player.Player;
 import core.net.TransferSearchQuery;
+import core.util.AmountOfMoney;
 import org.junit.jupiter.api.Test;
+
+import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -86,10 +89,13 @@ class TransferToolsTest {
                 {"ageMin":20,"ageMax":22,"skillType1":"PLAYMAKING","minSkillValue1":7,
                  "maxSkillValue1":9,"priceMax":2000000}""").getAsJsonObject();
 
+        AmountOfMoney.Companion.setExchangeRate(BigDecimal.TEN);   // a euro league
+
         final var query = TransferTools.queryFrom(args);
 
         assertThat(query.skillType1()).isEqualTo(TransferSearchQuery.Skill.PLAYMAKING);
-        assertThat(query.priceMax()).isEqualTo(2_000_000);
+        // The model asks in the user's currency, Hattrick is asked in swedish krona.
+        assertThat(query.priceMax()).isEqualTo(20_000_000);
         assertThat(query.pageSize()).isEqualTo(50);            // default
     }
 

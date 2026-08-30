@@ -86,8 +86,8 @@ public final class TransferTools {
                 "nativeCountryId", McpTool.prop("integer", "native country id"),
                 "tsiMin", McpTool.prop("integer", "minimum TSI"),
                 "tsiMax", McpTool.prop("integer", "maximum TSI"),
-                "priceMin", McpTool.prop("integer", "minimum asking price"),
-                "priceMax", McpTool.prop("integer", "maximum asking price"),
+                "priceMin", McpTool.prop("integer", "minimum asking price, in the user's currency"),
+                "priceMax", McpTool.prop("integer", "maximum asking price, in the user's currency"),
                 "pageSize", McpTool.prop("integer", "results per page, default 50, maximum 100"));
         return McpTool.schema(properties,
                 "ageMin", "ageMax", "skillType1", "minSkillValue1", "maxSkillValue1");
@@ -114,8 +114,9 @@ public final class TransferTools {
                 .nativeCountryId(McpJson.optInteger(args, "nativeCountryId"))
                 .tsiMin(McpJson.optInteger(args, "tsiMin"))
                 .tsiMax(McpJson.optInteger(args, "tsiMax"))
-                .priceMin(McpJson.optInteger(args, "priceMin"))
-                .priceMax(McpJson.optInteger(args, "priceMax"))
+                // The form takes the user's currency; the CHPP query is in swedish krona.
+                .priceMin(McpJson.swedishKrona(McpJson.optInteger(args, "priceMin")))
+                .priceMax(McpJson.swedishKrona(McpJson.optInteger(args, "priceMax")))
                 // Paging is not exposed: ItemCount comes back as -1 once more than 100 players
                 // match, so a second page buys little and would eat the per session cap.
                 .pageSize(Math.min(McpJson.optInt(args, "pageSize", DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE));
@@ -167,6 +168,7 @@ public final class TransferTools {
         }
 
         final var json = new JsonObject();
+        json.addProperty("currency", McpJson.currency());
         // -1 means "more than 100", Hattrick's analogy to "many"
         json.addProperty("itemCount", page.itemCount());
         json.addProperty("pageSize", page.pageSize());

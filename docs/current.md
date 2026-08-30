@@ -170,6 +170,14 @@ Implemented per `docs/superpowers/plans/2026-08-30-mcp-server.md`:
 - `McpServerPanel` writes both `UserParameter.instance()` and `UserParameter.temp()`, because it
   takes effect immediately rather than on the options dialog's OK.
 - The new `ls.options.mcp.*` keys are English-only until a maintainer adds them to POEditor.
+- **Money crosses the tool boundary in the user's currency, not in swedish krona.** Everything HO
+  stores internally — `AmountOfMoney`, and the raw `Salary` / `AskingPrice` numbers straight out of
+  a CHPP file — is swedish krona, and the UI divides by `AmountOfMoney.getExchangeRate()` before
+  showing anything. The first version of the tools handed the model `getSwedishKrona()`, so a euro
+  team's wages and finances came back a factor of ten too large and the model reported them as
+  euro. `McpJson.money` now does the conversion for every amount, `McpJson.swedishKrona` converts
+  the price arguments of `search_transfers` back for the CHPP query, and `get_team`, `get_finances`
+  and `search_transfers` each carry a `currency` field so the model can name the unit.
 
 ### Second pass: training, coach, and the assumptions behind a rating
 

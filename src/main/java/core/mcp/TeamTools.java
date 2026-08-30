@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import core.db.DBManager;
 import core.model.misc.Economy;
+import core.util.AmountOfMoney;
 import tool.arenasizer.Stadium;
 
 import java.util.List;
@@ -25,7 +26,8 @@ public final class TeamTools {
                         McpTool.schema(new JsonObject()),
                         args -> team()),
                 new McpTool("get_squad",
-                        "Every player in the squad with skills, form, stamina, loyalty, TSI, wage, "
+                        "Every player in the squad with skills, form, stamina, loyalty, TSI, wage "
+                                + "(in the user's currency, as get_team reports it), "
                                 + "specialty, injuries and cards, plus a positionRatings map giving "
                                 + "what the player is worth in each of the fourteen field slots "
                                 + "(100 keeper through 113 left forward) at normal behaviour.",
@@ -54,7 +56,8 @@ public final class TeamTools {
                                 + "stadium: its stands, what is under construction, and what "
                                 + "actually turned up at the last home matches. Capacity on its "
                                 + "own cannot answer an expansion question - the utilisation ratio "
-                                + "can.",
+                                + "can. Every amount is in the currency field's currency, the one "
+                                + "the user sees in Hattrick.",
                         McpTool.schema(McpTool.properties(
                                 "homeMatches", McpTool.prop("integer",
                                         "how many recent home matches to read the attendance of, "
@@ -91,8 +94,8 @@ public final class TeamTools {
             json.add("league", leagueJson);
         }
         if (economy != null) {
-            // Economy returns AmountOfMoney, whose raw value is swedish krona
             final var economyJson = new JsonObject();
+            economyJson.addProperty("currency", McpJson.currency());
             economyJson.addProperty("cash", money(economy.getCash()));
             economyJson.addProperty("expectedWeeksTotal", money(economy.getExpectedWeeksTotal()));
             economyJson.addProperty("playersSalary", money(economy.getCostsPlayers()));
@@ -148,9 +151,9 @@ public final class TeamTools {
         return json;
     }
 
-    /** The raw amount behind an AmountOfMoney, which stores swedish krona. */
-    private static long money(core.util.AmountOfMoney amount) {
-        return amount == null ? 0L : amount.getSwedishKrona().longValue();
+    /** An amount in the user's currency; see {@link McpJson#money}. */
+    private static long money(AmountOfMoney amount) {
+        return McpJson.money(amount);
     }
 
     private static JsonObject squad() throws McpToolException {
@@ -259,6 +262,7 @@ public final class TeamTools {
         }
 
         final var json = new JsonObject();
+        json.addProperty("currency", McpJson.currency());
         json.addProperty("cash", money(economy.getCash()));
         json.addProperty("expectedCash", money(economy.getExpectedCash()));
         json.addProperty("expectedWeeksTotal", money(economy.getExpectedWeeksTotal()));
@@ -347,7 +351,8 @@ public final class TeamTools {
                 .ifPresent(size -> json.addProperty("capacityUnderConstruction", size));
         stadium.getFutureTotalSize().ifPresent(size -> json.addProperty("futureCapacity", size));
         if (stadium.getExpansionCostsInSwedishKrona() != null) {
-            json.addProperty("expansionCosts", stadium.getExpansionCostsInSwedishKrona());
+            json.addProperty("expansionCosts",
+                    money(new AmountOfMoney(stadium.getExpansionCostsInSwedishKrona())));
         }
 
         var sum = 0;

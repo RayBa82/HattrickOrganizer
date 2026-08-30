@@ -4,14 +4,41 @@ import com.google.gson.JsonObject;
 import core.constants.player.PlayerSkill;
 import core.file.xml.XMLTransferSearchParser.Hit;
 import core.model.player.Player;
+import core.util.AmountOfMoney;
 import core.util.HODateTime;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.within;
 
 class McpJsonTest {
+
+    /** A euro league: ten swedish krona to the currency the user reads his team in. */
+    @BeforeEach
+    void euroLeague() {
+        AmountOfMoney.Companion.setExchangeRate(BigDecimal.TEN);
+    }
+
+    @Test
+    void money_isTheUsersCurrencyRatherThanTheStoredSwedishKrona() {
+        assertThat(McpJson.money(new AmountOfMoney(268_000L))).isEqualTo(26_800L);
+        assertThat(McpJson.money(268_000L)).isEqualTo(26_800L);
+        assertThat(McpJson.money((AmountOfMoney) null)).isZero();
+        assertThat(McpJson.swedishKrona(2_000_000)).isEqualTo(20_000_000);
+        assertThat(McpJson.swedishKrona(null)).isNull();
+    }
+
+    @Test
+    void player_reportsTheWageInTheUsersCurrency() {
+        final var player = new Player();
+        player.setWage(new AmountOfMoney(239_000L));
+
+        assertThat(McpJson.player(player).get("wage").getAsLong()).isEqualTo(23_900L);
+    }
 
     @Test
     void player_carriesIdentityAgeAndTheEightSkills() {
@@ -68,7 +95,8 @@ class McpJsonTest {
         final var json = McpJson.hit(expired);
 
         assertThat(json.get("playerId").getAsInt()).isEqualTo(999);
-        assertThat(json.get("highestBid").getAsLong()).isEqualTo(120_000L);
+        assertThat(json.get("askingPrice").getAsLong()).isEqualTo(10_000L);
+        assertThat(json.get("highestBid").getAsLong()).isEqualTo(12_000L);
         assertThat(json.get("details").isJsonNull()).isTrue();
     }
 

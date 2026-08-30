@@ -518,6 +518,50 @@ tasks.register("pushDB") {
     }
 }
 
+tasks.register("jpackageDmg", Exec) {
+    group 'sub tasks'
+    description "Packages the distribution into an unsigned macOS .dmg using the JDK's jpackage."
+    dependsOn tasks.createDistribution
+    onlyIf { org.gradle.internal.os.OperatingSystem.current().isMacOsX() }
+
+    // jpackage wants a CFBundleVersion (max 3 numeric parts), not the 4-part build version
+    def appVersion = version.toString().split(/\./).take(2).join('.')
+    def macappDir = file("${buildDir}/macapp")
+    def icns = file("${buildDir}/HO.icns")
+
+    doFirst {
+        // no .icns is checked in - render one from the logo
+        def iconset = file("${buildDir}/HO.iconset")
+        iconset.mkdirs()
+        [16, 32, 128, 256, 512].each { s ->
+            ["sips", "-z", "$s", "$s", "${projectDir}/utils/buildResources/Logo.png",
+             "--out", "${iconset}/icon_${s}x${s}.png"]*.toString().execute().waitFor()
+            ["sips", "-z", "${s * 2}", "${s * 2}", "${projectDir}/utils/buildResources/Logo.png",
+             "--out", "${iconset}/icon_${s}x${s}@2x.png"]*.toString().execute().waitFor()
+        }
+        ["iconutil", "-c", "icns", iconset.path, "-o", icns.path].execute().waitFor()
+        delete macappDir      // jpackage refuses to overwrite an existing .dmg
+        macappDir.mkdirs()
+    }
+
+    // --input/--dest must be absolute, otherwise jpackage cannot find the main jar
+    commandLine 'jpackage', '--type', 'dmg',
+            '--input', "${buildDir}/install/XXX",
+            '--dest', macappDir.path,
+            '--name', 'HO',
+            '--main-jar', 'HO.jar',
+            '--main-class', 'core.HOLauncher',
+            '--app-version', appVersion,
+            '--arguments', 'INSTALLED',
+            '--icon', icns.path
+}
+
+tasks.register("dmg", GradleBuild) {
+    group 'build'
+    description "One-shot macOS .dmg build: version stamp, distribution and jpackage."
+    tasks = ['createVersion', 'jpackageDmg']
+}
+
 tasks.register("release", GradleBuild) {
     tasks = ['clean', 'createVersion', 'poeditorPull', 'processResources', 'createLanguageFileList', 'makeAllMedias']
 }

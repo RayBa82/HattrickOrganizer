@@ -133,11 +133,46 @@ these here.
   * For details, see [``docs/Licences/scribe/LICENSE.txt``](Licences/scribe/LICENSE.txt)
 
 ## Create a local build
+
+```bash
 ./gradlew createVersion createDistribution
 cd build/install/XXX && java -jar HO.jar
+```
 
-## Create HO.app
+## Create a macOS .dmg
+
+```bash
+./gradlew dmg
+```
+
+One call: stamps the version, builds the distribution, renders an icon from
+`utils/buildResources/Logo.png` and runs the JDK's `jpackage`. No install4j
+licence needed. The result is `build/macapp/HO-10.0.dmg`.
+
+It is unsigned and not notarized, so the first launch on another machine needs
+right-click → Open, or:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/HO.app
+```
+
+To build signed artefacts for all platforms use `./gradlew release` — that path
+needs an install4j licence (`INSTALL4J_LICENSE` and `INSTALL4J_HOME`).
+
+### Just the .app, by hand
+
+```bash
 ./gradlew createVersion createDistribution
+
 jpackage --type app-image --input "$PWD/build/install/XXX" --dest "$PWD/build/macapp" \
   --name HO --main-jar HO.jar --main-class core.HOLauncher --app-version 10.0 \
-  --arguments INSTALLED --icon HO.icns
+  --arguments INSTALLED
+
+open build/macapp/HO.app
+```
+
+`--input`/`--dest` must be **absolute**, otherwise jpackage reports "main JAR not
+present in input directory". `--arguments INSTALLED` makes the bundle write
+`db/`, `logs/` and `user.xml` to `~/Library/Application Support/HO` instead of
+the launch working directory. Add `--icon "$PWD/build/HO.icns"` for the HO icon
+— there is no `.icns` in the repo, `./gradlew jpackageDmg` builds one there.

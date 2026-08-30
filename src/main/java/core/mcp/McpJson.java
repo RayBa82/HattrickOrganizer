@@ -12,8 +12,12 @@ import core.model.match.IMatchDetails;
 import core.model.player.IMatchRoleID;
 import core.model.player.Player;
 import core.rating.RatingPredictionModel;
+import core.util.AmountOfMoney;
 import core.util.HOLogger;
 import module.lineup.Lineup;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 /**
  * Serialization shared by the tool groups, plus the two lookups every tool starts with.
@@ -27,6 +31,35 @@ public final class McpJson {
     };
 
     private McpJson() {
+    }
+
+    /**
+     * An amount in the currency the user sees, which is the one both HO and Hattrick display.
+     * <p>
+     * Every amount HO holds is stored in swedish krona - the ones read straight out of a CHPP file
+     * included - and the local currency is that divided by the league's exchange rate. Handing a
+     * model the raw krona overstates every wage, cost and price by that rate (a factor of ten for
+     * a euro league), so the conversion happens once, here.
+     */
+    public static long money(AmountOfMoney amount) {
+        return amount == null ? 0L : amount.toLocale().setScale(0, RoundingMode.HALF_UP).longValue();
+    }
+
+    /** The same, for the raw swedish krona a CHPP record carries as a plain number. */
+    public static long money(long swedishKrona) {
+        return money(new AmountOfMoney(swedishKrona));
+    }
+
+    /** The currency every amount in a tool result is denominated in, so the model can quote it. */
+    public static String currency() {
+        return AmountOfMoney.Companion.getCurrencyName();
+    }
+
+    /** The reverse of {@link #money}: an amount a model passed in, as the krona CHPP expects. */
+    public static Integer swedishKrona(Integer localAmount) {
+        return localAmount == null ? null
+                : BigDecimal.valueOf(localAmount)
+                        .multiply(AmountOfMoney.Companion.getExchangeRate()).intValue();
     }
 
     /** The loaded team snapshot. */
@@ -84,7 +117,7 @@ public final class McpJson {
         json.addProperty("ageYears", p.getAge());
         json.addProperty("ageDays", p.getAgeDays());
         json.addProperty("tsi", p.getTsi());
-        json.addProperty("wage", p.getWage() == null ? 0L : p.getWage().getSwedishKrona().longValue());
+        json.addProperty("wage", money(p.getWage()));
         json.addProperty("form", p.getForm());
         json.addProperty("stamina", p.getStamina());
         json.addProperty("loyalty", p.getLoyalty());
@@ -131,8 +164,8 @@ public final class McpJson {
         json.addProperty("playerId", hit.playerId());
         json.addProperty("playerName", hit.playerName());
         json.addProperty("nativeCountryId", hit.nativeCountryId());
-        json.addProperty("askingPrice", hit.askingPrice());
-        json.addProperty("highestBid", hit.highestBid());
+        json.addProperty("askingPrice", money(hit.askingPrice()));
+        json.addProperty("highestBid", money(hit.highestBid()));
         json.addProperty("bidderTeamName", hit.bidderTeamName());
         json.addProperty("sellerTeamId", hit.sellerTeamId());
         json.addProperty("sellerTeamName", hit.sellerTeamName());
@@ -147,7 +180,7 @@ public final class McpJson {
         final var details = new JsonObject();
         details.addProperty("age", d.age());
         details.addProperty("ageDays", d.ageDays());
-        details.addProperty("salary", d.salary());
+        details.addProperty("salary", money(d.salary()));
         details.addProperty("tsi", d.tsi());
         details.addProperty("form", d.form());
         details.addProperty("experience", d.experience());
