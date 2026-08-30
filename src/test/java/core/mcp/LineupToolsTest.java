@@ -15,7 +15,7 @@ class LineupToolsTest {
     }
 
     @Test
-    void scratchLineup_placesPlayersAtTheGivenRolesAndSetsTheOrders() {
+    void scratchLineup_placesPlayersAtTheGivenRolesAndSetsTheOrders() throws McpToolException {
         final var spec = JsonParser.parseString("""
                 {"positions":[{"roleId":100,"playerId":11},{"roleId":113,"playerId":22,"behaviour":1}],
                  "tactic":3,"attitude":1,"captainId":11,"setPiecesTakerId":22}""").getAsJsonObject();
@@ -37,7 +37,7 @@ class LineupToolsTest {
      * LineupRatingCache would confuse them. Two scratch lineups must stay distinguishable.
      */
     @Test
-    void scratchLineupsAreIndependentInstances() {
+    void scratchLineupsAreIndependentInstances() throws McpToolException {
         final var a = LineupTools.scratchLineup(JsonParser.parseString("""
                 {"positions":[{"roleId":100,"playerId":11}]}""").getAsJsonObject());
         final var b = LineupTools.scratchLineup(JsonParser.parseString("""

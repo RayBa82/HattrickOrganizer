@@ -8,6 +8,7 @@ import core.file.xml.XMLTransferSearchParser.Hit;
 import core.model.HOModel;
 import core.model.HOVerwaltung;
 import core.model.Team;
+import core.model.match.IMatchDetails;
 import core.model.player.IMatchRoleID;
 import core.model.player.Player;
 import core.rating.RatingPredictionModel;
@@ -60,6 +61,22 @@ public final class McpJson {
         }
     }
 
+    /** The eight skills HO reports, and the names the client sees them under. */
+    private static final PlayerSkill[] SKILLS = {
+            PlayerSkill.KEEPER, PlayerSkill.DEFENDING, PlayerSkill.PLAYMAKING, PlayerSkill.WINGER,
+            PlayerSkill.PASSING, PlayerSkill.SCORING, PlayerSkill.SETPIECES, PlayerSkill.EXPERIENCE
+    };
+
+    private static final String[] SKILL_NAMES = {
+            "keeper", "defending", "playmaking", "winger",
+            "passing", "scoring", "setPieces", "experience"
+    };
+
+    /** Whether the player may be fielded: not injured and not suspended. */
+    public static boolean isAvailable(Player p) {
+        return p.getInjuryWeeks() <= 0 && !p.isRedCarded();
+    }
+
     public static JsonObject player(Player p) {
         final var json = new JsonObject();
         json.addProperty("playerId", p.getPlayerId());
@@ -76,18 +93,19 @@ public final class McpJson {
         json.addProperty("specialtyName", p.getSpecialtyName());
         json.addProperty("injuryWeeks", p.getInjuryWeeks());
         json.addProperty("cards", p.getTotalCards());
+        json.addProperty("suspended", p.isRedCarded());
+        json.addProperty("available", isAvailable(p));
         json.addProperty("transferListed", p.getTransferListed() > 0);
 
+        // Integer levels for reading, level+subskill for judging how close a skill is to popping.
         final var skills = new JsonObject();
-        skills.addProperty("keeper", p.getValue4Skill(PlayerSkill.KEEPER));
-        skills.addProperty("defending", p.getValue4Skill(PlayerSkill.DEFENDING));
-        skills.addProperty("playmaking", p.getValue4Skill(PlayerSkill.PLAYMAKING));
-        skills.addProperty("winger", p.getValue4Skill(PlayerSkill.WINGER));
-        skills.addProperty("passing", p.getValue4Skill(PlayerSkill.PASSING));
-        skills.addProperty("scoring", p.getValue4Skill(PlayerSkill.SCORING));
-        skills.addProperty("setPieces", p.getValue4Skill(PlayerSkill.SETPIECES));
-        skills.addProperty("experience", p.getValue4Skill(PlayerSkill.EXPERIENCE));
+        final var precise = new JsonObject();
+        for (int i = 0; i < SKILLS.length; i++) {
+            skills.addProperty(SKILL_NAMES[i], p.getValue4Skill(SKILLS[i]));
+            precise.addProperty(SKILL_NAMES[i], p.getValue4Skill(SKILLS[i]) + p.getSub4Skill(SKILLS[i]));
+        }
         json.add("skills", skills);
+        json.add("skillsWithSublevel", precise);
         return json;
     }
 
@@ -156,8 +174,46 @@ public final class McpJson {
             json.addProperty(sector.name().toLowerCase(java.util.Locale.ENGLISH),
                     ratingModel.getAverageRating(lineup, sector, 90));
         }
+        json.addProperty("hatStats90", ratingModel.getAverage90HatStats(lineup));
         json.addProperty("formation", lineup.getCurrentTeamFormationString());
+        json.add("assumptions", assumptions(lineup));
         return json;
+    }
+
+    /**
+     * What the sector ratings above were computed against. Team spirit and confidence feed the
+     * rating model through the {@link Team} it was built from, so they are an input to every
+     * number in this object, not decoration - a client comparing two evaluations has to know they
+     * were scored under the same ones.
+     */
+    private static JsonObject assumptions(Lineup lineup) {
+        final var json = new JsonObject();
+        final var model = HOVerwaltung.instance().getModel();
+        final var team = model == null ? null : model.getTeam();
+        if (team != null) {
+            json.addProperty("teamSpirit", team.getTeamSpiritLevel());
+            json.addProperty("subTeamSpirit", team.getSubTeamSpirit());
+            json.addProperty("confidence", team.getConfidence());
+            // Which download these were read at. Two evaluations are only comparable when this
+            // matches - team spirit and confidence move between downloads.
+            json.addProperty("hrfId", team.getHrfId());
+        }
+        if (model != null && model.getBasics() != null && model.getBasics().getDatum() != null) {
+            json.addProperty("snapshotDate", model.getBasics().getDatum().toHT());
+        }
+        json.addProperty("location", location(lineup.getLocation()));
+        json.addProperty("weather", String.valueOf(lineup.getWeather()));
+        return json;
+    }
+
+    private static String location(short location) {
+        return switch (location) {
+            case IMatchDetails.LOCATION_AWAY -> "away";
+            case IMatchDetails.LOCATION_HOME -> "home";
+            case IMatchDetails.LOCATION_AWAYDERBY -> "awayDerby";
+            case IMatchDetails.LOCATION_TOURNAMENT -> "tournament";
+            default -> "unknown";
+        };
     }
 
     // ---- argument readers -------------------------------------------------------------------
@@ -169,8 +225,19 @@ public final class McpJson {
         return args.get(name).getAsInt();
     }
 
+    public static double reqDouble(JsonObject args, String name) {
+        if (!args.has(name) || args.get(name).isJsonNull()) {
+            throw new IllegalArgumentException("Missing required argument: " + name);
+        }
+        return args.get(name).getAsDouble();
+    }
+
     public static int optInt(JsonObject args, String name, int defaultValue) {
         return args.has(name) && !args.get(name).isJsonNull() ? args.get(name).getAsInt() : defaultValue;
+    }
+
+    public static boolean optBool(JsonObject args, String name, boolean defaultValue) {
+        return args.has(name) && !args.get(name).isJsonNull() ? args.get(name).getAsBoolean() : defaultValue;
     }
 
     public static Integer optInteger(JsonObject args, String name) {

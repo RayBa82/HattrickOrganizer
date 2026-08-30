@@ -3,11 +3,15 @@ package core.mcp;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import core.db.DBManager;
+import core.model.misc.Economy;
+import tool.arenasizer.Stadium;
 
 import java.util.List;
 
 /** The read only view of the team HO already knows about. */
 public final class TeamTools {
+
+    private static final int DEFAULT_HOME_MATCHES = 5;
 
     private TeamTools() {
     }
@@ -15,7 +19,8 @@ public final class TeamTools {
     public static List<McpTool> tools() {
         return List.of(
                 new McpTool("get_team",
-                        "The user's team: name, league, finances, stadium and staff, as of the "
+                        "The user's team: name, league, finances, stadium, team spirit and "
+                                + "confidence, the head coach and the rest of the staff, as of the "
                                 + "latest download.",
                         McpTool.schema(new JsonObject()),
                         args -> team()),
@@ -35,7 +40,26 @@ public final class TeamTools {
                 new McpTool("get_upcoming_matches",
                         "The fixture list of the current series.",
                         McpTool.schema(new JsonObject()),
-                        args -> fixtures())
+                        args -> fixtures()),
+                new McpTool("get_league_table",
+                        "The standings of our series: all eight teams with position, record, "
+                                + "points and goals. get_team only reports our own row, and "
+                                + "promotion, relegation and the season expectations all hang off "
+                                + "the whole table.",
+                        McpTool.schema(new JsonObject()),
+                        args -> leagueTable()),
+                new McpTool("get_finances",
+                        "The full weekly financial statement with last week's copy beside it, the "
+                                + "fan club and the staff levels that drive the cost line, and the "
+                                + "stadium: its stands, what is under construction, and what "
+                                + "actually turned up at the last home matches. Capacity on its "
+                                + "own cannot answer an expansion question - the utilisation ratio "
+                                + "can.",
+                        McpTool.schema(McpTool.properties(
+                                "homeMatches", McpTool.prop("integer",
+                                        "how many recent home matches to read the attendance of, "
+                                                + "default " + DEFAULT_HOME_MATCHES))),
+                        TeamTools::finances)
         );
     }
 
@@ -80,6 +104,34 @@ public final class TeamTools {
             stadiumJson.addProperty("capacity", stadium.getTotalSize());
             json.add("stadium", stadiumJson);
         }
+
+        final var team = model.getTeam();
+        if (team != null) {
+            // Team spirit and confidence are inputs to every lineup rating, so they belong here
+            // rather than only inside evaluate_lineup's output.
+            final var moodJson = new JsonObject();
+            moodJson.addProperty("teamSpirit", team.getTeamSpiritLevel());
+            moodJson.addProperty("subTeamSpirit", team.getSubTeamSpirit());
+            moodJson.addProperty("confidence", team.getConfidence());
+            json.add("mood", moodJson);
+        }
+
+        // The head coach is not a staff member - he is a Player with a coach skill - and his level
+        // drives both training speed and the team spirit ceiling.
+        // getTrainer() never returns null - it hands back an empty Player for teams without a
+        // coach - so a team with no coach shows up as coachSkill 0 rather than a missing block.
+        final var trainer = model.getTrainer();
+        final var coachJson = new JsonObject();
+        coachJson.addProperty("playerId", trainer.getPlayerId());
+        coachJson.addProperty("name", trainer.getFullName());
+        coachJson.addProperty("coachSkill", trainer.getCoachSkill());
+        coachJson.addProperty("leadership", trainer.getLeadership());
+        coachJson.addProperty("trainerType",
+                trainer.getTrainerType() == null ? null : trainer.getTrainerType().toString());
+        if (model.getClub() != null) {
+            coachJson.addProperty("assistantCoaches", model.getClub().getCoTrainer());
+        }
+        json.add("coach", coachJson);
 
         final var staff = new JsonArray();
         if (model.getStaff() != null) {
@@ -157,6 +209,178 @@ public final class TeamTools {
         }
         final var json = new JsonObject();
         json.add("matches", matches);
+        return json;
+    }
+
+    private static JsonObject leagueTable() throws McpToolException {
+        final var model = McpJson.model();
+        final var xtra = model.getXtraDaten();
+        if (xtra == null) {
+            throw new McpToolException("HO holds no series data yet. Download the team first.");
+        }
+        // The league LEVEL UNIT id, not Basics.getLiga() - that one is the league, not the series.
+        final var fixtures = DBManager.instance()
+                .getSpielplan(xtra.getLeagueLevelUnitID(), model.getBasics().getSeason());
+        if (fixtures == null || fixtures.getTable() == null) {
+            throw new McpToolException("HO has not downloaded this season's series yet.");
+        }
+
+        final var json = new JsonObject();
+        json.addProperty("seriesName", fixtures.getLigaName());
+        json.addProperty("leagueLevelUnitId", fixtures.getLigaId());
+        json.addProperty("season", fixtures.getSaison());
+
+        final var rows = new JsonArray();
+        for (final var entry : fixtures.getTable().getEntries()) {
+            final var row = new JsonObject();
+            row.addProperty("position", entry.getPosition());
+            row.addProperty("previousPosition", entry.getPreviousPosition());
+            row.addProperty("teamId", entry.getTeamId());
+            row.addProperty("teamName", entry.getTeamName());
+            row.addProperty("played", entry.getAnzSpiele());
+            row.addProperty("won", entry.getG_Siege());
+            row.addProperty("drawn", entry.getG_Un());
+            row.addProperty("lost", entry.getG_Nied());
+            row.addProperty("points", entry.getPoints());
+            row.addProperty("goalsFor", entry.getGoalsFor());
+            row.addProperty("goalsAgainst", entry.getGoalsAgainst());
+            row.addProperty("goalDifference", entry.getGoalsDiff());
+            rows.add(row);
+        }
+        json.add("table", rows);
+        return json;
+    }
+
+    private static JsonObject finances(JsonObject args) throws McpToolException {
+        final var model = McpJson.model();
+        final var economy = model.getEconomy();
+        if (economy == null) {
+            throw new McpToolException("HO holds no financial statement for the latest download.");
+        }
+
+        final var json = new JsonObject();
+        json.addProperty("cash", money(economy.getCash()));
+        json.addProperty("expectedCash", money(economy.getExpectedCash()));
+        json.addProperty("expectedWeeksTotal", money(economy.getExpectedWeeksTotal()));
+        json.addProperty("sponsorsPopularity", economy.getSponsorsPopularity());
+        json.addProperty("supportersPopularity", economy.getSupportersPopularity());
+        // Last week's copy is what makes the statement readable as a trend rather than a snapshot.
+        json.add("thisWeek", thisWeek(economy));
+        json.add("lastWeek", lastWeek(economy));
+
+        final var club = model.getClub();
+        if (club != null) {
+            // The staff levels next door on Verein are what drives the cost line above.
+            final var clubJson = new JsonObject();
+            clubJson.addProperty("fans", club.getFans());
+            clubJson.addProperty("doctors", club.getAerzte());
+            clubJson.addProperty("sportPsychologists", club.getPsychologen());
+            clubJson.addProperty("spokespersons", club.getPRManager());
+            clubJson.addProperty("assistantCoaches", club.getCoTrainer());
+            clubJson.addProperty("financialDirectors", club.getFinancialDirectorLevels());
+            clubJson.addProperty("formCoaches", club.getFormCoachLevels());
+            clubJson.addProperty("tacticalAssistants", club.getTacticalAssistantLevels());
+            json.add("club", clubJson);
+        }
+
+        if (model.getStadium() != null) {
+            json.add("stadium", stadium(model.getStadium(), model.getBasics().getTeamId(),
+                    McpJson.optInt(args, "homeMatches", DEFAULT_HOME_MATCHES)));
+        }
+        return json;
+    }
+
+    private static JsonObject thisWeek(Economy economy) {
+        final var json = new JsonObject();
+        json.addProperty("incomeSum", money(economy.getIncomeSum()));
+        json.addProperty("incomeSponsors", money(economy.getIncomeSponsors()));
+        json.addProperty("incomeSponsorsBonus", money(economy.getIncomeSponsorsBonus()));
+        json.addProperty("incomeSpectators", money(economy.getIncomeSpectators()));
+        json.addProperty("incomeFinancial", money(economy.getIncomeFinancial()));
+        json.addProperty("incomeSoldPlayers", money(economy.getIncomeSoldPlayers()));
+        json.addProperty("incomeSoldPlayersCommission", money(economy.getIncomeSoldPlayersCommission()));
+        json.addProperty("costsSum", money(economy.getCostsSum()));
+        json.addProperty("costsPlayers", money(economy.getCostsPlayers()));
+        json.addProperty("costsArena", money(economy.getCostsArena()));
+        json.addProperty("costsStaff", money(economy.getCostsStaff()));
+        json.addProperty("costsYouth", money(economy.getCostsYouth()));
+        json.addProperty("costsFinancial", money(economy.getCostsFinancial()));
+        json.addProperty("costsBoughtPlayers", money(economy.getCostsBoughtPlayers()));
+        json.addProperty("costsArenaBuilding", money(economy.getCostsArenaBuilding()));
+        return json;
+    }
+
+    private static JsonObject lastWeek(Economy economy) {
+        final var json = new JsonObject();
+        json.addProperty("incomeSum", money(economy.getLastIncomeSum()));
+        json.addProperty("incomeSponsors", money(economy.getLastIncomeSponsors()));
+        json.addProperty("incomeSponsorsBonus", money(economy.getLastIncomeSponsorsBonus()));
+        json.addProperty("incomeSpectators", money(economy.getLastIncomeSpectators()));
+        json.addProperty("incomeFinancial", money(economy.getLastIncomeFinancial()));
+        json.addProperty("incomeSoldPlayers", money(economy.getLastIncomeSoldPlayers()));
+        json.addProperty("incomeSoldPlayersCommission", money(economy.getLastIncomeSoldPlayersCommission()));
+        json.addProperty("costsSum", money(economy.getLastCostsSum()));
+        json.addProperty("costsPlayers", money(economy.getLastCostsPlayers()));
+        json.addProperty("costsArena", money(economy.getLastCostsArena()));
+        json.addProperty("costsStaff", money(economy.getLastCostsStaff()));
+        json.addProperty("costsYouth", money(economy.getLastCostsYouth()));
+        json.addProperty("costsFinancial", money(economy.getLastCostsFinancial()));
+        json.addProperty("costsBoughtPlayers", money(economy.getLastCostsBoughtPlayers()));
+        json.addProperty("costsArenaBuilding", money(economy.getLastCostsArenaBuilding()));
+        json.addProperty("weeksTotal", money(economy.getLastWeeksTotal()));
+        return json;
+    }
+
+    /**
+     * The stands, plus what actually turned up at the last home matches. Capacity alone cannot
+     * answer an expansion question - the ratio between the two can, so both sources are joined here.
+     */
+    private static JsonObject stadium(Stadium stadium, int teamId, int homeMatches) {
+        final var json = new JsonObject();
+        json.addProperty("name", stadium.getStadiumName());
+        json.addProperty("capacity", stadium.getTotalSize());
+        json.addProperty("terraces", stadium.getTerraces());
+        json.addProperty("basicSeating", stadium.getBasicSeating());
+        json.addProperty("underRoofSeating", stadium.getUnderRoofSeating());
+        json.addProperty("vipBoxes", stadium.getVipBox());
+        stadium.getTotalSizeUnderConstruction()
+                .ifPresent(size -> json.addProperty("capacityUnderConstruction", size));
+        stadium.getFutureTotalSize().ifPresent(size -> json.addProperty("futureCapacity", size));
+        if (stadium.getExpansionCostsInSwedishKrona() != null) {
+            json.addProperty("expansionCosts", stadium.getExpansionCostsInSwedishKrona());
+        }
+
+        var sum = 0;
+        final var attendances = new JsonArray();
+        // Scan wider than we need: only about half of the played matches are at home.
+        for (final var info : DBManager.instance().getOwnPlayedMatchInfo(homeMatches * 4, true)) {
+            if (attendances.size() >= homeMatches) {
+                break;
+            }
+            if (info.getHomeTeamID() != teamId) {
+                continue;
+            }
+            final var details = DBManager.instance()
+                    .loadMatchDetails(info.getMatchType().getId(), info.getMatchID());
+            if (details == null || details.getZuschauer() <= 0) {
+                continue;
+            }
+            final var entry = new JsonObject();
+            entry.addProperty("matchId", info.getMatchID());
+            entry.addProperty("date",
+                    info.getMatchSchedule() == null ? null : info.getMatchSchedule().toHT());
+            entry.addProperty("attendance", details.getZuschauer());
+            attendances.add(entry);
+            sum += details.getZuschauer();
+        }
+        json.add("recentHomeAttendance", attendances);
+        if (!attendances.isEmpty()) {
+            final var average = (double) sum / attendances.size();
+            json.addProperty("averageHomeAttendance", average);
+            if (stadium.getTotalSize() > 0) {
+                json.addProperty("utilisation", average / stadium.getTotalSize());
+            }
+        }
         return json;
     }
 }

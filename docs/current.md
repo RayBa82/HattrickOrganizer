@@ -170,3 +170,96 @@ Implemented per `docs/superpowers/plans/2026-08-30-mcp-server.md`:
 - `McpServerPanel` writes both `UserParameter.instance()` and `UserParameter.temp()`, because it
   takes effect immediately rather than on the options dialog's OK.
 - The new `ls.options.mcp.*` keys are English-only until a maintainer adds them to POEditor.
+
+### Second pass: training, coach, and the assumptions behind a rating
+
+A peer agent driving the server reported that HO's headline feature — training — was unreachable,
+and that it could not tell what a rating had been computed against. Eleven tools now, not ten:
+
+- **`get_training`** (`core/mcp/TrainingTools.java`) reports the current settings out of
+  `HOModel.getTraining()` — type, intensity, stamina share, coach level, assistant level, plus the
+  role ids that get full and partial training from `WeeklyTrainingType` — and, per player, the
+  predicted skill changes from `FutureTrainingManager` with its `trainingSpeed` to rank by.
+  It reads the **future training plan** (`DBManager.getFutureTrainingsVector()`), which stays empty
+  until the user has opened the Training tab once; the tool then returns the settings plus
+  `status: no_future_training_plan` and a note rather than an empty prediction. The status is a
+  stable marker on purpose — from outside, "no plan stored" and "nobody is being trained" look
+  identical, and only the first is something the user can fix by clicking. `FutureTrainingManager`'s constructor previews over
+  `UserParameter.futureWeeks` before we ask for our own window, so a plan shorter than that logs a
+  warning per player and changes nothing — the second `previewPlayer(weeks)` is what the numbers
+  come from.
+- **`get_team`** gained a `mood` block (team spirit, sub team spirit, confidence) and a `coach`
+  block. The head coach is *not* in `HOModel.getStaff()` — he is `HOModel.getTrainer()`, a `Player`
+  with `getCoachSkill()`/`getLeadership()`. That method never returns null; it fabricates an empty
+  `Player` for NT teams, so a coachless team reads as `coachSkill` 0.
+- **`get_squad`/`get_player`** now carry `skillsWithSublevel` (level + `Player.getSub4Skill`) next to
+  the integer `skills`, plus `suspended` and `available`. Without sublevels there is no way to see
+  which skill is about to pop, which is the whole point of tracking training.
+- **Rating outputs** carry `hatStats90` and an `assumptions` block (team spirit, confidence,
+  location, weather, plus `hrfId` and `snapshotDate` — team spirit and confidence move between
+  downloads, so two evaluations are only comparable when the `hrfId` matches). Team spirit and confidence always did feed the numbers — the rating model is
+  built from the `Team` object — they just were not reported, so two evaluations could not be
+  compared honestly.
+- **`evaluate_lineup`/`apply_lineup` reject an injured or suspended player**, overridable with
+  `allowUnavailable`. The check sits in `LineupTools.applySpec`, the one path both tools share. It
+  reads `HOVerwaltung.instance().getModel()` directly rather than `McpJson.model()`: with no
+  snapshot loaded there is nothing to check ids against, and that keeps `scratchLineup` usable in
+  the unit tests, which have no model.
+
+Still missing, in the order the peer ranked them: match history and match details, league table,
+finances beyond the three totals in `get_team`, stadium utilisation, a TSI/wage/form-aware player
+valuation, the youth academy, substitutions and conditional orders in `apply_lineup`, and
+minutes-played-at-trained-position per player.
+
+## The rest of the MCP read surface
+
+Five more tools, sixteen in total. None of them needed a new CHPP parser, a DB migration or a new
+translation key — in every case HO already held the data and nothing exposed it.
+
+### `get_matches` / `get_match` / `predict_match` — `core/mcp/MatchTools.java`
+
+- **`get_matches`** wraps `DBManager.getOwnPlayedMatchInfo(count, officialOnly)`: result,
+  competition, location and outcome, most recent first. Every row carries `matchTypeId` next to
+  `matchId`, because `matchType` is half the key of every match row — a match id alone does not
+  identify one.
+- **`get_match`** joins `loadMatchDetails` (both sides' sector ratings, HatStats, tactic, attitude,
+  formation, attendance) with `getMatchLineupPlayers` (our own per-player match ratings, which is
+  what makes predicted-vs-actual checkable). `matchType` is an optional argument: passing it null
+  makes `MatchesKurzInfoTable.getMatchesKurzInfoByMatchID` fall back to `WHERE MATCHID=?`, which is
+  all a caller holding a bare id can do. The result row and the details are downloaded separately,
+  so a match with no details returns `status: no_match_details` rather than an empty object — the
+  same kind of stable marker `get_training` uses, and for the same reason: from outside, "never
+  downloaded" and "nothing to report" look identical.
+- **`predict_match`** drives `MatchPredictionManager`: our seven sectors out of the current lineup
+  on a **private** rating model, the opponent's seven supplied as arguments (take them from
+  `get_match` on one of their recent games), then `calculateNMatches` over both. Reports win / draw /
+  loss probabilities plus goals and chances per match for either side. The tactic level is
+  `getTacticRating(lineup, 0)` with the `+1` that `SimButtonListener.getTacticLevel` applies.
+
+### `get_league_table` / `get_finances` — added to `TeamTools`
+
+- **`get_league_table`** is `DBManager.getSpielplan(xtra.getLeagueLevelUnitID(), season)` →
+  `MatchFixtures.getTable()` → all eight `SerieTableEntry` rows. Note the league *level unit* id out
+  of `getXtraDaten()`, not `Basics.getLiga()`.
+- **`get_finances`** reports the whole `Economy` statement with last week's copy beside it — the
+  trend is the point, one week's numbers are not readable on their own — plus the `Verein` fan club
+  and the staff levels that drive the cost line, and the stadium. The stadium block joins
+  `tool.arenasizer.Stadium` (stands, under construction, future sizes, expansion cost) with
+  `Matchdetails.getZuschauer()` over the last few home matches and reports the utilisation ratio:
+  capacity on its own cannot answer an expansion question.
+
+**Verification status:** full suite green (585 tests, 51 suites, 0 failures). The tool bodies still
+need a loaded `HOModel` and a database, so the new tests assert the surface — names, schemas,
+required arguments — exactly like the other tool tests.
+
+### Deliberately not built: `refresh`
+
+`OnlineWorker.getHrf(JDialog parent)` is Swing-coupled and puts progress dialogs on screen, so an
+MCP-triggered download would have to marshal to the EDT and would visibly take over the user's
+window. It is also a live CHPP call, the same territory as the transfer-search unlock button. The
+`assumptions` block on every rating output already carries `hrfId` and `snapshotDate`, which is
+enough for a client to notice a stale snapshot and tell the user to press download itself.
+
+Still missing after this pass, in the order the peer agent ranked them: substitutions and
+conditional orders in `apply_lineup`, a TSI/wage/form-aware player valuation, the youth academy, and
+minutes-played-at-trained-position per player.

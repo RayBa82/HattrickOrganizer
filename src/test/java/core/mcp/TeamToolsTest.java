@@ -12,9 +12,24 @@ import static org.assertj.core.api.Assertions.assertThat;
 class TeamToolsTest {
 
     @Test
-    void tools_areTheFourReadTools() {
+    void tools_areTheSixReadTools() {
         assertThat(TeamTools.tools()).extracting(McpTool::name)
-                .containsExactly("get_team", "get_squad", "get_player", "get_upcoming_matches");
+                .containsExactly("get_team", "get_squad", "get_player", "get_upcoming_matches",
+                        "get_league_table", "get_finances");
+    }
+
+    @Test
+    void theStandingsAndTheStatementTakeNoRequiredArguments() {
+        final var byName = TeamTools.tools().stream()
+                .filter(t -> t.name().equals("get_league_table") || t.name().equals("get_finances"))
+                .toList();
+
+        assertThat(byName).hasSize(2);
+        assertThat(byName).allSatisfy(
+                t -> assertThat(t.inputSchema().getAsJsonArray("required")).isEmpty());
+        // the stadium block reads back a few played home matches, and how many is tunable
+        assertThat(byName.get(1).inputSchema().getAsJsonObject("properties").has("homeMatches"))
+                .isTrue();
     }
 
     @Test

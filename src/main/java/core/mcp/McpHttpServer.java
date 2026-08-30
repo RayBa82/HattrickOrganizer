@@ -70,6 +70,8 @@ public final class McpHttpServer {
         registerAll(TeamTools.tools());
         registerAll(TransferTools.tools());
         registerAll(LineupTools.tools());
+        registerAll(TrainingTools.tools());
+        registerAll(MatchTools.tools());
     }
 
     public synchronized boolean isRunning() {

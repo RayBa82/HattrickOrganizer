@@ -71,19 +71,52 @@ public final class LineupTools {
                         "tactic", McpTool.prop("integer", "tactic type"),
                         "attitude", McpTool.prop("integer", "attitude"),
                         "styleOfPlay", McpTool.prop("integer", "style of play, -10 defensive to 10 offensive"),
+                        "allowUnavailable", McpTool.prop("boolean", "score the lineup even though it fields an injured or suspended player; rejected by default"),
                         "captainId", McpTool.prop("integer", "player id of the captain"),
                         "setPiecesTakerId", McpTool.prop("integer", "player id of the set pieces taker")),
                 "positions");
     }
 
     /** A throwaway lineup built from a lineup spec. Never the live one. */
-    static Lineup scratchLineup(JsonObject spec) {
+    static Lineup scratchLineup(JsonObject spec) throws McpToolException {
         final var lineup = new Lineup();
         applySpec(lineup, spec);
         return lineup;
     }
 
-    private static void applySpec(Lineup lineup, JsonObject spec) {
+    /**
+     * Rejects a spec that fields an injured or suspended player, unless the caller opted out with
+     * {@code allowUnavailable}. Both evaluate_lineup and apply_lineup route through here, so the
+     * check sits here rather than in either tool.
+     */
+    private static void rejectUnavailable(JsonObject spec) throws McpToolException {
+        if (McpJson.optBool(spec, "allowUnavailable", false)) {
+            return;
+        }
+        // Deliberately not McpJson.model(): with no snapshot loaded there is nothing to check the
+        // ids against, and the tools that need one fail on their own further down.
+        final var model = core.model.HOVerwaltung.instance().getModel();
+        if (model == null) {
+            return;
+        }
+        final var complaints = new java.util.ArrayList<String>();
+        for (final var element : McpJson.reqArray(spec, "positions")) {
+            final var playerId = McpJson.reqInt(element.getAsJsonObject(), "playerId");
+            final var player = playerId > 0 ? model.getCurrentPlayer(playerId) : null;
+            if (player != null && !McpJson.isAvailable(player)) {
+                complaints.add(player.getFullName() + " (" + playerId + ") is "
+                        + (player.isRedCarded() ? "suspended" : "injured for "
+                        + player.getInjuryWeeks() + " more week(s)"));
+            }
+        }
+        if (!complaints.isEmpty()) {
+            throw new McpToolException("Cannot field: " + String.join("; ", complaints)
+                    + ". Pass allowUnavailable true to score the lineup anyway.");
+        }
+    }
+
+    private static void applySpec(Lineup lineup, JsonObject spec) throws McpToolException {
+        rejectUnavailable(spec);
         for (final var element : McpJson.reqArray(spec, "positions")) {
             final var position = element.getAsJsonObject();
             lineup.setSpielerAtPosition(McpJson.reqInt(position, "roleId"),
