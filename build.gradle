@@ -338,12 +338,9 @@ tasks.register("makeAllMedias") {
 tasks.register("preparingBuild") {
     group 'sub tasks'
     doLast {
-        //     Deleting build project     ---------------------------------------------------------------------
-        println("Deleting build and execution files ....")
-        project.delete(files("${projectDir}/db"))
-        project.delete(files("${projectDir}/logs"))
-        project.delete(files("${projectDir}/themes"))
-        project.delete(files("${projectDir}/user.xml"))
+        // Do NOT delete db/, logs/, themes/ or user.xml here: this task runs on every build
+        // (pushmd -> markdownToHtml -> poeditorPull -> processResources -> compileJava), and HO
+        // running portable from the IDE or `gradle run` keeps its database in the project dir.
         //     Creating Target directory ...  ---------------------------------------------------------------------
         mkdir project.ext.target_dir
     }
