@@ -234,6 +234,15 @@ public class HO {
 			// stop display splash image
 			interruptionWindow.setVisible(false);
 			interruptionWindow.dispose();
+
+			if (UserParameter.instance().mcpServerEnabled) {
+				try {
+					core.mcp.McpHttpServer.instance().registerAllTools();
+					core.mcp.McpHttpServer.instance().start(UserParameter.instance().mcpServerPort);
+				} catch (Exception e) {
+					HOLogger.instance().error(HO.class, e);
+				}
+			}
 		});
 	}
 

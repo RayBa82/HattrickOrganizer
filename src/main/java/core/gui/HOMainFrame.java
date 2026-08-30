@@ -288,6 +288,8 @@ public final class HOMainFrame extends JFrame implements Refreshable {
 			// Save module configs
 			ModuleConfig.instance().save();
 			HOLogger.instance().debug(getClass(), "Module configurations saved");
+			core.mcp.McpHttpServer.instance().stop();
+			HOLogger.instance().debug(getClass(), "MCP server stopped");
 			// Disconnect
 			DBManager.instance().disconnect();
 			HOLogger.instance().debug(getClass(), "Disconnected");

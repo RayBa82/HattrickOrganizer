@@ -100,6 +100,9 @@ public class OptionenDialog extends JDialog {
         m_jpReleaseChannelsPanel = new ReleaseChannelPanel();
         tabbedPane.addTab(TranslationFacility.tr("options.tabtitle.release_channels"), new JScrollPane(m_jpReleaseChannelsPanel));
 
+        tabbedPane.addTab(TranslationFacility.tr("ls.options.mcp.tabtitle"),
+                new JScrollPane(new McpServerPanel()));
+
         // Columns
         UserColumnsPanel m_jpUserColumns = new UserColumnsPanel();
         tabbedPane.addTab(TranslationFacility.tr("columns"), new JScrollPane(m_jpUserColumns));

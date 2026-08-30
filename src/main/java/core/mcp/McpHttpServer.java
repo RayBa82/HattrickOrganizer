@@ -65,6 +65,13 @@ public final class McpHttpServer {
         toolList.forEach(this::register);
     }
 
+    /** Register the whole tool surface. Idempotent - the map is keyed on the tool name. */
+    public void registerAllTools() {
+        registerAll(TeamTools.tools());
+        registerAll(TransferTools.tools());
+        registerAll(LineupTools.tools());
+    }
+
     public synchronized boolean isRunning() {
         return server != null;
     }
