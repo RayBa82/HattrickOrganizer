@@ -8,6 +8,7 @@ import core.model.TranslationFacility;
 import core.model.player.Player;
 import module.transfer.history.HistoryPane;
 import module.transfer.scout.TransferScoutPanel;
+import module.transfer.search.TransferSearchPanel;
 import module.transfer.transfertype.TransferTypePane;
 
 import javax.swing.*;
@@ -22,6 +23,7 @@ public class TransfersPanel extends JPanel implements IRefreshable {
 	private List<Player> players;
 	private final TransferTypePane transferTypePane;
 	private final TransferScoutPanel scoutPanel;
+	private final TransferSearchPanel searchPanel;
 
 	public TransfersPanel() {
 
@@ -39,6 +41,9 @@ public class TransfersPanel extends JPanel implements IRefreshable {
 
 		scoutPanel = new TransferScoutPanel();
 		tabPane.add(TranslationFacility.tr("TransferScout"), scoutPanel);
+
+		searchPanel = new TransferSearchPanel(scoutPanel);
+		tabPane.add(TranslationFacility.tr("ls.transfersearch"), searchPanel);
 
 		setLayout(new BorderLayout());
 		add(tabPane, BorderLayout.CENTER);
@@ -64,10 +69,10 @@ public class TransfersPanel extends JPanel implements IRefreshable {
 		if ((!allOutdated.isEmpty()) && !HOVerwaltung.instance().getModel().getBasics().isNationalTeam() &&  (DBManager.instance().getTransfers(0, true, true).isEmpty())) {
 			success = XMLParser.updateTeamTransfers(HOVerwaltung.instance().getModel().getBasics().getTeamId());
 		}
-		
+
 		// If download is cancelled, the below will give authorization requests for each player.
 		// Don't do this if first download access was cancelled. This is relevant on hrf import to empty db.
-		// Also, Db is called to do downloads? Truly messed up. 
+		// Also, Db is called to do downloads? Truly messed up.
 		if (success) {
 			for (final Player player : allOutdated) {
 				XMLParser.updatePlayerTransfers(player.getPlayerId());
@@ -97,6 +102,7 @@ public class TransfersPanel extends JPanel implements IRefreshable {
 	public void storeUserSettings() {
 		historyPane.storeUserSettings();
 		scoutPanel.storeUserSettings();
+		searchPanel.storeUserSettings();
 	}
 
 	public void selectTransfer(int transferId) {
