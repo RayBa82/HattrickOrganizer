@@ -166,3 +166,4 @@ truststore.jks
 /.codex/config.toml
 /mcp_config.json
 /.gemini/settings.json
+/.agents/
