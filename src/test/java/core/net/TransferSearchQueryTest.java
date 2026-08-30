@@ -60,4 +60,69 @@ class TransferSearchQueryTest {
         assertThat(TransferSearchQuery.Skill.KEEPER.toPlayerSkill()).isEqualTo(PlayerSkill.KEEPER);
         assertThat(TransferSearchQuery.Skill.SETPIECES.toPlayerSkill()).isEqualTo(PlayerSkill.SETPIECES);
     }
+
+    private static TransferSearchQuery.TransferSearchQueryBuilder validQuery() {
+        return TransferSearchQuery.builder()
+                .ageMin(20)
+                .ageMax(22)
+                .skillType1(TransferSearchQuery.Skill.PLAYMAKING)
+                .minSkillValue1(7)
+                .maxSkillValue1(9);
+    }
+
+    @Test
+    void validationErrorKey_acceptsAValidQuery() {
+        assertThat(validQuery().build().validationErrorKey()).isNull();
+    }
+
+    @Test
+    void validationErrorKey_rejectsAnInvertedAgeRange() {
+        assertThat(validQuery().ageMin(25).ageMax(20).build().validationErrorKey())
+                .isEqualTo("ls.transfersearch.error.agerange");
+    }
+
+    @Test
+    void validationErrorKey_rejectsASkillRangeOfMoreThanFourLevels() {
+        assertThat(validQuery().minSkillValue1(5).maxSkillValue1(10).build().validationErrorKey())
+                .isEqualTo("ls.transfersearch.error.skillrange");
+    }
+
+    @Test
+    void validationErrorKey_rejectsAnInvertedSkillRange() {
+        assertThat(validQuery().minSkillValue1(9).maxSkillValue1(7).build().validationErrorKey())
+                .isEqualTo("ls.transfersearch.error.skillrange");
+    }
+
+    @Test
+    void validationErrorKey_rejectsSetPiecesBelowLevelFive() {
+        assertThat(validQuery()
+                .skillType1(TransferSearchQuery.Skill.SETPIECES)
+                .minSkillValue1(4)
+                .maxSkillValue1(8)
+                .build()
+                .validationErrorKey())
+                .isEqualTo("ls.transfersearch.error.minlevel");
+    }
+
+    @Test
+    void validationErrorKey_rejectsKeeperBelowLevelThree() {
+        assertThat(validQuery()
+                .skillType1(TransferSearchQuery.Skill.KEEPER)
+                .minSkillValue1(2)
+                .maxSkillValue1(6)
+                .build()
+                .validationErrorKey())
+                .isEqualTo("ls.transfersearch.error.minlevel");
+    }
+
+    @Test
+    void validationErrorKey_checksTheSecondarySkillsToo() {
+        assertThat(validQuery()
+                .skillType2(TransferSearchQuery.Skill.WINGER)
+                .minSkillValue2(4)
+                .maxSkillValue2(12)
+                .build()
+                .validationErrorKey())
+                .isEqualTo("ls.transfersearch.error.skillrange");
+    }
 }

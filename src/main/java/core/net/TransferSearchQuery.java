@@ -75,6 +75,54 @@ public record TransferSearchQuery(
     }
 
     /**
+     * Checks the rules Hattrick enforces server side, which answers a violation with an error file
+     * rather than with an empty result.
+     *
+     * @return the translation key of the message to show, or null if the query is acceptable
+     */
+    public String validationErrorKey() {
+        if (ageMin > ageMax) {
+            return "ls.transfersearch.error.agerange";
+        }
+        final String[] checks = {
+                check(skillType1, minSkillValue1, maxSkillValue1),
+                check(skillType2, minSkillValue2, maxSkillValue2),
+                check(skillType3, minSkillValue3, maxSkillValue3),
+                check(skillType4, minSkillValue4, maxSkillValue4)
+        };
+        for (final var error : checks) {
+            if (error != null) {
+                return error;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The minimum level Hattrick accepts for a skill, 0 for the skills without a lower limit.
+     */
+    private static int minimumLevel(Skill skill) {
+        return switch (skill) {
+            case SETPIECES, LEADERSHIP, EXPERIENCE -> 5;
+            case KEEPER -> 3;
+            default -> 0;
+        };
+    }
+
+    private static String check(Skill skill, Integer min, Integer max) {
+        if (skill == null || min == null || max == null) {
+            return null;
+        }
+        if (min > max || max - min > 4) {
+            return "ls.transfersearch.error.skillrange";
+        }
+        if (min < minimumLevel(skill)) {
+            return "ls.transfersearch.error.minlevel";
+        }
+        return null;
+    }
+
+    /**
      * The query parameters of this search, unset ones omitted so that Hattrick applies its own
      * defaults. Starts with an ampersand, to be appended to the file and version parameters.
      */
