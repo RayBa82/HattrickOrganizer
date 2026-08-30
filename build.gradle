@@ -71,6 +71,10 @@ dependencies {
 
 test {
     useJUnitPlatform()
+    // Tests that touch DBManager create a database, a users.json and logs. Keep them inside the
+    // build folder, which clean wipes on every build, instead of the working directory or the
+    // real HO folder of the user.
+    systemProperty 'ho.dbParentFolder', layout.buildDirectory.dir('test-ho').get().asFile.absolutePath
 }
 
 //  configure application plugin --------------------------------

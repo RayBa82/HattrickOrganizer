@@ -504,6 +504,18 @@ public class Connector {
 	}
 
 	/**
+	 * Search the transfer market.
+	 * <p>
+	 * CHPP does not allow the transfer market to be scanned automatically: this may only be
+	 * called on an explicit user request, never from a timer or a background refresh.
+	 */
+	public String getTransferSearch(TransferSearchQuery query) {
+		final String url = htUrl + "?file=transfersearch&version=1.1" + query.toQueryString();
+
+		return getCHPPWebFile(url);
+	}
+
+	/**
 	 * holt die Vereinsdaten
 	 */
 	public String getVerein(int teamId) {

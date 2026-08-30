@@ -51,7 +51,7 @@ Updates to a newer version should be documented here in the `Used Version` colum
 | tournamentlist         | Information about tournaments that the user is currently playing in.                        | 1.0 (2013-10-17)         |              |
 | training               | Training                                                                                    | 2.2 (2013-11-21)         | 2.1          |
 | trainingevents         | Get training events for a player.                                                           | 1.3 (2013-03-04)         | -            |
-| transfersearch         | Search the transfer market.                                                                 | 1.1 (2022-03-03)         | -            |
+| transfersearch         | Search the transfer market.                                                                 | 1.1 (2022-03-03)         | 1.1          |
 | transfersteam          | Get the transfer history of a team                                                          | 1.2 (2011-04-13)         | 1.1          |
 | transfersplayer        | Get all transfers of a player                                                               | 1.1                      | 1.1          |
 | translations           | Translations for the denominations in the game.                                             | 1.2 (2022-03-04)         | -            |

@@ -83,7 +83,13 @@ public class UserManager {
 
 
     private void setDBParentFolder(){
-        if (! HO.isPortableVersion()) {
+        // The test task points this at the build folder, so that tests never create a database,
+        // a users.json or logs in the working directory or in the real HO folder of the user.
+        var configuredFolder = System.getProperty("ho.dbParentFolder");
+        if (configuredFolder != null) {
+            dbParentFolder = configuredFolder;
+        }
+        else if (! HO.isPortableVersion()) {
             if (HO.getPlatform() == OSUtils.OS.LINUX) {
                 dbParentFolder = System.getProperty("user.home") + "/.ho";}
             else if (HO.getPlatform() == OSUtils.OS.MAC) {

@@ -1,6 +1,5 @@
 package core.db.user;
 
-import core.HO;
 import org.jetbrains.annotations.NotNull;
 import java.nio.file.Paths;
 
@@ -56,8 +55,9 @@ public class User{
 	private void fillUserInfos(){
 		this.dbFolder = Paths.get(UserManager.instance().getDbParentFolder() , this.baseUser.dbName).toString();
 
-		if (HO.isPortableVersion()) this.dbURL = "jdbc:hsqldb:file:" + this.baseUser.dbName + "/database";
-		else this.dbURL = "jdbc:hsqldb:file:" + dbFolder + "/database";
+		// Always derived from the db folder: a relative url would silently put the database next to
+		// the working directory of the process instead of into the folder the rest of HO uses.
+		this.dbURL = "jdbc:hsqldb:file:" + dbFolder + "/database";
 	}
 
 	public static User createDefaultUser() {
