@@ -82,9 +82,23 @@ class TransferSearchQueryTest {
     }
 
     @Test
-    void validationErrorKey_rejectsASkillRangeOfMoreThanFourLevels() {
+    void validationErrorKey_rejectsASkillRangeOfMoreThanThreeLevels() {
         assertThat(validQuery().minSkillValue1(5).maxSkillValue1(10).build().validationErrorKey())
                 .isEqualTo("ls.transfersearch.error.skillrange");
+    }
+
+    @Test
+    void validationErrorKey_rejectsAWindowFourLevelsApart() {
+        // Hattrick counts the levels inclusively: 7..11 is five levels and comes back as
+        // "No primary skill with min and max range has been specified".
+        assertThat(validQuery().minSkillValue1(7).maxSkillValue1(11).build().validationErrorKey())
+                .isEqualTo("ls.transfersearch.error.skillrange");
+    }
+
+    @Test
+    void validationErrorKey_acceptsAWindowThreeLevelsApart() {
+        assertThat(validQuery().minSkillValue1(7).maxSkillValue1(10).build().validationErrorKey())
+                .isNull();
     }
 
     @Test
@@ -98,7 +112,7 @@ class TransferSearchQueryTest {
         assertThat(validQuery()
                 .skillType1(TransferSearchQuery.Skill.SETPIECES)
                 .minSkillValue1(4)
-                .maxSkillValue1(8)
+                .maxSkillValue1(7)
                 .build()
                 .validationErrorKey())
                 .isEqualTo("ls.transfersearch.error.minlevel");
@@ -109,7 +123,7 @@ class TransferSearchQueryTest {
         assertThat(validQuery()
                 .skillType1(TransferSearchQuery.Skill.KEEPER)
                 .minSkillValue1(2)
-                .maxSkillValue1(6)
+                .maxSkillValue1(5)
                 .build()
                 .validationErrorKey())
                 .isEqualTo("ls.transfersearch.error.minlevel");

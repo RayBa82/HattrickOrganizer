@@ -9,8 +9,10 @@ import lombok.NonNull;
  * <p>
  * Age and one skill are mandatory, everything else narrows the search down. Hattrick enforces
  * a few rules server side, so an invalid combination comes back as an error file, not as an
- * empty result: the distance between min and max skill value may be at most 4 levels, set
- * pieces / leadership / experience need a minimum level of 5 and keeper a minimum of 3.
+ * empty result: a skill window may span at most 4 levels <em>counted inclusively</em>, so min and
+ * max may differ by at most 3 - a difference of 4 is answered with "No primary skill with min and
+ * max range has been specified", whatever the docs say. Set pieces / leadership / experience need
+ * a minimum level of 5 and keeper a minimum of 3.
  *
  * @see Connector#getTransferSearch(TransferSearchQuery)
  */
@@ -113,7 +115,7 @@ public record TransferSearchQuery(
         if (skill == null || min == null || max == null) {
             return null;
         }
-        if (min > max || max - min > 4) {
+        if (min > max || max - min > 3) {
             return "ls.transfersearch.error.skillrange";
         }
         if (min < minimumLevel(skill)) {

@@ -9,9 +9,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 class LineupToolsTest {
 
     @Test
-    void tools_areTheFourLineupTools() {
+    void tools_areTheFiveLineupTools() {
         assertThat(LineupTools.tools()).extracting(McpTool::name)
-                .containsExactly("get_lineup", "evaluate_lineup", "optimize_lineup", "apply_lineup");
+                .containsExactly("get_lineup", "evaluate_lineup", "optimize_lineup", "apply_lineup",
+                        "set_player_group");
     }
 
     @Test

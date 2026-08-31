@@ -95,7 +95,9 @@ public class TransferSearchService {
                         + "press \"unlock market search\" in HO's options under MCP server first.");
             }
         }
-        return search(query);
+        // No Swing from this thread: Connector pops a modal error dialog on a CHPP error, which
+        // blocks HO until a human clicks OK and leaves the MCP request hanging until it times out.
+        return search(query, true);
     }
 
     /**
@@ -106,6 +108,10 @@ public class TransferSearchService {
      * @throws SearchFailed if the query is invalid or the download failed
      */
     public XMLTransferSearchParser.Page search(TransferSearchQuery query) throws SearchFailed {
+        return search(query, false);
+    }
+
+    private XMLTransferSearchParser.Page search(TransferSearchQuery query, boolean silent) throws SearchFailed {
         final var validationError = query.validationErrorKey();
         if (validationError != null) {
             throw new SearchFailed(validationError, "Invalid transfer search: " + validationError);
@@ -120,15 +126,36 @@ public class TransferSearchService {
             searchesThisSession++;
         }
         try {
-            return XMLTransferSearchParser.parse(fetch(query));
+            final var xml = fetch(query, silent);
+            if (xml == null || xml.isBlank()) {
+                // Silent downloads swallow the CHPP error into an empty answer; it is in the log.
+                throw new SearchFailed(null, "Hattrick rejected the transfer search. "
+                        + "The CHPP error is in HO's log.");
+            }
+            return XMLTransferSearchParser.parse(xml);
+        } catch (SearchFailed e) {
+            throw e;
         } catch (Exception e) {
             HOLogger.instance().log(TransferSearchService.class, e);
             throw new SearchFailed("Error searching transfers: " + e.getMessage(), e);
         }
     }
 
-    /** The CHPP call. Overridden in tests so that no network access is needed. */
-    protected String fetch(TransferSearchQuery query) {
-        return Connector.instance().getTransferSearch(query);
+    /**
+     * The CHPP call. Overridden in tests so that no network access is needed.
+     *
+     * @param silent suppress the modal error dialog Connector shows on a CHPP error - mandatory
+     *               off the EDT, where it would block whoever called us
+     */
+    protected String fetch(TransferSearchQuery query, boolean silent) {
+        if (!silent) {
+            return Connector.instance().getTransferSearch(query);
+        }
+        final var wasSilent = Connector.instance().setSilentDownload(true);
+        try {
+            return Connector.instance().getTransferSearch(query);
+        } finally {
+            Connector.instance().setSilentDownload(wasSilent);
+        }
     }
 }

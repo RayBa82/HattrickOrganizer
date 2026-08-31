@@ -45,7 +45,8 @@ public final class TransferTools {
                         "Search the Hattrick transfer market. Age and one skill are mandatory. Skill "
                                 + "names are KEEPER, STAMINA, SETPIECES, DEFENDING, SCORING, WINGER, "
                                 + "PASSING, PLAYMAKING, LEADERSHIP, EXPERIENCE. Hattrick rejects a "
-                                + "skill span wider than 4 levels, set pieces / leadership / "
+                                + "skill window whose min and max are more than 3 levels apart, "
+                                + "set pieces / leadership / "
                                 + "experience below level 5 and keeper below level 3. Narrow the "
                                 + "query rather than paging: Hattrick reports no exact total once "
                                 + "more than 100 players match. Searching needs the user to unlock "
@@ -198,7 +199,7 @@ public final class TransferTools {
      * The market query that describes a player: his age window, his two highest positional skills
      * and his specialty.
      * <p>
-     * Clamped so that Hattrick accepts it - a skill window may span at most 4 levels, and keeper /
+     * Clamped so that Hattrick accepts it - min and max may be at most 3 levels apart, and keeper /
      * set pieces carry a minimum level.
      */
     static TransferSearchQuery comparableQuery(Player player, int ageTolerance, int skillTolerance) {
@@ -209,7 +210,9 @@ public final class TransferTools {
         final var first = ranked.get(0);
         final var second = ranked.get(1);
 
-        final var tolerance = Math.min(Math.max(skillTolerance, 0), 2);   // a span of at most 4 levels
+        // maxLevel() clamps the window to the 3 levels Hattrick accepts, so a wide tolerance
+        // only widens it downwards.
+        final var tolerance = Math.min(Math.max(skillTolerance, 0), 2);
         return TransferSearchQuery.builder()
                 .ageMin(Math.max(player.getAge() - ageTolerance, 17))
                 .ageMax(player.getAge() + ageTolerance)
@@ -234,9 +237,9 @@ public final class TransferTools {
         return Math.max(player.getValue4Skill(skill.toPlayerSkill()) - tolerance, minimum);
     }
 
-    /** The window's upper bound, kept within 4 levels of the lower one. */
+    /** The window's upper bound, kept within the 3 levels of the lower one Hattrick accepts. */
     private static int maxLevel(TransferSearchQuery.Skill skill, Player player, int tolerance) {
         final var value = player.getValue4Skill(skill.toPlayerSkill());
-        return Math.min(value + tolerance, minLevel(skill, player, tolerance) + 4);
+        return Math.min(value + tolerance, minLevel(skill, player, tolerance) + 3);
     }
 }

@@ -93,7 +93,10 @@ Taken from the rendered CHPP docs page, saved under
 | `pageSize`       | no   | unsigned int     | 25            | max 100 |
 | `pageIndex`      | no   | unsigned int     | 0             | zero based |
 
-Server-side rules, per skill pair: max/min may differ by at most 4 levels; set pieces, leadership
+Server-side rules, per skill pair: the window may span at most 4 levels **counted inclusively**, so
+max and min may differ by at most **3** — the docs say "up to 4 levels", but `minSkillValue1=7&maxSkillValue1=11`
+is answered with error 10, "No primary skill with min and max range has been specified", while
+`7..10` works; set pieces, leadership
 and experience need a minimum level of 5, keeper a minimum of 3. `SkillID`: 1 keeper, 2 stamina,
 3 set pieces, 4 defending, 5 scoring, 6 winger, 7 passing, 8 playmaking, 9 trainer (not searchable),
 10 leadership, 11 experience.

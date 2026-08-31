@@ -278,3 +278,37 @@ enough for a client to notice a stale snapshot and tell the user to press downlo
 Still missing after this pass, in the order the peer agent ranked them: substitutions and
 conditional orders in `apply_lineup`, a TSI/wage/form-aware player valuation, the youth academy, and
 minutes-played-at-trained-position per player.
+
+## Fixed: `transfersearch` rejected every 4-apart skill window
+
+Live symptom, `logs/HO-1788133014.log`:
+
+```
+?file=transfersearch&…&skillType1=8&minSkillValue1=7&maxSkillValue1=11&skillType2=7&minSkillValue2=5&maxSkillValue2=9
+CHPP Fehler - 10 - Invalid parameter specified (10) Additional Info:
+No primary skill with min and max range has been specified
+```
+
+The same query with `7..10` / `5..8` goes through. So **Hattrick counts the window's levels
+inclusively**: "The difference between min and max can be up to 4 levels" in the CHPP spec means at
+most *four levels in the window*, i.e. `max - min <= 3`. A difference of 4 is not reported as a range
+error but as the primary skill being missing altogether, which is what made it hard to read.
+
+- `TransferSearchQuery.check()` now rejects `max - min > 3`. Both callers (the search tab and
+  `search_transfers`) validate through it, so one guard covers both.
+- `TransferTools.maxLevel()` clamps the comparables window to `minLevel + 3`.
+- `docs/chpp_files.md` records the discrepancy with the published spec.
+
+### The dialog that froze HO
+
+The same run left HO with a modal `Fehler` dialog on screen and the MCP request hanging until
+`Broken pipe`. `Connector.getCHPPWebFile` shows `JOptionPane.showMessageDialog` on any CHPP error
+unless `silentDownload` is set — on the MCP worker thread that blocks the tool call until a human
+clicks OK. `TransferSearchService.searchForAgent` now sets `silentDownload` for the duration of the
+call and restores it afterwards; a blank answer becomes a `SearchFailed` pointing at the log. The UI
+path (`OnlineWorker.searchTransfers`) is unchanged and still shows the CHPP text.
+
+Any future MCP tool that reaches CHPP has to do the same — no Swing off the EDT.
+
+**Verification status:** full suite green (589 tests, 0 failures). Live CHPP verification of the
+3-level window is the log evidence above, not a test.

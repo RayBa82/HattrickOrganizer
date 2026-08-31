@@ -57,7 +57,7 @@ class TransferSearchServiceTest {
         String lastQueryString;
 
         @Override
-        protected String fetch(TransferSearchQuery query) {
+        protected String fetch(TransferSearchQuery query, boolean silent) {
             lastQueryString = query.toQueryString();
             return ONE_RESULT;
         }
