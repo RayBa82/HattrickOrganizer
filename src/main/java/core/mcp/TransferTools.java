@@ -154,10 +154,10 @@ public final class TransferTools {
             if (e.errorKey() != null) {
                 // A query Hattrick would reject is an invalid parameter, JSON-RPC -32602, and
                 // McpHttpServer maps IllegalArgumentException onto that.
-                throw new IllegalArgumentException(e.errorKey() + ": " + e.getMessage());
+                throw new IllegalArgumentException(e.getMessage());
             }
-            // Locked market or an exhausted cap is an expected refusal the model must be able to
-            // read and act on, so it comes back as an isError tool result instead.
+            // An exhausted cap is an expected refusal the model must be able to read and act on,
+            // so it comes back as an isError tool result instead.
             throw new McpToolException(e.getMessage());
         }
 

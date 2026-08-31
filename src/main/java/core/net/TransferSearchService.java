@@ -1,11 +1,9 @@
 package core.net;
 
 import core.file.xml.XMLTransferSearchParser;
+import core.model.TranslationFacility;
 import core.model.UserParameter;
 import core.util.HOLogger;
-
-import java.time.Duration;
-import java.time.Instant;
 
 /**
  * Headless transfer market search.
@@ -14,9 +12,8 @@ import java.time.Instant;
  * any Swing call: {@code setWaitInformation} and the error dialog stay in OnlineWorker, so this can
  * be called from a plain worker thread.
  * <p>
- * CHPP does not allow the transfer market to be scanned automatically. This class exposes no entry
- * point reachable from a timer, a {@link Thread} or a scheduled task, and nothing in HO may call it
- * from one.
+ * Searches are capped per HO session ({@link core.model.UserParameter#mcpSearchesPerSession}) so
+ * that no caller can scan the market in bulk.
  */
 public class TransferSearchService {
 
@@ -53,48 +50,16 @@ public class TransferSearchService {
     TransferSearchService() {
     }
 
-    /**
-     * When the user's market search unlock expires. Null while locked. Deliberately in memory only:
-     * an unlock must not survive a restart.
-     */
-    private Instant marketUnlockedUntil;
-
     /** Searches issued in this HO session, by either caller. Bounds total CHPP traffic. */
     private int searchesThisSession;
 
     /**
-     * Open market search for {@link core.model.UserParameter#mcpMarketUnlockMinutes} minutes.
-     * Only ever called from the options panel button - a human action in HO's own UI is the
-     * precondition CHPP asks for.
-     */
-    public synchronized void unlockMarketSearch() {
-        final var minutes = Math.max(1, UserParameter.instance().mcpMarketUnlockMinutes);
-        marketUnlockedUntil = Instant.now().plus(Duration.ofMinutes(minutes));
-    }
-
-    /** Seconds left on the unlock window, 0 if market search is locked. */
-    public synchronized long marketUnlockSecondsRemaining() {
-        if (marketUnlockedUntil == null) {
-            return 0;
-        }
-        final var remaining = Duration.between(Instant.now(), marketUnlockedUntil).toSeconds();
-        return Math.max(remaining, 0);
-    }
-
-    /**
      * Search the transfer market on behalf of an MCP client.
      * <p>
-     * Refuses unless the user has unlocked market search in HO, and unless the per-session cap has
-     * room left. The message says why, so the model can act on it rather than retrying.
+     * Refused only when the per-session cap has no room left. The message says why, so the model
+     * can act on it rather than retrying.
      */
     public XMLTransferSearchParser.Page searchForAgent(TransferSearchQuery query) throws SearchFailed {
-        synchronized (this) {
-            if (marketUnlockSecondsRemaining() == 0) {
-                throw new SearchFailed(null, "Transfer market search is locked. Hattrick only allows "
-                        + "the market to be searched on an explicit user request, so the user has to "
-                        + "press \"unlock market search\" in HO's options under MCP server first.");
-            }
-        }
         // No Swing from this thread: Connector pops a modal error dialog on a CHPP error, which
         // blocks HO until a human clicks OK and leaves the MCP request hanging until it times out.
         return search(query, true);
@@ -114,7 +79,10 @@ public class TransferSearchService {
     private XMLTransferSearchParser.Page search(TransferSearchQuery query, boolean silent) throws SearchFailed {
         final var validationError = query.validationErrorKey();
         if (validationError != null) {
-            throw new SearchFailed(validationError, "Invalid transfer search: " + validationError);
+            // The translated rule, not the bare key: an MCP client only ever sees this message,
+            // and a key tells the model nothing about what to change.
+            throw new SearchFailed(validationError,
+                    "Invalid transfer search: " + TranslationFacility.tr(validationError));
         }
         synchronized (this) {
             final var cap = UserParameter.instance().mcpSearchesPerSession;

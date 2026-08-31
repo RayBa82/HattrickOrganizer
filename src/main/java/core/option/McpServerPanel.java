@@ -13,19 +13,16 @@ import javax.swing.*;
 import java.awt.*;
 
 /**
- * The MCP server switch, and the two buttons the design deliberately keeps in HO's own UI rather
- * than exposing as tools: unlocking market search, and resolving expired listings. Both start CHPP
- * traffic, so both stay a human action.
+ * The MCP server switch, and the resolve button the design deliberately keeps in HO's own UI rather
+ * than exposing as a tool: it starts a batch of CHPP calls, so it stays a human action.
  */
 public final class McpServerPanel extends ImagePanel {
 
     private final JCheckBox enabled = new JCheckBox(TranslationFacility.tr("ls.options.mcp.enabled"));
     private final JTextField port = new JTextField(6);
     private final JTextField searchCap = new JTextField(6);
-    private final JTextField unlockMinutes = new JTextField(6);
     private final JTextField resolveCap = new JTextField(6);
     private final JLabel status = new JLabel();
-    private final JLabel unlockStatus = new JLabel();
     private final JTextField url = new JTextField(34);
 
     public McpServerPanel() {
@@ -52,26 +49,11 @@ public final class McpServerPanel extends ImagePanel {
                 String.valueOf(UserParameter.instance().mcpServerPort));
         addField(c, ++c.gridy, "ls.options.mcp.searchcap", searchCap,
                 String.valueOf(UserParameter.instance().mcpSearchesPerSession));
-        addField(c, ++c.gridy, "ls.options.mcp.unlockminutes", unlockMinutes,
-                String.valueOf(UserParameter.instance().mcpMarketUnlockMinutes));
 
         c.gridx = 0;
         c.gridy++;
         add(status, c);
 
-        c.gridy++;
-        final var unlock = new JButton(TranslationFacility.tr("ls.options.mcp.unlock"));
-        unlock.setToolTipText(TranslationFacility.tr("ls.options.mcp.unlock.tt"));
-        unlock.addActionListener(e -> {
-            saveFields();
-            TransferSearchService.instance().unlockMarketSearch();
-            refreshUnlockStatus();
-        });
-        add(unlock, c);
-        c.gridx = 1;
-        add(unlockStatus, c);
-
-        c.gridx = 0;
         c.gridy++;
         final var resolve = new JButton(TranslationFacility.tr("ls.options.mcp.resolve"));
         resolve.setToolTipText(TranslationFacility.tr("ls.options.mcp.resolve.tt"));
@@ -94,7 +76,6 @@ public final class McpServerPanel extends ImagePanel {
         add(new JLabel(""), c);
 
         refreshStatus();
-        refreshUnlockStatus();
     }
 
     private void addField(GridBagConstraints c, int row, String labelKey, JTextField field, String value) {
@@ -119,16 +100,14 @@ public final class McpServerPanel extends ImagePanel {
      * copy that the options dialog persists on OK; {@link UserParameter#instance()} is what the
      * running server and {@link TransferSearchService} actually read. This panel takes effect the
      * moment a field is edited - the server starts on the checkbox, not on OK - so writing only
-     * temp() would leave the cap and the unlock duration inert until the dialog was committed.
+     * temp() would leave the cap inert until the dialog was committed.
      */
     private void saveFields() {
         final var portValue = parse(port, 8765);
         final var capValue = parse(searchCap, 20);
-        final var minutesValue = parse(unlockMinutes, 30);
         for (final var p : new UserParameter[]{UserParameter.instance(), UserParameter.temp()}) {
             p.mcpServerPort = portValue;
             p.mcpSearchesPerSession = capValue;
-            p.mcpMarketUnlockMinutes = minutesValue;
         }
     }
 
@@ -177,20 +156,11 @@ public final class McpServerPanel extends ImagePanel {
         url.setText(running ? "http://127.0.0.1:" + McpHttpServer.instance().port() + "/mcp" : "");
     }
 
-    private void refreshUnlockStatus() {
-        final var seconds = TransferSearchService.instance().marketUnlockSecondsRemaining();
-        unlockStatus.setText(seconds == 0
-                ? TranslationFacility.tr("ls.options.mcp.unlock.locked")
-                : TranslationFacility.tr("ls.options.mcp.unlock.remaining")
-                        .replace("%minutes%", String.valueOf((seconds + 59) / 60)));
-    }
-
     /**
      * Fill in what expired listings actually sold for.
      * <p>
      * One CHPP transfersPlayer call per listing, capped per run, only ever from this button - an
-     * agent must not be able to start a batch of CHPP calls. transfersPlayer is not covered by the
-     * market scanning restriction, but it is still throttled and still manual.
+     * agent must not be able to start a batch of CHPP calls.
      */
     private void resolveExpiredListings() {
         final var cap = parse(resolveCap, 20);

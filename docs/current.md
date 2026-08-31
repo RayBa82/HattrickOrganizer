@@ -159,8 +159,9 @@ Implemented per `docs/superpowers/plans/2026-08-30-mcp-server.md`:
   only and rejects any request carrying an `Origin` header or a non-loopback `Host`. **There is no
   authentication beyond that** — while it is on, any process running as this user can read the squad
   and write the lineup. That is the reason the switch is off by default.
-- The transfer market needs the unlock button pressed first, because CHPP forbids automated
-  scanning; the per-session cap bounds both callers.
+- Transfer market search is always allowed; the per-session cap (Options → MCP server) is what
+  bounds CHPP traffic for both callers. The former unlock button and `mcpMarketUnlockMinutes`
+  parameter are gone.
 - Scratch lineups must always be scored on a private `RatingPredictionModel`, because
   `LineupRatingCache` is keyed on `Lineup.ratingRevision` alone. **`optimize_lineup` is the known
   exception**: `Lineup.optimizeLineup` → `LineupAssistant` fetches the shared model itself, so that
@@ -276,7 +277,7 @@ required arguments — exactly like the other tool tests.
 
 `OnlineWorker.getHrf(JDialog parent)` is Swing-coupled and puts progress dialogs on screen, so an
 MCP-triggered download would have to marshal to the EDT and would visibly take over the user's
-window. It is also a live CHPP call, the same territory as the transfer-search unlock button. The
+window. It is also a live CHPP call, the same territory as the transfer search. The
 `assumptions` block on every rating output already carries `hrfId` and `snapshotDate`, which is
 enough for a client to notice a stale snapshot and tell the user to press download itself.
 
