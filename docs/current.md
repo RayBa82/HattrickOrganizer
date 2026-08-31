@@ -250,6 +250,11 @@ translation key — in every case HO already held the data and nothing exposed i
   `get_match` on one of their recent games), then `calculateNMatches` over both. Reports win / draw /
   loss probabilities plus goals and chances per match for either side. The tactic level is
   `getTacticRating(lineup, 0)` with the `+1` that `SimButtonListener.getTacticLevel` applies.
+- **`simulate_lineup`** is `predict_match` on a scratch lineup: the body of `predict` moved into a
+  `simulate(Lineup, args)` the two share, the schema's opponent half moved into `opponentProperties`.
+  With `positions` given it runs `LineupTools.scratchLineup(args)` — the exact `evaluate_lineup`
+  builder, private model, injured/suspended guard and all — so a model can loop XIs against the next
+  opponent without ever calling `apply_lineup`. Without `positions` it is `predict_match`.
 
 ### `get_league_table` / `get_finances` — added to `TeamTools`
 

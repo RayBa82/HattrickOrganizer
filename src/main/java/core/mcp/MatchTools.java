@@ -8,6 +8,7 @@ import core.model.match.MatchKurzInfo;
 import core.model.match.Matchdetails;
 import core.prediction.engine.MatchPredictionManager;
 import core.rating.RatingPredictionModel.RatingSector;
+import module.lineup.Lineup;
 
 import java.util.List;
 
@@ -21,6 +22,11 @@ public final class MatchTools {
 
     private static final int DEFAULT_COUNT = 10;
     private static final int DEFAULT_SIMULATIONS = 1000;
+
+    private static final String[] OPPONENT_SECTORS = {
+            "opponentMidfield", "opponentDefenceLeft", "opponentDefenceCentral",
+            "opponentDefenceRight", "opponentAttackLeft", "opponentAttackCentral",
+            "opponentAttackRight"};
 
     private MatchTools() {
     }
@@ -59,24 +65,19 @@ public final class MatchTools {
                                 + "draw and loss probabilities plus goals and chances per match. "
                                 + "Take the opponent's ratings from get_match on one of their "
                                 + "recent games.",
-                        McpTool.schema(McpTool.properties(
-                                        "opponentMidfield", McpTool.prop("number", "opponent midfield rating"),
-                                        "opponentDefenceLeft", McpTool.prop("number", "opponent left defence rating"),
-                                        "opponentDefenceCentral", McpTool.prop("number", "opponent central defence rating"),
-                                        "opponentDefenceRight", McpTool.prop("number", "opponent right defence rating"),
-                                        "opponentAttackLeft", McpTool.prop("number", "opponent left attack rating"),
-                                        "opponentAttackCentral", McpTool.prop("number", "opponent central attack rating"),
-                                        "opponentAttackRight", McpTool.prop("number", "opponent right attack rating"),
-                                        "opponentName", McpTool.prop("string", "opponent team name, for the output only"),
-                                        "opponentTacticType", McpTool.prop("integer", "opponent tactic type, 0 normal"),
-                                        "opponentTacticSkill", McpTool.prop("integer", "opponent tactic level, default 1"),
-                                        "location", McpTool.prop("string", "'home' or 'away', from our point of view; default home"),
-                                        "simulations", McpTool.prop("integer",
-                                                "how many matches to simulate, default " + DEFAULT_SIMULATIONS)),
-                                "opponentMidfield", "opponentDefenceLeft", "opponentDefenceCentral",
-                                "opponentDefenceRight", "opponentAttackLeft", "opponentAttackCentral",
-                                "opponentAttackRight"),
-                        MatchTools::predict)
+                        McpTool.schema(opponentProperties(new JsonObject()), OPPONENT_SECTORS),
+                        MatchTools::predict),
+                new McpTool("simulate_lineup",
+                        "predict_match for a lineup you have not set: a hypothetical XI, supplied "
+                                + "the same way as evaluate_lineup, against an opponent whose seven "
+                                + "sector ratings you supply. Nothing in HO changes - the scratch "
+                                + "lineup is scored on a private model - so call it in a loop to "
+                                + "compare XIs against the next opponent. Omit positions and it "
+                                + "falls back to the current lineup, exactly like predict_match.",
+                        McpTool.schema(
+                                opponentProperties(LineupTools.lineupSchema().getAsJsonObject("properties")),
+                                OPPONENT_SECTORS),
+                        MatchTools::simulateLineup)
         );
     }
 
@@ -191,9 +192,24 @@ public final class MatchTools {
         return players;
     }
 
+    /** predict_match: our current HO lineup versus the supplied opponent. */
     private static JsonObject predict(JsonObject args) throws McpToolException {
+        return simulate(McpJson.model().getCurrentLineup(), args);
+    }
+
+    /**
+     * simulate_lineup: same simulator, but on a scratch lineup built from the args - or, when no
+     * positions are given, on the current lineup, which makes it a drop-in for predict_match.
+     */
+    private static JsonObject simulateLineup(JsonObject args) throws McpToolException {
+        final var lineup = args.has("positions")
+                ? LineupTools.scratchLineup(args)
+                : McpJson.model().getCurrentLineup();
+        return simulate(lineup, args);
+    }
+
+    private static JsonObject simulate(Lineup lineup, JsonObject args) throws McpToolException {
         final var model = McpJson.model();
-        final var lineup = model.getCurrentLineup();
         // Private model for the same reason evaluate_lineup uses one: never touch HO's own rating
         // state from a tool call.
         final var ratingModel = McpJson.privateRatingModel();
@@ -249,6 +265,29 @@ public final class MatchTools {
         json.addProperty("opponentChancesPerMatch", (double) theirChances / played);
         json.add("ourRatings", McpJson.ratings(ratingModel, lineup));
         return json;
+    }
+
+    /**
+     * Adds the opponent side and the simulation controls to a properties object - the half of the
+     * schema that predict_match and simulate_lineup share. The seven sector ratings are the only
+     * required arguments ({@link #OPPONENT_SECTORS}); everything else has a default.
+     */
+    private static JsonObject opponentProperties(JsonObject properties) {
+        properties.add("opponentMidfield", McpTool.prop("number", "opponent midfield rating"));
+        properties.add("opponentDefenceLeft", McpTool.prop("number", "opponent left defence rating"));
+        properties.add("opponentDefenceCentral", McpTool.prop("number", "opponent central defence rating"));
+        properties.add("opponentDefenceRight", McpTool.prop("number", "opponent right defence rating"));
+        properties.add("opponentAttackLeft", McpTool.prop("number", "opponent left attack rating"));
+        properties.add("opponentAttackCentral", McpTool.prop("number", "opponent central attack rating"));
+        properties.add("opponentAttackRight", McpTool.prop("number", "opponent right attack rating"));
+        properties.add("opponentName", McpTool.prop("string", "opponent team name, for the output only"));
+        properties.add("opponentTacticType", McpTool.prop("integer", "opponent tactic type, 0 normal"));
+        properties.add("opponentTacticSkill", McpTool.prop("integer", "opponent tactic level, default 1"));
+        properties.add("location", McpTool.prop("string",
+                "'home' or 'away', from our point of view; default home"));
+        properties.add("simulations", McpTool.prop("integer",
+                "how many matches to simulate, default " + DEFAULT_SIMULATIONS));
+        return properties;
     }
 
     /** The tactic level as the Lineup tab shows it: the raw rating, rounded the way HO rounds it. */

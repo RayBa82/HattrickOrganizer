@@ -11,9 +11,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MatchToolsTest {
 
     @Test
-    void tools_areTheThreeMatchTools() {
+    void tools_areTheFourMatchTools() {
         assertThat(MatchTools.tools()).extracting(McpTool::name)
-                .containsExactly("get_matches", "get_match", "predict_match");
+                .containsExactly("get_matches", "get_match", "predict_match", "simulate_lineup");
     }
 
     @Test
@@ -48,6 +48,25 @@ class MatchToolsTest {
         // our own side comes from the current lineup, so nothing about it is an argument
         final var properties = predictMatch.inputSchema().getAsJsonObject("properties");
         assertThat(properties.has("location")).isTrue();
+        assertThat(properties.has("simulations")).isTrue();
+        assertThat(properties.has("positions")).isFalse();
+    }
+
+    @Test
+    void simulateLineup_addsAnOptionalLineupToPredictMatchsArguments() {
+        final var simulateLineup = MatchTools.tools().get(3);
+
+        assertThat(simulateLineup.name()).isEqualTo("simulate_lineup");
+        // same opponent side as predict_match, and only that side is required
+        assertThat(simulateLineup.inputSchema().getAsJsonArray("required"))
+                .extracting(element -> element.getAsString())
+                .containsExactlyInAnyOrder("opponentMidfield", "opponentDefenceLeft",
+                        "opponentDefenceCentral", "opponentDefenceRight", "opponentAttackLeft",
+                        "opponentAttackCentral", "opponentAttackRight");
+        // plus an optional hypothetical lineup, the evaluate_lineup way
+        final var properties = simulateLineup.inputSchema().getAsJsonObject("properties");
+        assertThat(properties.has("positions")).isTrue();
+        assertThat(properties.has("tactic")).isTrue();
         assertThat(properties.has("simulations")).isTrue();
     }
 }

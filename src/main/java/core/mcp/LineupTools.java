@@ -81,7 +81,7 @@ public final class LineupTools {
         );
     }
 
-    private static JsonObject lineupSchema() {
+    static JsonObject lineupSchema() {
         return McpTool.schema(McpTool.properties(
                         "positions", McpTool.prop("array", SPEC_DOC),
                         "bench", McpTool.prop("array", "bench slots as {roleId, playerId}"),
