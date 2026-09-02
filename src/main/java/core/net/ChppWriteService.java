@@ -5,9 +5,11 @@ import core.file.xml.XMLChallengesParser;
 import core.file.xml.XMLManager;
 import core.file.xml.XMLTrainingParser;
 import core.model.HOVerwaltung;
+import core.model.enums.MatchType;
 import core.model.UserParameter;
 import core.util.HOLogger;
 import org.w3c.dom.Document;
+import org.w3c.dom.Element;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -196,6 +198,83 @@ public class ChppWriteService {
         final var was = Connector.instance().setSilentDownload(true);
         try {
             return Connector.instance().challenges(actionType, params);
+        } finally {
+            Connector.instance().setSilentDownload(was);
+        }
+    }
+
+    // ===================== match order =====================
+
+    public String sendMatchOrderForAgent(int matchId, MatchType matchType, String orderString)
+            throws ChppWriteException {
+        if (matchType == null) {
+            throw new ChppWriteException(null, "Unknown matchType.");
+        }
+        checkAndCountWrite();
+        try {
+            final var response = fetchMatchOrder(matchId, matchType, orderString);
+            if (response == null || response.isBlank()) {
+                throw new ChppWriteException(null,
+                        "Hattrick rejected the match order: " + reason());
+            }
+            return response;
+        } catch (ChppWriteException e) {
+            throw e;
+        } catch (Exception e) {
+            HOLogger.instance().log(ChppWriteService.class, e);
+            throw new ChppWriteException(null,
+                    "Hattrick rejected the match order: " + e.getMessage());
+        }
+    }
+
+    protected String fetchMatchOrder(int matchId, MatchType matchType, String orderString)
+            throws Exception {
+        final var teamId = currentTeamId();
+        final var was = Connector.instance().setSilentDownload(true);
+        try {
+            return Connector.instance().uploadMatchOrder(matchId, teamId, matchType, orderString, false);
+        } finally {
+            Connector.instance().setSilentDownload(was);
+        }
+    }
+
+    // ===================== transfer bid =====================
+
+    public record BidResult(String highestBid, String deadline, String bidderTeamName) {
+    }
+
+    public BidResult placeBidForAgent(int playerId, long bidAmount, Long maxBidAmount)
+            throws ChppWriteException {
+        final var teamId = currentTeamId();
+        checkAndCountWrite();
+
+        final String xml;
+        try {
+            xml = fetchPlaceBid(playerId, teamId, bidAmount, maxBidAmount);
+        } catch (Exception e) {
+            HOLogger.instance().log(ChppWriteService.class, e);
+            throw new ChppWriteException("BidFailed", "Error placing the bid: " + e.getMessage());
+        }
+        if (xml == null || xml.isBlank()) {
+            throw new ChppWriteException("BidFailed", "Hattrick rejected the bid: " + reason());
+        }
+        final var doc = XMLManager.parseString(xml);
+        final var player = doc == null ? null
+                : (Element) doc.getDocumentElement().getElementsByTagName("Player").item(0);
+        if (player == null) {
+            throw new ChppWriteException("BidFailed",
+                    "Hattrick did not return the player after the bid: " + reason());
+        }
+        return new BidResult(
+                XMLManager.xmlValue(player, "HighestBid"),
+                XMLManager.xmlValue(player, "Deadline"),
+                XMLManager.xmlValue(player, "HighestBidderTeamName"));
+    }
+
+    protected String fetchPlaceBid(int playerId, int teamId, long bidAmount, Long maxBidAmount) {
+        final var was = Connector.instance().setSilentDownload(true);
+        try {
+            return Connector.instance().placeBid(playerId, teamId, bidAmount, maxBidAmount);
         } finally {
             Connector.instance().setSilentDownload(was);
         }

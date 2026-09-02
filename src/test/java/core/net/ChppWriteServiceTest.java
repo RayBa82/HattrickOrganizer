@@ -56,6 +56,33 @@ class ChppWriteServiceTest {
             lastChallengeAction = actionType;
             return challengesResponse;
         }
+
+        String matchOrderResponse = "<HattrickData><MatchData>ok</MatchData></HattrickData>";
+        RuntimeException matchOrderFailure;
+        int matchOrderFetches;
+
+        @Override
+        protected String fetchMatchOrder(int matchId, core.model.enums.MatchType matchType, String orderString) {
+            matchOrderFetches++;
+            if (matchOrderFailure != null) throw matchOrderFailure;
+            return matchOrderResponse;
+        }
+
+        String bidResponse = """
+                <HattrickData><Player>
+                  <PlayerID>111</PlayerID>
+                  <HighestBid>1750000</HighestBid>
+                  <Deadline>2026-09-05 20:00:00</Deadline>
+                  <HighestBidderTeamName>HO FC</HighestBidderTeamName>
+                </Player></HattrickData>
+                """;
+        int bidFetches;
+
+        @Override
+        protected String fetchPlaceBid(int playerId, int teamId, long bidAmount, Long maxBidAmount) {
+            bidFetches++;
+            return bidResponse;
+        }
     }
 
     private StubService service;
@@ -151,5 +178,38 @@ class ChppWriteServiceTest {
         service.respondToChallengeForAgent("accept", 733551221L);
         assertThat(service.writesThisSession).isEqualTo(1);
         assertThat(service.lastChallengeAction).isEqualTo("accept");
+    }
+
+    @Test
+    void sendMatchOrder_countsOneWriteAndReturnsTheResponse() throws Exception {
+        final var response = service.sendMatchOrderForAgent(
+                12345, core.model.enums.MatchType.LEAGUE, "{\"positions\":[]}");
+        assertThat(response).contains("ok");
+        assertThat(service.writesThisSession).isEqualTo(1);
+    }
+
+    @Test
+    void sendMatchOrder_wrapsAConnectorFailure() {
+        service.matchOrderFailure = new RuntimeException("CHPP Fehler - 50 setmatchorder");
+        assertThatExceptionOfType(ChppWriteService.ChppWriteException.class)
+                .isThrownBy(() -> service.sendMatchOrderForAgent(
+                        1, core.model.enums.MatchType.LEAGUE, "{}"))
+                .withMessageContaining("50");
+    }
+
+    @Test
+    void placeBid_parsesTheReturnedPlayerBlock() throws Exception {
+        final var result = service.placeBidForAgent(111, 1_500_000L, null);
+        assertThat(result.highestBid()).isEqualTo("1750000");
+        assertThat(result.deadline()).isEqualTo("2026-09-05 20:00:00");
+        assertThat(service.writesThisSession).isEqualTo(1);
+    }
+
+    @Test
+    void placeBid_blankResponseFailsWithBidFailedKey() {
+        service.bidResponse = "";
+        assertThatExceptionOfType(ChppWriteService.ChppWriteException.class)
+                .isThrownBy(() -> service.placeBidForAgent(111, 1_500_000L, null))
+                .satisfies(e -> assertThat(e.errorKey()).isEqualTo("BidFailed"));
     }
 }
