@@ -49,10 +49,13 @@ public class OAuthDialog extends JDialog {
 		this.m_service = service;
 		setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
 
-		// Hard code set_matchorder due to authorization woes.
-		// scope manage_youthplayers is needed to use action type unlockskills
-		scopes = "&scope=" + "set_matchorder,manage_youthplayers";
-		
+		// Hard code the scope set due to authorization woes - the `scope` constructor
+		// parameter is never read.
+		// manage_youthplayers is needed for action type unlockskills;
+		// set_training / manage_challenges / place_bid are the CHPP write families exposed over MCP
+		// (docs/superpowers/specs/2026-09-02-chpp-write-operations-over-mcp-design.md).
+		scopes = "&scope=" + "set_matchorder,manage_youthplayers,set_training,manage_challenges,place_bid";
+
 		obtainUserURL();
 		initComponents();
 		addListeners();

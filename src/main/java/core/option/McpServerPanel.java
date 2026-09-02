@@ -22,6 +22,7 @@ public final class McpServerPanel extends ImagePanel {
     private final JTextField port = new JTextField(6);
     private final JTextField searchCap = new JTextField(6);
     private final JTextField resolveCap = new JTextField(6);
+    private final JTextField writeCap = new JTextField(6);
     private final JLabel status = new JLabel();
     private final JTextField url = new JTextField(34);
 
@@ -49,6 +50,8 @@ public final class McpServerPanel extends ImagePanel {
                 String.valueOf(UserParameter.instance().mcpServerPort));
         addField(c, ++c.gridy, "ls.options.mcp.searchcap", searchCap,
                 String.valueOf(UserParameter.instance().mcpSearchesPerSession));
+        addField(c, ++c.gridy, "ls.options.mcp.writecap", writeCap,
+                String.valueOf(UserParameter.instance().mcpChppWritesPerSession));
 
         c.gridx = 0;
         c.gridy++;
@@ -105,9 +108,11 @@ public final class McpServerPanel extends ImagePanel {
     private void saveFields() {
         final var portValue = parse(port, 8765);
         final var capValue = parse(searchCap, 20);
+        final var writeCapValue = parse(writeCap, 20);
         for (final var p : new UserParameter[]{UserParameter.instance(), UserParameter.temp()}) {
             p.mcpServerPort = portValue;
             p.mcpSearchesPerSession = capValue;
+            p.mcpChppWritesPerSession = writeCapValue;
         }
     }
 

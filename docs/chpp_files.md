@@ -13,7 +13,7 @@ Updates to a newer version should be documented here in the `Used Version` colum
 | alliancedetails        | Alliance / Federation information                                                           | 1.5 (2013-03-04)         | -            |
 | avatars                | Avatars for all players of user's team                                                      | 1.1 (2013-01-08)         | 1.1          |
 | bookmarks              | User bookmarks                                                                              | 1.0                      | -            |
-| challenges             | Challenges                                                                                  | 1.6 (2016-10-27)         | -            |
+| challenges             | Challenges                                                                                  | 1.6 (2016-10-27)         | 1.6          |
 | club                   | Information about specialists and youth                                                     | 1.5 (2015-09-22)         | 1.5          |
 | cupmatches             | Information about cup matches                                                               | 1.4 (2011-06-03)         | -            |
 | currentbids            | Shows the current transfer activity for a team.                                             | 1.0 (2014-02-10)         | -            |
@@ -111,3 +111,15 @@ Documented example: `?file=transfersearch&version=1.1&ageMin=20&ageMax=22&skillT
 
 The file description states it is *not* meant to be polled by bots, only fetched on manual user
 request.
+
+## CHPP write actionTypes used by HO
+
+HO issues these write actions on behalf of the managed team (exposed over MCP, see
+`docs/superpowers/specs/2026-09-02-chpp-write-operations-over-mcp-design.md`):
+
+| file | version | actionType | purpose |
+|---|---|---|---|
+| `training` | 2.1 | `setTraining` | set senior training type / intensity / stamina share |
+| `matchorders` | 3.0 | `setmatchorder` | upload the match order for an upcoming game (pre-existing) |
+| `challenges` | 1.6 | `view` / `challenge` / `accept` / `decline` / `withdraw` | list and manage friendly challenges |
+| `playerdetails` | 3.0 | `placeBid` | place a transfer bid |

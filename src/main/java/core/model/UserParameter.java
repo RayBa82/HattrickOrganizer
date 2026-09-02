@@ -115,6 +115,8 @@ public final class UserParameter extends Configuration {
     public int mcpServerPort = 8765;
     /** How many transfer searches one HO session may issue in total. */
     public int mcpSearchesPerSession = 20;
+    /** How many CHPP writes (training, match order, challenges, bids) one HO session may issue in total. */
+    public int mcpChppWritesPerSession = 20;
 
     //Whether or not the player analysis is packed vertically one below the other
     public boolean spieleranalyseVertikal = true;
@@ -449,6 +451,7 @@ public final class UserParameter extends Configuration {
         map.put("mcpServerEnabled", String.valueOf(mcpServerEnabled));
         map.put("mcpServerPort", String.valueOf(mcpServerPort));
         map.put("mcpSearchesPerSession", String.valueOf(mcpSearchesPerSession));
+        map.put("mcpChppWritesPerSession", String.valueOf(mcpChppWritesPerSession));
 
         if (ReleaseChannel == null) {
             ReleaseChannel = "Stable";
@@ -699,6 +702,7 @@ public final class UserParameter extends Configuration {
         // so 0 means "not configured" and the default applies.
         mcpServerPort = orDefault(getIntValue(values, "mcpServerPort"), 8765);
         mcpSearchesPerSession = orDefault(getIntValue(values, "mcpSearchesPerSession"), 20);
+        mcpChppWritesPerSession = orDefault(getIntValue(values, "mcpChppWritesPerSession"), 20);
         ReleaseChannel = getStringValue(values, "ReleaseChannel");
         fixtures = getBooleanValue(values, "fixtures");
         downloadCurrentMatchlist = getBooleanValue(values, "currentMatchlist");
