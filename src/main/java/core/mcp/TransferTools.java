@@ -106,7 +106,8 @@ public final class TransferTools {
         );
     }
 
-    private record PendingBid(int playerId, long bidAmount, Long maxBidAmount, long createdAt) {
+    /** Amounts are in Swedish krona - already converted from the user's currency in {@link #previewBid}. */
+    private record PendingBid(int playerId, long bidAmountSek, Long maxBidAmountSek, long createdAt) {
     }
 
     private static final Map<String, PendingBid> PENDING_BIDS = new ConcurrentHashMap<>();
@@ -118,7 +119,7 @@ public final class TransferTools {
 
     static void expirePendingBidsForTest() {
         PENDING_BIDS.replaceAll((k, v) ->
-                new PendingBid(v.playerId(), v.bidAmount(), v.maxBidAmount(), 0L));
+                new PendingBid(v.playerId(), v.bidAmountSek(), v.maxBidAmountSek(), 0L));
     }
 
     private static void sweepExpiredBids() {
@@ -138,15 +139,20 @@ public final class TransferTools {
     }
 
     private static JsonObject previewBid(JsonObject args, int playerId) throws McpToolException {
-        final var bidAmount = McpJson.reqLong(args, "bidAmount");
-        final Long maxBidAmount = McpJson.optLong(args, "maxBidAmount");
+        // The model bids in the user's currency; Hattrick's placeBid wants swedish krona.
+        final var bidAmountLocal = McpJson.reqLong(args, "bidAmount");
+        final Long maxBidAmountLocal = McpJson.optLong(args, "maxBidAmount");
+        final var bidAmountSek = McpJson.swedishKrona(bidAmountLocal);
+        final Long maxBidAmountSek =
+                maxBidAmountLocal == null ? null : McpJson.swedishKrona(maxBidAmountLocal);
 
         final var token = UUID.randomUUID().toString();
         PENDING_BIDS.put(token,
-                new PendingBid(playerId, bidAmount, maxBidAmount, System.currentTimeMillis()));
+                new PendingBid(playerId, bidAmountSek, maxBidAmountSek, System.currentTimeMillis()));
 
         final var out = new JsonObject();
         out.addProperty("status", "confirm_required");
+        out.addProperty("currency", McpJson.currency());
 
         final var listing = DBManager.instance().loadLatestTransferListing(playerId);
         final var player = new JsonObject();
@@ -154,8 +160,8 @@ public final class TransferTools {
         if (listing != null) {
             player.addProperty("name", listing.getPlayerName());
             player.addProperty("ageYears", listing.getAge());
-            player.addProperty("askingPrice", listing.getAskingPrice());
-            player.addProperty("highestBid", listing.getHighestBid());
+            player.addProperty("askingPrice", McpJson.money(listing.getAskingPrice()));
+            player.addProperty("highestBid", McpJson.money(listing.getHighestBid()));
             player.addProperty("deadline",
                     listing.getDeadline() == null ? null : listing.getDeadline().toHT());
         } else {
@@ -164,10 +170,11 @@ public final class TransferTools {
         }
         out.add("player", player);
 
+        // Echoed back in the user's currency - the numbers the model passed in.
         final var bid = new JsonObject();
-        bid.addProperty("bidAmount", bidAmount);
-        if (maxBidAmount != null) {
-            bid.addProperty("maxBidAmount", maxBidAmount);
+        bid.addProperty("bidAmount", bidAmountLocal);
+        if (maxBidAmountLocal != null) {
+            bid.addProperty("maxBidAmount", maxBidAmountLocal);
         }
         out.add("bid", bid);
 
@@ -188,17 +195,18 @@ public final class TransferTools {
         }
         final ChppWriteService.BidResult result;
         try {
-            result = ChppWriteService.instance()
-                    .placeBidForAgent(pending.playerId(), pending.bidAmount(), pending.maxBidAmount());
+            result = ChppWriteService.instance().placeBidForAgent(
+                    pending.playerId(), pending.bidAmountSek(), pending.maxBidAmountSek());
         } catch (ChppWriteService.ChppWriteException e) {
             throw new McpToolException(e.getMessage());
         }
         final var out = new JsonObject();
         out.addProperty("status", "ok");
+        out.addProperty("currency", McpJson.currency());
         final var player = new JsonObject();
         player.addProperty("id", pending.playerId());
         out.add("player", player);
-        out.addProperty("highestBid", result.highestBid());
+        out.addProperty("highestBid", McpJson.money(result.highestBid()));
         out.addProperty("deadline", result.deadline());
         out.addProperty("bidderTeamName", result.bidderTeamName());
         out.addProperty("note", "Bid placed. Poll get_player or search_transfers for the updated "

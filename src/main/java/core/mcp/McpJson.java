@@ -62,6 +62,15 @@ public final class McpJson {
                         .multiply(AmountOfMoney.Companion.getExchangeRate()).intValue();
     }
 
+    /**
+     * {@link #swedishKrona(Integer)} for a long amount. Transfer bids need this: in a weak-currency
+     * league the local number can be larger than the krona value and exceed the int range.
+     */
+    public static long swedishKrona(long localAmount) {
+        return BigDecimal.valueOf(localAmount)
+                .multiply(AmountOfMoney.Companion.getExchangeRate()).longValue();
+    }
+
     /** The loaded team snapshot. */
     public static HOModel model() throws McpToolException {
         final var model = HOVerwaltung.instance().getModel();

@@ -425,6 +425,13 @@ Shipped: `set_training`, `send_match_order`, `list_challenges` / `arrange_challe
 `Connector`; `XMLChallengesParser` is new. Non-bid writes fire directly; `place_bid` needs a
 confirm token (static map on `TransferTools`, 120 s TTL, single-use).
 
+`place_bid` amounts follow the same currency contract as the rest of the MCP surface: the model
+bids in the user's currency, `TransferTools` converts to swedish krona (`McpJson.swedishKrona`)
+before the CHPP call and stores the krona value in the pending-bid entry; the preview echoes the
+user-currency numbers back and every money field in the result is converted back with
+`McpJson.money` and tagged with a `currency` field. `ChppWriteService.BidResult.highestBid` is
+raw krona.
+
 OAuth scopes `set_training,manage_challenges,place_bid` added to the hard-coded `OAuthDialog`
 string — a token authorized before this ships does NOT carry them and there is no recovery path
 (by design); re-authorize to pick them up.
@@ -433,4 +440,4 @@ Verified against the code but NOT against live CHPP: the `setTraining` echo nest
 `challenges` `view` element casing (`MatchTime` / `IsAgreed`), and the `<Player>` field name for
 the post-bid highest bidder. Capture real responses and adjust the parsers/fixtures if they differ.
 
-**Verification status:** full suite green (627 tests, 0 failures). No live CHPP verification.
+**Verification status:** full suite green (629 tests, 0 failures). No live CHPP verification.

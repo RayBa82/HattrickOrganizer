@@ -200,7 +200,7 @@ class ChppWriteServiceTest {
     @Test
     void placeBid_parsesTheReturnedPlayerBlock() throws Exception {
         final var result = service.placeBidForAgent(111, 1_500_000L, null);
-        assertThat(result.highestBid()).isEqualTo("1750000");
+        assertThat(result.highestBid()).isEqualTo(1_750_000L);   // raw swedish krona from the response
         assertThat(result.deadline()).isEqualTo("2026-09-05 20:00:00");
         assertThat(service.writesThisSession).isEqualTo(1);
     }

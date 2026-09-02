@@ -20,10 +20,16 @@ class TransferToolsTest {
 
     private ChppWriteService originalService;
 
+    @org.junit.jupiter.api.BeforeEach
+    void baselineExchangeRate() {
+        AmountOfMoney.Companion.setExchangeRate(BigDecimal.ONE);
+    }
+
     @AfterEach
     void restore() {
         if (originalService != null) ChppWriteService.setInstanceForTest(originalService);
         TransferTools.clearPendingBidsForTest();
+        AmountOfMoney.Companion.setExchangeRate(BigDecimal.ONE);   // other tests set it; reset
     }
 
     private static McpTool bidTool() {
@@ -43,7 +49,7 @@ class TransferToolsTest {
                 placeCalls++;
                 placedAmount = bidAmount;
                 placedMax = maxBidAmount;
-                return new BidResult("1750000", "2026-09-05 20:00:00", "HO FC");
+                return new BidResult(1_750_000L, "2026-09-05 20:00:00", "HO FC");
             }
         });
     }
@@ -141,6 +147,41 @@ class TransferToolsTest {
         a.addProperty("confirmToken", token);
         assertThatExceptionOfType(McpToolException.class)
                 .isThrownBy(() -> bidTool().handler().call(a));
+    }
+
+    /** The model bids in the user's currency; Hattrick's placeBid is asked in swedish krona. */
+    @Test
+    void bid_convertsTheModelsCurrencyToSwedishKronaBothWays() throws Exception {
+        AmountOfMoney.Companion.setExchangeRate(BigDecimal.TEN);   // a euro league
+        installRecordingService();
+
+        final var preview = bidTool().handler().call(step1(111, 1_000_000L));
+        // preview echoes the local number the model passed, not the krona it will send
+        assertThat(preview.getAsJsonObject("bid").get("bidAmount").getAsLong()).isEqualTo(1_000_000L);
+
+        final var a = new JsonObject();
+        a.addProperty("playerId", 111);
+        a.addProperty("confirmToken", preview.get("confirmToken").getAsString());
+        final var result = bidTool().handler().call(a);
+
+        assertThat(placedAmount).isEqualTo(10_000_000L);                       // sent in krona
+        assertThat(result.get("highestBid").getAsLong()).isEqualTo(175_000L); // 1_750_000 krona back to local
+    }
+
+    @Test
+    void bid_previewConvertsMaxBidAmountToo() throws Exception {
+        AmountOfMoney.Companion.setExchangeRate(BigDecimal.TEN);
+        installRecordingService();
+        final var a1 = step1(111, 1_000_000L);
+        a1.addProperty("maxBidAmount", 2_000_000L);
+        final var token = bidTool().handler().call(a1).get("confirmToken").getAsString();
+
+        final var a2 = new JsonObject();
+        a2.addProperty("playerId", 111);
+        a2.addProperty("confirmToken", token);
+        bidTool().handler().call(a2);
+
+        assertThat(placedMax).isEqualTo(20_000_000L);
     }
 
     @Test

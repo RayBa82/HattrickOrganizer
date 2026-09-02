@@ -79,6 +79,14 @@ public class ChppWriteService {
         return cause == null ? "no answer, see HO's log." : cause;
     }
 
+    private static long parseLongOrZero(String s) {
+        try {
+            return s == null || s.isBlank() ? 0L : Long.parseLong(s.trim());
+        } catch (NumberFormatException e) {
+            return 0L;
+        }
+    }
+
     private static int currentTeamId() {
         final var model = HOVerwaltung.instance().getModel();
         return model != null ? model.getBasics().getTeamId() : 0;
@@ -245,7 +253,8 @@ public class ChppWriteService {
 
     // ===================== transfer bid =====================
 
-    public record BidResult(String highestBid, String deadline, String bidderTeamName) {
+    /** {@code highestBid} is Swedish krona, the raw CHPP value; the tool layer converts to the user's currency. */
+    public record BidResult(long highestBid, String deadline, String bidderTeamName) {
     }
 
     public BidResult placeBidForAgent(int playerId, long bidAmount, Long maxBidAmount)
@@ -271,7 +280,7 @@ public class ChppWriteService {
                     "Hattrick did not return the player after the bid: " + reason());
         }
         return new BidResult(
-                XMLManager.xmlValue(player, "HighestBid"),
+                parseLongOrZero(XMLManager.xmlValue(player, "HighestBid")),
                 XMLManager.xmlValue(player, "Deadline"),
                 XMLManager.xmlValue(player, "HighestBidderTeamName"));
     }
