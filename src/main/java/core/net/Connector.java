@@ -340,10 +340,12 @@ public class Connector {
 		return result;
 	}
 
-	// ---- training (file=training, version 2.1, actionType=setTraining) ----
+	// ---- training (file=training, version 2.2, actionType=setTraining) ----
+	// teamId is required for setTraining - CHPP uses no default there. trainingLevel 0-100,
+	// trainingLevelStamina 5-100 (CHPP training doc).
 
 	static String setTrainingUrl(int teamId, int trainingType, int trainingLevel, int staminaLevel) {
-		return htUrl + "?file=training&version=2.1&actionType=setTraining"
+		return htUrl + "?file=training&version=2.2&actionType=setTraining"
 				+ "&teamId=" + teamId
 				+ "&trainingType=" + trainingType
 				+ "&trainingLevel=" + trainingLevel

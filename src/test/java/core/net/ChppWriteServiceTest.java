@@ -8,29 +8,44 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 class ChppWriteServiceTest {
 
-    /** A training echo with the three values and TrainingSet=true. */
+    /**
+     * A setTraining echo, shaped like a real training 2.2 response: the <Team> block carries the
+     * current settings (no <View> wrapper, no invented <TrainingSet> element).
+     */
     private static final String TRAINING_OK = """
             <?xml version="1.0" encoding="utf-8"?>
             <HattrickData>
               <FileName>training.xml</FileName>
-              <Version>2.1</Version>
+              <Version>2.2</Version>
               <FetchedDate>2026-09-03 12:00:00</FetchedDate>
-              <View>
-                <Team>
-                  <TeamID>1500</TeamID>
-                  <TeamName>HO FC</TeamName>
-                  <TrainingLevel>40</TrainingLevel>
-                  <StaminaTrainingPart>10</StaminaTrainingPart>
-                  <TrainingType>3</TrainingType>
-                  <Trainer><TrainerID>1</TrainerID><TrainerName>T</TrainerName><ArrivalDate>2026-01-01 00:00:00</ArrivalDate></Trainer>
-                </Team>
-              </View>
-              <TrainingSet>true</TrainingSet>
+              <Team>
+                <TeamID>1500</TeamID>
+                <TeamName>HO FC</TeamName>
+                <TrainingLevel>40</TrainingLevel>
+                <NewTrainingLevel Available="false"></NewTrainingLevel>
+                <StaminaTrainingPart>10</StaminaTrainingPart>
+                <TrainingType>3</TrainingType>
+                <LastTrainingTrainingType>2</LastTrainingTrainingType>
+                <LastTrainingTrainingLevel>50</LastTrainingTrainingLevel>
+                <LastTrainingStaminaTrainingPart>15</LastTrainingStaminaTrainingPart>
+                <Trainer><TrainerID>1</TrainerID><TrainerName>T</TrainerName><ArrivalDate>2026-01-01 00:00:00</ArrivalDate></Trainer>
+              </Team>
             </HattrickData>
             """;
 
-    private static final String TRAINING_NOT_SET = TRAINING_OK.replace(
-            "<TrainingSet>true</TrainingSet>", "<TrainingSet>false</TrainingSet>");
+    /** Same, but the intensity change is pending (takes effect at the next training update). */
+    private static final String TRAINING_LEVEL_PENDING = TRAINING_OK.replace(
+            "<NewTrainingLevel Available=\"false\"></NewTrainingLevel>",
+            "<NewTrainingLevel Available=\"true\">40</NewTrainingLevel>")
+            .replace("<TrainingLevel>40</TrainingLevel>", "<TrainingLevel>55</TrainingLevel>");
+
+    /** A CHPP error response (bad scope, bad value, ...). */
+    private static final String TRAINING_ERROR = """
+            <HattrickData><FileName>training.xml</FileName>
+              <ErrorCode>50</ErrorCode>
+              <Error>The scope set_training is required.</Error>
+            </HattrickData>
+            """;
 
     /** A service whose fetch* methods answer from canned strings, never the network. */
     static class StubService extends ChppWriteService {
@@ -108,12 +123,21 @@ class ChppWriteServiceTest {
         assertThat(committed.trainingType()).isEqualTo(3);
         assertThat(committed.intensity()).isEqualTo(40);
         assertThat(committed.staminaShare()).isEqualTo(10);
+        assertThat(committed.intensityChangePending()).isFalse();
         assertThat(service.writesThisSession).isEqualTo(1);
     }
 
     @Test
-    void setTraining_trainingSetFalseIsAFailure() {
-        service.trainingResponse = TRAINING_NOT_SET;
+    void setTraining_reportsAPendingIntensityFromNewTrainingLevel() throws Exception {
+        service.trainingResponse = TRAINING_LEVEL_PENDING;
+        final var committed = service.setTrainingForAgent(3, 40, 10);
+        assertThat(committed.intensity()).isEqualTo(40);              // the pending NewTrainingLevel
+        assertThat(committed.intensityChangePending()).isTrue();
+    }
+
+    @Test
+    void setTraining_chppErrorIsAFailure() {
+        service.trainingResponse = TRAINING_ERROR;
         assertThatExceptionOfType(ChppWriteService.ChppWriteException.class)
                 .isThrownBy(() -> service.setTrainingForAgent(3, 40, 10));
     }

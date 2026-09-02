@@ -84,8 +84,14 @@ public final class TrainingTools {
         c.addProperty("trainingType", committed.trainingType());
         c.addProperty("intensity", committed.intensity());
         c.addProperty("staminaShare", committed.staminaShare());
+        c.addProperty("intensityChangePending", committed.intensityChangePending());
         out.add("committed", c);
-        out.addProperty("note", "HO's snapshot is not refreshed until the next team download.");
+        final var note = new StringBuilder("HO's snapshot is not refreshed until the next team download.");
+        if (committed.intensityChangePending()) {
+            note.append(" The training intensity change takes effect at the next training update; "
+                    + "'intensity' above is the pending value Hattrick will apply.");
+        }
+        out.addProperty("note", note.toString());
         return out;
     }
 

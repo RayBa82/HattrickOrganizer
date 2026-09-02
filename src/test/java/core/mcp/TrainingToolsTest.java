@@ -77,7 +77,7 @@ class TrainingToolsTest {
         installService(new ChppWriteService() {
             @Override
             public TrainingCommitted setTrainingForAgent(int t, int i, int s) {
-                return new TrainingCommitted(t, i, s);
+                return new TrainingCommitted(t, i, s, false);
             }
         });
         final var result = tool("set_training").handler().call(args(3, 40, 10));

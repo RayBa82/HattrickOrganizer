@@ -119,7 +119,7 @@ HO issues these write actions on behalf of the managed team (exposed over MCP, s
 
 | file | version | actionType | purpose |
 |---|---|---|---|
-| `training` | 2.1 | `setTraining` | set senior training type / intensity / stamina share |
+| `training` | 2.2 | `setTraining` | set senior training type / intensity (0-100) / stamina share (5-100); `teamId` required, needs the `set_training` scope |
 | `matchorders` | 3.0 | `setmatchorder` | upload the match order for an upcoming game (pre-existing) |
 | `challenges` | 1.6 | `view` / `challenge` / `accept` / `decline` / `withdraw` | list and manage friendly challenges |
 | `playerdetails` | 3.2 | `placeBid` | place a transfer bid (`bidAmount` / `maxBidAmount` are Money in SEK; needs the `place_bid` scope and Supporter) |

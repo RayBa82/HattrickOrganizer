@@ -8,7 +8,6 @@ import core.model.HOVerwaltung;
 import core.model.enums.MatchType;
 import core.model.UserParameter;
 import core.util.HOLogger;
-import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
 import java.util.LinkedHashMap;
@@ -94,7 +93,13 @@ public class ChppWriteService {
 
     // ===================== training =====================
 
-    public record TrainingCommitted(int trainingType, int intensity, int staminaShare) {
+    /**
+     * The training state Hattrick echoed back after the set. {@code intensity} is the value that
+     * will be in effect: the pending {@code NewTrainingLevel} when a level change has not taken
+     * hold yet ({@code intensityChangePending} true), otherwise the current {@code TrainingLevel}.
+     */
+    public record TrainingCommitted(int trainingType, int intensity, int staminaShare,
+                                    boolean intensityChangePending) {
     }
 
     public TrainingCommitted setTrainingForAgent(int trainingType, int intensity, int staminaShare)
@@ -119,23 +124,28 @@ public class ChppWriteService {
             throw new ChppWriteException(null, "Hattrick rejected the training change: " + reason());
         }
 
-        final Document doc = XMLManager.parseString(xml);
-        if (doc != null && "false".equalsIgnoreCase(
-                XMLManager.xmlValue(doc.getDocumentElement(), "TrainingSet"))) {
-            throw new ChppWriteException(null,
-                    "Hattrick did not apply the training change (TrainingSet=false).");
+        final var error = XMLCHPPPreParser.getError(xml);
+        if (!error.isEmpty()) {
+            // Missing set_training scope, out-of-range value, teamId not a managed senior team.
+            throw new ChppWriteException(null, "Hattrick rejected the training change: " + error);
         }
 
+        // The setTraining response is the training "view" output: <Team> carries the current
+        // TrainingType / TrainingLevel / StaminaTrainingPart, plus NewTrainingLevel when a level
+        // change is pending (training doc, version 2.2). There is no TrainingSet flag.
         final var echo = XMLTrainingParser.parseTrainingFromString(xml);
         if (!echo.containsKey("TrainingType") || !echo.containsKey("TrainingLevel")
                 || !echo.containsKey("StaminaTrainingPart")) {
             throw new ChppWriteException(null,
                     "Hattrick did not echo the new training state: " + reason());
         }
+        final var pendingLevel = echo.get("NewTrainingLevel");   // present only when Available=true
         return new TrainingCommitted(
                 Integer.parseInt(echo.get("TrainingType").trim()),
-                Integer.parseInt(echo.get("TrainingLevel").trim()),
-                Integer.parseInt(echo.get("StaminaTrainingPart").trim()));
+                Integer.parseInt((pendingLevel != null ? pendingLevel
+                        : echo.get("TrainingLevel")).trim()),
+                Integer.parseInt(echo.get("StaminaTrainingPart").trim()),
+                pendingLevel != null);
     }
 
     /** The CHPP call. Overridden in tests so that no network access is needed. */

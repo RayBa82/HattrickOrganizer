@@ -414,7 +414,6 @@ Any future MCP tool that reaches CHPP has to do the same — no Swing off the ED
 
 **Verification status:** full suite green (589 tests, 0 failures). Live CHPP verification of the
 3-level window is the log evidence above, not a test.
-3-level window is the log evidence above, not a test.
 
 ## CHPP write operations over MCP (2026-09-03)
 
@@ -428,9 +427,6 @@ confirm token (static map on `TransferTools`, 120 s TTL, single-use).
 `place_bid` amounts follow the same currency contract as the rest of the MCP surface: the model
 bids in the user's currency, `TransferTools` converts to swedish krona (`McpJson.swedishKrona`)
 before the CHPP call and stores the krona value in the pending-bid entry; the preview echoes the
-`place_bid` amounts follow the same currency contract as the rest of the MCP surface: the model
-bids in the user's currency, `TransferTools` converts to swedish krona (`McpJson.swedishKrona`)
-before the CHPP call and stores the krona value in the pending-bid entry; the preview echoes the
 user-currency numbers back and every money field in the result is converted back with
 `McpJson.money` and tagged with a `currency` field. `ChppWriteService.BidResult.highestBid` is
 raw krona. The CHPP `playerdetails` doc confirms `bidAmount` / `maxBidAmount` are Money **in SEK**,
@@ -439,16 +435,25 @@ doc documents `placeBid`; HO's read path still uses 3.0), `actionType=placeBid`,
 (the managed senior team) required. The post-bid response is the full `view` output; the bid state
 is read from `<Player><TransferDetails>` (`HighestBid`, `Deadline`) and the leading bidder from
 `<Player><BidderTeam><TeamName>`. A CHPP `<ErrorCode>` in the response (not a Supporter, bid too
-low, deadline passed, …) becomes a `ChppWriteException` with `errorKey "BidFailed"`.
+low, deadline passed, ...) becomes a `ChppWriteException` with `errorKey "BidFailed"`.
 
 OAuth scopes `set_training,manage_challenges,place_bid` added to the hard-coded `OAuthDialog`
 string — a token authorized before this ships does NOT carry them and there is no recovery path
 (by design); re-authorize to pick them up.
 
-Verified against the code but NOT against live CHPP: the `setTraining` echo nesting and the
-`challenges` `view` element casing (`MatchTime` / `IsAgreed`). `place_bid`'s wire format, SEK
-units and response structure are now from the official `playerdetails` CHPP doc, but no live
-`placeBid` round-trip has been run — capture one and adjust the fixtures if anything differs.
+`set_training` is `training` **version 2.2**, `actionType=setTraining`, `teamId` required (CHPP
+uses no default there), params `trainingType` / `trainingLevel` (0-100) / `trainingLevelStamina`
+(5-100). The response is the training `view` output - `<Team>` carries the current
+`TrainingType` / `TrainingLevel` / `StaminaTrainingPart`, plus `NewTrainingLevel` (attr
+`Available`) when an intensity change is pending. There is **no** `TrainingSet` flag (the plan
+invented one; it was dead code). `TrainingCommitted.intensity` is the pending `NewTrainingLevel`
+when present, else the current `TrainingLevel`, and `intensityChangePending` says which; a CHPP
+`<ErrorCode>` becomes a `ChppWriteException`.
 
-**Verification status:** full suite green (630 tests, 0 failures). No live CHPP round-trip;
-`place_bid` wire format and response shape are from the CHPP `playerdetails` doc.
+Verified against the code and the official CHPP docs (`playerdetails`, `training`) for wire
+format, SEK units, versions and response structure, but NOT against a live round-trip. The one
+remaining pure guess is the `challenges` `view` element casing (`MatchTime` / `IsAgreed`) - no
+`challenges` doc was checked. Capture real responses and adjust the fixtures if anything differs.
+
+**Verification status:** full suite green (631 tests, 0 failures). No live CHPP round-trip;
+`set_training` / `place_bid` wire format and response shape are from the CHPP docs.

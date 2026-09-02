@@ -13,7 +13,7 @@ class ConnectorWriteUrlTest {
     void setTrainingUrl_hasFileVersionActionAndEveryParameter() {
         final var url = Connector.setTrainingUrl(1500, 3, 40, 10);
         assertThat(url).contains("file=training")
-                .contains("version=2.1")
+                .contains("version=2.2")
                 .contains("actionType=setTraining")
                 .contains("teamId=1500")
                 .contains("trainingType=3")
