@@ -414,3 +414,23 @@ Any future MCP tool that reaches CHPP has to do the same — no Swing off the ED
 
 **Verification status:** full suite green (589 tests, 0 failures). Live CHPP verification of the
 3-level window is the log evidence above, not a test.
+3-level window is the log evidence above, not a test.
+
+## CHPP write operations over MCP (2026-09-03)
+
+Shipped: `set_training`, `send_match_order`, `list_challenges` / `arrange_challenge` /
+`respond_to_challenge`, and a two-step `place_bid`. All route through `core.net.ChppWriteService`
+(same shape as `TransferSearchService`: `fetch*` seam, per-session cap
+`UserParameter.mcpChppWritesPerSession`, typed `ChppWriteException`). URL building + raw calls in
+`Connector`; `XMLChallengesParser` is new. Non-bid writes fire directly; `place_bid` needs a
+confirm token (static map on `TransferTools`, 120 s TTL, single-use).
+
+OAuth scopes `set_training,manage_challenges,place_bid` added to the hard-coded `OAuthDialog`
+string — a token authorized before this ships does NOT carry them and there is no recovery path
+(by design); re-authorize to pick them up.
+
+Verified against the code but NOT against live CHPP: the `setTraining` echo nesting, the
+`challenges` `view` element casing (`MatchTime` / `IsAgreed`), and the `<Player>` field name for
+the post-bid highest bidder. Capture real responses and adjust the parsers/fixtures if they differ.
+
+**Verification status:** full suite green (627 tests, 0 failures). No live CHPP verification.
