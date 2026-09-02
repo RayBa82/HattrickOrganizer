@@ -36,11 +36,25 @@ class ChppWriteServiceTest {
     static class StubService extends ChppWriteService {
         String trainingResponse = TRAINING_OK;
         int trainingFetches;
+        String challengesResponse = """
+                <HattrickData><Version>1.6</Version>
+                  <ChallengesByMe/><OffersByOthers/>
+                </HattrickData>
+                """;
+        int challengeFetches;
+        String lastChallengeAction;
 
         @Override
         protected String fetchSetTraining(int teamId, int trainingType, int trainingLevel, int staminaLevel) {
             trainingFetches++;
             return trainingResponse;
+        }
+
+        @Override
+        protected String fetchChallenges(String actionType, java.util.Map<String, String> params) {
+            challengeFetches++;
+            lastChallengeAction = actionType;
+            return challengesResponse;
         }
     }
 
@@ -94,5 +108,48 @@ class ChppWriteServiceTest {
                 .isThrownBy(() -> service.setTrainingForAgent(3, 40, 10))
                 .withMessageContaining("20")
                 .withMessageContaining("MCP server");
+    }
+
+    @Test
+    void listChallenges_doesNotCountAgainstTheWriteCap() throws Exception {
+        service.listChallengesForAgent(false);
+        service.listChallengesForAgent(true);
+        assertThat(service.writesThisSession).isZero();
+        assertThat(service.lastChallengeAction).isEqualTo("view");
+    }
+
+    @Test
+    void listChallenges_blankResponseIsAFailure() {
+        service.challengesResponse = "";
+        assertThatExceptionOfType(ChppWriteService.ChppWriteException.class)
+                .isThrownBy(() -> service.listChallengesForAgent(false));
+    }
+
+    @Test
+    void arrangeChallenge_neutralWithoutArenaIsRejectedBeforeAnyFetch() {
+        assertThatExceptionOfType(ChppWriteService.ChppWriteException.class)
+                .isThrownBy(() -> service.arrangeChallengeForAgent(999, 0, 2, null, false));
+        assertThat(service.challengeFetches).isZero();
+    }
+
+    @Test
+    void arrangeChallenge_countsOneWrite() throws Exception {
+        service.arrangeChallengeForAgent(999, 1, 2, 42, true);
+        assertThat(service.writesThisSession).isEqualTo(1);
+        assertThat(service.lastChallengeAction).isEqualTo("challenge");
+    }
+
+    @Test
+    void respondToChallenge_rejectsAnUnknownVerbBeforeAnyFetch() {
+        assertThatExceptionOfType(ChppWriteService.ChppWriteException.class)
+                .isThrownBy(() -> service.respondToChallengeForAgent("cancel", 733551221L));
+        assertThat(service.challengeFetches).isZero();
+    }
+
+    @Test
+    void respondToChallenge_acceptCountsOneWrite() throws Exception {
+        service.respondToChallengeForAgent("accept", 733551221L);
+        assertThat(service.writesThisSession).isEqualTo(1);
+        assertThat(service.lastChallengeAction).isEqualTo("accept");
     }
 }

@@ -1,11 +1,17 @@
 package core.net;
 
+import core.file.xml.XMLCHPPPreParser;
+import core.file.xml.XMLChallengesParser;
 import core.file.xml.XMLManager;
 import core.file.xml.XMLTrainingParser;
 import core.model.HOVerwaltung;
 import core.model.UserParameter;
 import core.util.HOLogger;
 import org.w3c.dom.Document;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * The network and parse core of the CHPP write families HO exposes over MCP: set training, match
@@ -122,6 +128,74 @@ public class ChppWriteService {
         final var was = Connector.instance().setSilentDownload(true);
         try {
             return Connector.instance().setTraining(teamId, trainingType, trainingLevel, staminaLevel);
+        } finally {
+            Connector.instance().setSilentDownload(was);
+        }
+    }
+
+    // ===================== challenges =====================
+
+    private static final Set<String> RESPONSE_VERBS = Set.of("accept", "decline", "withdraw");
+
+    /** A read. Shares the silent-fetch handling but does not count against the write cap. */
+    public XMLChallengesParser.ChallengeLists listChallengesForAgent(boolean weekend)
+            throws ChppWriteException {
+        final Map<String, String> params = weekend
+                ? Map.of("isWeekendFriendly", "1") : Map.of();
+        final var xml = fetchChallenges("view", params);
+        if (xml == null || xml.isBlank()) {
+            throw new ChppWriteException(null, "Hattrick rejected the challenge list: " + reason());
+        }
+        return XMLChallengesParser.parse(xml);
+    }
+
+    public void arrangeChallengeForAgent(int opponentTeamId, int friendlyType, int matchPlace,
+            Integer neutralArenaId, boolean weekend) throws ChppWriteException {
+        if (matchPlace == 2 && neutralArenaId == null) {
+            throw new ChppWriteException(null,
+                    "A neutral-ground challenge needs neutralArenaId.");
+        }
+        checkAndCountWrite();
+        final var params = new LinkedHashMap<String, String>();
+        params.put("opponentTeamId", String.valueOf(opponentTeamId));
+        params.put("matchType", String.valueOf(friendlyType));   // 0 normal rules, 1 cup rules
+        params.put("matchPlace", String.valueOf(matchPlace));    // 0 home, 1 away, 2 neutral
+        if (matchPlace == 2) {
+            params.put("neutralArenaId", String.valueOf(neutralArenaId));
+        }
+        if (weekend) {
+            params.put("isWeekendFriendly", "1");
+        }
+        requireAccepted(fetchChallenges("challenge", params), "arrange challenge");
+    }
+
+    public void respondToChallengeForAgent(String verb, long trainingMatchId)
+            throws ChppWriteException {
+        if (!RESPONSE_VERBS.contains(verb)) {
+            throw new ChppWriteException(null,
+                    "verb must be accept, decline or withdraw, was " + verb);
+        }
+        checkAndCountWrite();
+        requireAccepted(
+                fetchChallenges(verb, Map.of("trainingMatchId", String.valueOf(trainingMatchId))),
+                "challenge " + verb);
+    }
+
+    /** No {@code <error>} block and a non-blank body means Hattrick took the write. */
+    private static void requireAccepted(String xml, String what) throws ChppWriteException {
+        if (xml == null || xml.isBlank()) {
+            throw new ChppWriteException(null, "Hattrick rejected the " + what + ": " + reason());
+        }
+        final var error = XMLCHPPPreParser.getError(xml);
+        if (!error.isEmpty()) {
+            throw new ChppWriteException(null, "Hattrick rejected the " + what + ": " + error);
+        }
+    }
+
+    protected String fetchChallenges(String actionType, Map<String, String> params) {
+        final var was = Connector.instance().setSilentDownload(true);
+        try {
+            return Connector.instance().challenges(actionType, params);
         } finally {
             Connector.instance().setSilentDownload(was);
         }
