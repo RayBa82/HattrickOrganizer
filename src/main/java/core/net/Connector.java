@@ -313,6 +313,11 @@ public class Connector {
 	 */
 	public String uploadMatchOrder(int matchId, int teamId, MatchType matchType, String orderString)
 			throws IOException {
+		return uploadMatchOrder(matchId, teamId, matchType, orderString, true);
+	}
+
+	public String uploadMatchOrder(int matchId, int teamId, MatchType matchType, String orderString,
+			boolean showErrorMessage) throws IOException {
 		StringBuilder urlpara = new StringBuilder(getMatchOrdersURl());
 		if (teamId > 0 && !HOVerwaltung.instance().getModel().getBasics().isNationalTeam()) {
 			urlpara.append("&teamId=").append(teamId);
@@ -326,13 +331,63 @@ public class Connector {
 
 		Map<String, String> paras = new HashMap<>();
 		paras.put("lineup", orderString);
-		String result = readStream(postWebFileWithBodyParameters(urlpara.toString(), paras, true,
-				"set_matchorder"));
+		String result = readStream(postWebFileWithBodyParameters(urlpara.toString(), paras,
+				showErrorMessage, "set_matchorder"));
 		String sError = XMLCHPPPreParser.getError(result);
 		if (!sError.isEmpty()) {
 			throw new RuntimeException(sError);
 		}
 		return result;
+	}
+
+	// ---- training (file=training, version 2.1, actionType=setTraining) ----
+
+	static String setTrainingUrl(int teamId, int trainingType, int trainingLevel, int staminaLevel) {
+		return htUrl + "?file=training&version=2.1&actionType=setTraining"
+				+ "&teamId=" + teamId
+				+ "&trainingType=" + trainingType
+				+ "&trainingLevel=" + trainingLevel
+				+ "&trainingLevelStamina=" + staminaLevel;
+	}
+
+	/** Set the senior training. Echoes the new state under &lt;View&gt; plus &lt;TrainingSet&gt;. */
+	public String setTraining(int teamId, int trainingType, int trainingLevel, int staminaLevel) {
+		return getCHPPWebFile(setTrainingUrl(teamId, trainingType, trainingLevel, staminaLevel));
+	}
+
+	// ---- challenges (file=challenges, version 1.6) ----
+
+	static String challengesUrl(String actionType, Map<String, String> params) {
+		StringBuilder url = new StringBuilder(htUrl)
+				.append("?file=challenges&version=1.6&actionType=").append(actionType);
+		for (Map.Entry<String, String> e : params.entrySet()) {
+			url.append('&').append(e.getKey()).append('=').append(e.getValue());
+		}
+		return url.toString();
+	}
+
+	/** view / challenge / accept / decline / withdraw. */
+	public String challenges(String actionType, Map<String, String> params) {
+		return getCHPPWebFile(challengesUrl(actionType, params));
+	}
+
+	// ---- transfer bid (file=playerdetails, version 3.0, actionType=placeBid) ----
+
+	static String placeBidUrl(int playerId, int teamId, long bidAmount, Long maxBidAmount) {
+		StringBuilder url = new StringBuilder(htUrl)
+				.append("?file=playerdetails&version=3.0&actionType=placeBid")
+				.append("&playerID=").append(playerId)
+				.append("&teamId=").append(teamId)
+				.append("&bidAmount=").append(bidAmount);
+		if (maxBidAmount != null) {
+			url.append("&maxBidAmount=").append(maxBidAmount);
+		}
+		return url.toString();
+	}
+
+	/** Place a bid. Returns the updated &lt;Player&gt; block from playerdetails. */
+	public String placeBid(int playerId, int teamId, long bidAmount, Long maxBidAmount) {
+		return getCHPPWebFile(placeBidUrl(playerId, teamId, bidAmount, maxBidAmount));
 	}
 
 	/**
