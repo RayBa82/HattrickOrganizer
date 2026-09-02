@@ -6,6 +6,7 @@ import core.gui.HOMainFrame;
 import core.gui.theme.GroupTeamFactory;
 import core.model.player.IMatchRoleID;
 import core.model.player.Player;
+import core.net.ChppWriteService;
 import module.lineup.Lineup;
 
 import javax.swing.SwingUtilities;
@@ -77,8 +78,51 @@ public final class LineupTools {
                                                 "one of: " + String.join(", ", GroupTeamFactory.TEAMS_GROUPS)
                                                         + " (the empty one clears the group)")),
                                 "playerIds", "group"),
-                        LineupTools::setPlayerGroup)
+                        LineupTools::setPlayerGroup),
+                new McpTool("send_match_order",
+                        "Send THE LINEUP CURRENTLY SET IN HO for a match to Hattrick as the match "
+                                + "order. This leaves the machine and OVERWRITES whatever order "
+                                + "Hattrick currently holds for that match. Build the lineup with "
+                                + "apply_lineup and review it with get_lineup first. League matches "
+                                + "are matchType 1; for cup, friendly or tournament take the "
+                                + "matchType id from get_matches.",
+                        McpTool.schema(McpTool.properties(
+                                        "matchId", McpTool.prop("integer", "the Hattrick match id"),
+                                        "matchType", McpTool.prop("integer",
+                                                "match type id (league = 1; from get_matches for others)")),
+                                "matchId", "matchType"),
+                        LineupTools::sendMatchOrder)
         );
+    }
+
+    private static JsonObject sendMatchOrder(JsonObject args) throws McpToolException {
+        final var matchId = McpJson.reqInt(args, "matchId");
+        final var matchTypeId = McpJson.reqInt(args, "matchType");
+        final var matchType = core.model.enums.MatchType.getById(matchTypeId);
+        if (matchType == null) {
+            throw new IllegalArgumentException("Unknown matchType " + matchTypeId
+                    + "; take the matchType id from get_matches (league matches are 1).");
+        }
+        final var model = McpJson.model();
+        // apply_lineup mutates the live Lineup on the EDT, so serialise it there too.
+        final var orderString = onEdt(() -> {
+            final var wrapper = new JsonObject();
+            wrapper.addProperty("order", model.getCurrentLineup().toJson());
+            return wrapper;
+        }).get("order").getAsString();
+
+        final String response;
+        try {
+            response = ChppWriteService.instance()
+                    .sendMatchOrderForAgent(matchId, matchType, orderString);
+        } catch (ChppWriteService.ChppWriteException e) {
+            throw new McpToolException(e.getMessage());
+        }
+        final var out = new JsonObject();
+        out.addProperty("status", "ok");
+        out.addProperty("matchId", matchId);
+        out.addProperty("response", response);
+        return out;
     }
 
     static JsonObject lineupSchema() {

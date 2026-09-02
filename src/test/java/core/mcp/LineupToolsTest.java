@@ -1,18 +1,32 @@
 package core.mcp;
 
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import core.model.player.IMatchRoleID;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 class LineupToolsTest {
 
     @Test
-    void tools_areTheFiveLineupTools() {
+    void tools_areTheLineupTools() {
         assertThat(LineupTools.tools()).extracting(McpTool::name)
                 .containsExactly("get_lineup", "evaluate_lineup", "optimize_lineup", "apply_lineup",
-                        "set_player_group");
+                        "set_player_group", "send_match_order");
+    }
+
+    @Test
+    void sendMatchOrder_rejectsAnUnknownMatchType() {
+        final var sendTool = LineupTools.tools().stream()
+                .filter(t -> t.name().equals("send_match_order")).findFirst().orElseThrow();
+        final var a = new JsonObject();
+        a.addProperty("matchId", 12345);
+        a.addProperty("matchType", 999);   // not a MatchType id
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> sendTool.handler().call(a))
+                .withMessageContaining("get_matches");
     }
 
     @Test
