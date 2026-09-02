@@ -1,18 +1,59 @@
 package core.mcp;
 
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import core.constants.player.PlayerSkill;
 import core.constants.player.PlayerSpeciality;
 import core.model.player.Player;
+import core.net.ChppWriteService;
 import core.net.TransferSearchQuery;
 import core.util.AmountOfMoney;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 class TransferToolsTest {
+
+    private ChppWriteService originalService;
+
+    @AfterEach
+    void restore() {
+        if (originalService != null) ChppWriteService.setInstanceForTest(originalService);
+        TransferTools.clearPendingBidsForTest();
+    }
+
+    private static McpTool bidTool() {
+        return TransferTools.tools().stream()
+                .filter(t -> t.name().equals("place_bid")).findFirst().orElseThrow();
+    }
+
+    private int placeCalls;
+    private long placedAmount;
+    private Long placedMax;
+
+    private void installRecordingService() {
+        originalService = ChppWriteService.instance();
+        ChppWriteService.setInstanceForTest(new ChppWriteService() {
+            @Override
+            public BidResult placeBidForAgent(int playerId, long bidAmount, Long maxBidAmount) {
+                placeCalls++;
+                placedAmount = bidAmount;
+                placedMax = maxBidAmount;
+                return new BidResult("1750000", "2026-09-05 20:00:00", "HO FC");
+            }
+        });
+    }
+
+    private static JsonObject step1(int playerId, long amount) {
+        final var a = new JsonObject();
+        a.addProperty("playerId", playerId);
+        a.addProperty("bidAmount", amount);
+        return a;
+    }
 
     private static Player player(int age, int... skillValues) {
         final var p = new Player();
@@ -33,7 +74,73 @@ class TransferToolsTest {
     @Test
     void tools_areTheTransferTools() {
         assertThat(TransferTools.tools()).extracting(McpTool::name)
-                .containsExactly("search_transfers", "find_comparables", "get_team_transfers");
+                .containsExactly("search_transfers", "find_comparables", "get_team_transfers",
+                        "place_bid");
+    }
+
+    @Test
+    void step1_issuesATokenAndPlacesNothing() throws Exception {
+        installRecordingService();
+        final var result = bidTool().handler().call(step1(111, 1_500_000L));
+        assertThat(result.get("status").getAsString()).isEqualTo("confirm_required");
+        assertThat(result.has("confirmToken")).isTrue();
+        assertThat(placeCalls).isZero();
+    }
+
+    @Test
+    void step2_placesExactlyThePreviewedAmounts() throws Exception {
+        installRecordingService();
+        final var token = bidTool().handler().call(step1(111, 1_500_000L))
+                .get("confirmToken").getAsString();
+
+        final var a = new JsonObject();
+        a.addProperty("playerId", 111);
+        a.addProperty("bidAmount", 9_999_999L);   // must be ignored in favour of the pending entry
+        a.addProperty("confirmToken", token);
+        final var result = bidTool().handler().call(a);
+
+        assertThat(result.get("status").getAsString()).isEqualTo("ok");
+        assertThat(placeCalls).isEqualTo(1);
+        assertThat(placedAmount).isEqualTo(1_500_000L);
+    }
+
+    @Test
+    void step2_tokenIsSingleUse() throws Exception {
+        installRecordingService();
+        final var token = bidTool().handler().call(step1(111, 1_500_000L))
+                .get("confirmToken").getAsString();
+        final var a = new JsonObject();
+        a.addProperty("playerId", 111);
+        a.addProperty("confirmToken", token);
+        bidTool().handler().call(a);
+        assertThatExceptionOfType(McpToolException.class)
+                .isThrownBy(() -> bidTool().handler().call(a))
+                .withMessageContaining("step-1");
+    }
+
+    @Test
+    void step2_rejectsAWrongPlayerId() throws Exception {
+        installRecordingService();
+        final var token = bidTool().handler().call(step1(111, 1_500_000L))
+                .get("confirmToken").getAsString();
+        final var a = new JsonObject();
+        a.addProperty("playerId", 222);
+        a.addProperty("confirmToken", token);
+        assertThatExceptionOfType(McpToolException.class)
+                .isThrownBy(() -> bidTool().handler().call(a));
+    }
+
+    @Test
+    void step2_rejectsAnExpiredToken() throws Exception {
+        installRecordingService();
+        final var token = bidTool().handler().call(step1(111, 1_500_000L))
+                .get("confirmToken").getAsString();
+        TransferTools.expirePendingBidsForTest();
+        final var a = new JsonObject();
+        a.addProperty("playerId", 111);
+        a.addProperty("confirmToken", token);
+        assertThatExceptionOfType(McpToolException.class)
+                .isThrownBy(() -> bidTool().handler().call(a));
     }
 
     @Test

@@ -7,6 +7,7 @@ import core.db.TransferListing;
 import core.file.xml.XMLTransferSearchParser;
 import core.model.player.Player;
 import core.net.TransferSearchQuery;
+import core.net.ChppWriteService;
 import core.net.TransferSearchService;
 import core.util.HODateTime;
 import module.transfer.PlayerTransfer;
@@ -15,6 +16,9 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Transfer market search and comparables.
@@ -81,8 +85,125 @@ public final class TransferTools {
                                 "direction", McpTool.prop("string", "buy, sell, or omit for both"),
                                 "limit", McpTool.prop("integer", "how many transfers to return, newest first; default 20, max 100"),
                                 "offset", McpTool.prop("integer", "how many of the newest transfers to skip, for paging; default 0"))),
-                        TransferTools::teamTransfers)
+                        TransferTools::teamTransfers),
+                new McpTool("place_bid",
+                        "Place a transfer bid. TWO STEPS so a stray call cannot spend money: call "
+                                + "once with playerId + bidAmount to get a preview and a "
+                                + "confirmToken, then call again with the same playerId and that "
+                                + "confirmToken to actually place the bid. The second call leaves "
+                                + "the machine and commits money in Hattrick. bidAmount is in the "
+                                + "user's currency. maxBidAmount is an optional autobid ceiling.",
+                        McpTool.schema(McpTool.properties(
+                                        "playerId", McpTool.prop("integer", "the player to bid on"),
+                                        "bidAmount", McpTool.prop("integer",
+                                                "the bid, in the user's currency (required in step 1)"),
+                                        "maxBidAmount", McpTool.prop("integer",
+                                                "optional autobid ceiling"),
+                                        "confirmToken", McpTool.prop("string",
+                                                "the token from step 1 (required in step 2, omit in step 1)")),
+                                "playerId"),
+                        TransferTools::placeBid)
         );
+    }
+
+    private record PendingBid(int playerId, long bidAmount, Long maxBidAmount, long createdAt) {
+    }
+
+    private static final Map<String, PendingBid> PENDING_BIDS = new ConcurrentHashMap<>();
+    private static final long BID_TTL_MS = 120_000;
+
+    static void clearPendingBidsForTest() {
+        PENDING_BIDS.clear();
+    }
+
+    static void expirePendingBidsForTest() {
+        PENDING_BIDS.replaceAll((k, v) ->
+                new PendingBid(v.playerId(), v.bidAmount(), v.maxBidAmount(), 0L));
+    }
+
+    private static void sweepExpiredBids() {
+        final var now = System.currentTimeMillis();
+        PENDING_BIDS.values().removeIf(b -> now - b.createdAt() > BID_TTL_MS);
+    }
+
+    private static JsonObject placeBid(JsonObject args) throws McpToolException {
+        sweepExpiredBids();
+        final var playerId = McpJson.reqInt(args, "playerId");
+        final var confirmToken = McpJson.optString(args, "confirmToken", null);
+
+        if (confirmToken == null) {
+            return previewBid(args, playerId);
+        }
+        return commitBid(playerId, confirmToken);
+    }
+
+    private static JsonObject previewBid(JsonObject args, int playerId) throws McpToolException {
+        final var bidAmount = McpJson.reqLong(args, "bidAmount");
+        final Long maxBidAmount = McpJson.optLong(args, "maxBidAmount");
+
+        final var token = UUID.randomUUID().toString();
+        PENDING_BIDS.put(token,
+                new PendingBid(playerId, bidAmount, maxBidAmount, System.currentTimeMillis()));
+
+        final var out = new JsonObject();
+        out.addProperty("status", "confirm_required");
+
+        final var listing = DBManager.instance().loadLatestTransferListing(playerId);
+        final var player = new JsonObject();
+        player.addProperty("id", playerId);
+        if (listing != null) {
+            player.addProperty("name", listing.getPlayerName());
+            player.addProperty("ageYears", listing.getAge());
+            player.addProperty("askingPrice", listing.getAskingPrice());
+            player.addProperty("highestBid", listing.getHighestBid());
+            player.addProperty("deadline",
+                    listing.getDeadline() == null ? null : listing.getDeadline().toHT());
+        } else {
+            player.addProperty("note", "No market snapshot for this player - run search_transfers "
+                    + "for him first if you want a preview.");
+        }
+        out.add("player", player);
+
+        final var bid = new JsonObject();
+        bid.addProperty("bidAmount", bidAmount);
+        if (maxBidAmount != null) {
+            bid.addProperty("maxBidAmount", maxBidAmount);
+        }
+        out.add("bid", bid);
+
+        out.addProperty("confirmToken", token);
+        out.addProperty("expiresInSeconds", 120);
+        out.addProperty("note", "Call place_bid again with this confirmToken and the same playerId "
+                + "to place the bid.");
+        return out;
+    }
+
+    private static JsonObject commitBid(int playerId, String confirmToken) throws McpToolException {
+        final var pending = PENDING_BIDS.remove(confirmToken);
+        if (pending == null
+                || System.currentTimeMillis() - pending.createdAt() > BID_TTL_MS
+                || pending.playerId() != playerId) {
+            throw new McpToolException("That confirmToken is invalid, expired, or for a different "
+                    + "player - start again with a step-1 place_bid call.");
+        }
+        final ChppWriteService.BidResult result;
+        try {
+            result = ChppWriteService.instance()
+                    .placeBidForAgent(pending.playerId(), pending.bidAmount(), pending.maxBidAmount());
+        } catch (ChppWriteService.ChppWriteException e) {
+            throw new McpToolException(e.getMessage());
+        }
+        final var out = new JsonObject();
+        out.addProperty("status", "ok");
+        final var player = new JsonObject();
+        player.addProperty("id", pending.playerId());
+        out.add("player", player);
+        out.addProperty("highestBid", result.highestBid());
+        out.addProperty("deadline", result.deadline());
+        out.addProperty("bidderTeamName", result.bidderTeamName());
+        out.addProperty("note", "Bid placed. Poll get_player or search_transfers for the updated "
+                + "market state.");
+        return out;
     }
 
     private static JsonObject searchSchema() {

@@ -89,6 +89,14 @@ public class TransferListingTable extends AbstractTable {
         return load(TransferListing.class, connectionManager.executeQuery(sql));
     }
 
+    /** The most recent snapshot of this player's market listing, or null if none was ever seen. */
+    public TransferListing loadLatestForPlayer(int playerId) {
+        final var sql = createSelectStatement(
+                "WHERE PLAYERID = " + playerId + " ORDER BY OBSERVEDAT DESC LIMIT 1");
+        final var rows = load(TransferListing.class, connectionManager.executeQuery(sql));
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
     /** Record what an observed listing actually sold for. */
     public void storeSalePrice(int playerId, HODateTime observedAt, long salePrice) {
         connectionManager.executeUpdate("UPDATE " + getTableName()
