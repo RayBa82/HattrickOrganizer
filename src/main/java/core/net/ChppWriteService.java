@@ -253,7 +253,10 @@ public class ChppWriteService {
 
     // ===================== transfer bid =====================
 
-    /** {@code highestBid} is Swedish krona, the raw CHPP value; the tool layer converts to the user's currency. */
+    /**
+     * {@code highestBid} is Swedish krona, the raw CHPP value; the tool layer converts to the user's
+     * currency. {@code bidderTeamName} is the team currently holding the highest bid ("" if none).
+     */
     public record BidResult(long highestBid, String deadline, String bidderTeamName) {
     }
 
@@ -272,6 +275,12 @@ public class ChppWriteService {
         if (xml == null || xml.isBlank()) {
             throw new ChppWriteException("BidFailed", "Hattrick rejected the bid: " + reason());
         }
+        final var error = XMLCHPPPreParser.getError(xml);
+        if (!error.isEmpty()) {
+            // placeBid fails for many reasons: not a Supporter, bid below the minimum, deadline
+            // passed, already the highest bidder. The CHPP <error> carries which.
+            throw new ChppWriteException("BidFailed", "Hattrick rejected the bid: " + error);
+        }
         final var doc = XMLManager.parseString(xml);
         final var player = doc == null ? null
                 : (Element) doc.getDocumentElement().getElementsByTagName("Player").item(0);
@@ -279,10 +288,14 @@ public class ChppWriteService {
             throw new ChppWriteException("BidFailed",
                     "Hattrick did not return the player after the bid: " + reason());
         }
+        // The bid state lives under <Player><TransferDetails>, the leading bidder under <BidderTeam>
+        // (playerdetails 3.2). getElementsByTagName is recursive, but <TeamName> is not unique in
+        // the file, so read it from inside <BidderTeam>.
+        final var bidderTeam = (Element) player.getElementsByTagName("BidderTeam").item(0);
         return new BidResult(
                 parseLongOrZero(XMLManager.xmlValue(player, "HighestBid")),
                 XMLManager.xmlValue(player, "Deadline"),
-                XMLManager.xmlValue(player, "HighestBidderTeamName"));
+                bidderTeam == null ? "" : XMLManager.xmlValue(bidderTeam, "TeamName"));
     }
 
     protected String fetchPlaceBid(int playerId, int teamId, long bidAmount, Long maxBidAmount) {

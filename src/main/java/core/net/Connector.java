@@ -371,11 +371,13 @@ public class Connector {
 		return getCHPPWebFile(challengesUrl(actionType, params));
 	}
 
-	// ---- transfer bid (file=playerdetails, version 3.0, actionType=placeBid) ----
+	// ---- transfer bid (file=playerdetails, version 3.2, actionType=placeBid) ----
+	// bidAmount / maxBidAmount are Money in SEK (CHPP playerdetails doc); the caller converts
+	// from the user's currency. teamId must be a senior team the requesting user manages.
 
 	static String placeBidUrl(int playerId, int teamId, long bidAmount, Long maxBidAmount) {
 		StringBuilder url = new StringBuilder(htUrl)
-				.append("?file=playerdetails&version=3.0&actionType=placeBid")
+				.append("?file=playerdetails&version=3.2&actionType=placeBid")
 				.append("&playerID=").append(playerId)
 				.append("&teamId=").append(teamId)
 				.append("&bidAmount=").append(bidAmount);

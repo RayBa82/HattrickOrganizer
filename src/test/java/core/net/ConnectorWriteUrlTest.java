@@ -49,7 +49,7 @@ class ConnectorWriteUrlTest {
     void placeBidUrl_includesMaxBidAmountOnlyWhenGiven() {
         assertThat(Connector.placeBidUrl(111, 222, 1_500_000L, null))
                 .contains("file=playerdetails")
-                .contains("version=3.0")
+                .contains("version=3.2")
                 .contains("actionType=placeBid")
                 .contains("playerID=111")
                 .contains("teamId=222")

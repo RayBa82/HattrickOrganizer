@@ -68,12 +68,21 @@ class ChppWriteServiceTest {
             return matchOrderResponse;
         }
 
+        /** Shaped like a real playerdetails 3.2 placeBid response (bid state under TransferDetails). */
         String bidResponse = """
                 <HattrickData><Player>
                   <PlayerID>111</PlayerID>
-                  <HighestBid>1750000</HighestBid>
-                  <Deadline>2026-09-05 20:00:00</Deadline>
-                  <HighestBidderTeamName>HO FC</HighestBidderTeamName>
+                  <TransferListed>true</TransferListed>
+                  <TransferDetails>
+                    <AskingPrice>1000000</AskingPrice>
+                    <Deadline>2026-09-05 20:00:00</Deadline>
+                    <HighestBid>1750000</HighestBid>
+                    <MaxBid>2000000</MaxBid>
+                  </TransferDetails>
+                  <BidderTeam>
+                    <TeamID>4711</TeamID>
+                    <TeamName>HO FC</TeamName>
+                  </BidderTeam>
                 </Player></HattrickData>
                 """;
         int bidFetches;
@@ -198,16 +207,30 @@ class ChppWriteServiceTest {
     }
 
     @Test
-    void placeBid_parsesTheReturnedPlayerBlock() throws Exception {
+    void placeBid_parsesTransferDetailsAndTheBidderTeam() throws Exception {
         final var result = service.placeBidForAgent(111, 1_500_000L, null);
-        assertThat(result.highestBid()).isEqualTo(1_750_000L);   // raw swedish krona from the response
+        assertThat(result.highestBid()).isEqualTo(1_750_000L);   // raw swedish krona, from <TransferDetails>
         assertThat(result.deadline()).isEqualTo("2026-09-05 20:00:00");
+        assertThat(result.bidderTeamName()).isEqualTo("HO FC");  // from <BidderTeam><TeamName>
         assertThat(service.writesThisSession).isEqualTo(1);
     }
 
     @Test
     void placeBid_blankResponseFailsWithBidFailedKey() {
         service.bidResponse = "";
+        assertThatExceptionOfType(ChppWriteService.ChppWriteException.class)
+                .isThrownBy(() -> service.placeBidForAgent(111, 1_500_000L, null))
+                .satisfies(e -> assertThat(e.errorKey()).isEqualTo("BidFailed"));
+    }
+
+    @Test
+    void placeBid_chppErrorResponseFailsWithBidFailedKey() {
+        service.bidResponse = """
+                <HattrickData><FileName>playerdetails.xml</FileName>
+                  <ErrorCode>50</ErrorCode>
+                  <Error>Only Supporters may place bids.</Error>
+                </HattrickData>
+                """;
         assertThatExceptionOfType(ChppWriteService.ChppWriteException.class)
                 .isThrownBy(() -> service.placeBidForAgent(111, 1_500_000L, null))
                 .satisfies(e -> assertThat(e.errorKey()).isEqualTo("BidFailed"));

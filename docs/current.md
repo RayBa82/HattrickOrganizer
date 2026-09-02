@@ -428,22 +428,27 @@ confirm token (static map on `TransferTools`, 120 s TTL, single-use).
 `place_bid` amounts follow the same currency contract as the rest of the MCP surface: the model
 bids in the user's currency, `TransferTools` converts to swedish krona (`McpJson.swedishKrona`)
 before the CHPP call and stores the krona value in the pending-bid entry; the preview echoes the
+`place_bid` amounts follow the same currency contract as the rest of the MCP surface: the model
+bids in the user's currency, `TransferTools` converts to swedish krona (`McpJson.swedishKrona`)
+before the CHPP call and stores the krona value in the pending-bid entry; the preview echoes the
 user-currency numbers back and every money field in the result is converted back with
 `McpJson.money` and tagged with a `currency` field. `ChppWriteService.BidResult.highestBid` is
-raw krona.
+raw krona. The CHPP `playerdetails` doc confirms `bidAmount` / `maxBidAmount` are Money **in SEK**,
+so the conversion is correct. The bid call is `playerdetails` **version 3.2** (the version whose
+doc documents `placeBid`; HO's read path still uses 3.0), `actionType=placeBid`, with `teamId`
+(the managed senior team) required. The post-bid response is the full `view` output; the bid state
+is read from `<Player><TransferDetails>` (`HighestBid`, `Deadline`) and the leading bidder from
+`<Player><BidderTeam><TeamName>`. A CHPP `<ErrorCode>` in the response (not a Supporter, bid too
+low, deadline passed, …) becomes a `ChppWriteException` with `errorKey "BidFailed"`.
 
 OAuth scopes `set_training,manage_challenges,place_bid` added to the hard-coded `OAuthDialog`
 string — a token authorized before this ships does NOT carry them and there is no recovery path
 (by design); re-authorize to pick them up.
 
-Verified against the code but NOT against live CHPP: the `setTraining` echo nesting, the
-`challenges` `view` element casing (`MatchTime` / `IsAgreed`), the `<Player>` field name for
-the post-bid highest bidder, and **the currency of `placeBid`'s `bidAmount` / `maxBidAmount`**.
-The currency handling assumes CHPP wants swedish krona there, on the strength of the CHPP-wide
-invariant that every money field is krona - HO reads `playerdetails` `AskingPrice` / `HighestBid`
-and `transfersearch` prices as raw krona, and already converts `transfersearch` `priceMin` /
-`priceMax` to krona before sending (`TransferSearchConverter`, `module/transfer/XMLParser`,
-`TransferSearchPanel`). No captured `placeBid` request confirms it. Capture real responses and
-adjust the parsers / fixtures / conversion if any differ.
+Verified against the code but NOT against live CHPP: the `setTraining` echo nesting and the
+`challenges` `view` element casing (`MatchTime` / `IsAgreed`). `place_bid`'s wire format, SEK
+units and response structure are now from the official `playerdetails` CHPP doc, but no live
+`placeBid` round-trip has been run — capture one and adjust the fixtures if anything differs.
 
-**Verification status:** full suite green (629 tests, 0 failures). No live CHPP verification.
+**Verification status:** full suite green (630 tests, 0 failures). No live CHPP round-trip;
+`place_bid` wire format and response shape are from the CHPP `playerdetails` doc.

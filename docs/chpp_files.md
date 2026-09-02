@@ -122,4 +122,4 @@ HO issues these write actions on behalf of the managed team (exposed over MCP, s
 | `training` | 2.1 | `setTraining` | set senior training type / intensity / stamina share |
 | `matchorders` | 3.0 | `setmatchorder` | upload the match order for an upcoming game (pre-existing) |
 | `challenges` | 1.6 | `view` / `challenge` / `accept` / `decline` / `withdraw` | list and manage friendly challenges |
-| `playerdetails` | 3.0 | `placeBid` | place a transfer bid |
+| `playerdetails` | 3.2 | `placeBid` | place a transfer bid (`bidAmount` / `maxBidAmount` are Money in SEK; needs the `place_bid` scope and Supporter) |
