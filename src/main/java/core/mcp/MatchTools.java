@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import core.db.DBManager;
 import core.model.enums.MatchType;
+import core.net.ChppWriteService;
 import core.model.match.MatchKurzInfo;
 import core.model.match.Matchdetails;
 import core.prediction.engine.MatchPredictionManager;
@@ -77,8 +78,120 @@ public final class MatchTools {
                         McpTool.schema(
                                 opponentProperties(LineupTools.lineupSchema().getAsJsonObject("properties")),
                                 OPPONENT_SECTORS),
-                        MatchTools::simulateLineup)
+                        MatchTools::simulateLineup),
+                new McpTool("list_challenges",
+                        "Friendly challenges: the ones this team has sent (outgoing) and the ones "
+                                + "other teams have sent it (incoming). accept / decline / withdraw "
+                                + "need a trainingMatchId that only this list provides. A read - "
+                                + "does not spend the write cap.",
+                        McpTool.schema(McpTool.properties(
+                                "weekend", McpTool.prop("boolean",
+                                        "list weekend friendly challenges instead of midweek; default false"))),
+                        MatchTools::listChallenges),
+                new McpTool("arrange_challenge",
+                        "Send a friendly challenge to another team. Leaves the machine. Poll "
+                                + "list_challenges afterwards for whether the opponent agreed.",
+                        McpTool.schema(McpTool.properties(
+                                        "opponentTeamId", McpTool.prop("integer", "the team to challenge"),
+                                        "friendlyType", McpTool.prop("integer",
+                                                "0 normal rules, 1 cup rules; default 0"),
+                                        "location", McpTool.prop("string",
+                                                "home, away or neutral; default home"),
+                                        "neutralArenaId", McpTool.prop("integer",
+                                                "arena id, required when location is neutral"),
+                                        "weekend", McpTool.prop("boolean",
+                                                "arrange it as a weekend friendly; default false")),
+                                "opponentTeamId"),
+                        MatchTools::arrangeChallenge),
+                new McpTool("respond_to_challenge",
+                        "Accept, decline or withdraw a friendly challenge by its trainingMatchId "
+                                + "(from list_challenges). Leaves the machine.",
+                        McpTool.schema(McpTool.properties(
+                                        "trainingMatchId", McpTool.prop("integer",
+                                                "the challenge id from list_challenges"),
+                                        "action", McpTool.prop("string",
+                                                "accept, decline or withdraw")),
+                                "trainingMatchId", "action"),
+                        MatchTools::respondToChallenge)
         );
+    }
+
+    private static JsonObject listChallenges(JsonObject args) throws McpToolException {
+        final var weekend = McpJson.optBool(args, "weekend", false);
+        final core.file.xml.XMLChallengesParser.ChallengeLists lists;
+        try {
+            lists = ChppWriteService.instance().listChallengesForAgent(weekend);
+        } catch (ChppWriteService.ChppWriteException e) {
+            throw new McpToolException(e.getMessage());
+        }
+        final var out = new JsonObject();
+        out.add("outgoing", challengeArray(lists.outgoing()));
+        out.add("incoming", challengeArray(lists.incoming()));
+        return out;
+    }
+
+    private static JsonArray challengeArray(
+            java.util.List<core.file.xml.XMLChallengesParser.Challenge> challenges) {
+        final var arr = new JsonArray();
+        for (final var c : challenges) {
+            final var j = new JsonObject();
+            j.addProperty("trainingMatchId", c.trainingMatchId());
+            j.addProperty("opponentTeamId", c.opponentTeamId());
+            j.addProperty("opponentName", c.opponentName());
+            j.addProperty("matchTime", c.matchTime());
+            j.addProperty("friendlyType", c.friendlyType());
+            j.addProperty("arenaName", c.arenaName());
+            j.addProperty("isAgreed", c.isAgreed());
+            arr.add(j);
+        }
+        return arr;
+    }
+
+    private static JsonObject arrangeChallenge(JsonObject args) throws McpToolException {
+        final var opponentTeamId = McpJson.reqInt(args, "opponentTeamId");
+        final var friendlyType = McpJson.optInt(args, "friendlyType", 0);
+        final var location = McpJson.optString(args, "location", "home");
+        final int matchPlace = switch (location) {
+            case "home" -> 0;
+            case "away" -> 1;
+            case "neutral" -> 2;
+            default -> throw new IllegalArgumentException(
+                    "location must be home, away or neutral, was " + location);
+        };
+        final Integer neutralArenaId = McpJson.optInteger(args, "neutralArenaId");
+        if (matchPlace == 2 && neutralArenaId == null) {
+            throw new IllegalArgumentException("location=neutral needs neutralArenaId.");
+        }
+        final var weekend = McpJson.optBool(args, "weekend", false);
+        try {
+            ChppWriteService.instance().arrangeChallengeForAgent(
+                    opponentTeamId, friendlyType, matchPlace, neutralArenaId, weekend);
+        } catch (ChppWriteService.ChppWriteException e) {
+            throw new McpToolException(e.getMessage());
+        }
+        final var out = new JsonObject();
+        out.addProperty("status", "ok");
+        out.addProperty("note", "challenge sent; poll list_challenges for the opponent's response");
+        return out;
+    }
+
+    private static JsonObject respondToChallenge(JsonObject args) throws McpToolException {
+        final var trainingMatchId = McpJson.reqLong(args, "trainingMatchId");
+        final var action = McpJson.reqString(args, "action");
+        if (!java.util.Set.of("accept", "decline", "withdraw").contains(action)) {
+            throw new IllegalArgumentException(
+                    "action must be accept, decline or withdraw, was " + action);
+        }
+        try {
+            ChppWriteService.instance().respondToChallengeForAgent(action, trainingMatchId);
+        } catch (ChppWriteService.ChppWriteException e) {
+            throw new McpToolException(e.getMessage());
+        }
+        final var out = new JsonObject();
+        out.addProperty("status", "ok");
+        out.addProperty("action", action);
+        out.addProperty("trainingMatchId", trainingMatchId);
+        return out;
     }
 
     private static JsonObject matches(JsonObject args) throws McpToolException {

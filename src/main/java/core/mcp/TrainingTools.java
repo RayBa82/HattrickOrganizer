@@ -5,6 +5,7 @@ import com.google.gson.JsonObject;
 import core.db.DBManager;
 import core.model.HOModel;
 import core.model.player.Player;
+import core.net.ChppWriteService;
 import core.training.FutureTrainingManager;
 import core.training.TrainingPerWeek;
 import core.training.WeeklyTrainingType;
@@ -42,8 +43,50 @@ public final class TrainingTools {
                                                 + "; capped at the number of future weeks HO has planned"),
                                 "playerIds", McpTool.prop("array",
                                         "restrict the prediction to these player ids; the whole squad if omitted"))),
-                        TrainingTools::training)
+                        TrainingTools::training),
+                new McpTool("set_training",
+                        "Set the senior team's training. Call get_training first for the current "
+                                + "values and for what each trainingType id trains. This leaves the "
+                                + "machine and changes training in Hattrick immediately. HO's local "
+                                + "snapshot is NOT refreshed until the next team download.",
+                        McpTool.schema(McpTool.properties(
+                                        "trainingType", McpTool.prop("integer",
+                                                "training type id; see get_training for the meanings"),
+                                        "intensity", McpTool.prop("integer",
+                                                "training intensity, 0..100"),
+                                        "staminaShare", McpTool.prop("integer",
+                                                "stamina share, 5..100")),
+                                "trainingType", "intensity", "staminaShare"),
+                        TrainingTools::setTraining)
         );
+    }
+
+    private static JsonObject setTraining(JsonObject args) throws McpToolException {
+        final var trainingType = McpJson.reqInt(args, "trainingType");
+        final var intensity = McpJson.reqInt(args, "intensity");
+        final var staminaShare = McpJson.reqInt(args, "staminaShare");
+        if (intensity < 0 || intensity > 100) {
+            throw new IllegalArgumentException("intensity must be 0..100, was " + intensity);
+        }
+        if (staminaShare < 5 || staminaShare > 100) {
+            throw new IllegalArgumentException("staminaShare must be 5..100, was " + staminaShare);
+        }
+        final ChppWriteService.TrainingCommitted committed;
+        try {
+            committed = ChppWriteService.instance()
+                    .setTrainingForAgent(trainingType, intensity, staminaShare);
+        } catch (ChppWriteService.ChppWriteException e) {
+            throw new McpToolException(e.getMessage());
+        }
+        final var out = new JsonObject();
+        out.addProperty("status", "ok");
+        final var c = new JsonObject();
+        c.addProperty("trainingType", committed.trainingType());
+        c.addProperty("intensity", committed.intensity());
+        c.addProperty("staminaShare", committed.staminaShare());
+        out.add("committed", c);
+        out.addProperty("note", "HO's snapshot is not refreshed until the next team download.");
+        return out;
     }
 
     private static JsonObject training(JsonObject args) throws McpToolException {

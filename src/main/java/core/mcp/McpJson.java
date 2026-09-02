@@ -261,6 +261,17 @@ public final class McpJson {
         return args.get(name).getAsInt();
     }
 
+    public static long reqLong(JsonObject args, String name) {
+        if (!args.has(name) || args.get(name).isJsonNull()) {
+            throw new IllegalArgumentException("Missing required argument: " + name);
+        }
+        return args.get(name).getAsLong();
+    }
+
+    public static Long optLong(JsonObject args, String name) {
+        return args.has(name) && !args.get(name).isJsonNull() ? args.get(name).getAsLong() : null;
+    }
+
     public static String reqString(JsonObject args, String name) {
         if (!args.has(name) || args.get(name).isJsonNull()) {
             throw new IllegalArgumentException("Missing required argument: " + name);

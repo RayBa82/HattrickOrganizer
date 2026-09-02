@@ -31,7 +31,7 @@ public class ChppWriteService {
     public static class ChppWriteException extends Exception {
         private final String errorKey;
 
-        ChppWriteException(String errorKey, String message) {
+        public ChppWriteException(String errorKey, String message) {
             super(message);
             this.errorKey = errorKey;
         }
@@ -51,8 +51,13 @@ public class ChppWriteService {
         return instance;
     }
 
-    /** Package private: production code uses {@link #instance()}, tests subclass. */
-    ChppWriteService() {
+    /** Test-only: swap the singleton so a tool test can inject a stub. */
+    public static synchronized void setInstanceForTest(ChppWriteService replacement) {
+        instance = replacement;
+    }
+
+    /** Production code uses {@link #instance()}; tests subclass this (also from other packages). */
+    protected ChppWriteService() {
     }
 
     /** Network writes issued in this HO session. Reads (challenge list, bid preview) do not count. */
