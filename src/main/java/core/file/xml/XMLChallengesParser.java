@@ -1,0 +1,77 @@
+package core.file.xml;
+
+import core.util.HOLogger;
+import org.w3c.dom.Element;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Parses a {@code challenges} {@code view} response (version 1.6) into the outgoing challenges
+ * this team has sent and the offers other teams have sent it.
+ * <p>
+ * Built like {@link XMLTransferSearchParser}: a static {@code parse} that never throws and returns
+ * empty lists on anything it cannot read.
+ */
+public class XMLChallengesParser {
+
+    public record Challenge(long trainingMatchId, String matchTime, int friendlyType,
+                            int opponentTeamId, String opponentName, String arenaName,
+                            boolean isAgreed) {
+    }
+
+    public record ChallengeLists(List<Challenge> outgoing, List<Challenge> incoming) {
+    }
+
+    private XMLChallengesParser() {
+    }
+
+    public static ChallengeLists parse(String xml) {
+        final var doc = XMLManager.parseString(xml);
+        if (doc == null) {
+            return new ChallengeLists(List.of(), List.of());
+        }
+        final var root = doc.getDocumentElement();
+        return new ChallengeLists(
+                parseList(root, "ChallengesByMe", "Challenge"),
+                parseList(root, "OffersByOthers", "Offer"));
+    }
+
+    private static List<Challenge> parseList(Element root, String containerTag, String itemTag) {
+        final var result = new ArrayList<Challenge>();
+        final var container = (Element) root.getElementsByTagName(containerTag).item(0);
+        if (container == null) {
+            return result;
+        }
+        final var items = container.getElementsByTagName(itemTag);
+        for (int i = 0; i < items.getLength(); i++) {
+            try {
+                result.add(parseItem((Element) items.item(i)));
+            } catch (RuntimeException e) {
+                HOLogger.instance().log(XMLChallengesParser.class, e);
+            }
+        }
+        return result;
+    }
+
+    private static Challenge parseItem(Element item) {
+        final var opponent = (Element) item.getElementsByTagName("Opponent").item(0);
+        return new Challenge(
+                parseLong(XMLManager.xmlValue(item, "TrainingMatchID")),
+                XMLManager.xmlValue(item, "MatchTime"),
+                parseInt(XMLManager.xmlValue(item, "FriendlyType")),
+                opponent == null ? 0 : parseInt(XMLManager.xmlValue(opponent, "TeamID")),
+                opponent == null ? "" : XMLManager.xmlValue(opponent, "TeamName"),
+                opponent == null ? "" : XMLManager.xmlValue(opponent, "ArenaName"),
+                opponent != null
+                        && "true".equalsIgnoreCase(XMLManager.xmlValue(opponent, "IsAgreed")));
+    }
+
+    private static long parseLong(String s) {
+        return s == null || s.isBlank() ? 0L : Long.parseLong(s.trim());
+    }
+
+    private static int parseInt(String s) {
+        return s == null || s.isBlank() ? 0 : Integer.parseInt(s.trim());
+    }
+}
