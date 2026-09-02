@@ -139,7 +139,9 @@ public final class TransferTools {
     }
 
     private static JsonObject previewBid(JsonObject args, int playerId) throws McpToolException {
-        // The model bids in the user's currency; Hattrick's placeBid wants swedish krona.
+        // The model bids in the user's currency; placeBid is sent in swedish krona - the CHPP-wide
+        // money unit HO already converts transfersearch priceMin/priceMax to. Not confirmed against
+        // a captured placeBid request (docs/current.md); adjust if a real response says otherwise.
         final var bidAmountLocal = McpJson.reqLong(args, "bidAmount");
         final Long maxBidAmountLocal = McpJson.optLong(args, "maxBidAmount");
         final var bidAmountSek = McpJson.swedishKrona(bidAmountLocal);

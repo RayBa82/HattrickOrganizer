@@ -437,7 +437,13 @@ string — a token authorized before this ships does NOT carry them and there is
 (by design); re-authorize to pick them up.
 
 Verified against the code but NOT against live CHPP: the `setTraining` echo nesting, the
-`challenges` `view` element casing (`MatchTime` / `IsAgreed`), and the `<Player>` field name for
-the post-bid highest bidder. Capture real responses and adjust the parsers/fixtures if they differ.
+`challenges` `view` element casing (`MatchTime` / `IsAgreed`), the `<Player>` field name for
+the post-bid highest bidder, and **the currency of `placeBid`'s `bidAmount` / `maxBidAmount`**.
+The currency handling assumes CHPP wants swedish krona there, on the strength of the CHPP-wide
+invariant that every money field is krona - HO reads `playerdetails` `AskingPrice` / `HighestBid`
+and `transfersearch` prices as raw krona, and already converts `transfersearch` `priceMin` /
+`priceMax` to krona before sending (`TransferSearchConverter`, `module/transfer/XMLParser`,
+`TransferSearchPanel`). No captured `placeBid` request confirms it. Capture real responses and
+adjust the parsers / fixtures / conversion if any differ.
 
 **Verification status:** full suite green (629 tests, 0 failures). No live CHPP verification.
