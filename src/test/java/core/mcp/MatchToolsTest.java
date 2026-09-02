@@ -148,7 +148,8 @@ class MatchToolsTest {
             @Override
             public XMLChallengesParser.ChallengeLists listChallengesForAgent(boolean weekend) {
                 return new XMLChallengesParser.ChallengeLists(
-                        List.of(new XMLChallengesParser.Challenge(1L, "2026-09-06 15:00:00", 1, 10, "A", "AA", false)),
+                        List.of(new XMLChallengesParser.Challenge(
+                                1L, 0L, "2026-09-06 15:00:00", 1, 10, "A", "AA", false)),
                         List.of());
             }
         });

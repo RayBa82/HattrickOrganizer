@@ -450,10 +450,19 @@ invented one; it was dead code). `TrainingCommitted.intensity` is the pending `N
 when present, else the current `TrainingLevel`, and `intensityChangePending` says which; a CHPP
 `<ErrorCode>` becomes a `ChppWriteException`.
 
-Verified against the code and the official CHPP docs (`playerdetails`, `training`) for wire
-format, SEK units, versions and response structure, but NOT against a live round-trip. The one
-remaining pure guess is the `challenges` `view` element casing (`MatchTime` / `IsAgreed`) - no
-`challenges` doc was checked. Capture real responses and adjust the fixtures if anything differs.
+The `challenges` doc (version 1.6) corrected `XMLChallengesParser`: under `<Team>`,
+`<ChallengesByMe>` / `<OffersByOthers>` hold `<Challenge>` / `<Offer>` items whose
+`TrainingMatchID`, `MatchID`, `MatchTime`, `FriendlyType`, `<Arena>` and `IsAgreed` are **siblings
+of `<Opponent>`** - the parser had been reading `IsAgreed` and `ArenaName` from inside `<Opponent>`
+(so both were always empty/false). `MatchID` (the real match once agreed, for `get_match` /
+`send_match_order`) is now captured too. `MatchTime` is kept as a string (the schema types it
+`integer` but it is a datetime in practice). `arrange_challenge` / accept / decline / withdraw
+params match the doc (`opponentTeamId`, `matchType`, `matchPlace`, `neutralArenaId`,
+`trainingMatchId`, `isWeekendFriendly`).
+
+Verified against the code and the official CHPP docs (`playerdetails`, `training`, `challenges`)
+for wire format, versions, params and response structure, but NOT against a live round-trip.
+Capture real responses and adjust the fixtures if anything differs.
 
 **Verification status:** full suite green (631 tests, 0 failures). No live CHPP round-trip;
-`set_training` / `place_bid` wire format and response shape are from the CHPP docs.
+all three write families' wire format and response shape are from the CHPP docs.

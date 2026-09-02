@@ -15,7 +15,13 @@ import java.util.List;
  */
 public class XMLChallengesParser {
 
-    public record Challenge(long trainingMatchId, String matchTime, int friendlyType,
+    /**
+     * One challenge or offer. {@code matchId} is 0 until the challenge is agreed, then it is the
+     * real match you can pass to {@code get_match} / {@code send_match_order}. {@code matchTime} is
+     * the raw CHPP value (a {@code yyyy-MM-dd HH:mm:ss} string in practice, though the schema types
+     * it as an integer).
+     */
+    public record Challenge(long trainingMatchId, long matchId, String matchTime, int friendlyType,
                             int opponentTeamId, String opponentName, String arenaName,
                             boolean isAgreed) {
     }
@@ -55,16 +61,18 @@ public class XMLChallengesParser {
     }
 
     private static Challenge parseItem(Element item) {
+        // TrainingMatchID / MatchID / MatchTime / FriendlyType / IsAgreed and the <Arena> block are
+        // direct children of <Challenge>/<Offer>; only TeamID/TeamName sit inside <Opponent>.
         final var opponent = (Element) item.getElementsByTagName("Opponent").item(0);
         return new Challenge(
                 parseLong(XMLManager.xmlValue(item, "TrainingMatchID")),
+                parseLong(XMLManager.xmlValue(item, "MatchID")),
                 XMLManager.xmlValue(item, "MatchTime"),
                 parseInt(XMLManager.xmlValue(item, "FriendlyType")),
                 opponent == null ? 0 : parseInt(XMLManager.xmlValue(opponent, "TeamID")),
                 opponent == null ? "" : XMLManager.xmlValue(opponent, "TeamName"),
-                opponent == null ? "" : XMLManager.xmlValue(opponent, "ArenaName"),
-                opponent != null
-                        && "true".equalsIgnoreCase(XMLManager.xmlValue(opponent, "IsAgreed")));
+                XMLManager.xmlValue(item, "ArenaName"),
+                "true".equalsIgnoreCase(XMLManager.xmlValue(item, "IsAgreed")));
     }
 
     private static long parseLong(String s) {

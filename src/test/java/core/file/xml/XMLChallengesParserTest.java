@@ -7,43 +7,64 @@ import static org.assertj.core.api.Assertions.assertThat;
 class XMLChallengesParserTest {
 
     /**
-     * Hand-built from the challenges 1.6 schema (spec section 1.6). VERIFY the element casing
-     * (notably MatchTime and IsAgreed) against a real `challenges&actionType=view` response or the
-     * reference structs at github.com/lucianoq/hattrick before merging.
+     * Shaped from the official challenges 1.6 doc: under {@code <Team>}, {@code <ChallengesByMe>} /
+     * {@code <OffersByOthers>} hold {@code <Challenge>} / {@code <Offer>} items whose
+     * {@code TrainingMatchID}, {@code MatchID}, {@code MatchTime}, {@code FriendlyType},
+     * {@code <Arena>} and {@code IsAgreed} are siblings of {@code <Opponent>} (only TeamID/TeamName
+     * are inside {@code <Opponent>}).
      */
     private static final String VIEW = """
             <?xml version="1.0" encoding="utf-8"?>
             <HattrickData>
               <FileName>challenges.xml</FileName>
               <Version>1.6</Version>
-              <IsPossibleToChallengeMidWeek>false</IsPossibleToChallengeMidWeek>
-              <IsPossibleToChallengeWeekend>true</IsPossibleToChallengeWeekend>
-              <ChallengesByMe>
-                <Challenge>
-                  <TrainingMatchID>733551221</TrainingMatchID>
-                  <MatchTime>2026-09-06 15:00:00</MatchTime>
-                  <FriendlyType>1</FriendlyType>
-                  <Opponent>
-                    <TeamID>1877</TeamID>
-                    <TeamName>Rivals FC</TeamName>
-                    <ArenaName>Rivals Arena</ArenaName>
+              <Team>
+                <TeamID>1500</TeamID>
+                <TeamName>HO FC</TeamName>
+                <ChallengesByMe>
+                  <Challenge>
+                    <TrainingMatchID>733551221</TrainingMatchID>
+                    <MatchTime>2026-09-06 15:00:00</MatchTime>
+                    <MatchID>0</MatchID>
+                    <FriendlyType>1</FriendlyType>
+                    <Opponent>
+                      <TeamID>1877</TeamID>
+                      <TeamName>Rivals FC</TeamName>
+                      <LogoURL>http://x/logo.png</LogoURL>
+                    </Opponent>
+                    <Arena>
+                      <ArenaID>200</ArenaID>
+                      <ArenaName>Rivals Arena</ArenaName>
+                    </Arena>
+                    <Country>
+                      <CountryID>5</CountryID>
+                      <CountryName>Sweden</CountryName>
+                    </Country>
                     <IsAgreed>false</IsAgreed>
-                  </Opponent>
-                </Challenge>
-              </ChallengesByMe>
-              <OffersByOthers>
-                <Offer>
-                  <TrainingMatchID>733559999</TrainingMatchID>
-                  <MatchTime>2026-09-06 18:00:00</MatchTime>
-                  <FriendlyType>0</FriendlyType>
-                  <Opponent>
-                    <TeamID>2999</TeamID>
-                    <TeamName>Challengers United</TeamName>
-                    <ArenaName>CU Park</ArenaName>
+                  </Challenge>
+                </ChallengesByMe>
+                <OffersByOthers>
+                  <Offer>
+                    <TrainingMatchID>733559999</TrainingMatchID>
+                    <MatchTime>2026-09-06 18:00:00</MatchTime>
+                    <MatchID>733999888</MatchID>
+                    <FriendlyType>0</FriendlyType>
+                    <Opponent>
+                      <TeamID>2999</TeamID>
+                      <TeamName>Challengers United</TeamName>
+                    </Opponent>
+                    <Arena>
+                      <ArenaID>300</ArenaID>
+                      <ArenaName>CU Park</ArenaName>
+                    </Arena>
+                    <League>
+                      <LeagueID>36</LeagueID>
+                      <LeagueName>Sweden</LeagueName>
+                    </League>
                     <IsAgreed>true</IsAgreed>
-                  </Opponent>
-                </Offer>
-              </OffersByOthers>
+                  </Offer>
+                </OffersByOthers>
+              </Team>
             </HattrickData>
             """;
 
@@ -54,6 +75,7 @@ class XMLChallengesParserTest {
         assertThat(lists.outgoing()).hasSize(1);
         final var out = lists.outgoing().get(0);
         assertThat(out.trainingMatchId()).isEqualTo(733551221L);
+        assertThat(out.matchId()).isZero();
         assertThat(out.matchTime()).isEqualTo("2026-09-06 15:00:00");
         assertThat(out.friendlyType()).isEqualTo(1);
         assertThat(out.opponentTeamId()).isEqualTo(1877);
@@ -62,8 +84,11 @@ class XMLChallengesParserTest {
         assertThat(out.isAgreed()).isFalse();
 
         assertThat(lists.incoming()).hasSize(1);
-        assertThat(lists.incoming().get(0).trainingMatchId()).isEqualTo(733559999L);
-        assertThat(lists.incoming().get(0).isAgreed()).isTrue();
+        final var in = lists.incoming().get(0);
+        assertThat(in.trainingMatchId()).isEqualTo(733559999L);
+        assertThat(in.matchId()).isEqualTo(733999888L);
+        assertThat(in.arenaName()).isEqualTo("CU Park");
+        assertThat(in.isAgreed()).isTrue();
     }
 
     @Test

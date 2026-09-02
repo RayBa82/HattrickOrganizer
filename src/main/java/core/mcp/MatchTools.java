@@ -142,6 +142,10 @@ public final class MatchTools {
             j.addProperty("friendlyType", c.friendlyType());
             j.addProperty("arenaName", c.arenaName());
             j.addProperty("isAgreed", c.isAgreed());
+            if (c.isAgreed() && c.matchId() > 0) {
+                // Once agreed, the real match exists - hand back its id for get_match / send_match_order.
+                j.addProperty("matchId", c.matchId());
+            }
             arr.add(j);
         }
         return arr;
