@@ -31,9 +31,9 @@ class TransferToolsTest {
     }
 
     @Test
-    void tools_areTheTwoTransferTools() {
+    void tools_areTheTransferTools() {
         assertThat(TransferTools.tools()).extracting(McpTool::name)
-                .containsExactly("search_transfers", "find_comparables");
+                .containsExactly("search_transfers", "find_comparables", "get_team_transfers");
     }
 
     @Test
@@ -80,6 +80,19 @@ class TransferToolsTest {
         assertThat(query.skillType1()).isEqualTo(TransferSearchQuery.Skill.KEEPER);
         assertThat(query.minSkillValue1()).isEqualTo(3);       // keeper minimum level
         assertThat(query.maxSkillValue1() - query.minSkillValue1()).isLessThanOrEqualTo(4);
+        assertThat(query.validationErrorKey()).isNull();
+    }
+
+    /** Hattrick rejects a young age window wider than a year, so an 18yo's window is clamped. */
+    @Test
+    void comparableQuery_clampsTheYoungAgeWindowToAYear() {
+        //                      kp de pm pa wi sc sp
+        final var p = player(18, 1, 4, 9, 5, 3, 2, 1);
+
+        final var query = TransferTools.comparableQuery(p, 1, 1);
+
+        assertThat(query.ageMin()).isEqualTo(17);
+        assertThat(query.ageMax()).isEqualTo(18);
         assertThat(query.validationErrorKey()).isNull();
     }
 

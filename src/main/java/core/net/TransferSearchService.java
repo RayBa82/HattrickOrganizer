@@ -96,9 +96,11 @@ public class TransferSearchService {
         try {
             final var xml = fetch(query, silent);
             if (xml == null || xml.isBlank()) {
-                // Silent downloads swallow the CHPP error into an empty answer; it is in the log.
-                throw new SearchFailed(null, "Hattrick rejected the transfer search. "
-                        + "The CHPP error is in HO's log.");
+                // An empty answer is always a failed download, never a search without hits: a
+                // search with no match still comes back as a well formed file with ItemCount 0.
+                final var cause = Connector.instance().lastError();
+                throw new SearchFailed(null, "Hattrick rejected the transfer search: "
+                        + (cause == null ? "no answer, see HO's log." : cause));
             }
             return XMLTransferSearchParser.parse(xml);
         } catch (SearchFailed e) {

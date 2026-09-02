@@ -101,7 +101,7 @@ Also worth recording: the file's own description says it is *"NOT meant to be fe
 automatically scan the transfer market, but instead upon manual user request"* — which is why the
 panel is button-only and deliberately **not** registered with `RefreshManager`. Keep it that way.
 
-## Hattrick rejects `ageMin` for a wide age range
+## Hattrick limits the age window, and the limit widens at 19
 
 A search with playmaking 7-9 and age **17-20** fails:
 
@@ -111,30 +111,109 @@ URL: https://chpp.hattrick.org/chppxml.ashx?file=transfersearch&version=1.1
      &ageMin=17&ageMax=20&skillType1=8&minSkillValue1=7&maxSkillValue1=9&pageSize=50&pageIndex=0
 ```
 
-The identical search with age **20-22** - Hattrick's own documented example - returns hits. So the
-rejection is about the age *values*, and `ageMin` is simply the parameter Hattrick names.
+The identical search with age **20-22** - Hattrick's own documented example - returns hits.
+
+**The rule is on the width of the age window, and the allowed width depends on `ageMin`:**
+
+| `ageMin` | Largest accepted `ageMax - ageMin` |
+|---|---|
+| up to 18 | 1 |
+| 19 and above | 2, and no wider value has been tried |
+
+`ageMin` is only the parameter Hattrick names in the error; the value it objects to is the pair. 17
+and 18 year olds *can* be searched for — one year at a time, e.g. `17..18` or `17..17`.
+
+Everything past this is unmapped: whether the allowance widens again at some higher age, and whether
+`ageDaysMin`/`ageDaysMax` shift the boundary (`17y0d..18y111d` is nearly two years of real age and is
+accepted, so the count is of the year numbers, not of elapsed time).
 
 ### Ruled out by experiment
 
-- **Parameter names, skill and specialty mappings, transport, missing required parameters** - all
-  verified against the spec, and the same request shape works with a different age pair.
+- **Parameter names, skill and specialty mappings, transport** - all verified against the spec, and
+  the same request shape works with a different age pair.
 - **Missing day bounds.** Sending `ageDaysMin=0&ageDaysMax=111` explicitly (the documented defaults,
   which is what Hattrick's own web form always does) reached the server and changed nothing - the
   17-20 search still failed.
+- **A floor on `ageMin`.** This was the previous reading of the same data and it was wrong; see
+  below.
 
-### Still open: floor or window width
+### The observations, and the false floor they first suggested
 
-The two surviving explanations are not yet separated:
+Run from the MCP `search_transfers` tool on 2026-08-31
+(`~/Library/Application Support/HO/logs/HO-1788133014.log`, `HO-1788138555.log`,
+`HO-1788142064.log` hold the exact URLs):
 
-- **Floor** - 17 is below the lowest accepted `ageMin`.
-- **Window width** - with `ageDaysMax` defaulting to 111, 17-20 is really 17y0d to 20y111d, a span of
-  3 years and 111 days, against 2 years and 111 days for the working example.
+| `ageMin`..`ageMax` | Width | `ageMin` | Result |
+|---|---|---|---|
+| 17..19, 18..20 | 2 | ≤18 | rejected, empty answer |
+| 18..21 | 3 | ≤18 | rejected, empty answer |
+| 18..30 | 12 | ≤18 | rejected, empty answer |
+| 19..21, 20..22, 22..24, 23..25 | 2 | ≥19 | hits |
 
-**One probe separates them: age 17-19.** Works -> no floor, the span is the limit; fails -> 17 itself
-is rejected. If it is the span, `20-23` then shows whether the limit is a two-year window.
+Every row fits the width rule. It also *appeared* to fit a floor at `ageMin >= 19`, because no probe
+in the set was both narrow and young - the width and the `ageMin` value moved together in all
+fourteen requests.
 
-Once known, encode it in `TransferSearchQuery.validationErrorKey()` with a test so it is caught
-client-side. Neither constraint is documented in the CHPP spec.
+The one apparent counter-example, a `17..17` search that failed, is not one: that request carried
+`minSkillValue1=7&maxSkillValue1=11`, a 4-level skill span, and was rejected for *that* (§ *Fixed:
+`transfersearch` rejected every 4-apart skill window* - it is the very request that discovered the
+skill rule). It was the only evidence against a width rule and it never was evidence.
+
+**`17..18` is the probe that separates the two readings for good** - it works under the width rule
+and cannot work under a floor.
+
+### Why none of this rests on the error text
+
+`Additional Info: ageMin` is not usable as evidence. CHPP error 10 has already misnamed its cause
+once here - the skill-span violation above came back as "No primary skill with min and max range has
+been specified". The conclusions are built from which requests returned data, and the rival
+explanations die on their own data points:
+
+- **`pageSize` / `pageIndex`** - omitted on both sides, so not the discriminator. `TransferTools`
+  had never sent `pageIndex` (`git log -S pageIndex` on it is empty); only
+  `TransferSearchPanel.java:265` did. Every request in the three MCP-path logs carried `pageSize=50`
+  and no `pageIndex`, failing and working alike. **Both are required and are now always sent** -
+  `TransferSearchQuery.toQueryString()` fills in `pageSize=50` / `pageIndex=0` when the caller sets
+  neither, so the one guard covers the panel and `search_transfers` together.
+- **The skill filters** - two matched pairs settle it. `18..20` and `19..21` with an identical
+  `skillType1=8 9..11 / skillType2=7 6..8` differ only in the age pair and land on opposite sides
+  (`HO-1788138555.log`, 03:52:34 and 03:52:15); `min1=7` likewise appears on both sides.
+- **`ageMax` alone** - `18..30` fails while `ageMax=30` is far outside anything else tried, and
+  `23..25` works; neither bound decides on its own.
+
+Success and failure were read off the caller, not the log, because the silent path recorded nothing.
+That is fixed below, so the re-runs carry their own evidence.
+
+### Enforced client-side
+
+`TransferSearchQuery.validationErrorKey()` rejects `ageMin <= 18 && ageMax - ageMin > 1` with
+`ls.transfersearch.error.youngagespan`, so a young window that Hattrick would refuse never leaves HO
+and never costs a search against `mcpSearchesPerSession`. `TransferSearchService.search()` is the
+only caller of `Connector.getTransferSearch()` and validates before fetching, so the search tab and
+`search_transfers` are both covered by that one guard; `TransferTools.comparableQuery()` clamps an
+18-or-younger player's window to a year before building the query at all.
+
+The `ageMin >= 19` half is deliberately **not** guarded. A width of 2 is confirmed to work there and
+nothing wider has ever been tried, so capping at 2 would refuse searches that may well be legal —
+the guard covers only what is known to fail. Extend it if a wider window is confirmed to be refused.
+
+The `search_transfers` schema states the rule in the `ageMin` description too, so a model reads it
+before spending a search rather than after.
+
+### Silent downloads no longer swallow the CHPP error
+
+That table was expensive to produce because `Connector.getCHPPWebFile()` used to log the error and
+show the dialog *only* when `silentDownload` was off — and `TransferSearchService.searchForAgent()`
+turns it on deliberately, to keep a modal dialog off the MCP worker thread. Every MCP-side failure
+was therefore an empty string with no trace anywhere, and `SearchFailed`'s "The CHPP error is in
+HO's log" was simply false.
+
+`Connector` now keeps the message in a `lastError` field, logs it on every path, and shows the
+dialog only when not silent; `TransferSearchService` puts `lastError()` into the `SearchFailed`
+message. An MCP client asking for 17 year olds now gets
+`Hattrick rejected the transfer search: CHPP Fehler - 10 - Invalid parameter specified (10)
+Additional Info: ageMin` instead of a blank, which is what let a model conclude "the market has no
+17 year olds" from what was actually a rejected request.
 
 The panel defaults are currently the documented example's `20-22` (`TransferSearchPanel.java:40-41`).
 
@@ -272,6 +351,23 @@ translation key — in every case HO already held the data and nothing exposed i
 **Verification status:** full suite green (585 tests, 51 suites, 0 failures). The tool bodies still
 need a loaded `HOModel` and a database, so the new tests assert the surface — names, schemas,
 required arguments — exactly like the other tool tests.
+
+### `get_team_transfers` — added to `TransferTools`
+
+The managed team's own buy/sell history. `DBManager.getTransfers(season, bought, sold)` already
+selects it keyed on the current team id, and `ConvertXml2Hrf` calls
+`PlayerTransfer.downloadMissingTransfers` on every team download, so the table is kept current with
+no live CHPP call — the tool is a pure DB read like `get_finances`. Each row carries direction
+(buy/sell relative to the managed team, derived from `buyerid == teamId` since the DB has no `type`
+column), price, TSI at transfer time, the counterparty team, and the mother-club / previous-club
+fees (`PlayerTransfer` computes those lazily off the loaded player info). `season` (Hattrick season
+number, omit for all) and `direction` (`buy`/`sell`, omit for both) are optional filters. The result
+is paged — `limit` (default 20, max 100) newest-first from `offset` (default 0) — with
+`totalCount` / `returned` / `hasMore` beside the rows so a caller can ask for "the last ten" without
+pulling a lifetime of history into context. `totalSpent` / `totalEarned` (from `getSumTransferPrices`,
+lifetime, unaffected by the filters) and `currency` round it out. The full list is still loaded and
+player-info-hydrated before the slice — same as HO's own Transfers tab — so the paging is a
+context-size guard, not a DB-load one; push `LIMIT`/`OFFSET` into `TransferTable` if that ever bites.
 
 ### Deliberately not built: `refresh`
 

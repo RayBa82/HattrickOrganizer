@@ -101,6 +101,12 @@ and experience need a minimum level of 5, keeper a minimum of 3. `SkillID`: 1 ke
 3 set pieces, 4 defending, 5 scoring, 6 winger, 7 passing, 8 playmaking, 9 trainer (not searchable),
 10 leadership, 11 experience.
 
+The age window is limited too, and the limit depends on `ageMin`: up to `ageMin=18` only
+`ageMax - ageMin <= 1` is accepted, from `ageMin=19` a width of 2 works. Wider windows at higher ages
+are untested. A violation is answered with error 10, `Additional Info: ageMin` — which names the
+parameter but not the actual rule. `pageSize` and `pageIndex` are documented as optional but must
+always be sent.
+
 Documented example: `?file=transfersearch&version=1.1&ageMin=20&ageMax=22&skillType1=8&minSkillValue1=7&maxSkillValue1=9`
 
 The file description states it is *not* meant to be polled by bots, only fetched on manual user

@@ -9,10 +9,12 @@ import core.model.player.Player;
 import core.net.TransferSearchQuery;
 import core.net.TransferSearchService;
 import core.util.HODateTime;
+import module.transfer.PlayerTransfer;
 
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Transfer market search and comparables.
@@ -47,7 +49,10 @@ public final class TransferTools {
                                 + "PASSING, PLAYMAKING, LEADERSHIP, EXPERIENCE. Hattrick rejects a "
                                 + "skill window whose min and max are more than 3 levels apart, "
                                 + "set pieces / leadership / "
-                                + "experience below level 5 and keeper below level 3. Narrow the "
+                                + "experience below level 5 and keeper below level 3. An age range "
+                                + "that includes 17 or 18 may span at most one year (17-18 is fine, "
+                                + "17-19 is not); scan a wider young range in one-year windows. "
+                                + "Narrow the "
                                 + "query rather than paging: Hattrick reports no exact total once "
                                 + "more than 100 players match. Searching needs the user to unlock "
                                 + "market search in HO first, and is capped per session.",
@@ -63,14 +68,31 @@ public final class TransferTools {
                                         "ageTolerance", McpTool.prop("integer", "age window in years, default 1"),
                                         "skillTolerance", McpTool.prop("integer", "skill window in levels, default 1")),
                                 "playerId"),
-                        TransferTools::findComparables)
+                        TransferTools::findComparables),
+                new McpTool("get_team_transfers",
+                        "The managed team's own transfer history - every player it bought or sold, "
+                                + "newest first, with price, TSI at transfer time and the mother-club "
+                                + "and previous-club fees. HO refreshes this from Hattrick on every "
+                                + "team download, so it needs no live call. Returns the most recent "
+                                + "page only (default 20); page back with offset. Optionally filter "
+                                + "by Hattrick season number and by direction (buy or sell).",
+                        McpTool.schema(McpTool.properties(
+                                "season", McpTool.prop("integer", "Hattrick season number; omit for the full history"),
+                                "direction", McpTool.prop("string", "buy, sell, or omit for both"),
+                                "limit", McpTool.prop("integer", "how many transfers to return, newest first; default 20, max 100"),
+                                "offset", McpTool.prop("integer", "how many of the newest transfers to skip, for paging; default 0"))),
+                        TransferTools::teamTransfers)
         );
     }
 
     private static JsonObject searchSchema() {
         final var properties = McpTool.properties(
-                "ageMin", McpTool.prop("integer", "minimum age in years"),
-                "ageMax", McpTool.prop("integer", "maximum age in years"),
+                "ageMin", McpTool.prop("integer", "minimum age in years. Hattrick limits how wide "
+                        + "the age window may be: up to ageMin 18 only ageMax - ageMin <= 1, from "
+                        + "ageMin 19 a width of 2. A wider window is refused outright, not answered "
+                        + "with an empty result - split it into several searches"),
+                "ageMax", McpTool.prop("integer", "maximum age in years, see ageMin for how far it "
+                        + "may sit above it"),
                 "skillType1", McpTool.prop("string", "first skill name"),
                 "minSkillValue1", McpTool.prop("integer", "minimum level of the first skill"),
                 "maxSkillValue1", McpTool.prop("integer", "maximum level of the first skill"),
@@ -177,6 +199,54 @@ public final class TransferTools {
         return json;
     }
 
+    private static JsonObject teamTransfers(JsonObject args) throws McpToolException {
+        final var teamId = McpJson.model().getBasics().getTeamId();
+        final var season = McpJson.optInt(args, "season", 0);
+        final var direction = McpJson.optString(args, "direction", "").toLowerCase(Locale.ENGLISH);
+        final var bought = direction.isEmpty() || direction.equals("buy");
+        final var sold = direction.isEmpty() || direction.equals("sell");
+
+        // ponytail: whole history is loaded and player-info-hydrated before the page is sliced,
+        // same as HO's own Transfers tab. Push LIMIT/OFFSET into TransferTable if a team's history
+        // ever gets big enough to matter.
+        final var all = DBManager.instance().getTransfers(season, bought, sold);
+        final var offset = Math.max(McpJson.optInt(args, "offset", 0), 0);
+        final var limit = Math.min(Math.max(McpJson.optInt(args, "limit", 20), 1), 100);
+        final var page = offset >= all.size() ? List.<PlayerTransfer>of()
+                : all.subList(offset, Math.min(offset + limit, all.size()));
+
+        final var transfers = new JsonArray();
+        for (final var t : page) {
+            final var isBuy = t.getBuyerid() == teamId;
+            final var json = new JsonObject();
+            json.addProperty("transferId", t.getTransferId());
+            json.addProperty("date", t.getDate() == null ? null : t.getDate().toHT());
+            json.addProperty("week", t.getWeek());
+            json.addProperty("season", t.getSeason());
+            json.addProperty("direction", isBuy ? "buy" : "sell");
+            json.addProperty("playerId", t.getPlayerId());
+            json.addProperty("playerName", t.getPlayerName());
+            json.addProperty("price", McpJson.money(t.getPrice()));
+            json.addProperty("tsi", t.getTsi());
+            json.addProperty("counterpartyTeamId", isBuy ? t.getSellerid() : t.getBuyerid());
+            json.addProperty("counterpartyTeamName", isBuy ? t.getSellerName() : t.getBuyerName());
+            json.addProperty("motherClubFee", McpJson.money(t.getMotherClubFee()));
+            json.addProperty("previousClubCommission", McpJson.money(t.getPreviousClubFee()));
+            transfers.add(json);
+        }
+
+        final var json = new JsonObject();
+        json.addProperty("currency", McpJson.currency());
+        json.addProperty("totalCount", all.size());
+        json.addProperty("offset", offset);
+        json.addProperty("returned", transfers.size());
+        json.addProperty("hasMore", offset + transfers.size() < all.size());
+        json.addProperty("totalSpent", McpJson.money(DBManager.instance().getSumTransferPrices(teamId, false)));
+        json.addProperty("totalEarned", McpJson.money(DBManager.instance().getSumTransferPrices(teamId, true)));
+        json.add("transfers", transfers);
+        return json;
+    }
+
     private static JsonObject findComparables(JsonObject args) throws McpToolException {
         final var model = McpJson.model();
         final var playerId = McpJson.reqInt(args, "playerId");
@@ -199,8 +269,9 @@ public final class TransferTools {
      * The market query that describes a player: his age window, his two highest positional skills
      * and his specialty.
      * <p>
-     * Clamped so that Hattrick accepts it - min and max may be at most 3 levels apart, and keeper /
-     * set pieces carry a minimum level.
+     * Clamped so that Hattrick accepts it - min and max may be at most 3 levels apart, keeper /
+     * set pieces carry a minimum level, and an age window reaching down to 17 or 18 may span at
+     * most a year.
      */
     static TransferSearchQuery comparableQuery(Player player, int ageTolerance, int skillTolerance) {
         final var ranked = POSITIONAL_SKILLS.stream()
@@ -213,9 +284,14 @@ public final class TransferTools {
         // maxLevel() clamps the window to the 3 levels Hattrick accepts, so a wide tolerance
         // only widens it downwards.
         final var tolerance = Math.min(Math.max(skillTolerance, 0), 2);
+        final var ageMin = Math.max(player.getAge() - ageTolerance, 17);
+        // Hattrick rejects a young age window wider than a year, so clamp it like the skill windows.
+        final var ageMax = ageMin <= 18
+                ? Math.min(player.getAge() + ageTolerance, ageMin + 1)
+                : player.getAge() + ageTolerance;
         return TransferSearchQuery.builder()
-                .ageMin(Math.max(player.getAge() - ageTolerance, 17))
-                .ageMax(player.getAge() + ageTolerance)
+                .ageMin(ageMin)
+                .ageMax(ageMax)
                 .skillType1(first)
                 .minSkillValue1(minLevel(first, player, tolerance))
                 .maxSkillValue1(maxLevel(first, player, tolerance))

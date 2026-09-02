@@ -12,7 +12,11 @@ import lombok.NonNull;
  * empty result: a skill window may span at most 4 levels <em>counted inclusively</em>, so min and
  * max may differ by at most 3 - a difference of 4 is answered with "No primary skill with min and
  * max range has been specified", whatever the docs say. Set pieces / leadership / experience need
- * a minimum level of 5 and keeper a minimum of 3.
+ * a minimum level of 5 and keeper a minimum of 3. An age range that reaches down to 17 or 18 may
+ * span at most one year (17-18 and 18-19 are fine, 17-19 is not, and is answered with "Invalid
+ * parameter specified: ageMin"). From 19 up a two-year range works (19-21, 20-22, and Hattrick's
+ * own 20-22 example); whether there is a wider ceiling there is not yet known, so an over-wide
+ * 19+ range is not caught here and still falls through to the raw CHPP error.
  *
  * @see Connector#getTransferSearch(TransferSearchQuery)
  */
@@ -45,6 +49,9 @@ public record TransferSearchQuery(
         Integer pageSize,
         Integer pageIndex
 ) {
+
+    /** Sent when the caller sets no page size. Hattrick's own documented default is 25. */
+    private static final int DEFAULT_PAGE_SIZE = 50;
 
     /**
      * The skills the transfer market can be searched by, with the CHPP skillID numbering, which
@@ -85,6 +92,11 @@ public record TransferSearchQuery(
     public String validationErrorKey() {
         if (ageMin > ageMax) {
             return "ls.transfersearch.error.agerange";
+        }
+        // Hattrick clamps how wide the youth end can be searched: a range that includes 17 or 18
+        // may span at most one year, or it comes back as "Invalid parameter specified: ageMin".
+        if (ageMin <= 18 && ageMax - ageMin > 1) {
+            return "ls.transfersearch.error.youngagespan";
         }
         final String[] checks = {
                 check(skillType1, minSkillValue1, maxSkillValue1),
@@ -152,8 +164,10 @@ public record TransferSearchQuery(
         append(query, "tsiMax", tsiMax);
         append(query, "priceMin", priceMin);
         append(query, "priceMax", priceMax);
-        append(query, "pageSize", pageSize);
-        append(query, "pageIndex", pageIndex);
+        // Always sent, never omitted: Hattrick does not reliably apply its own documented
+        // defaults for these two, so a query without them is not the query it looks like.
+        query.append("&pageSize=").append(pageSize == null ? DEFAULT_PAGE_SIZE : pageSize);
+        query.append("&pageIndex=").append(pageIndex == null ? 0 : pageIndex);
         return query.toString();
     }
 

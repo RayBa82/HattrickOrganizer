@@ -21,7 +21,8 @@ class TransferSearchQueryTest {
                 .build();
 
         assertThat(query.toQueryString())
-                .isEqualTo("&ageMin=20&ageMax=22&skillType1=8&minSkillValue1=7&maxSkillValue1=9");
+                .isEqualTo("&ageMin=20&ageMax=22&skillType1=8&minSkillValue1=7&maxSkillValue1=9"
+                        + "&pageSize=50&pageIndex=0");
     }
 
     @Test
@@ -42,7 +43,7 @@ class TransferSearchQueryTest {
 
         assertThat(query.toQueryString()).isEqualTo("&ageMin=17&ageMax=19&skillType1=5"
                 + "&minSkillValue1=10&maxSkillValue1=14&skillType2=6&minSkillValue2=8"
-                + "&maxSkillValue2=12&specialty=2&priceMax=2000000&pageSize=100");
+                + "&maxSkillValue2=12&specialty=2&priceMax=2000000&pageSize=100&pageIndex=0");
     }
 
     @Test
@@ -79,6 +80,27 @@ class TransferSearchQueryTest {
     void validationErrorKey_rejectsAnInvertedAgeRange() {
         assertThat(validQuery().ageMin(25).ageMax(20).build().validationErrorKey())
                 .isEqualTo("ls.transfersearch.error.agerange");
+    }
+
+    @Test
+    void validationErrorKey_rejectsAYoungAgeRangeWiderThanAYear() {
+        // Hattrick answers "Invalid parameter specified: ageMin" for 17-19 or 18-20.
+        assertThat(validQuery().ageMin(17).ageMax(19).build().validationErrorKey())
+                .isEqualTo("ls.transfersearch.error.youngagespan");
+        assertThat(validQuery().ageMin(18).ageMax(20).build().validationErrorKey())
+                .isEqualTo("ls.transfersearch.error.youngagespan");
+    }
+
+    @Test
+    void validationErrorKey_acceptsAYoungAgeRangeOfAtMostAYear() {
+        assertThat(validQuery().ageMin(17).ageMax(18).build().validationErrorKey()).isNull();
+        assertThat(validQuery().ageMin(18).ageMax(19).build().validationErrorKey()).isNull();
+        assertThat(validQuery().ageMin(17).ageMax(17).build().validationErrorKey()).isNull();
+    }
+
+    @Test
+    void validationErrorKey_allowsAWiderRangeFromAgeNineteenUp() {
+        assertThat(validQuery().ageMin(19).ageMax(21).build().validationErrorKey()).isNull();
     }
 
     @Test

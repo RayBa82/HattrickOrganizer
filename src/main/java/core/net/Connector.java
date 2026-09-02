@@ -50,6 +50,9 @@ public class Connector {
 
 	private boolean silentDownload = false;
 
+	/** The CHPP error of the last failed download, null after a successful one. */
+	private String lastError;
+
 	/**
 	 * Creates a new instance of Connector.
 	 */
@@ -615,6 +618,7 @@ public class Connector {
 	 */
 	private String getCHPPWebFile(String surl) {
 		HOLogger.instance().info(this.getClass(), "getCHPPWebFile " + surl);
+		lastError = null;
 		String returnString = "";
 		OAuthDialog authDialog = null;
 		Response response = null;
@@ -683,8 +687,11 @@ public class Connector {
 			}
 		} catch (Exception sox) {
 
+			// Always log: a silent download returns an empty string, and without this the reason
+			// Hattrick refused is lost entirely.
+			lastError = sox.getMessage();
+			HOLogger.instance().error(getClass(), sox);
 			if ( !silentDownload) {
-				HOLogger.instance().error(getClass(), sox);
 				JOptionPane.showMessageDialog(null,
 						sox.getMessage() + "\n\n" + "URL:" + surl + "\n",
 						TranslationFacility.tr("Fehler"),
@@ -912,6 +919,11 @@ public class Connector {
 		} catch (Exception e) {
 			HOLogger.instance().error(Connector.class, e);
 		}
+	}
+
+	/** The CHPP error of the last download, null if it succeeded. */
+	public String lastError() {
+		return lastError;
 	}
 
 	public boolean isSilentDownload() {
