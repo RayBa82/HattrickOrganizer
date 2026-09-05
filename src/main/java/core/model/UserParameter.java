@@ -138,6 +138,16 @@ public final class UserParameter extends Configuration {
      */
     public int mcpResolveCap = 200;
 
+    /**
+     * How far the resolver's scout sale pass has got, as a CHPP-format timestamp.
+     * <p>
+     * A scout entry has no per-row "looked, no sale" marker the way a TRANSFERLISTING row has
+     * RESOLVEDAT, so this one watermark stands in for all of them: the pass asks only about entries
+     * whose transfer ended after it, which is the handful that expired since the last download
+     * rather than the whole list under a cap. Empty means never run.
+     */
+    public String mcpScoutResolvedThrough = "";
+
     //Whether or not the player analysis is packed vertically one below the other
     public boolean spieleranalyseVertikal = true;
     public boolean statistikAlleBeschriftung = true;
@@ -474,6 +484,8 @@ public final class UserParameter extends Configuration {
         map.put("mcpChppWritesPerSession", String.valueOf(mcpChppWritesPerSession));
         map.put("mcpDownloadsPerSession", String.valueOf(mcpDownloadsPerSession));
         map.put("mcpResolveCap", String.valueOf(mcpResolveCap));
+        map.put("mcpScoutResolvedThrough",
+                mcpScoutResolvedThrough == null ? "" : mcpScoutResolvedThrough);
 
         if (ReleaseChannel == null) {
             ReleaseChannel = "Stable";
@@ -727,6 +739,7 @@ public final class UserParameter extends Configuration {
         mcpChppWritesPerSession = orDefault(getIntValue(values, "mcpChppWritesPerSession"), 20);
         mcpDownloadsPerSession = orDefault(getIntValue(values, "mcpDownloadsPerSession"), 5);
         mcpResolveCap = orDefault(getIntValue(values, "mcpResolveCap"), 200);
+        mcpScoutResolvedThrough = getStringValue(values, "mcpScoutResolvedThrough");
         ReleaseChannel = getStringValue(values, "ReleaseChannel");
         fixtures = getBooleanValue(values, "fixtures");
         downloadCurrentMatchlist = getBooleanValue(values, "currentMatchlist");

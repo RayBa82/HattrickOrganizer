@@ -1855,3 +1855,85 @@ it away would have left the new columns almost always null. Guarded on `transfer
 
 Still not done: nothing *values* a player on character. The data is now recorded so that question can
 be asked of real history later rather than guessed at now.
+asked of real history later rather than guessed at now.
+
+## The scout pass starved everything past its first few entries (2026-09-05)
+
+A player sold at 21:37 and two downloads afterwards, at 21:55 and 21:57, left his SCOUT and
+TRANSFERLISTING rows with `SALEPRICE` null. Reported as "the download does not reliably update the
+transfer listing and the scout entries", and reliability was exactly the shape of it.
+
+The log settles it without any guessing. Each run made precisely 20 CHPP calls in the resolver — five
+`playerdetails`+`transfersPlayer` pairs for scout candidates, then ten `transfersPlayer` for the
+corpus — and `513158949` appears in no HO log, ever. The stored `mcpResolveCap` is **20**, not the 200
+this document had been assuming: the default was raised after this installation had already persisted
+the old value, and `UserParameter` reads the stored one. So `scoutCap = cap / 2` is 10, two calls a
+candidate, five entries a download.
+
+Which five was the bug. `scoutCandidates` walked `ScoutList.entries()` in list order and stopped when
+the budget ran out, so it re-asked about whichever entries sat near the head — four of them expired
+hours earlier, already asked about on previous downloads, and never going to sell — while the player
+who had actually just sold sat at position 85 of 92 and was never reached. Not a race, not a CHPP
+lag: he was candidate number six against five slots, on every download, indefinitely.
+
+### Two questions, two selection rules
+
+Ordering the candidate list newest-expiry-first was the first fix and it is not enough, because the
+cap stays the ceiling: the pass is still sampling a list when what one of its two questions needs is
+completeness. They are not the same kind of question.
+
+| | asked | needs |
+|---|---|---|
+| **the sale** — "what did he go for?" | once, and only just after the deadline | every newly-expired entry, every run |
+| **the re-listing** — "is he back?" | over and over, for `SCOUT_WATCH_GRACE` | fair rotation, best effort |
+
+So `resolve` now runs them as two passes over one `ScoutList.entries()` read, sharing the `looked`
+set so an entry in both still costs one `playerdetails` call.
+
+**Pass one, the sale, is scoped by a watermark instead of by the cap.** `salesToAskAbout` takes only
+entries whose deadline falls between `mcpScoutResolvedThrough` and now — the handful that expired
+since the last download, not the whole list. It is ordered *oldest* first so the watermark can be a
+resume point: the loop parks it on the first candidate it cannot afford and everything before that is
+done. The window is inclusive of the watermark, so that candidate comes back next run; two entries
+sharing a deadline cost one repeat call, which is the cheap side of the mistake. A `transfersPlayer`
+that throws also stops the pass and parks the watermark, because a network blip must not silently
+consume the one moment a sale was askable — hence `Outcome.failed`, which is not `!resolved`: "he did
+not sell" is an answer, "the call threw" is not.
+
+**Pass two, the watch, keeps the rotating cap-bounded walk**, newest expiry first, and asks nothing
+about sales — pass one has already done that, once, for every entry it can see. It is the pass that
+degrades under a tight cap, which is the right one to degrade: "is he back on the market" has no
+single moment to miss.
+
+`scoutAction` and its `ScoutAction` record are gone. The branch table existed because one pass had to
+decide, per candidate, which of the two questions it was still inside; with the questions split the
+answer is structural — pass one always asks both, pass two only ever refreshes.
+
+### The watermark
+
+`UserParameter.mcpScoutResolvedThrough`, a CHPP-format timestamp in the existing USERCONFIGURATION
+key/value table — no migration, same shape as `mcpResolveCap`. Written straight through with
+`DBManager.saveUserParameter` rather than left to `HOMainFrame.shutdown()`: a download can come from
+the MCP server with no window to close, and a watermark lost to a crash means every sale in the
+window is asked about twice.
+
+It is deliberately *not* the previous HRF row, which was the other candidate and is free — one HRF is
+written per download, timestamped to the second, and `loadLatestHRFDownloadedBefore` already exists.
+But that timestamp means "last download", not "last resolve": a run cut short by the cap would
+advance it anyway and lose the entries it never reached, and `DBCleanupTool` pruning HRFs would widen
+the window unpredictably. The watermark has to be owned by the pass that moves it.
+
+`SCOUT_RETRY_GRACE` survives, repurposed as the floor on how far back a stale watermark may reach:
+without it the first run after a fortnight away would ask about every entry that expired in the
+meantime. Missing watermark means "never run", which the floor turns into the last fortnight.
+
+### Still worth knowing
+
+The cap is the user's to set and 20 is tight for a 92-entry list — it now buys *all* the newly-expired
+sales plus whatever watch and corpus rows fit in what is left, but a long absence still works off its
+backlog over several downloads. Options → MCP → resolve cap.
+
+**Not done:** a scout entry still has no per-row `LOOKEDAT`, so pass two restarts from the head of
+its (newest-first) ordering each run rather than rotating on last-observed. Bounded and best-effort
+by design; a column would make it fair. Worth doing if the list keeps growing.
+

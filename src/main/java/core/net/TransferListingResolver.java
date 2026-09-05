@@ -3,12 +3,15 @@ package core.net;
 import core.db.DBManager;
 import core.db.TransferListing;
 import core.file.xml.XMLPlayersParser;
+import core.model.UserParameter;
 import core.util.HODateTime;
 import core.util.HOLogger;
 import module.transfer.XMLParser;
+import module.transfer.scout.ScoutEintrag;
 import module.transfer.scout.ScoutList;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 
@@ -45,7 +48,14 @@ public final class TransferListingResolver {
      */
     private static final java.time.Duration SKILL_FILL_GRACE = java.time.Duration.ofDays(14);
 
-    /** How long after its deadline a scout entry is still worth asking about. */
+    /**
+     * How far back a stale watermark may reach when picking entries for the sale pass.
+     * <p>
+     * Normally the watermark is the last run, an hour or two ago. After a long absence it is
+     * whatever it was when HO was last opened, and without a floor the first run back would ask
+     * about every entry that expired in the meantime. A fortnight is generous for a question a
+     * completed transfer answers immediately.
+     */
     private static final java.time.Duration SCOUT_RETRY_GRACE = java.time.Duration.ofDays(14);
 
     /**
@@ -86,20 +96,73 @@ public final class TransferListingResolver {
         var resolved = 0;
         var calls = 0;
         final var seen = new HashSet<Integer>();
-
-        // Half the cap, not all of it. SCOUT_WATCH_GRACE is six and a half times SCOUT_RETRY_GRACE,
-        // and a fresh ScoutEintrag defaults its deadline to the moment it was created
-        // (ScoutEintrag.java:22), so a hand-typed entry is a candidate from day one and stays one
-        // for 90 days. Unbounded, a long scout list would eat the whole run and the corpus pass
-        // below would never start.
-        //
-        // The per-candidate cost also doubled with this pass - one observe, plus one resolvePlayer
-        // while the entry is still inside SCOUT_RETRY_GRACE - so against the halved cap the scout
-        // pass gets through roughly a quarter as many entries per run as it used to. Ample at the
-        // default mcpResolveCap of 200; worth knowing if a user turns that right down.
-        final var scoutCap = Math.max(1, cap / 2);
         final var looked = new HashSet<Integer>();   // playerdetails fetched for him this run
-        for (final var candidate : scoutCandidates(now)) {
+
+        // Half the cap, not all of it, so a long scout list cannot starve the corpus pass below.
+        final var scoutCap = Math.max(1, cap / 2);
+        final var entries = ScoutList.entries();
+
+        // Pass one: the sale, for entries whose watched transfer ended since the last run.
+        //
+        // Scoped by a watermark rather than by the cap, because "what did he sell for" has exactly
+        // one moment to be answered and the set that needs asking is small - the handful that
+        // expired since the last download. The earlier version walked the whole list under the cap
+        // instead, which meant it spent every download re-asking about whichever entries sat near
+        // the head and never reached the rest: a player who had sold twenty minutes before sat at
+        // position 85 of 92 and was skipped download after download, indefinitely.
+        var resolvedThrough = now;
+        for (final var candidate : salesToAskAbout(entries, saleWatermark(now), now)) {
+            if (spent(calls, scoutCap, deadline)) {
+                // Leave the watermark at the first candidate not reached, not at now. The window
+                // is inclusive of it, so a truncated run resumes next time. Erring towards asking
+                // twice costs a CHPP call; erring the other way loses a sale price for good.
+                resolvedThrough = candidate.deadline();
+                break;
+            }
+            looked.add(candidate.playerId());
+            // seen means "his sale has been asked about this run", which stops the corpus loop
+            // below spending a second call on the same player's TRANSFERLISTING rows.
+            seen.add(candidate.playerId());
+            final var observation = observe(candidate.playerId(), now);
+            calls++;
+            // Free: the call has already been made, and character comes back whether or not he is
+            // listed. Fills in entries added before add_to_scout started fetching it.
+            if (observation != null) {
+                recordCharacterOnScoutList(candidate.playerId(), observation);
+            }
+            // Asked whether or not he is listed again: a buyer re-listing a player he has just
+            // bought is ordinary Hattrick behaviour, and this is the last moment the sale can be
+            // recorded - the refresh below moves the deadline forward, after which
+            // isTheWatchedTransfer can never line this sale up with this entry again.
+            //
+            // ponytail: no SELLERTEAMID column on TRANSFERLISTING, so this still costs a
+            // transfersPlayer call - add the column and compare observation.owningTeamId() against
+            // it if the scout list ever grows enough for one call per watched entry to matter.
+            final var outcome = resolvePlayer(candidate.playerId(), candidate.deadline(), now);
+            calls += outcome.calls();
+            if (outcome.resolved()) {
+                resolved++;
+            }
+            if (outcome.failed()) {
+                // The lookup did not answer. Stop here and leave the watermark on this candidate:
+                // a network blip must not silently consume the one moment his sale was askable.
+                resolvedThrough = candidate.deadline();
+                break;
+            }
+            if (observation != null && observation.transferListed()) {
+                recordRelistingOnScoutList(candidate.playerId(), observation);
+            }
+        }
+        setSaleWatermark(resolvedThrough);
+
+        // Pass two: the re-listing watch, on whatever is left of the scout half.
+        //
+        // This one stays cap-bounded and rotating, because unlike the sale it has no single moment
+        // and no answer that ends it - "is he back on the market" has to be asked again and again
+        // for as long as SCOUT_WATCH_GRACE. Newest expiry first so it degrades sensibly when the
+        // budget runs out, and it asks nothing about sales: pass one has already done that, once,
+        // for every entry here.
+        for (final var candidate : relistingsToWatch(entries, now)) {
             if (spent(calls, scoutCap, deadline)) {
                 break;
             }
@@ -108,34 +171,11 @@ public final class TransferListingResolver {
             }
             final var observation = observe(candidate.playerId(), now);
             calls++;
-            // Free: the call has already been made, and character comes back whether or not he is
-            // listed. Fills in entries added before add_to_scout started fetching it.
-            if (observation != null) {
-                recordCharacterOnScoutList(candidate.playerId(), observation);
+            if (observation == null) {
+                continue;
             }
-            final var action = scoutAction(observation != null && observation.transferListed(),
-                    candidate.deadline(), now);
-            // The sale question first, and before the refresh: step 3 moves the deadline forward,
-            // after which isTheWatchedTransfer can never line this sale up with this entry again.
-            //
-            // ponytail: no SELLERTEAMID column on TRANSFERLISTING, so this still costs a
-            // transfersPlayer call - add the column and compare observation.owningTeamId() against
-            // it if the scout list ever grows enough for one call per watched entry to matter.
-            if (action.askAboutSale()) {
-                // Only here does he become "seen", because seen means "his sale has been asked
-                // about this run" and nothing else. Marking him on the look alone would be a
-                // regression: SCOUT_WATCH_GRACE is far wider than the window scoutAction asks in,
-                // so most candidates fall past this branch, and seen would then make the corpus
-                // loop below skip their TRANSFERLISTING rows for up to 90 days - rows the old,
-                // narrower candidate window left it free to resolve.
-                seen.add(candidate.playerId());
-                final var outcome = resolvePlayer(candidate.playerId(), candidate.deadline(), now);
-                calls += outcome.calls();
-                if (outcome.resolved()) {
-                    resolved++;
-                }
-            }
-            if (action.refreshEntry()) {
+            recordCharacterOnScoutList(candidate.playerId(), observation);
+            if (observation.transferListed()) {
                 recordRelistingOnScoutList(candidate.playerId(), observation);
             }
         }
@@ -169,24 +209,70 @@ public final class TransferListingResolver {
     }
 
     /**
-     * Scouted players whose watched transfer has ended: either his sale price is still unknown, or
-     * he is worth re-checking in case the seller has put him back on the market.
+     * How far the sale pass got last time, so this run picks up where it left off.
      * <p>
-     * Bounded, because a scout entry has nowhere to record "looked, no sale" the way a listing row
-     * does - without a cut-off an entry that never sold would cost a CHPP call on every download
-     * for as long as it stayed on the list. {@link #SCOUT_WATCH_GRACE} is the wider of the two
-     * windows and so is the one that bounds the candidate set; {@link #scoutAction} decides which
-     * of the two questions each candidate is still inside.
+     * Floored at {@link #SCOUT_RETRY_GRACE}: a watermark from before a long absence would otherwise
+     * make the first run back ask about every entry that expired in the meantime. Missing means
+     * "never run", which the floor turns into the last fortnight.
      */
-    private static List<Candidate> scoutCandidates(HODateTime now) {
-        final var giveUpBefore = new HODateTime(now.getInstant().minus(SCOUT_WATCH_GRACE));
+    private static HODateTime saleWatermark(HODateTime now) {
+        final var floor = new HODateTime(now.getInstant().minus(SCOUT_RETRY_GRACE));
+        final var stored = HODateTime.fromHT(UserParameter.instance().mcpScoutResolvedThrough);
+        return stored == null || stored.compareTo(floor) < 0 ? floor : stored;
+    }
+
+    /**
+     * Written through to the database rather than left for {@code HOMainFrame.shutdown()}: a
+     * download can come from the MCP server with no window to close, and a watermark lost to a
+     * crash means every sale in the window is asked about twice.
+     */
+    private static void setSaleWatermark(HODateTime through) {
+        UserParameter.instance().mcpScoutResolvedThrough = through.toHT();
+        DBManager.instance().saveUserParameter("mcpScoutResolvedThrough", through.toHT());
+    }
+
+    /**
+     * Scout entries whose watched transfer ended since the last sale pass, oldest first.
+     * <p>
+     * Oldest first so the watermark can be a resume point: the loop stops at the first candidate it
+     * cannot afford and parks the watermark there, and everything before it is done. The window is
+     * inclusive of {@code since} so that candidate comes back next run rather than falling through
+     * the gap - two entries sharing a deadline cost one repeat call, which is the cheap side of the
+     * mistake to make.
+     */
+    static List<Candidate> salesToAskAbout(List<ScoutEintrag> entries, HODateTime since,
+                                           HODateTime now) {
+        final var candidates = expired(entries, since, now);
+        candidates.sort(Comparator.comparing(Candidate::deadline));
+        return candidates;
+    }
+
+    /**
+     * Unsold scout entries still inside the re-listing watch, newest expiry first.
+     * <p>
+     * Bounded by {@link #SCOUT_WATCH_GRACE}, because a scout entry has nowhere to record "looked,
+     * not listed" - without a cut-off an entry that never comes back would cost a CHPP call on
+     * every download for as long as it stayed on the list. Newest first so that when the budget
+     * runs out it is the stalest entries that go unasked, and so a target that has just been
+     * withdrawn is watched most closely.
+     */
+    static List<Candidate> relistingsToWatch(List<ScoutEintrag> entries, HODateTime now) {
+        final var candidates = expired(entries,
+                new HODateTime(now.getInstant().minus(SCOUT_WATCH_GRACE)), now);
+        candidates.sort(Comparator.comparing(Candidate::deadline).reversed());
+        return candidates;
+    }
+
+    /** Unsold entries whose deadline has passed and is no older than {@code since}. */
+    private static List<Candidate> expired(List<ScoutEintrag> entries, HODateTime since,
+                                           HODateTime now) {
         final var candidates = new ArrayList<Candidate>();
-        for (final var entry : ScoutList.entries()) {
+        for (final var entry : entries) {
             if (entry.isSold() || entry.getDeadline() == null) {
                 continue;
             }
             final var deadline = HODateTime.fromDbTimestamp(entry.getDeadline());
-            if (deadline.compareTo(now) < 0 && deadline.compareTo(giveUpBefore) > 0) {
+            if (deadline.compareTo(now) < 0 && deadline.compareTo(since) >= 0) {
                 candidates.add(new Candidate(entry.getPlayerID(), deadline));
             }
         }
@@ -194,26 +280,7 @@ public final class TransferListingResolver {
     }
 
     /** A scouted player and the deadline of the transfer that was being watched. */
-    private record Candidate(int playerId, HODateTime deadline) {}
-
-    /** What the scout pass does about one candidate, once the observation has come back. */
-    record ScoutAction(boolean askAboutSale, boolean refreshEntry) {}
-
-    /**
-     * The two independent questions a scout candidate raises, decided together so the branch table
-     * is one testable thing rather than a shape spread across the loop.
-     * <p>
-     * They are independent because "he is listed again" does not answer "did he sell": a buyer
-     * re-listing a player he has just bought is ordinary Hattrick behaviour, and once the refresh
-     * has moved the deadline forward the sale can never be matched to this entry again.
-     *
-     * @param oldDeadline the deadline the entry was watching, before any refresh
-     */
-    static ScoutAction scoutAction(boolean transferListed, HODateTime oldDeadline, HODateTime now) {
-        final var stillWorthAsking = oldDeadline != null
-                && oldDeadline.getInstant().plus(SCOUT_RETRY_GRACE).isAfter(now.getInstant());
-        return new ScoutAction(stillWorthAsking, transferListed);
-    }
+    record Candidate(int playerId, HODateTime deadline) {}
 
 
     /** Whether this run is out of budget - either bound stops it, whichever comes first. */
@@ -280,8 +347,14 @@ public final class TransferListingResolver {
     }
 
 
-    /** What one player cost us, and whether it produced a price. */
-    private record Outcome(int calls, boolean resolved) {}
+    /**
+     * What one player cost us, whether it produced a price, and whether the lookup answered at all.
+     * <p>
+     * {@code failed} is not {@code !resolved}: "he did not sell" is an answer and consumes the
+     * question, while "the call threw" leaves it open and must not let the sale watermark move past
+     * him.
+     */
+    private record Outcome(int calls, boolean resolved, boolean failed) {}
 
     /**
      * Fill in what this player's expired listing sold for.
@@ -297,7 +370,7 @@ public final class TransferListingResolver {
         if (known != null) {
             applySale(playerId, known);
             DBManager.instance().markTransferListingResolveAttempted(playerId, now);
-            return new Outcome(0, true);
+            return new Outcome(0, true, false);
         }
 
         final List<module.transfer.PlayerTransfer> fetched;
@@ -307,7 +380,7 @@ public final class TransferListingResolver {
             // The lookup failed rather than answered - leave the rows alone so a network blip does
             // not burn their one attempt.
             HOLogger.instance().error(TransferListingResolver.class, e);
-            return new Outcome(1, false);
+            return new Outcome(1, false, true);
         }
         final var sale = saleAt(fetched, deadline);
         if (sale != null) {
@@ -316,7 +389,7 @@ public final class TransferListingResolver {
         // The call answered. Whatever it did not account for - a listing that was withdrawn, or
         // expired with no bidder - is marked looked-at so it is never asked about again.
         DBManager.instance().markTransferListingResolveAttempted(playerId, now);
-        return new Outcome(1, sale != null);
+        return new Outcome(1, sale != null, false);
     }
 
     /**

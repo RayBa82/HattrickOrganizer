@@ -3,6 +3,7 @@ package core.net;
 import core.util.AmountOfMoney;
 import core.util.HODateTime;
 import module.transfer.PlayerTransfer;
+import module.transfer.scout.ScoutEintrag;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -73,63 +74,107 @@ class TransferListingResolverTest {
 
     private static final HODateTime NOW = HODateTime.fromHT("2026-09-05 12:00:00");
 
-    /**
-     * The sale question is asked whenever the entry's <em>old</em> deadline is still inside
-     * SCOUT_RETRY_GRACE, whether or not he is listed again. "He is listed, so he did not sell" is
-     * false - a buyer re-listing a player he has just bought is ordinary Hattrick behaviour - and
-     * this is the last moment the sale can be recorded: the refresh moves the deadline forward and
-     * isTheWatchedTransfer will never line up with that sale again.
-     */
-    @Test
-    void aRelistingInsideTheRetryGraceStillAsksAboutTheSale() {
-        final var recent = HODateTime.fromHT("2026-09-01 20:15:00");   // 4 days ago
-
-        final var action = TransferListingResolver.scoutAction(true, recent, NOW);
-
-        assertThat(action.askAboutSale()).isTrue();
-        assertThat(action.refreshEntry()).isTrue();
-    }
-
-    @Test
-    void pastTheRetryGraceTheWatchContinuesAlone() {
-        final var old = HODateTime.fromHT("2026-08-01 20:15:00");      // 35 days ago
-
-        final var action = TransferListingResolver.scoutAction(true, old, NOW);
-
-        assertThat(action.askAboutSale()).isFalse();
-        assertThat(action.refreshEntry()).isTrue();
-    }
-
-    @Test
-    void anUnlistedPlayerIsAskedAboutButHisEntryIsLeftAlone() {
-        final var recent = HODateTime.fromHT("2026-09-01 20:15:00");
-
-        final var action = TransferListingResolver.scoutAction(false, recent, NOW);
-
-        assertThat(action.askAboutSale()).isTrue();
-        assertThat(action.refreshEntry()).isFalse();
-    }
-
-    /** Off the market and long past the retry grace: nothing left to do but keep watching. */
-    @Test
-    void anUnlistedPlayerPastTheRetryGraceCostsNothingBeyondTheLook() {
-        final var old = HODateTime.fromHT("2026-08-01 20:15:00");
-
-        final var action = TransferListingResolver.scoutAction(false, old, NOW);
-
-        assertThat(action.askAboutSale()).isFalse();
-        assertThat(action.refreshEntry()).isFalse();
+    private static ScoutEintrag entry(int playerId, String deadline) {
+        final var e = new ScoutEintrag();
+        e.setPlayerID(playerId);
+        e.setDeadline(HODateTime.fromHT(deadline).toDbTimestamp());
+        return e;
     }
 
     /**
-     * {@code scoutCandidates} filters these out, so this is a guard rather than a live path - but
-     * the function is package-private and pure, and a null deadline must never become "ask about a
-     * sale at no particular date", which is how a player's decade-old transfer ends up recorded as
-     * this entry's.
+     * The sale pass asks only about transfers that ended since it last ran, so the set is the
+     * handful that expired between two downloads rather than the whole scout list. That is what
+     * makes it complete: walked under the call cap instead, it spent every download on whichever
+     * entries sat near the head of the list and never reached the rest - a player who had sold
+     * twenty minutes earlier sat at position 85 of 92 and was skipped download after download.
      */
     @Test
-    void aDeadlinelessCandidateIsNeverAskedAboutASale() {
-        assertThat(TransferListingResolver.scoutAction(true, null, NOW).askAboutSale()).isFalse();
-        assertThat(TransferListingResolver.scoutAction(true, null, NOW).refreshEntry()).isTrue();
+    void onlyTransfersThatEndedSinceTheLastRunAreAskedAbout() {
+        final var entries = List.of(
+                entry(1, "2026-09-05 07:00:00"),      // asked about on an earlier run
+                entry(2, "2026-09-05 11:30:00"),
+                entry(3, "2026-09-05 18:00:00"));     // still running
+
+        assertThat(TransferListingResolver.salesToAskAbout(
+                entries, HODateTime.fromHT("2026-09-05 10:00:00"), NOW))
+                .extracting(TransferListingResolver.Candidate::playerId)
+                .containsExactly(2);
+    }
+
+    /**
+     * Oldest first, because the watermark is a resume point: a run cut short by the cap parks it on
+     * the first candidate it could not afford, and everything before that is done.
+     */
+    @Test
+    void theSalePassIsOrderedSoATruncatedRunCanResume() {
+        final var entries = List.of(
+                entry(1, "2026-09-05 11:30:00"),
+                entry(2, "2026-09-05 10:15:00"),
+                entry(3, "2026-09-05 11:00:00"));
+
+        assertThat(TransferListingResolver.salesToAskAbout(
+                entries, HODateTime.fromHT("2026-09-05 10:00:00"), NOW))
+                .extracting(TransferListingResolver.Candidate::playerId)
+                .containsExactly(2, 3, 1);
+    }
+
+    /**
+     * Inclusive of the watermark. The candidate a truncated run stopped on is the one the watermark
+     * names, and it has to come back - asking twice costs a CHPP call, not asking loses the sale.
+     */
+    @Test
+    void theCandidateTheWatermarkStoppedOnComesBack() {
+        final var stoppedOn = HODateTime.fromHT("2026-09-05 10:15:00");
+
+        assertThat(TransferListingResolver.salesToAskAbout(
+                List.of(entry(2, "2026-09-05 10:15:00")), stoppedOn, NOW))
+                .extracting(TransferListingResolver.Candidate::playerId)
+                .containsExactly(2);
+    }
+
+    /** A sold entry is finished with, whichever pass is asking. */
+    @Test
+    void aSoldEntryIsNeverACandidate() {
+        final var sold = entry(1, "2026-09-05 11:30:00");
+        sold.setSalePrice(new AmountOfMoney(1_000_000L));
+
+        assertThat(TransferListingResolver.salesToAskAbout(
+                List.of(sold), HODateTime.fromHT("2026-09-05 10:00:00"), NOW)).isEmpty();
+        assertThat(TransferListingResolver.relistingsToWatch(List.of(sold), NOW)).isEmpty();
+    }
+
+    /**
+     * The watch keeps asking long after the sale question is closed, so its window is the wide one
+     * and it is ordered newest-first: when the budget runs out it is the stalest entries that go
+     * unasked, and a target withdrawn from the market yesterday is watched most closely.
+     */
+    @Test
+    void theWatchSpansMonthsAndPutsTheFreshestExpiryFirst() {
+        final var entries = List.of(
+                entry(1, "2026-07-01 10:00:00"),      // two months ago, still watched
+                entry(2, "2026-01-01 10:00:00"),      // past SCOUT_WATCH_GRACE, given up on
+                entry(3, "2026-09-05 11:30:00"),
+                entry(4, "2026-09-05 18:00:00"));     // still running
+
+        assertThat(TransferListingResolver.relistingsToWatch(entries, NOW))
+                .extracting(TransferListingResolver.Candidate::playerId)
+                .containsExactly(3, 1);
+    }
+
+    /**
+     * {@code ScoutEintrag} defaults its deadline to the moment it was created, so a hand-typed
+     * entry looks expired the instant it is made - and a deadline that has been cleared entirely
+     * must never become "ask about a sale at no particular date", which is how a player's
+     * decade-old transfer ends up recorded as this entry's.
+     */
+    @Test
+    void anEntryWithNoDeadlineIsNeverACandidate() {
+        final var noDeadline = entry(1, "2026-09-05 11:30:00");
+        noDeadline.setDeadline(null);
+
+        assertThat(TransferListingResolver.salesToAskAbout(
+                List.of(noDeadline), HODateTime.fromHT("2026-09-05 10:00:00"), NOW)).isEmpty();
+        assertThat(TransferListingResolver.relistingsToWatch(List.of(noDeadline), NOW)).isEmpty();
     }
 }
+
