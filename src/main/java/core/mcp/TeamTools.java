@@ -13,6 +13,9 @@ import module.opponentspy.OppPlayerSkillEstimator;
 import module.teamanalyzer.ht.HattrickManager;
 import module.teamanalyzer.manager.PlayerDataManager;
 import module.teamanalyzer.vo.PlayerInfo;
+import tool.arenasizer.ArenaAdmission;
+import tool.arenasizer.ArenaMaintenance;
+import tool.arenasizer.ArenaSizer;
 import tool.arenasizer.Stadium;
 
 import java.util.List;
@@ -97,8 +100,87 @@ public final class TeamTools {
                                 "homeMatches", McpTool.prop("integer",
                                         "how many recent home matches to read the attendance of, "
                                                 + "default " + DEFAULT_HOME_MATCHES))),
-                        TeamTools::finances)
+                        TeamTools::finances),
+                new McpTool("get_stadium",
+                        "The stadium and what HO's arena sizer makes of it. Reports the stands, "
+                                + "any expansion in progress, the recent home attendance and the "
+                                + "resulting utilisation, then the weekly maintenance bill and the "
+                                + "gate receipts a sold-out match would bring in - and finally the "
+                                + "capacity the fan club supports, with the rebuild cost of getting "
+                                + "there. Three sizes are given rather than one because attendance "
+                                + "swings with form and opponent: pessimistic, normal and "
+                                + "optimistic. Each carries its own maintenance and sold-out gate, "
+                                + "so an expansion can be judged against what it costs to keep. "
+                                + "Pass capacity to price one specific target size instead. Every "
+                                + "amount is in the currency field's currency.",
+                        McpTool.schema(McpTool.properties(
+                                "supporters", McpTool.prop("integer",
+                                        "size the arena for this fan club instead of the current one"),
+                                "capacity", McpTool.prop("integer",
+                                        "price this exact total capacity instead of the three scenarios"),
+                                "homeMatches", McpTool.prop("integer",
+                                        "how many recent home matches to read the attendance of, "
+                                                + "default " + DEFAULT_HOME_MATCHES))),
+                        TeamTools::arena)
         );
+    }
+
+    /**
+     * The stadium on its own, joined with the arena sizer. {@code get_finances} carries the same
+     * stands as one line of the statement; here they are the subject, and the sizer answers the
+     * question the statement raises - how big should it be, and what does that cost.
+     */
+    private static JsonObject arena(JsonObject args) throws McpToolException {
+        final var model = McpJson.model();
+        final var current = model.getStadium();
+        if (current == null) {
+            throw new McpToolException("HO holds no stadium for the latest download.");
+        }
+
+        final var json = new JsonObject();
+        json.addProperty("currency", McpJson.currency());
+        json.add("stadium", stadium(current, model.getBasics().getTeamId(),
+                McpJson.optInt(args, "homeMatches", DEFAULT_HOME_MATCHES)));
+        json.addProperty("weeklyMaintenance", money(ArenaMaintenance.calculateCosts(current)));
+        json.addProperty("soldOutGateReceipts", money(ArenaAdmission.calculateIncome(current)));
+
+        final var supporters = McpJson.optInt(args, "supporters",
+                model.getClub() == null ? 0 : model.getClub().getFans());
+        json.addProperty("supporters", supporters);
+
+        final var capacity = McpJson.optInteger(args, "capacity");
+        final var plans = new JsonArray();
+        if (capacity != null) {
+            // The sizer only knows how to build three at once; ask it for the same size thrice.
+            plans.add(plan("target",
+                    ArenaSizer.calcConstructionArenas(current, capacity, capacity, capacity)[0]));
+        } else {
+            final var sized = ArenaSizer.calcConstructionArenas(current, supporters);
+            plans.add(plan("optimistic", sized[0]));
+            plans.add(plan("normal", sized[1]));
+            plans.add(plan("pessimistic", sized[2]));
+        }
+        json.add("recommendations", plans);
+        return json;
+    }
+
+    /** One sized arena: the stands it would have, what has to be built, and what that costs. */
+    static JsonObject plan(String scenario, Stadium sized) {
+        final var json = new JsonObject();
+        json.addProperty("scenario", scenario);
+        json.addProperty("capacity", sized.getTotalSize());
+        json.addProperty("terraces", sized.getTerraces());
+        json.addProperty("basicSeating", sized.getBasicSeating());
+        json.addProperty("underRoofSeating", sized.getUnderRoofSeating());
+        json.addProperty("vipBoxes", sized.getVipBox());
+        json.addProperty("terracesToBuild", sized.getTerracesUnderConstruction());
+        json.addProperty("basicSeatingToBuild", sized.getBasicSeatingUnderConstruction());
+        json.addProperty("underRoofSeatingToBuild", sized.getUnderRoofSeatingUnderConstruction());
+        json.addProperty("vipBoxesToBuild", sized.getVipBoxUnderConstruction());
+        json.addProperty("rebuildCost", money(sized.getExpansionCosts()));
+        json.addProperty("weeklyMaintenance", money(ArenaMaintenance.calculateCosts(sized)));
+        json.addProperty("soldOutGateReceipts", money(ArenaAdmission.calculateIncome(sized)));
+        return json;
     }
 
     private static JsonObject team() throws McpToolException {

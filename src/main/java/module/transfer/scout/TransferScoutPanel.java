@@ -4,17 +4,13 @@ import core.db.DBManager;
 import core.gui.comp.panel.ImagePanel;
 import java.awt.BorderLayout;
 import java.awt.Component;
-import java.awt.event.KeyEvent;
-import java.awt.event.KeyListener;
-import java.awt.event.MouseEvent;
-import java.awt.event.MouseListener;
 
 import javax.swing.*;
 
 /**
  * The TransferScout main Panel
  */
-public class TransferScoutPanel extends ImagePanel implements MouseListener, KeyListener {
+public class TransferScoutPanel extends ImagePanel {
 
 	//~ Instance fields ----------------------------------------------------------------------------
     private JSplitPane verticalSplitPane;
@@ -59,40 +55,6 @@ public class TransferScoutPanel extends ImagePanel implements MouseListener, Key
         m_jtTransferTable.refresh();
     }
 
-    public final void keyPressed(KeyEvent keyEvent) {
-        if (keyEvent.getSource().equals(m_jtTransferTable)) {
-            newSelectionInform();
-        }
-    }
-
-    public final void keyReleased(KeyEvent keyEvent) {
-        if (keyEvent.getSource().equals(m_jtTransferTable)) {
-            newSelectionInform();
-        }
-    }
-
-    public void keyTyped(KeyEvent keyEvent) {
-    }
-
-    //------------Listener---------------------------------------------------
-    public void mouseClicked(MouseEvent mouseEvent) {
-    }
-
-    public void mouseEntered(MouseEvent mouseEvent) {
-    }
-
-    public void mouseExited(MouseEvent mouseEvent) {
-    }
-
-    public void mousePressed(MouseEvent mouseEvent) {
-    }
-
-    public final void mouseReleased(MouseEvent mouseEvent) {
-        if (mouseEvent.getSource().equals(m_jtTransferTable)) {
-            newSelectionInform();
-        }
-    }
-
     //------------------------------------------------------
     public final void newSelectionInform() {
         final int row = m_jtTransferTable.getSelectedRow();
@@ -130,6 +92,13 @@ public class TransferScoutPanel extends ImagePanel implements MouseListener, Key
     private void initComponents() {
         setLayout(new BorderLayout());
         verticalSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, false, initTransferTable(), initTransferEingabePanel());
+        // the selection model is shared by the fixed and the scrollable half of the table, so this
+        // catches clicks in either half as well as keyboard navigation
+        m_jtTransferTable.addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                newSelectionInform();
+            }
+        });
         add(verticalSplitPane, BorderLayout.CENTER);
         verticalSplitPane.setDividerLocation(core.model.UserParameter.instance().transferScoutPanel_horizontalSplitPane);
         m_clScoutThread = ScoutThread.start(DBManager.instance().getScoutList());
@@ -142,8 +111,6 @@ public class TransferScoutPanel extends ImagePanel implements MouseListener, Key
 
     private Component initTransferTable() {
         m_jtTransferTable = new TransferScoutingTable();
-        m_jtTransferTable.addMouseListener(this);
-        m_jtTransferTable.addKeyListener(this);
         return m_jtTransferTable.getContainerComponent();
     }
 

@@ -53,7 +53,8 @@ public class TransferScoutingTableModel extends HOTableModel {
                 new TransferScoutTableColumn(id++, "ls.player.id") {
                     @Override
                     public IHOTableCellEntry getTableEntry(ScoutEintrag scouting) {
-                        return new ColorLabelEntry(String.valueOf(scouting.getPlayerID()), ColorLabelEntry.FG_STANDARD, ColorLabelEntry.BG_STANDARD, SwingConstants.LEFT);
+                        return new ColorLabelEntry(scouting.getPlayerID(), String.valueOf(scouting.getPlayerID()),
+                                ColorLabelEntry.FG_STANDARD, ColorLabelEntry.BG_STANDARD, SwingConstants.LEFT);
                     }
                 },
                 new TransferScoutTableColumn(id++, "ls.player.name") {
@@ -80,10 +81,8 @@ public class TransferScoutingTableModel extends HOTableModel {
                 new TransferScoutTableColumn(id++, "ls.scout.saleprice") {
                     @Override
                     public IHOTableCellEntry getTableEntry(ScoutEintrag scouting) {
-                        return new ColorLabelEntry(
-                                scouting.isSold() ? scouting.getSalePrice().toLocaleString() : "",
-                                ColorLabelEntry.FG_STANDARD,
-                                ColorLabelEntry.BG_STANDARD, SwingConstants.RIGHT);
+                        // null sale price renders as empty text and sorts as 0
+                        return new ColorLabelEntry(scouting.getSalePrice(), ColorLabelEntry.BG_STANDARD);
                     }
                 },
                 new TransferScoutTableColumn(id++, "Ablaufdatum") {
@@ -139,21 +138,24 @@ public class TransferScoutingTableModel extends HOTableModel {
                 new TransferScoutTableColumn(id++, "ls.player.short_form", "ls.player.form") {
                     @Override
                     public IHOTableCellEntry getTableEntry(ScoutEintrag scouting) {
-                        return new ColorLabelEntry(scouting.getPlayer().getForm() + "",
+                        var value = scouting.getPlayer().getForm();
+                        return new ColorLabelEntry(value, String.valueOf(value),
                                 ColorLabelEntry.FG_STANDARD, ColorLabelEntry.BG_PLAYERSPECIALVALUES, SwingConstants.RIGHT);
                     }
                 },
                 new TransferScoutTableColumn(id++, "ls.player.skill_short.stamina", "ls.player.skill.stamina") {
                     @Override
                     public IHOTableCellEntry getTableEntry(ScoutEintrag scouting) {
-                        return new ColorLabelEntry(scouting.getPlayer().getStamina() + "",
+                        var value = scouting.getPlayer().getStamina();
+                        return new ColorLabelEntry(value, String.valueOf(value),
                                 ColorLabelEntry.FG_STANDARD, ColorLabelEntry.BG_SINGLEPLAYERVALUES, SwingConstants.RIGHT);
                     }
                 },
                 new TransferScoutTableColumn(id++, "ls.player.short_loyalty", "ls.player.loyalty") {
                     @Override
                     public IHOTableCellEntry getTableEntry(ScoutEintrag scouting) {
-                        return new ColorLabelEntry(scouting.getPlayer().getLoyalty() + "",
+                        var value = scouting.getPlayer().getLoyalty();
+                        return new ColorLabelEntry(value, String.valueOf(value),
                                 ColorLabelEntry.FG_STANDARD, ColorLabelEntry.BG_SINGLEPLAYERVALUES,
                                 SwingConstants.RIGHT);
                     }
@@ -161,7 +163,8 @@ public class TransferScoutingTableModel extends HOTableModel {
                 new TransferScoutTableColumn(id++, "ls.player.skill_short.keeper", "ls.player.skill.keeper") {
                     @Override
                     public IHOTableCellEntry getTableEntry(ScoutEintrag scouting) {
-                        return new ColorLabelEntry(scouting.getPlayer().getGoalkeeperSkill() + "",
+                        var value = scouting.getPlayer().getGoalkeeperSkill();
+                        return new ColorLabelEntry(value, String.valueOf(value),
                                 ColorLabelEntry.FG_STANDARD,
                                 ColorLabelEntry.BG_SINGLEPLAYERVALUES,
                                 SwingConstants.RIGHT);
@@ -170,7 +173,8 @@ public class TransferScoutingTableModel extends HOTableModel {
                 new TransferScoutTableColumn(id++, "ls.player.skill_short.defending", "ls.player.skill.defending") {
                     @Override
                     public IHOTableCellEntry getTableEntry(ScoutEintrag scouting) {
-                        return new ColorLabelEntry(scouting.getPlayer().getDefendingSkill() + "",
+                        var value = scouting.getPlayer().getDefendingSkill();
+                        return new ColorLabelEntry(value, String.valueOf(value),
                                 ColorLabelEntry.FG_STANDARD,
                                 ColorLabelEntry.BG_SINGLEPLAYERVALUES,
                                 SwingConstants.RIGHT);
@@ -179,7 +183,8 @@ public class TransferScoutingTableModel extends HOTableModel {
                 new TransferScoutTableColumn(id++, "ls.player.skill_short.playmaking", "ls.player.skill.playmaking") {
                     @Override
                     public IHOTableCellEntry getTableEntry(ScoutEintrag scouting) {
-                        return new ColorLabelEntry(scouting.getPlayer().getPlaymakingSkill() + "",
+                        var value = scouting.getPlayer().getPlaymakingSkill();
+                        return new ColorLabelEntry(value, String.valueOf(value),
                                 ColorLabelEntry.FG_STANDARD,
                                 ColorLabelEntry.BG_SINGLEPLAYERVALUES,
                                 SwingConstants.RIGHT);
@@ -188,7 +193,8 @@ public class TransferScoutingTableModel extends HOTableModel {
                 new TransferScoutTableColumn(id++, "ls.player.skill_short.passing", "ls.player.skill.passing") {
                     @Override
                     public IHOTableCellEntry getTableEntry(ScoutEintrag scouting) {
-                        return new ColorLabelEntry(scouting.getPlayer().getPassingSkill() + "",
+                        var value = scouting.getPlayer().getPassingSkill();
+                        return new ColorLabelEntry(value, String.valueOf(value),
                                 ColorLabelEntry.FG_STANDARD,
                                 ColorLabelEntry.BG_SINGLEPLAYERVALUES,
                                 SwingConstants.RIGHT);
@@ -197,7 +203,8 @@ public class TransferScoutingTableModel extends HOTableModel {
                 new TransferScoutTableColumn(id++, "ls.player.skill_short.winger", "ls.player.skill.winger") {
                     @Override
                     public IHOTableCellEntry getTableEntry(ScoutEintrag scouting) {
-                        return new ColorLabelEntry(scouting.getPlayer().getWingerSkill() + "",
+                        var value = scouting.getPlayer().getWingerSkill();
+                        return new ColorLabelEntry(value, String.valueOf(value),
                                 ColorLabelEntry.FG_STANDARD,
                                 ColorLabelEntry.BG_SINGLEPLAYERVALUES,
                                 SwingConstants.RIGHT);
@@ -206,7 +213,8 @@ public class TransferScoutingTableModel extends HOTableModel {
                 new TransferScoutTableColumn(id++, "ls.player.skill_short.scoring", "ls.player.skill.scoring") {
                     @Override
                     public IHOTableCellEntry getTableEntry(ScoutEintrag scouting) {
-                        return new ColorLabelEntry(scouting.getPlayer().getScoringSkill() + "",
+                        var value = scouting.getPlayer().getScoringSkill();
+                        return new ColorLabelEntry(value, String.valueOf(value),
                                 ColorLabelEntry.FG_STANDARD,
                                 ColorLabelEntry.BG_SINGLEPLAYERVALUES,
                                 SwingConstants.RIGHT);
@@ -215,7 +223,8 @@ public class TransferScoutingTableModel extends HOTableModel {
                 new TransferScoutTableColumn(id++, "ls.player.skill_short.setpieces", "ls.player.skill.setpieces") {
                     @Override
                     public IHOTableCellEntry getTableEntry(ScoutEintrag scouting) {
-                        return new ColorLabelEntry(scouting.getPlayer().getSetPiecesSkill() + "",
+                        var value = scouting.getPlayer().getSetPiecesSkill();
+                        return new ColorLabelEntry(value, String.valueOf(value),
                                 ColorLabelEntry.FG_STANDARD,
                                 ColorLabelEntry.BG_SINGLEPLAYERVALUES,
                                 SwingConstants.RIGHT);
@@ -402,9 +411,7 @@ public class TransferScoutingTableModel extends HOTableModel {
                 new TransferScoutTableColumn(id++, "ls.player.wage") {
                     @Override
                     public IHOTableCellEntry getTableEntry(ScoutEintrag scouting) {
-                        return new ColorLabelEntry(scouting.getbaseWage().toLocaleString(),
-                                ColorLabelEntry.FG_STANDARD,
-                                ColorLabelEntry.BG_STANDARD, SwingConstants.RIGHT);
+                        return new ColorLabelEntry(scouting.getbaseWage(), ColorLabelEntry.BG_STANDARD);
                     }
                 }
         )).toArray(new TransferScoutTableColumn[0]);

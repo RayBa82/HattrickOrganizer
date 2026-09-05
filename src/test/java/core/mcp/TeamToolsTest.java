@@ -21,10 +21,10 @@ import static org.assertj.core.api.Assertions.assertThatNoException;
 class TeamToolsTest {
 
     @Test
-    void tools_areTheSevenReadTools() {
+    void tools_areTheEightReadTools() {
         assertThat(TeamTools.tools()).extracting(McpTool::name)
                 .containsExactly("get_team", "get_squad", "get_player", "get_opponent_squad",
-                        "get_upcoming_matches", "get_league_table", "get_finances");
+                        "get_upcoming_matches", "get_league_table", "get_finances", "get_stadium");
     }
 
     @Test
@@ -65,6 +65,68 @@ class TeamToolsTest {
     @Test
     void everyToolHasANonEmptyDescription() {
         assertThat(TeamTools.tools()).allSatisfy(t -> assertThat(t.description()).isNotBlank());
+    }
+
+    @Test
+    void getStadium_takesNoRequiredArgumentsAndOffersTheSizerKnobs() {
+        final var tool = TeamTools.tools().stream()
+                .filter(t -> t.name().equals("get_stadium")).findFirst().orElseThrow();
+
+        assertThat(tool.inputSchema().getAsJsonArray("required")).isEmpty();
+        assertThat(tool.inputSchema().getAsJsonObject("properties").keySet())
+                .containsExactlyInAnyOrder("supporters", "capacity", "homeMatches");
+    }
+
+    /**
+     * The sizer's own maths has its own tests; what is checked here is that the plan block reports
+     * the arena it was handed - stands, the delta against the current one, and the three prices.
+     */
+    @Test
+    void plan_reportsTheStandsToBuildAndWhatTheyCost() {
+        final var current = new tool.arenasizer.Stadium();
+        current.setTerraces(6_000);
+        current.setBasicSeating(2_350);
+        current.setUnderRoofSeating(1_400);
+        current.setVipBox(250);   // a 10 000 arena, exactly Hattrick's distribution
+
+        // 500 supporters at the normal 20 spectators each: a 10 000 arena again, nothing to build
+        final var normal = tool.arenasizer.ArenaSizer.calcConstructionArenas(current, 500)[1];
+        final var json = TeamTools.plan("normal", normal);
+
+        assertThat(json.get("scenario").getAsString()).isEqualTo("normal");
+        assertThat(json.get("capacity").getAsInt()).isEqualTo(10_000);
+        assertThat(json.get("terraces").getAsInt()).isEqualTo(6_000);
+        assertThat(json.get("vipBoxes").getAsInt()).isEqualTo(250);
+        assertThat(json.get("terracesToBuild").getAsInt()).isZero();
+        assertThat(json.get("vipBoxesToBuild").getAsInt()).isZero();
+        // nothing to build means no rebuild, so not even the fixed 100 000 is charged
+        assertThat(json.get("rebuildCost").getAsLong()).isZero();
+        // 6000*5 + 2350*7 + 1400*10 + 250*25 = 66 700 krona, ten to the euro
+        assertThat(json.get("weeklyMaintenance").getAsLong()).isEqualTo(6_670L);
+        // 6000*70 + 2350*100 + 1400*190 + 250*350 = 1 008 500 krona
+        assertThat(json.get("soldOutGateReceipts").getAsLong()).isEqualTo(100_850L);
+    }
+
+    @Test
+    void plan_pricesAnExpansionIncludingTheFixedRebuildFee() {
+        final var current = new tool.arenasizer.Stadium();
+        current.setTerraces(6_000);
+        current.setBasicSeating(2_350);
+        current.setUnderRoofSeating(1_400);
+        current.setVipBox(250);
+
+        // the optimistic scenario is 25 spectators per supporter, so 12 500 - less the seat each
+        // sector loses to truncation, which is why the sizer never quite hits a round number
+        final var optimistic = tool.arenasizer.ArenaSizer.calcConstructionArenas(current, 500)[0];
+        final var json = TeamTools.plan("optimistic", optimistic);
+
+        assertThat(json.get("capacity").getAsInt()).isEqualTo(12_499);
+        assertThat(json.get("terracesToBuild").getAsInt()).isEqualTo(1_500);
+        assertThat(json.get("basicSeatingToBuild").getAsInt()).isEqualTo(587);
+        assertThat(json.get("underRoofSeatingToBuild").getAsInt()).isEqualTo(350);
+        assertThat(json.get("vipBoxesToBuild").getAsInt()).isEqualTo(62);
+        // 100 000 fixed + 1500*450 + 587*750 + 350*900 + 62*3000 = 1 716 250 krona
+        assertThat(json.get("rebuildCost").getAsLong()).isEqualTo(171_625L);
     }
 
     // ---- get_opponent_squad, per player ------------------------------------------------------
