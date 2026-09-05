@@ -553,6 +553,16 @@ public class XMLPlayersParser {
     /**
      * The own-team view of a {@code playerdetails} response: null for anybody else's player, which
      * is what every existing caller expects.
+     * <p>
+     * <b>The seven outfield skills are only filled in while the player is transfer-listed.</b> The
+     * gate belongs to the market path - Hattrick prunes a foreign unlisted player's PlayerSkills
+     * down to stamina, and reading the pruned block would report seven real skills as 0 - but it
+     * applies here too, and Hattrick does <em>not</em> prune your own players. So an own, unlisted
+     * player comes back carrying {@link Player}'s field default of 1 for keeper, playmaking,
+     * scoring, passing, winger, defending and set pieces. Only stamina, and the non-skill details,
+     * are real. The one caller ({@code Player.downloadMotherClubInfoIfMissing}) reads
+     * {@code motherClubId} / {@code motherClubName} and nothing else; a caller that wants an own
+     * player's skills wants {@code HOVerwaltung}'s model, not this.
      *
      * @see #parseMarketPlayerFromString for the market view, which has no such guard
      */

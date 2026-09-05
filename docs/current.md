@@ -536,15 +536,20 @@ tool (or a `get_open_bids` enrichment) will read.
   logs and is dropped, it does not fail the tool call. Same untested-glue status as `search()`'s
   `storeTransferListing`; the pure factories and the table are unit-tested.
 - **Skills-fill** is a second branch in the Options → MCP server *resolve* button
-  (`McpServerPanel.resolveExpiredListings`): for an unresolved listing whose player has a
-  `TRANSFERBID` row but no skill-bearing `TRANSFERLISTING` snapshot
-  (`transferListingHasSkillData` = any row with `PLAYMAKER IS NOT NULL`), one
-  `OnlineWorker.downloadPlayerDetails` call writes a `TransferListing.fromPlayerDetails` snapshot.
-  Both CHPP calls (`transfersPlayer` + `playerdetails`) share the one `resolveCap` per run. Still a
-  human-only button — an agent must not be able to start a batch of CHPP calls.
+  (`McpServerPanel.resolveExpiredListings`): for an unresolved listing with no skill-bearing
+  `TRANSFERLISTING` snapshot (`transferListingHasSkillData` = any row with `PLAYMAKER IS NOT NULL`)
+  and a deadline inside `SKILL_FILL_GRACE`, one `OnlineWorker.downloadMarketPlayer` call writes a
+  `TransferListing.fromPlayerDetails` snapshot — but **only if the player happens to be listed again
+  at that moment**. Both CHPP calls (`transfersPlayer` + `playerdetails`) share the one
+  `resolveCap` per run. Still a human-only button — an agent must not be able to start a batch of
+  CHPP calls.
 - This covers the narrow case of a player bid on via the Hattrick website and never searched in HO;
   a player found through `search_transfers` / `find_comparables` already has a rich `TRANSFERLISTING`
   row.
+- Two things this paragraph got wrong until 2026-09-05, corrected in full further down under *the
+  scout re-listing watch*: the old guard also required a `TRANSFERBID` row, and the call went
+  through `downloadPlayerDetails`, which returns null for anybody else's player — so the pass
+  stored nothing at all. The branch is now `TransferListingResolver.observeForCorpus`.
 
 **Verification status:** full suite green (653 tests, 0 failures). No live CHPP round-trip.
 

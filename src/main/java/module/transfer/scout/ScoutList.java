@@ -130,11 +130,17 @@ public final class ScoutList {
      * <p>
      * {@code Price} may be a number the user typed themselves - a hand-added entry carries whatever
      * they entered - and this overwrites it. That is intended: the column means "what it would cost
-     * to take him now" everywhere else, including {@code TransferSearchConverter}.
+     * to take him now" everywhere else, including {@code TransferSearchConverter}. It overwrites it
+     * only with a real number, though: {@code XMLManager.xmlLongValue} defaults a missing child to
+     * 0, so an empty TransferDetails block arrives here as "free", which is never what the seller
+     * meant. Nothing to say, nothing said.
      */
     static void applyRelisting(ScoutEintrag entry, long askingPrice, long highestBid,
                                HODateTime deadline) {
-        entry.setPrice(new AmountOfMoney(Math.max(askingPrice, highestBid)));
+        final var price = Math.max(askingPrice, highestBid);
+        if (price > 0) {
+            entry.setPrice(new AmountOfMoney(price));
+        }
         entry.setDeadline(deadline.toDbTimestamp());
         entry.setWecker(false);   // a has-already-rung latch; left true the alarm never fires again
     }
