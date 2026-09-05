@@ -1505,6 +1505,15 @@ public class OnlineWorker {
 		return new XMLPlayersParser().parsePlayerDetailsFromString(xml);
 	}
 
+	/**
+	 * A player-details download read as market data, so it works for somebody else's player.
+	 * {@link #downloadPlayerDetails} returns null for those.
+	 */
+	public static XMLPlayersParser.MarketPlayer downloadMarketPlayer(String playerID) {
+		var xml = Connector.instance().downloadPlayerDetails(playerID);
+		return new XMLPlayersParser().parseMarketPlayerFromString(xml);
+	}
+
 	public static void downloadTeamLogo(Map<String, String> team) {
 		String url = team.get("LogoURL");
 		if (StringUtils.isEmpty(url)) return;

@@ -399,8 +399,21 @@ public class XMLPlayersParser {
         xmlAttribute2Hash(hash, playerSkills, attr, "MayUnlock");
     }
 
+    /**
+     * A {@code playerdetails} response read as market data. {@code transferListed} decides what the
+     * rest of it is worth: Hattrick publishes the full skill block and the TransferDetails block
+     * only while the player is on the market, and prunes PlayerSkills down to stamina otherwise
+     * (see docs/superpowers/specs/2026-09-05-scout-relist-watch-design.md §1.2, §1.3). When it is
+     * false the market fields are 0 / null, and the seven hidden skills on {@code player} are a
+     * meaningless 1 - Player's own field default, left unparsed rather than read as 0. Only stamina
+     * is real. Build nothing out of this record's skills unless the flag is true.
+     */
+    public record MarketPlayer(Player player, boolean transferListed, int owningTeamId,
+                               boolean isAbroad, long askingPrice, HODateTime deadline,
+                               long highestBid) {}
+
     // TODO refactor, use createPlayerDetails
-    public Player parsePlayerDetailsFromString(String xml) {
+    public MarketPlayer parseMarketPlayerFromString(String xml) {
         Document doc = XMLManager.parseString(xml);
 
         var root = doc.getDocumentElement();
@@ -408,8 +421,6 @@ public class XMLPlayersParser {
 
         var owningTeam = (Element)root.getElementsByTagName("OwningTeam").item(0);
         var teamID = xmlIntValue(owningTeam, "TeamID");
-        if (!UserManager.instance().getCurrentUser().isNtTeam() &&
-             teamID != HOVerwaltung.instance().getModel().getBasics().getTeamId()) return null; // foreign player
 
         var player = new Player();
         player.setPlayerId(xmlIntValue(root, "PlayerID"));
@@ -466,8 +477,9 @@ public class XMLPlayersParser {
 
         player.setWage(new AmountOfMoney(xmlIntValue(root, "Salary")));
 
-//        IsAbroad : Boolean*
-//                The abroad status of the player, given as an integer. true for beeing in home country, false for beeing in a team abroad. The container is empty If the player has no owner.
+        // Not a Player field: the abroad status only matters for correcting the wage back to its
+        // base, which TransferListing does. Empty when the player has no owner, so false by default.
+        final var isAbroad = xmlBoolValue(root, "IsAbroad");
 
         player.setInternationalMatches(xmlIntValue(root, "Caps"));
         player.setU20InternationalMatches(xmlIntValue(root, "CapsU20"));
@@ -481,7 +493,8 @@ public class XMLPlayersParser {
 
 //        NationalTeamName : String*
 //                If the player is enrolled on a national team, this is that national team's name.
-        player.setTransferListed(xmlBoolValue(root, "TransferListed")?1:0);
+        final var transferListed = xmlBoolValue(root, "TransferListed");
+        player.setTransferListed(transferListed ? 1 : 0);
 
         var ele = (Element) root.getElementsByTagName("TrainerData").item(0);
         if ( ele != null) {
@@ -501,16 +514,54 @@ public class XMLPlayersParser {
 
         ele = (Element) root.getElementsByTagName("PlayerSkills").item(0);
         if ( ele != null) {
+            // Stamina is published whether or not he is listed. The other seven are pruned out of
+            // the block when he is not, and xmlIntValue would read every one of them as 0 - a
+            // number indistinguishable from a genuinely terrible footballer. Leave them at Player's
+            // own default of 1 instead, and let the caller refuse to build anything out of them.
             player.setStamina(xmlIntValue(ele, "StaminaSkill"));
-            player.setGoalkeeperSkill(xmlIntValue(ele, "KeeperSkill"));
-            player.setPlaymakingSkill(xmlIntValue(ele, "PlaymakerSkill"));
-            player.setScoringSkill(xmlIntValue(ele, "ScorerSkill"));
-            player.setPassingSkill(xmlIntValue(ele, "PassingSkill"));
-            player.setWingerSkill(xmlIntValue(ele, "WingerSkill"));
-            player.setDefendingSkill(xmlIntValue(ele, "DefenderSkill"));
-            player.setSetPiecesSkill(xmlIntValue(ele, "SetPiecesSkill"));
+            if (transferListed) {
+                player.setGoalkeeperSkill(xmlIntValue(ele, "KeeperSkill"));
+                player.setPlaymakingSkill(xmlIntValue(ele, "PlaymakerSkill"));
+                player.setScoringSkill(xmlIntValue(ele, "ScorerSkill"));
+                player.setPassingSkill(xmlIntValue(ele, "PassingSkill"));
+                player.setWingerSkill(xmlIntValue(ele, "WingerSkill"));
+                player.setDefendingSkill(xmlIntValue(ele, "DefenderSkill"));
+                player.setSetPiecesSkill(xmlIntValue(ele, "SetPiecesSkill"));
+            }
         }
 
-        return player;
+        // Read by child, never by container presence: <TransferDetails /> is a non-null Element for
+        // an unlisted player, so only <TransferListed> can tell the two apart.
+        long askingPrice = 0L;
+        long highestBid = 0L;
+        HODateTime deadline = null;
+        if (transferListed) {
+            final var details = (Element) root.getElementsByTagName("TransferDetails").item(0);
+            if (details != null) {
+                final var ask = xmlLongValue(details, "AskingPrice");
+                final var bid = xmlLongValue(details, "HighestBid");
+                askingPrice = ask == null ? 0L : ask;
+                highestBid = bid == null ? 0L : bid;
+                deadline = xmlHODateTimeValue(details, "Deadline");
+            }
+        }
+
+        return new MarketPlayer(player, transferListed, teamID, isAbroad,
+                askingPrice, deadline, highestBid);
+    }
+
+    /**
+     * The own-team view of a {@code playerdetails} response: null for anybody else's player, which
+     * is what every existing caller expects.
+     *
+     * @see #parseMarketPlayerFromString for the market view, which has no such guard
+     */
+    public Player parsePlayerDetailsFromString(String xml) {
+        final var m = parseMarketPlayerFromString(xml);
+        if (!UserManager.instance().getCurrentUser().isNtTeam() &&
+             m.owningTeamId() != HOVerwaltung.instance().getModel().getBasics().getTeamId()) {
+            return null;   // foreign player
+        }
+        return m.player();
     }
 }
