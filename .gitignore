@@ -167,3 +167,4 @@ truststore.jks
 /mcp_config.json
 /.gemini/settings.json
 /.agents/
+/CLAUDE.local.md
