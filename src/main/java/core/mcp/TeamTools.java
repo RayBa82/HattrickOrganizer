@@ -18,7 +18,14 @@ import tool.arenasizer.ArenaMaintenance;
 import tool.arenasizer.ArenaSizer;
 import tool.arenasizer.Stadium;
 
+import com.google.gson.JsonNull;
+import core.gui.HOMainFrame;
+import core.gui.RefreshManager;
+import core.model.HOVerwaltung;
+import core.model.UserParameter;
+import core.net.Connector;
 import core.net.OnlineWorker;
+import core.util.HODateTime;
 
 import java.util.List;
 
@@ -127,7 +134,29 @@ public final class TeamTools {
                                 "homeMatches", McpTool.prop("integer",
                                         "how many recent home matches to read the attendance of, "
                                                 + "default " + DEFAULT_HOME_MATCHES))),
-                        TeamTools::arena)
+                        TeamTools::arena),
+                new McpTool("download_team",
+                        "Re-downloads the team from Hattrick and rewrites HO's local database - "
+                                + "squad, finances, staff, stadium, team spirit - then "
+                                + "recalculates sub-skills. Every other tool answers from that "
+                                + "database, so call this when the user has done something in "
+                                + "Hattrick that HO cannot see yet: a transfer, a sacking, a "
+                                + "training change, a new week. Roughly a dozen CHPP requests and "
+                                + "ten to twenty seconds, during which HO's window is frozen, so "
+                                + "call it because something changed, not as a routine refresh. "
+                                + "It does not refresh matches, fixtures, the league table's "
+                                + "played results, hall of fame or youth data - those still need "
+                                + "a manual download in HO. It also replaces HO's stored lineup "
+                                + "with the match order Hattrick currently holds, so a lineup "
+                                + "built in HO but never uploaded is lost: check lineupReplaced "
+                                + "and previousLineup in the result before reporting success - a "
+                                + "null lineupReplaced means HO could not tell either way.",
+                        McpTool.schema(McpTool.properties(
+                                "resolvePrices", McpTool.prop("boolean",
+                                        "also look up what watched market players sold for - a "
+                                                + "burst of extra per-player CHPP lookups, "
+                                                + "default false"))),
+                        TeamTools::downloadTeam)
         );
     }
 
@@ -613,6 +642,160 @@ public final class TeamTools {
             }
         }
         return json;
+    }
+
+    /** Team downloads issued over MCP in this HO session. Manual downloads do not count. */
+    static int downloadsThisSession;
+
+    /**
+     * Refuse before spending anything when the session's downloads are used up.
+     * <p>
+     * Not synchronized, and it does not need to be: the only caller is inside
+     * {@link LineupTools#onEdt}, so the check and the increment both happen on the event dispatch
+     * thread. The counter moves only after a download actually succeeded - a Hattrick outage must
+     * not eat the session's whole allowance.
+     */
+    private static void checkDownloadCap() throws McpToolException {
+        final var cap = UserParameter.instance().mcpDownloadsPerSession;
+        if (downloadsThisSession >= cap) {
+            throw new McpToolException("The team-download cap of " + cap + " downloads per HO "
+                    + "session is used up. Raise it in HO's options under MCP server, or restart "
+                    + "HO, before downloading again.");
+        }
+    }
+
+    /**
+     * Refuse when HO holds no team id.
+     * <p>
+     * {@code ConvertXml2Hrf.createHrf():79} opens a modal {@code TeamSelectionDialog} in exactly
+     * that case when the CHPP account has more than one team, and unlike {@code Connector}'s
+     * dialogs this one is not gated on {@code silentDownload}. The only way to keep it off this
+     * path is not to reach it.
+     */
+    private static void requireTeamSelected() throws McpToolException {
+        final var model = HOVerwaltung.instance().getModel();
+        if (model == null || model.getBasics() == null || model.getBasics().getTeamId() <= 0) {
+            throw new McpToolException(advice(OnlineWorker.Failure.NO_TEAM, null).message());
+        }
+    }
+
+    /**
+     * Refresh HO's local database from Hattrick.
+     * <p>
+     * All of it runs inside one {@link LineupTools#onEdt} hop, because
+     * {@link OnlineWorker#downloadTeamData()} touches HO's info line and the lineup panel and
+     * because the model swap must not race the UI. HO's window is frozen for the duration - the
+     * manual Download button already works that way.
+     * <p>
+     * The body runs with {@link Connector#setSilentDownload}, restored in a {@code finally}.
+     * {@code Connector} opens {@code OAuthDialog} on an HTTP 401 and a {@code JOptionPane} on
+     * every other CHPP failure, both gated on that flag alone, and a modal dialog on the EDT would
+     * block the EDT and the MCP server's single handler thread together, with nothing on the
+     * agent's side able to dismiss it. The wrap spans {@code resolveTransferListings()} too, which
+     * is CHPP traffic of its own. It sits here rather than inside {@code downloadTeamData()}
+     * because HO's Download button must keep those dialogs.
+     */
+    private static JsonObject downloadTeam(JsonObject args) throws McpToolException {
+        final var resolvePrices = McpJson.optBool(args, "resolvePrices", false);
+        return LineupTools.onEdt(() -> {
+            // Both before any CHPP traffic, so a refusal costs nothing.
+            checkDownloadCap();
+            requireTeamSelected();
+
+            final var before = lineupSnapshot();
+            final var wasSilent = Connector.instance().setSilentDownload(true);
+            try {
+                final OnlineWorker.TeamDownload download;
+                try {
+                    download = OnlineWorker.downloadTeamData();
+                } catch (OnlineWorker.DownloadFailed e) {
+                    throw new McpToolException(explain(e));
+                }
+                downloadsThisSession++;
+
+                // Without this the training tools read sub-skills computed against the previous
+                // HRF. DownloadDialog:400 does the same after every download - and on the live
+                // model, which is the downloaded one only when the swap actually happened.
+                HOVerwaltung.instance().getModel().calcSubskills();
+
+                if (resolvePrices) {
+                    OnlineWorker.resolveTransferListings();
+                }
+
+                // The download only wrote the database. Without this every HO tab keeps showing
+                // the old squad while the agent talks about the new one - worse than not
+                // refreshing at all, because the user's screen now disagrees with the agent.
+                RefreshManager.instance().doReInit();
+                // DownloadDialog:413 ends this way. Without it HO's progress bar stays mid-flight
+                // after the call returns.
+                HOMainFrame.instance().setInformationCompleted();
+
+                // Only comparable when the swap happened. When it did not, HOVerwaltung still
+                // holds the previous model with the user's in-memory lineup, so before and after
+                // are snapshots of the same object and always compare equal - even though
+                // storeModel has already overwritten the stored lineup. Null rather than false:
+                // "HO cannot tell" is not "nothing was lost".
+                Boolean lineupReplaced = null;
+                if (download.becameCurrent() && before != null) {
+                    final var after = lineupSnapshot();
+                    lineupReplaced = after != null && !before.equals(after);
+                }
+
+                final var json = new JsonObject();
+                json.addProperty("hrfId", download.model().getHrfId());
+                json.addProperty("downloadedAt", HODateTime.now().toHT());
+                // false means the download stored an HRF that is not newer than the one HO already
+                // held, so nothing became live - do not report that as a refresh.
+                json.addProperty("becameCurrent", download.becameCurrent());
+                json.addProperty("players", download.model().getCurrentPlayers().size());
+                json.addProperty("subskillsRecalculated", true);
+                json.addProperty("pricesResolved", resolvePrices);
+                json.addProperty("lineupReplaced", lineupReplaced);
+                json.add("previousLineup",
+                        Boolean.TRUE.equals(lineupReplaced) ? before : JsonNull.INSTANCE);
+                return json;
+            } finally {
+                Connector.instance().setSilentDownload(wasSilent);
+            }
+        });
+    }
+
+    /**
+     * The message an agent gets for a failed download.
+     * <p>
+     * With {@code silentDownload} on, {@code Connector} swallowed the dialog it would otherwise
+     * have shown and handed back an empty string; {@code createHrf} then returned null exactly the
+     * way it does when no team is selected, so {@code downloadTeamData} reported
+     * {@link OnlineWorker.Failure#NO_TEAM}. {@link Connector#lastError()} is what tells the two
+     * apart - it is cleared at the start of every CHPP request and left set only by a failed one,
+     * so a non-null value here means Hattrick, not the team selection, is the reason. Without this
+     * an expired OAuth token - the likeliest real failure - would be reported to the agent as "no
+     * team is selected in HO", which the user cannot act on.
+     */
+    private static String explain(OnlineWorker.DownloadFailed failure) {
+        final var chppError = Connector.instance().lastError();
+        final var advice = failure.reason == OnlineWorker.Failure.NO_TEAM && chppError != null
+                ? advice(OnlineWorker.Failure.CHPP_ERROR, chppError)
+                : advice(failure.reason, failure.getMessage());
+        return advice.message() + (advice.retryable()
+                ? " Nothing was stored; the same call may work in a few minutes."
+                : " Nothing was stored.");
+    }
+
+    /**
+     * The live lineup's positions, or null when HO holds no model yet - on a fresh install the
+     * first download has nothing to compare against.
+     * <p>
+     * No rating model, so no {@code ratings} block: this exists to be compared, and two full
+     * rating passes on the EDT to produce a field that would then have to be ignored is a poor
+     * trade. The positions are also what an agent needs to rebuild a lineup a download replaced.
+     */
+    private static JsonObject lineupSnapshot() {
+        final var model = HOVerwaltung.instance().getModel();
+        if (model == null || model.getBasics() == null) {
+            return null;
+        }
+        return LineupTools.describe(model.getCurrentLineup(), null);
     }
 
     /** What the agent is told about a failed download, and whether trying again could help. */

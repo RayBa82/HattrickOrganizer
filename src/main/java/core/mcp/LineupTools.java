@@ -8,6 +8,7 @@ import core.model.player.IMatchRoleID;
 import core.model.player.Player;
 import core.net.ChppWriteService;
 import module.lineup.Lineup;
+import org.jetbrains.annotations.Nullable;
 
 import javax.swing.SwingUtilities;
 import java.lang.reflect.InvocationTargetException;
@@ -390,7 +391,15 @@ public final class LineupTools {
                 + String.join(", ", GroupTeamFactory.TEAMS_GROUPS));
     }
 
-    private static JsonObject describe(Lineup lineup, core.rating.RatingPredictionModel ratingModel) {
+    /**
+     * Package-private so {@code TeamTools.download_team} can snapshot the lineup a download
+     * replaces.
+     *
+     * @param ratingModel null to leave the {@code ratings} block out entirely - what the download
+     *                    snapshot wants, because it compares two snapshots and ratings move on
+     *                    nearly every download
+     */
+    static JsonObject describe(Lineup lineup, @Nullable core.rating.RatingPredictionModel ratingModel) {
         final var json = new JsonObject();
         final var positions = new com.google.gson.JsonArray();
         for (final var position : lineup.getAllPositions()) {
@@ -407,7 +416,9 @@ public final class LineupTools {
         json.addProperty("setPiecesTakerId", lineup.getKicker());
         // styleOfPlay is settable on Lineup but readable only from MatchLineupTeam, so it is an
         // input here and not part of the output.
-        json.add("ratings", McpJson.ratings(ratingModel, lineup));
+        if (ratingModel != null) {
+            json.add("ratings", McpJson.ratings(ratingModel, lineup));
+        }
         return json;
     }
 
@@ -436,7 +447,11 @@ public final class LineupTools {
             throw new McpToolException("HO's UI thread rejected the request: " + e.getMessage());
         }
         if (failure.get() != null) {
-            throw new McpToolException(failure.get().getMessage());
+            // getMessage() is null for a bare NullPointerException; toString() at least names the
+            // class. Every McpToolException already carries a message, so this changes nothing for
+            // the deliberate failures.
+            final var e = failure.get();
+            throw new McpToolException(e.getMessage() != null ? e.getMessage() : e.toString());
         }
         return result.get();
     }

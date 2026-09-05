@@ -22,10 +22,24 @@ import static org.assertj.core.api.Assertions.assertThatNoException;
 class TeamToolsTest {
 
     @Test
-    void tools_areTheEightReadTools() {
+    void tools_areTheEightReadToolsPlusTheDownload() {
         assertThat(TeamTools.tools()).extracting(McpTool::name)
                 .containsExactly("get_team", "get_squad", "get_player", "get_opponent_squad",
-                        "get_upcoming_matches", "get_league_table", "get_finances", "get_stadium");
+                        "get_upcoming_matches", "get_league_table", "get_finances", "get_stadium",
+                        "download_team");
+    }
+
+    @Test
+    void downloadTeam_takesNoRequiredArgumentsAndOffersThePriceResolve() {
+        final var download = TeamTools.tools().stream()
+                .filter(t -> t.name().equals("download_team"))
+                .findFirst().orElseThrow();
+
+        assertThat(download.inputSchema().getAsJsonArray("required")).isEmpty();
+        assertThat(download.inputSchema().getAsJsonObject("properties").has("resolvePrices"))
+                .isTrue();
+        // the lineup clobber is the one surprise this tool has, so it has to be in the description
+        assertThat(download.description()).contains("lineupReplaced");
     }
 
     @Test
