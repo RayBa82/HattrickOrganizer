@@ -2,6 +2,7 @@ package core.db;
 
 import core.constants.player.PlayerSkill;
 import core.file.xml.XMLCurrentBidsParser.BidItem;
+import core.file.xml.XMLPlayersParser;
 import core.file.xml.XMLTransferSearchParser.Hit;
 import core.model.player.Player;
 import core.util.HODateTime;
@@ -102,15 +103,33 @@ public class TransferListing extends AbstractTable.Storable {
     }
 
     /**
-     * A skills-only snapshot from a {@code playerdetails} download: the skills-fill pass runs this
-     * for players HO bid on but never saw on the market, so the valuation corpus has their skills
-     * even though the market data (asking price, bids) is not part of a player-details response.
+     * The full market snapshot of a {@code playerdetails} download of a listed player: skills,
+     * details <em>and</em> the market data, so a row from this path carries everything one built by
+     * {@link #fromHit} does bar {@code bidderName} - {@code playerdetails} names the bidding team in
+     * a {@code <BidderTeam>} element this path does not read, and that column stays null.
+     * <p>
+     * Only for a listed player. Hattrick prunes an unlisted player's skills down to stamina and
+     * empties his TransferDetails block, so a row built from one of those would carry six or seven
+     * fabricated skills into {@code loadComparables} and drag every valuation using them downward.
+     * The correct number of rows to write for an unlisted response is zero.
+     *
+     * @throws IllegalArgumentException if {@code m} is not transfer-listed
      */
-    public static TransferListing fromPlayerDetails(Player p, HODateTime observedAt) {
+    public static TransferListing fromPlayerDetails(XMLPlayersParser.MarketPlayer m,
+                                                    HODateTime observedAt) {
+        if (!m.transferListed()) {
+            throw new IllegalArgumentException(
+                    "playerdetails of an unlisted player carries no corpus-worthy data: "
+                            + m.player().getPlayerId());
+        }
+        final var p = m.player();
         final var listing = new TransferListing();
         listing.playerId = p.getPlayerId();
         listing.observedAt = observedAt;
         listing.playerName = p.getFullName();
+        listing.deadline = m.deadline();
+        listing.askingPrice = m.askingPrice();
+        listing.highestBid = m.highestBid();
         listing.age = p.getAge();
         listing.ageDays = p.getAgeDays();
         listing.tsi = p.getTsi();
@@ -128,9 +147,21 @@ public class TransferListing extends AbstractTable.Storable {
         listing.winger = p.getValue4Skill(PlayerSkill.WINGER);
         listing.defender = p.getValue4Skill(PlayerSkill.DEFENDING);
         listing.setPieces = p.getValue4Skill(PlayerSkill.SETPIECES);
-        final var wage = p.getWage();
-        listing.salary = wage == null || wage.getSwedishKrona() == null
-                ? null : wage.getSwedishKrona().longValue();
+        listing.salary = baseWage(p, m.isAbroad());
         return listing;
+    }
+
+    /**
+     * CHPP's {@code Salary} includes the 20% surcharge a club pays for a player abroad;
+     * {@code transfersearch}'s does not. {@link #fromHit} stores the base wage, so this one has to
+     * as well or the column mixes two quantities and stops being a comparable.
+     */
+    private static Long baseWage(Player p, boolean isAbroad) {
+        final var wage = p.getWage();
+        if (wage == null || wage.getSwedishKrona() == null) {
+            return null;
+        }
+        final var sek = wage.getSwedishKrona().longValue();
+        return isAbroad ? Math.round(sek / 1.2) : sek;
     }
 }

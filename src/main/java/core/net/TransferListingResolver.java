@@ -173,11 +173,11 @@ public final class TransferListingResolver {
             return 0;                          // long sold; today's skills are not the sale's
         }
         try {
-            final var player = OnlineWorker.downloadPlayerDetails(
+            final var m = OnlineWorker.downloadMarketPlayer(
                     String.valueOf(listing.getPlayerId()));
-            if (player != null && player.getPlayerId() != 0) {
+            if (m != null && m.player().getPlayerId() != 0 && m.transferListed()) {
                 DBManager.instance().storeTransferListing(
-                        TransferListing.fromPlayerDetails(player, now));
+                        TransferListing.fromPlayerDetails(m, now));
             }
         } catch (Exception e) {
             HOLogger.instance().error(TransferListingResolver.class, e);

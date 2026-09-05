@@ -100,17 +100,26 @@ class TransferListingTableTest {
         assertThat(loaded.getSalePrice()).isNull();
     }
 
-    /** The skills-fill pass turns a player-details download into a skill-bearing snapshot. */
+    private static core.file.xml.XMLPlayersParser.MarketPlayer market(
+            int playerId, boolean isAbroad, long salarySek) {
+        final var p = new core.model.player.Player();
+        p.setPlayerId(playerId);
+        p.setAge(27);
+        p.setWage(new core.util.AmountOfMoney(salarySek));
+        p.setValue4Skill(core.constants.player.PlayerSkill.PLAYMAKING, 13);
+        p.setValue4Skill(core.constants.player.PlayerSkill.SCORING, 9);
+        return new core.file.xml.XMLPlayersParser.MarketPlayer(
+                p, true, 555444, isAbroad, 2_850_000L,
+                HODateTime.fromHT("2026-09-05 20:08:31"), 100_000L);
+    }
+
+    /** A listed player's details are a complete market snapshot, not a skills-only one. */
     @Test
     void snapshotsPlayerDetailsAsASkillBearingListing() {
         final var observedAt = HODateTime.fromHT("2026-08-30 16:00:00");
-        final var p = new core.model.player.Player();
-        p.setPlayerId(88991122);
-        p.setAge(27);
-        p.setValue4Skill(core.constants.player.PlayerSkill.PLAYMAKING, 13);
-        p.setValue4Skill(core.constants.player.PlayerSkill.SCORING, 9);
 
-        table.storeListing(TransferListing.fromPlayerDetails(p, observedAt));
+        table.storeListing(TransferListing.fromPlayerDetails(market(88991122, false, 44_000L),
+                observedAt));
 
         final var loaded = table.loadUnresolved(50).stream()
                 .filter(l -> l.getPlayerId() == 88991122).findFirst().orElseThrow();
@@ -118,7 +127,46 @@ class TransferListingTableTest {
         assertThat(loaded.getPlaymaker()).isEqualTo(13);
         assertThat(loaded.getScorer()).isEqualTo(9);
         assertThat(loaded.getSalePrice()).isNull();
+        assertThat(loaded.getAskingPrice()).isEqualTo(2_850_000L);
+        assertThat(loaded.getHighestBid()).isEqualTo(100_000L);
+        assertThat(loaded.getDeadline()).isEqualTo(HODateTime.fromHT("2026-09-05 20:08:31"));
     }
+
+    /**
+     * CHPP's Salary carries the 20% surcharge for a player abroad; the search path's Salary does
+     * not. Mixing the two in one column makes wage an unusable comparable - and it reaches the
+     * scout table's baseWage column, which the user reads.
+     */
+    @Test
+    void anAbroadPlayersSalaryIsStoredAsTheBaseWage() {
+        final var observedAt = HODateTime.fromHT("2026-08-30 16:00:00");
+
+        table.storeListing(TransferListing.fromPlayerDetails(market(88991123, true, 57_840L),
+                observedAt));
+        table.storeListing(TransferListing.fromPlayerDetails(market(88991124, false, 57_840L),
+                observedAt));
+
+        assertThat(table.loadUnresolved(50).stream()
+                .filter(l -> l.getPlayerId() == 88991123).findFirst().orElseThrow().getSalary())
+                .isEqualTo(48_200L);
+        assertThat(table.loadUnresolved(50).stream()
+                .filter(l -> l.getPlayerId() == 88991124).findFirst().orElseThrow().getSalary())
+                .isEqualTo(57_840L);
+    }
+
+    /** The §2 invariant: an unlisted response has nothing the corpus wants, so it cannot build one. */
+    @Test
+    void refusesToSnapshotAnUnlistedPlayer() {
+        final var p = new core.model.player.Player();
+        p.setPlayerId(88991125);
+        final var unlisted = new core.file.xml.XMLPlayersParser.MarketPlayer(
+                p, false, 555444, false, 0L, null, 0L);
+
+        org.assertj.core.api.Assertions.assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> TransferListing.fromPlayerDetails(
+                        unlisted, HODateTime.fromHT("2026-08-30 16:00:00")));
+    }
+
 
     @Test
     void hasSkillDataIsTrueOnlyOnceASkillBearingSnapshotExists() {
