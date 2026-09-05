@@ -182,6 +182,15 @@ final class DBUpdater {
 		scoutTable.tryAddColumn("SalePrice", "DECIMAL");
 		scoutTable.tryAddColumn("SoldAt", "TIMESTAMP");
 
+		// The scout/search tables gained a "Sold for" and a speciality column and lost the motherclub
+		// one. UserColumnsTable.loadModel maps stored settings by array position and hides every
+		// column it finds no row for, so a saved layout would both scramble the order and swallow the
+		// two new columns. Dropping the saved layout lets insertDefault() rebuild it.
+		// ponytail: a DEV build re-runs the newest migration on every start (DBManager.getDBVersion),
+		// so these two layouts reset each dev launch until DBVersion moves past 1003.
+		connectionManager.executeUpdate("DELETE FROM USERCOLUMNS WHERE COLUMN_ID BETWEEN 14000 AND 14999");
+		connectionManager.executeUpdate("DELETE FROM USERCOLUMNS WHERE COLUMN_ID BETWEEN 23000 AND 23999");
+
 		updateDBVersion(dbVersion, 1003);
 	}
 

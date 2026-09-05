@@ -1054,9 +1054,24 @@ and format; the note version could only be read. `list_scout` returns `salePrice
 alongside the snapshot `askingPrice`, and the tool description spells out which is which — the two
 are easy to confuse and mean opposite things about time.
 
-Visible in HO too: a "Sold for" column at the end of the transfer scout table (key
-`ls.scout.saleprice`, English only). Appending it keeps every existing column id stable, so saved
-column layouts are unaffected.
+Visible in HO too: a "Sold for" column (key `ls.scout.saleprice`, English only) directly right of the
+asking price in the transfer scout and transfer search tables.
+
+### The scout table's columns (2026-09-05)
+
+`TransferScoutingTableModel`'s array order is now `id | name | speciality | price | sold for |
+deadline | …`. Speciality is a new column (`ls.player.speciality`, `PlayerSpeciality.toString`), the
+motherclub/HV column is gone, and "Sold for" moved up from the end.
+
+**A new column in this model is invisible until the saved layout is dropped.** `TRANSFERSCOUT` and
+`TRANSFERSEARCH` are deliberately *not* in `UserColumnController.getAllModels()`, so neither table can
+be configured in Options → columns. `UserColumnsTable.loadModel` hides every column it finds no stored
+row for and maps stored width/order by **array position**, so a reordered array both scrambles the
+order and swallows anything appended — which is exactly why the first "Sold for" column never showed
+up. `updateDBv1003` therefore deletes `USERCOLUMNS` rows `14000–14999` and `23000–23999`, letting
+`insertDefault()` rebuild the layout from the array. Note a DEV build re-runs the newest migration on
+every start (`DBManager.getDBVersion`), so both layouts reset each dev launch until `DBVersion` moves
+past 1003. Any future column change here needs the same delete.
 
 **Migration:** `DBVersion` 1002 → 1003, `previousDBVersion` 1001 → 1002, `updateDBv1003` adds the two
 columns with `tryAddColumn`. That is guarded by `columnExistsInTable`, so the migration re-run DEV
@@ -1413,3 +1428,31 @@ comparables read side by side. It has exactly one caller, so nothing else moved.
 **Verification:** full suite green - 705 tests, 0 failures. Two new `TransferToolsTest` cases pin the
 trim: one over a squad player (skills nested in `skills`/`skillsWithSublevel`), one over a listing
 (flat keys, nullable skills, set pieces highest but dropped).
+
+## …except set pieces, which comes back (2026-09-05)
+
+Reversing the paragraph above. Lumping set pieces in with "the fourth skill down" was the wrong
+call: those two are excluded for different reasons and only one of the reasons survives scrutiny. A
+fourth positional skill is largely redundant - the top three plus TSI and wage already say it. Set
+pieces is orthogonal to all of that. A buyer wants a set piece taker whatever position the player
+fills, so it can move a price on its own, and nothing else in the row exposed it. The tool was
+deciding a priori that it does not matter while telling the model, in `estimateNote`, that it was
+not there to look at.
+
+It is back as a flat field beside `topSkills`, not inside it - a set piece specialist must not lose
+a positional skill off his top three to it - and still out of `comparableQuery`'s matching. So the
+comparables spread freely across it, which is the point: it is evidence for reading a row that
+priced away from the rest, the same standing wage and form already have. The tool description now
+says so, including that it is null on an observation Hattrick sent no `details` for.
+
+`topSkillsOnly` lifts it out by name before dropping the skill blocks and puts it back after, which
+covers both serialisations in one path (a player nests it in `skills`, a listing writes it flat).
+`JsonNull` is re-added rather than skipped - an absent key reads as trimmed away, a null as unknown.
+
+Cost is one integer per row against forty rows. Nothing else in the pipeline moved: the value was
+already parsed (`XMLTransferSearchParser:99`), already stored (`TransferListingTable`), already
+serialised (`McpJson.listing`) - `topSkillsOnly` was deleting it on the way out.
+
+**Verification:** full suite green - 705 tests, 0 failures. The two `TransferToolsTest` cases from
+the previous entry now assert the opposite for set pieces: 20 on the squad player survives into
+`setPieces` and stays out of `topSkills`, 13 on the listing survives the flat-key trim.

@@ -1,7 +1,7 @@
 package module.transfer.scout;
 
+import core.constants.player.PlayerSpeciality;
 import core.gui.comp.entry.ColorLabelEntry;
-import core.gui.comp.entry.HomegrownEntry;
 import core.gui.comp.entry.IHOTableCellEntry;
 import core.gui.comp.table.HOTableModel;
 import core.gui.comp.table.UserColumn;
@@ -62,10 +62,28 @@ public class TransferScoutingTableModel extends HOTableModel {
                         return new ColorLabelEntry(scouting.getName(), ColorLabelEntry.FG_STANDARD, ColorLabelEntry.BG_STANDARD, SwingConstants.LEFT);
                     }
                 },
+                new TransferScoutTableColumn(id++, "ls.player.speciality") {
+                    @Override
+                    public IHOTableCellEntry getTableEntry(ScoutEintrag scouting) {
+                        return new ColorLabelEntry(PlayerSpeciality.toString(scouting.getSpeciality()),
+                                ColorLabelEntry.FG_STANDARD, ColorLabelEntry.BG_STANDARD, SwingConstants.LEFT);
+                    }
+                },
                 new TransferScoutTableColumn(id++, "scout_price") {
                     @Override
                     public IHOTableCellEntry getTableEntry(ScoutEintrag scouting) {
                         return new ColorLabelEntry(scouting.getPrice(), ColorLabelEntry.BG_STANDARD);
+                    }
+                },
+                // What the watched transfer actually ended at, filled in once it completed.
+                // Empty while the player is still listed.
+                new TransferScoutTableColumn(id++, "ls.scout.saleprice") {
+                    @Override
+                    public IHOTableCellEntry getTableEntry(ScoutEintrag scouting) {
+                        return new ColorLabelEntry(
+                                scouting.isSold() ? scouting.getSalePrice().toLocaleString() : "",
+                                ColorLabelEntry.FG_STANDARD,
+                                ColorLabelEntry.BG_STANDARD, SwingConstants.RIGHT);
                     }
                 },
                 new TransferScoutTableColumn(id++, "Ablaufdatum") {
@@ -102,14 +120,6 @@ public class TransferScoutingTableModel extends HOTableModel {
                     public IHOTableCellEntry getTableEntry(ScoutEintrag scouting) {
                         return new ColorLabelEntry(scouting.getTSI(), String.valueOf(scouting.getTSI()),
                                 ColorLabelEntry.FG_STANDARD, ColorLabelEntry.BG_STANDARD, SwingConstants.RIGHT);
-                    }
-                },
-                new TransferScoutTableColumn(id++, "ls.player.short_motherclub", "ls.player.motherclub") {
-                    @Override
-                    public IHOTableCellEntry getTableEntry(ScoutEintrag scouting) {
-                        HomegrownEntry home = new HomegrownEntry();
-                        home.setPlayer(scouting.getPlayer());
-                        return home;
                     }
                 },
                 new TransferScoutTableColumn(id++, "ls.player.leadership") {
@@ -393,17 +403,6 @@ public class TransferScoutingTableModel extends HOTableModel {
                     @Override
                     public IHOTableCellEntry getTableEntry(ScoutEintrag scouting) {
                         return new ColorLabelEntry(scouting.getbaseWage().toLocaleString(),
-                                ColorLabelEntry.FG_STANDARD,
-                                ColorLabelEntry.BG_STANDARD, SwingConstants.RIGHT);
-                    }
-                },
-                // What the watched transfer actually ended at, filled in once it completed.
-                // Empty while the player is still listed.
-                new TransferScoutTableColumn(id++, "ls.scout.saleprice") {
-                    @Override
-                    public IHOTableCellEntry getTableEntry(ScoutEintrag scouting) {
-                        return new ColorLabelEntry(
-                                scouting.isSold() ? scouting.getSalePrice().toLocaleString() : "",
                                 ColorLabelEntry.FG_STANDARD,
                                 ColorLabelEntry.BG_STANDARD, SwingConstants.RIGHT);
                     }

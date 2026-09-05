@@ -186,8 +186,12 @@ public final class TransferTools {
                                 + "uses (age window, his two best positional skills, his specialty) "
                                 + "and returns the matching listings themselves, each with wage, "
                                 + "TSI, form, specialty, its three best positional skills "
-                                + "(topSkills), asking price, highest bid and - once his "
-                                + "transfer completed - what he actually sold for. YOU do the "
+                                + "(topSkills), set pieces, asking price, highest bid and - once "
+                                + "his transfer completed - what he actually sold for. Set pieces "
+                                + "is NOT part of the matching, so the comparables spread across "
+                                + "it freely: use it to explain a row that priced away from the "
+                                + "rest, and note that it is null where Hattrick sent no details. "
+                                + "YOU do the "
                                 + "valuation from those rows: weigh wage against skills, discount "
                                 + "stale observations, notice injuries and specialties. The "
                                 + "estimate field is only a median and is a starting anchor, not an "
@@ -306,10 +310,10 @@ public final class TransferTools {
         }
         json.addProperty("estimate", McpJson.money(median(sample)));
         json.addProperty("estimateNote", "Median over all " + sample.size() + " comparables, as a "
-                + "starting anchor only - it ignores wage, TSI, form, specialty and how stale each "
-                + "observation is. The comparables array carries those, and is the better basis "
-                + "for a judgement. Each row lists only its three best positional skills; set "
-                + "pieces and the skills below the top three are not returned.");
+                + "starting anchor only - it ignores wage, TSI, form, specialty, set pieces and how "
+                + "stale each observation is. The comparables array carries those, and is the "
+                + "better basis for a judgement. Each row lists its three best positional skills "
+                + "plus set pieces; the positional skills below the top three are not returned.");
         final var range = new JsonArray();
         range.add(McpJson.money(sample.get(0)));
         range.add(McpJson.money(sample.get(sample.size() - 1)));
@@ -328,19 +332,32 @@ public final class TransferTools {
      * Drops every positional skill from a serialised player or listing except his three best, which
      * move to {@code topSkills}. A valuation turns on what a player would be bought for, and seven
      * levels a row over forty rows buries that in numbers the reader has no use for - the fourth
-     * skill down has never decided a price. Set pieces is not among them, for the reason
-     * {@link #comparableQuery} leaves it out: it is a specialist skill, not a position.
+     * positional skill down has never decided a price, being largely what the top three and the TSI
+     * already say.
+     * <p>
+     * Set pieces survives the trim as a field of its own. It is the one skill that says nothing the
+     * rest of the row says: a buyer wants a set piece taker whatever position he plays, so unlike
+     * the fourth positional skill it can move a price on its own. It stays out of {@code topSkills}
+     * and out of {@link #comparableQuery}'s matching for the same reason - it is a specialist skill,
+     * not a position - so it is evidence for reading an outlier, not a criterion the corpus was
+     * selected on. It is null on an observation Hattrick sent no details for.
      * <p>
      * Specialty, wage, TSI, form and the prices stay - they are what the remaining judgement rests
      * on.
      */
     static JsonObject topSkillsOnly(JsonObject json, Map<String, Integer> levels) {
-        // A player nests his skills in two blocks, a listing writes them flat; set pieces is in
-        // neither map, so it is named here to make sure it goes too.
+        // A player nests his skills in two blocks, a listing writes them flat. Set pieces is in
+        // neither levels map, so it is lifted out by name before the blocks go, and put back after.
+        final var setPieces = json.has("skills")
+                ? json.getAsJsonObject("skills").get("setPieces")
+                : json.get("setPieces");
         json.remove("skills");
         json.remove("skillsWithSublevel");
-        json.remove("setPieces");
         levels.keySet().forEach(json::remove);
+        // Kept even when it is JsonNull: an absent key reads as trimmed away, a null as unknown.
+        if (setPieces != null) {
+            json.add("setPieces", setPieces);
+        }
 
         // Ties break by name so the same player always serialises the same way.
         final var top = new JsonObject();

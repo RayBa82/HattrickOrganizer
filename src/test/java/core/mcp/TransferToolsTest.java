@@ -393,10 +393,11 @@ class TransferToolsTest {
     /**
      * estimate_market_value hands a model up to forty rows; seven skill levels each is noise it has
      * no use for, so every row keeps its three best positional skills and nothing else. Set pieces
-     * is dropped however high it is, for the same reason comparableQuery never ranks it.
+     * is the exception: it prices a player whatever position he plays, so it comes out of the
+     * nested skills block and stays as a field of its own, beside topSkills rather than in it.
      */
     @Test
-    void topSkillsOnly_keepsTheThreeBestPositionalSkillsAndDropsSetPieces() {
+    void topSkillsOnly_keepsTheThreeBestPositionalSkillsAndSetPieces() {
         //                      kp de pm pa wi sc sp st ex ld
         final var p = player(24, 1, 7, 12, 9, 6, 5, 20, 8, 4, 2);
 
@@ -408,6 +409,10 @@ class TransferToolsTest {
         assertThat(json.getAsJsonObject("topSkills").get("playmaking").getAsInt()).isEqualTo(12);
         assertThat(json.has("skills")).isFalse();
         assertThat(json.has("skillsWithSublevel")).isFalse();
+        // Lifted out of the skills block: 20 outranks every positional skill and still must not
+        // displace one in topSkills.
+        assertThat(json.get("setPieces").getAsInt()).isEqualTo(20);
+        assertThat(json.getAsJsonObject("topSkills").has("setPieces")).isFalse();
         // Specialty and the price-bearing fields are what is left to judge on.
         assertThat(json.has("specialtyName")).isTrue();
         assertThat(json.has("wage")).isTrue();
@@ -433,7 +438,8 @@ class TransferToolsTest {
         assertThat(json.getAsJsonObject("topSkills").keySet())
                 .containsExactly("scoring", "defending", "playmaking");
         assertThat(json.has("defending")).isFalse();
-        assertThat(json.has("setPieces")).isFalse();
+        // A listing writes set pieces flat rather than nested, and it survives the trim there too.
+        assertThat(json.get("setPieces").getAsInt()).isEqualTo(13);
         assertThat(json.has("askingPrice")).isTrue();
     }
 
