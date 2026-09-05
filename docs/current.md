@@ -1486,3 +1486,64 @@ deltas and real money against hand-computed krona.
 
 **Not shipped:** source only. The running server is the installed bundle, so this is invisible to
 `~/hattrick` until `./gradlew dmg` and a relaunch.
+
+## `download_team` — refreshing HO from the agent (2026-09-05)
+
+Every read tool answers from `DBManager`/`HOVerwaltung`, so after the user fired a player in
+Hattrick `get_squad` kept returning the old squad until someone clicked Download in HO. `download_team`
+is that click, over MCP.
+
+`OnlineWorker.getHrf` was split. The download — `ConvertXml2Hrf.createHrf` → `HRFStringParser.parse`
+→ `storeModel` — is now `OnlineWorker.downloadTeamData()`, which shows nothing itself and throws a
+typed `DownloadFailed(Failure reason, …)`. `getHrf` keeps its signature and is now only the five
+dialogs (`report()`) plus `saveHRFToFile`. Both had exactly one caller each, so the blast radius was
+two files.
+
+Five things worth knowing next time:
+
+- **"Silent" is three separate problems, not one.** `downloadTeamData()` showing nothing is the easy
+  part. Underneath it, `Connector.getCHPPWebFile` opens `OAuthDialog` on an HTTP 401 (`:740`) and a
+  `JOptionPane` on every other failure (`:765`), both gated only on `Connector.silentDownload`, and
+  one download makes roughly a dozen requests through that method. `ConvertXml2Hrf.createHrf():79`
+  opens a modal `TeamSelectionDialog` when HO holds no team id and the account has several teams,
+  and `silentDownload` does *not* gate that one. `DBManager:150` shows a "Fatal DB Error" box.
+  `download_team` wraps its body in `Connector.setSilentDownload(true)` (save/restore, like
+  `ChppWriteService` and `TransferSearchService`), refuses up front when `getTeamId() <= 0`, and
+  leaves the DB box alone on purpose — HO is dead at that point anyway and hiding a corrupt database
+  from the user would be worse. The flag is set by the *tool*, not by `downloadTeamData()`: HO's
+  Download button still needs those dialogs.
+- **Suppressing the dialog costs you the error.** With the flag on, a CHPP failure makes
+  `getCHPPWebFile` return `""`, `createHrf` bails at `teamDetails.isEmpty()`, and the result is the
+  same null it returns when no team is selected — so an expired OAuth token reported as `NO_TEAM`,
+  "no team is selected in HO", which the user cannot act on. `Connector.lastError()` is the way out:
+  cleared at the start of every request, left set only by a failed one, so a non-null value at the
+  null-hrf branch means Hattrick was the reason. That disambiguation lives in `TeamTools.explain()`
+  and deliberately not in `downloadTeamData()`, where it would make the Download button pop an error
+  dialog it currently does not.
+- **The save chooser cannot be switched off.** `saveHRFToFile` opens it when the target file already
+  exists, and the name is `<teamId>-YYYY-MM-DD.hrf` — one per calendar day. So the second download on
+  any day opens it regardless of `showHRFSaveDialog`. Neutralising the flags is not a fix; the tool
+  must not enter `saveHRFToFile` at all, and it doesn't.
+- **`getHrf` returns `true` on three failures where nothing was stored** (`PLAYING_MATCH`, `NO_DATA`,
+  `UNPARSEABLE`), and `DownloadDialog` then carries on downloading matches and prices. That looks
+  wrong and was preserved deliberately — the refactor's contract was "the button behaves
+  identically". The MCP tool does not inherit it: all five reasons are errors there.
+- **A download overwrites HO's stored lineup** with the match order Hattrick currently holds
+  (`HRFStringParser:177` → `HOModel.storeLineup`). Three call sites write that lineup and none records
+  provenance, so there is no dirty flag and "refuse when unsaved" is not implementable. The tool
+  snapshots the lineup either side of the download and reports `lineupReplaced` / `previousLineup`
+  instead. Two traps there: the snapshot is taken with a null rating model, because ratings move on
+  nearly every download and would make the flag always true (and computing them twice on the EDT is
+  not free); and the comparison is only meaningful when `becameCurrent` is true, because otherwise
+  `HOVerwaltung` still holds the previous model with the user's in-memory lineup and both snapshots
+  come off the same object. In that case `lineupReplaced` is `null`, not `false` — the stored lineup
+  *was* overwritten, HO just cannot see it.
+
+Capped by the new `UserParameter.mcpDownloadsPerSession` (default 10, half the other two caps because
+one download is roughly a dozen CHPP requests). The counter increments only after a download
+succeeded, so a Hattrick outage cannot eat the whole session's allowance. No `DBVersion` bump —
+`UserParameter` persists through a plain string map.
+
+Not refreshed, on purpose: matches, fixtures, played league results, hall of fame, youth data. Those
+are the other ~150 lines of `DownloadDialog.startDownload`, each with its own filter settings. A later
+`download_matches` can follow the same split.
