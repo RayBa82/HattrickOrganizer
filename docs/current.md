@@ -936,6 +936,60 @@ snapshot and stays at the default.
 `list_scout` reads the panel's list back, market data as of when each player was added rather than
 live. `LineupTools.onEdt` went package-private and is shared — every panel touch is on the EDT.
 
+**The scout's price column is not the asking price** (2026-09-05). `SCOUT.Price` is a single column
+and both `TransferSearchConverter.toScoutEintrag` overloads fill it with
+`max(askingPrice, highestBid)` — the cost to take the player now, which silently becomes the leading
+bid once bidding passes what the seller asked. `list_scout` used to publish that as `askingPrice`,
+which was simply wrong. It is `price` now, and `listScout` re-reads the entry's newest
+`TRANSFERLISTING` row to add the real `askingPrice` and `highestBid` alongside it — the corpus has
+kept them apart since day one, so no schema change and no new CHPP call. Both are absent for an
+entry typed into the TransferScout tab by hand. The re-read runs *after* the `onEdt` block, so the
+database work stays off the EDT the way `add_to_scout`'s does.
+
+## The three prices, across every transfer tool (2026-09-05)
+
+Asking price / current price / sale price is what the model learns a market from, so each tool was
+audited for all three. `McpJson.listing` (`estimate_market_value`) and `McpJson.hit`
+(`search_transfers`, `find_comparables`) were already complete — `hit` has no sale price because a
+live listing has not sold yet, which is the honest answer, not a gap. `get_team_transfers` has the
+realized price only, and that is all CHPP `transfersTeam` sends.
+
+`get_open_bids` was the one real hole: `currentbids` carries the highest bid and nothing else, so a
+finished transfer reported the price it went for without ever saying that it *was* the price, and a
+lost bid never showed what it lost by. `addLocalBidContext` now fills that from what HO already has
+— `askingPrice` from the newest `TRANSFERLISTING` row, and `salePrice` / `outcome` / `ourBid` from
+the `TRANSFERBID` ledger that `recordBidObservations` refreshes two lines earlier. No CHPP call, no
+schema change. Asking price is skipped when it is 0, which is what a listing snapshotted from
+`currentbids` alone carries.
+
+**`list_scout`'s two new prices are the newest observation, not the add-time one.** `listScout`
+re-reads through `loadLatestTransferListing`, so a later `search_transfers` over the same profile —
+or a re-listing, which is a different transfer under the same player id — moves `askingPrice` and
+`highestBid` while `price` and `deadline` stay frozen at the moment `add_to_scout` ran. Fresher is
+the better number, so this is left as is, but it is no longer one instant: `observedAt` ships beside
+them to say which. The alternative, storing both prices on the scout entry, costs a `SCOUT` column
+and a `DBVersion` migration to buy a *staler* answer — declined.
+
+**Hattrick does not always send an asking price.** Checked against the live database (271 stored
+observations, read out of `database.log`): 255 carry a real `ASKINGPRICE`, 16 carry 0 — and those 16
+have age and TSI filled in, so they are genuine `transfersearch` hits with details, not the
+`fromBidItem` snapshots that never had an asking price to begin with. No rule found for which
+listings omit it; the 16 span cheap and expensive players alike. Consequence: a stored 0 means "not
+sent", never "the seller asked nothing", so both `list_scout` and `get_open_bids` leave the
+`askingPrice` key out entirely rather than publish a zero the model would read as a price.
+`highestBid` is published even at 0, where zero honestly means nobody has bid.
+
+This is also the trap in verifying the scout-price mislabel from a small sample: the players that
+show it most clearly are the ones with no asking price, where `max(asking, bid)` is trivially the
+bid. The `hattrick` session sampled three of them (Krokus, Kilchherr, Lehel — all in the zero-asking
+16). The mislabel is real, but it bites on the other 94% too, whenever bidding runs past the ask.
+
+Deliberately **not** added: a market-statistics or price-index tool. Every tool here returns rows and
+lets the model do the arithmetic (`estimate_market_value`'s own docstring says its median is "a
+starting anchor, not an answer"), and an aggregate would freeze one weighting into Java where the
+model cannot see past it. The binding constraint on market knowledge is the resolution rate of the
+corpus — how many observations get a real sale price attached — not the field list.
+
 No `remove_from_scout`: deprioritised by the requester, and the user can prune in the UI.
 No schema change, so no `DBVersion` bump.
 
@@ -1539,11 +1593,161 @@ Five things worth knowing next time:
   come off the same object. In that case `lineupReplaced` is `null`, not `false` — the stored lineup
   *was* overwritten, HO just cannot see it.
 
-Capped by the new `UserParameter.mcpDownloadsPerSession` (default 10, half the other two caps because
-one download is roughly a dozen CHPP requests). The counter increments only after a download
+Capped by the new `UserParameter.mcpDownloadsPerSession` (default 10 at the time, half the other two
+caps because one download was roughly a dozen CHPP requests; now 5 — see the next section). The
+counter increments only after a download
 succeeded, so a Hattrick outage cannot eat the whole session's allowance. No `DBVersion` bump —
 `UserParameter` persists through a plain string map.
 
-Not refreshed, on purpose: matches, fixtures, played league results, hall of fame, youth data. Those
-are the other ~150 lines of `DownloadDialog.startDownload`, each with its own filter settings. A later
-`download_matches` can follow the same split.
+Not refreshed, at first: matches, fixtures, played league results, hall of fame, youth data. That
+lasted one day — see the next section.
+
+## `download_team` reaches parity with the Download button (2026-09-05)
+
+The user's position, and it is the right one: a "download" should bring everything down. The curated
+subset above is gone; the tool now runs what `DownloadDialog.startDownload` runs.
+
+**The dialog was taken apart, not copied.** Five blocks moved to `OnlineWorker` —
+`downloadNtMatchesOfCappedPlayers`, `downloadHallOfFameIfActive`, `downloadCurrentMatches`,
+`downloadCurrentFixtures`, `refreshWorldDetailsIfDue` — and `startDownload` now calls them in the
+order it used to inline them. Copying 150 lines into the tool would have guaranteed drift the first
+time someone touched the dialog. Behaviour was preserved exactly, including the two places it looks
+wrong: the youth block still runs even when the match list failed, and `bOK` still latches the same
+way.
+
+**The filter settings are readable without the dialog — except where they aren't.** Eight of the
+dialog's checkboxes round-trip through `UserParameter` (`downloadCurrentMatchlist`,
+`downloadSingleMatches`, `downloadLadderMatches`, `downloadTournamentGroupMatches`,
+`downloadTournamentPlayoffMatches`, `downloadDivisionBattleMatches`, `xmlDownload`, `fixtures`), so
+`download_team` honours what the user last ticked. The parent "Current Matches" node has no flag of
+its own — `CheckBoxTree.updatePredecessorsWithCheckMode` marks a parent selected when *any*
+descendant is, so it is exactly the OR of the six match-type flags, which is what
+`OnlineWorker.anyCurrentMatchTypeSelected()` computes. That is what the comment in `startDownload`
+means by "checked, if any of the following is checked".
+
+Two sections cannot have parity, and saying so is better than working around it:
+
+- **The match archive** is a checkbox plus a date spinner, neither persisted, both starting off in a
+  fresh dialog. So "whatever the user last ticked" is genuinely "off", and that is what the tool does.
+- **Previous-season fixtures** are tree nodes that also start unchecked — *and* `downloadOldFixtures`
+  opens a modal `LigaAuswahlDialog` per season, so it could not run silently even if they were
+  ticked. Not called at all.
+
+Both are named in the tool description and in a `notRefreshed` field on the result, so a caller does
+not have to infer them from silence.
+
+**`Helper.showMessage` had to learn about silent downloads.** This was the real blocker. `Connector`
+gates its own two dialogs on `silentDownload`, but the ~11 error dialogs `OnlineWorker` raises around
+matches, fixtures and lineups go through `Helper.showMessage`, which checked nothing — only
+`downloadMatchData:452` bothered to test the flag itself. A modal `JOptionPane` from a silent
+download blocks the EDT and the MCP server's single handler thread together, with nobody able to
+dismiss it. One guard in `Helper.showMessage` covers every one of them, logs at warning instead, and
+fixes the paths nothing was going to touch otherwise.
+
+**Team transfers are still not part of button parity — so they were added separately.** The dialog
+never calls `XMLParser.updateTeamTransfers`; its only callers are `TransfersPanel.refresh():55` and
+`HistoryPane:40`. And `TransfersPanel.refresh()` guards that call on
+`DBManager.getTransfers(0,true,true).isEmpty()`, so it fires once on a database that holds no
+transfers at all and can never fire again. That is why a player bought since the last download showed
+up in `get_squad` and nowhere else — the symptom that started all of this. It is an HO gap, not an
+MCP one.
+
+`updateTeamTransfersIncremental` is the bounded version. `updateTeamTransfers` re-pages the entire
+lifetime history every call and then makes one `transfersPlayer` request per player it saw — for a
+few hundred transfers that is a dozen pages plus twenty-odd lookups, every download. The incremental
+one stops at the first page holding nothing new, and looks up only the players whose transfers were
+new: one page and no lookups in the steady state.
+
+Two traps in that loop, both covered by `XMLParserTest`:
+
+- The stop test runs over the **unfiltered** page. A transfer outside the stored date window is never
+  written, so it stays unknown for ever; testing the date-filtered list would make such a page look
+  permanently new and the loop would never terminate. Testing the whole page costs one extra page
+  fetch in that case and always terminates.
+- Pages are newest-first, so "everything on this page is stored" really does imply everything older
+  is too. A partly-new page is still followed by the next one, because one page can straddle the
+  boundary.
+
+**`lineupReplaced` is unaffected, and that was checked rather than assumed.** The worry was that
+parity pulls in the match side. It does not touch the lineup: `getAllLineups(10)` stores *match*
+lineups in `MATCHLINEUP`, and `startDownload` never downloads a next match order at all. The only
+writer of HO's stored lineup is still `HRFStringParser:177` → `HOModel.storeLineup`, inside
+`downloadTeamData`. So the snapshot pair was moved to bracket *only* that call, rather than the whole
+widened tool — bracketing everything would compare the same two things across a much longer window
+and would start reporting an unrelated EDT edit as a replacement.
+
+**Costs, at the new size — counted, not estimated.** The unit that matters is not the section, it is
+the *match*: `downloadMatchData` on one newly finished match is about six CHPP requests on its own —
+`matchdetails` to identify it, `teamdetails` for the opponent, `matchlineup`, two more `teamdetails`
+for each side's ratings (`downloadTeamRatings`), then `matchdetails` again for the highlights. So the
+cost is dominated by how many matches were played since the previous download:
+
+| | requests |
+|---|---|
+| `createHrf` (teamdetails, club, leaguedetails, worlddetails, players, avatars, youth players, economy, training, staff, arena, matches, next match order, last lineup) | 13–15 |
+| hall of fame, current match list, league fixtures, transfer pages | ~4 |
+| upcoming matches with an unsure weather forecast, re-fetched every download | 2–3 each |
+| **each newly played match** (ours, and each other-team league match that just got a result) | **~6 each** |
+| youth match backfill, world details, sale-price resolve | 0 in the steady state |
+
+A quiet download is therefore ~20–25 requests. The first download after a league match day is ~50–70:
+our own match plus the three other matches in an eight-team series, at six apiece. After a long gap it
+is far worse — the youth backfill walks 90-day windows and `getAllLineups(10)` fetches whatever is
+missing. The earlier "30–50 flat" figure in this document was an estimate made before the per-match
+cost was counted; it was low for the match-day case.
+`mcpDownloadsPerSession` therefore dropped from 10 to 5: the same allowance measured in requests
+rather than in calls. `mcpResolveCap` (200) and the resolver's 60s `TIME_BUDGET` are unchanged, but
+they now always run rather than only on `resolvePrices: true` — which is the point, since that pass
+is the scout list's half of a refresh. `resolvePrices` is gone as a parameter.
+
+## Two things the first live parity download exposed (2026-09-05)
+
+### `TRANSFER` has three writers in one download, not one
+
+`newTransfers` reported 0 on a download after which `get_team_transfers` plainly showed a new row.
+The counter was not wrong about what it measured — it was measuring the wrong third of the problem.
+One download writes `TRANSFER` from three places:
+
+1. `ConvertXml2Hrf.createHrf` → `areTransfersMissing(economyDataMap)` → `PlayerTransfer.downloadMissingTransfers`.
+   This is long-standing HO code inside `downloadTeamData`, and it is the one that actually catches a
+   recent purchase: it compares the economy's `CostsBoughtPlayers`/`IncomeSoldPlayers` against the
+   stored rows for the current and previous week and pages `transfersTeam` until they reconcile.
+2. `updateTeamTransfers(fresh)` — the incremental pass storing the pages it fetched.
+3. `updatePlayerTransfers(playerId)` — each affected player's full history, after (2).
+
+So in the normal case (1) has already stored the purchase by the time (3) runs, the incremental pass
+correctly finds nothing new, and `fresh.size()` is honestly 0. Reporting that number as
+`newTransfers` was the bug. It is now the delta of `getTransfers(0,true,true).size()` across the whole
+call, so it counts all three; the incremental pass's own contribution goes to the log.
+
+This also corrects the earlier claim in this document that the download never refreshes transfers.
+`updateTeamTransfers` is indeed never called from the dialog — but `downloadMissingTransfers` is, via
+`createHrf`, on every download including the old binary's. It is narrow (two weeks, economy-driven,
+skipped on an empty database), which is why the incremental pass still earns its place, but "never"
+was wrong.
+
+### `lineupReplaced` was comparing construction paths, not lineups
+
+The flag came back `true` on the first download after an HO restart with a `previousLineup`
+byte-identical to an earlier run's — the classic shape of a false positive. The cause is that the two
+snapshots were being read from objects built two different ways:
+
+- after a download, the live model's lineup is the object `HRFStringParser` just parsed;
+- after a restart, it is `HOModel(int id)` calling `DBManager.loadNextMatchLineup(teamId)` — a
+  database round trip.
+
+`before` on the first download after a restart is therefore a round-tripped object while `after` is a
+freshly parsed one, and any field the round trip does not preserve exactly renders as a difference in
+`LineupTools.describe`. That makes the flag fire on the first download of every session regardless of
+whether anything was lost — and it was not caused by narrowing the bracket, it predates it (the
+same-session second download compared parsed-against-parsed and correctly said `false`).
+
+`lineupSnapshot()` now reads `loadNextMatchLineup` for *both* snapshots. Representation cancels, and a
+difference means the stored row genuinely changed. Two consequences worth knowing:
+
+- The `becameCurrent` guard is gone. It existed because the live model keeps the old lineup when the
+  swap does not happen; reading the stored row sidesteps that entirely, and `storeModel` writes the
+  row either way. The old `null` answer — "HO cannot tell" — now only means "nothing was stored to
+  compare against", i.e. a fresh install.
+- The flag now reports what is in the database, which after a skipped swap is not what HO's window is
+  showing. That is the right thing for a field whose whole subject is the *stored* lineup.

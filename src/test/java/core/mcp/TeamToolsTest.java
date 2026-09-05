@@ -30,16 +30,19 @@ class TeamToolsTest {
     }
 
     @Test
-    void downloadTeam_takesNoRequiredArgumentsAndOffersThePriceResolve() {
+    void downloadTeam_takesNoArgumentsAtAll() {
         final var download = TeamTools.tools().stream()
                 .filter(t -> t.name().equals("download_team"))
                 .findFirst().orElseThrow();
 
         assertThat(download.inputSchema().getAsJsonArray("required")).isEmpty();
-        assertThat(download.inputSchema().getAsJsonObject("properties").has("resolvePrices"))
-                .isTrue();
+        // resolvePrices is gone: the download always resolves sale prices, the way HO's own
+        // Download button always has.
+        assertThat(download.inputSchema().getAsJsonObject("properties").entrySet()).isEmpty();
         // the lineup clobber is the one surprise this tool has, so it has to be in the description
         assertThat(download.description()).contains("lineupReplaced");
+        // and the two sections it cannot cover have to be named, or a caller will assume parity
+        assertThat(download.description()).contains("match archive");
     }
 
     @Test

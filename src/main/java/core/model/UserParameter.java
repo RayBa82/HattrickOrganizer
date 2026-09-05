@@ -121,10 +121,12 @@ public final class UserParameter extends Configuration {
      * How many full team downloads one HO session may issue over MCP. Manual downloads from the
      * Download button do not count.
      * <p>
-     * Half the other two caps because one download is roughly a dozen CHPP requests where a search
-     * or a write is one.
+     * A quarter of the other two caps because one download is now thirty to fifty CHPP requests
+     * where a search or a write is one - it does everything the Download button does. It was ten
+     * while the tool only fetched the HRF; five is the same allowance measured in requests rather
+     * than in calls. Existing users keep whatever they have stored; this only moves the default.
      */
-    public int mcpDownloadsPerSession = 10;
+    public int mcpDownloadsPerSession = 5;
 
     /**
      * How many expired listings the sale-price resolve pass may look up per run. 0 switches it off.
@@ -473,7 +475,6 @@ public final class UserParameter extends Configuration {
         map.put("mcpDownloadsPerSession", String.valueOf(mcpDownloadsPerSession));
         map.put("mcpResolveCap", String.valueOf(mcpResolveCap));
 
-
         if (ReleaseChannel == null) {
             ReleaseChannel = "Stable";
             if (HO.getVersionType() != null) {
@@ -724,9 +725,8 @@ public final class UserParameter extends Configuration {
         mcpServerPort = orDefault(getIntValue(values, "mcpServerPort"), 8765);
         mcpSearchesPerSession = orDefault(getIntValue(values, "mcpSearchesPerSession"), 20);
         mcpChppWritesPerSession = orDefault(getIntValue(values, "mcpChppWritesPerSession"), 20);
-        mcpDownloadsPerSession = orDefault(getIntValue(values, "mcpDownloadsPerSession"), 10);
+        mcpDownloadsPerSession = orDefault(getIntValue(values, "mcpDownloadsPerSession"), 5);
         mcpResolveCap = orDefault(getIntValue(values, "mcpResolveCap"), 200);
-
         ReleaseChannel = getStringValue(values, "ReleaseChannel");
         fixtures = getBooleanValue(values, "fixtures");
         downloadCurrentMatchlist = getBooleanValue(values, "currentMatchlist");

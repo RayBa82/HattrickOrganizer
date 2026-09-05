@@ -16,6 +16,7 @@ import core.model.enums.MatchTypeExtended;
 import core.model.match.*;
 import core.model.misc.Regiondetails;
 import core.model.player.Player;
+import core.module.ModuleManager;
 import core.util.HODateTime;
 import core.model.UserParameter;
 import core.util.HOLogger;
@@ -205,6 +206,167 @@ public class OnlineWorker {
 		} catch (Exception e) {
 			HOLogger.instance().error(OnlineWorker.class, e);
 		}
+	}
+
+	/**
+	 * How much of HO's progress bar each download section advances.
+	 * <p>
+	 * The dialog's local {@code progressIncrement}, hoisted so the extracted sections keep driving
+	 * the same bar at the same rate whichever caller runs them.
+	 */
+	private static final int DOWNLOAD_PROGRESS_STEP = 3;
+
+	/*
+	 * The sections below are {@code DownloadDialog.startDownload} taken apart, one method per block,
+	 * in its order. They were extracted rather than copied so {@code download_team} and the Download
+	 * button cannot drift: the dialog now calls these too, and its own body is the same sequence of
+	 * calls.
+	 *
+	 * Two of the dialog's sections deliberately did NOT move. The match archive is driven by a
+	 * checkbox and a date spinner that live only on the dialog and start unticked, and old-season
+	 * fixtures go through {@code downloadOldFixtures}, which opens the modal {@code LigaAuswahlDialog}
+	 * per season. Both are dialog state with no persisted form, so "whatever the user last ticked"
+	 * is "nothing" for a caller that has no dialog - and the second one could not run silently even
+	 * if it were ticked.
+	 */
+
+	/**
+	 * Whether the dialog's "Current Matches" node is ticked, without a dialog.
+	 * <p>
+	 * That node is not persisted and has no flag of its own. {@code CheckBoxTree} marks a parent
+	 * selected when any descendant is ({@code CheckBoxTree.updatePredecessorsWithCheckMode}), and the
+	 * six leaves under it are exactly the six saved flags below - which is what the comment in
+	 * {@code startDownload} means by "checked, if any of the following is checked".
+	 */
+	public static boolean anyCurrentMatchTypeSelected() {
+		final var p = UserParameter.instance();
+		return p.downloadCurrentMatchlist || p.downloadSingleMatches || p.downloadLadderMatches
+				|| p.downloadTournamentGroupMatches || p.downloadTournamentPlayoffMatches
+				|| p.downloadDivisionBattleMatches;
+	}
+
+	/**
+	 * The current matches of every national team one of our players is capped for.
+	 * <p>
+	 * In the dialog this sits inside the "team data" branch, because a capped player is only known
+	 * once the squad has been downloaded.
+	 */
+	public static void downloadNtMatchesOfCappedPlayers(HOModel model) {
+		for (Player p : model.getCurrentPlayers()) {
+			if (p.getNationalTeamId() != null && p.getNationalTeamId() != 0) {
+				getMatches(p.getNationalTeamId(), false, true, true);
+			}
+		}
+	}
+
+	/** The hall of fame, when that module is switched on - the dialog's own condition. */
+	public static void downloadHallOfFameIfActive(HOModel model) {
+		if (ModuleManager.instance().getModule(core.module.IModule.HALL_OF_FAME).getStatus()
+				== core.module.IModule.STATUS_DEACTIVATED) {
+			return;
+		}
+		HOMainFrame.instance().setInformation(
+				Helper.getTranslation("ls.update_status.hall_of_fame"), DOWNLOAD_PROGRESS_STEP);
+		var hallOfFamesPlayer = downloadHallOfFame(model.getBasics().getTeamId());
+		model.setHallOfFamesPlayers(hallOfFamesPlayer);
+		DBManager.instance().storeHallOfFame(model.getHrfId(), hallOfFamesPlayer);
+	}
+
+	/**
+	 * This team's current matches, their lineups, and the youth side's missing match data.
+	 * <p>
+	 * The youth block runs even when the match list failed, which is what the dialog does - kept
+	 * deliberately, so extracting this changed no behaviour.
+	 *
+	 * @return false when the match list could not be fetched
+	 */
+	public static boolean downloadCurrentMatches(HOModel model) {
+		final int teamId = model.getBasics().getTeamId();
+		HOMainFrame.instance().setInformation(
+				Helper.getTranslation("ls.update_status.match_info"), DOWNLOAD_PROGRESS_STEP);
+		// Only get lineups for own fixtures
+		boolean bOK = getMatches(teamId, false, true, true) != null;
+		if (bOK) {
+			getAllLineups(10);
+		}
+
+		if (model.getBasics().hasYouthTeam()) {
+			var dateSinceTimestamp = DBManager.instance().getMinScoutingDate();
+			var dateSince = HODateTime.fromDbTimestamp(dateSinceTimestamp);
+			downloadMissingYouthMatchData(model, dateSince);
+			// delete old youth match lineups, no longer needed (no current youth player has trained then)
+			DBManager.instance().deleteYouthMatchDataBefore(dateSinceTimestamp);
+		}
+		return bOK;
+	}
+
+	/**
+	 * This season's league fixtures, plus the matches other teams in the series have played since
+	 * the previous download - which is what turns the stored league table from predicted to actual.
+	 *
+	 * @return false when the fixture list could not be fetched
+	 */
+	public static boolean downloadCurrentFixtures(HOModel model) {
+		// in the last week of a season the LeagueLevelUnitID switches to the next season's value
+		// (no fixtures are available then)
+		if (model.getBasics().getSpieltag() >= 16) {
+			return true;
+		}
+		final int teamId = model.getBasics().getTeamId();
+		HOMainFrame.instance().setInformation(
+				Helper.getTranslation("ls.update_status.fixtures"), DOWNLOAD_PROGRESS_STEP);
+		var leagueId = model.getXtraDaten().getLeagueLevelUnitID();
+		var fixtures = downloadLeagueFixtures(-1, leagueId);
+		if (fixtures == null) {
+			return false;
+		}
+		if (fixtures.getMatches().isEmpty()) {
+			// Matches are not available from hattrick. Initialize them
+			var teamStats = getSeriesDetails(leagueId);
+			var newFixtures = MatchFixtures.createFixtures(model.getXtraDaten().getSeriesMatchDate(),
+					teamStats.values().stream().sorted(Comparator.comparing(TeamStats::getPosition)).toList());
+			fixtures.addFixtures(newFixtures);
+		}
+		final MatchFixtures modelFixtures = model.getFixtures();
+		if (modelFixtures != null) {
+			// state of previous download
+			var oldDownloadedFixtures = modelFixtures.getMatches();
+			// extract played matches of foreign teams
+			var newPlayedMatchesOfOtherTeams = fixtures.getMatches().stream()
+					.filter(i -> i.getToreHeim() >= 0 && i.getHeimId() != teamId && i.getGastId() != teamId)
+					.toList();
+			if (oldDownloadedFixtures != null) {
+				// matches that were not played on previous download
+				var notPlayedYet = oldDownloadedFixtures.stream()
+						.filter(i -> i.getToreHeim() < 0)
+						.toList();
+				// intersection of both lists gives the list of played matches since previous download
+				var latestPlayedMatches = newPlayedMatchesOfOtherTeams.stream()
+						.filter(i -> notPlayedYet.stream().anyMatch(j -> j.getMatchId() == i.getMatchId()))
+						.toList();
+				for (var m : latestPlayedMatches) {
+					if (!downloadMatchData(m.getMatchId(), MatchType.LEAGUE, true)) {
+						HOLogger.instance().error(OnlineWorker.class, "Error fetching Match: " + m.getMatchId());
+						break;
+					}
+				}
+			}
+		}
+		model.saveFixtures(fixtures);
+		return true;
+	}
+
+	/** The world's league metadata, when it is stale enough to be worth a refresh. */
+	public static void refreshWorldDetailsIfDue() {
+		if (!WorldDetailLeague.checkWorldDetailsDownload()) {
+			return;
+		}
+		HOMainFrame.instance().setInformation(
+				Helper.getTranslation("ls.update_status.world_details"), DOWNLOAD_PROGRESS_STEP);
+		var allLeagues = downloadWorldDetails();
+		DBManager.instance().storeWorldDetailLeagues(allLeagues);
+		WorldDetailsManager.instance().refresh();
+		WorldDetailLeague.setLatestDownloadNow();
 	}
 
 	/**

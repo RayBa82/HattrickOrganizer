@@ -142,7 +142,14 @@ public final class TransferTools {
                                 + "current leading bidder. "
                                 + "Pass includeAll for every tracked transfer - your listed "
                                 + "players, bookmarked players, mother-club and finished transfers "
-                                + "too - each with its raw trackingTypeId.",
+                                + "too - each with its raw trackingTypeId. "
+                                + "Hattrick sends only the highest bid, so HO adds what it already "
+                                + "holds: askingPrice from the stored market snapshot (absent for a "
+                                + "player never seen by search_transfers), and, once the transfer "
+                                + "finished, salePrice, outcome (won/lost) and ourBid - what you "
+                                + "bid, if it went through place_bid. A lost bid next to the price "
+                                + "it lost to is the cheapest read you get on what this market "
+                                + "actually pays.",
                         McpTool.schema(McpTool.properties(
                                 "includeAll", McpTool.prop("boolean",
                                         "return every tracked transfer, not just your open bids; "
@@ -169,8 +176,18 @@ public final class TransferTools {
                 new McpTool("list_scout",
                         "Read back HO's local transfer scout list - the shortlist add_to_scout "
                                 + "writes, with the market data and skills as they were when each "
-                                + "player was added. askingPrice and deadline are that snapshot, "
-                                + "not live; re-run search_transfers for the current market state. "
+                                + "player was added. price and deadline are that snapshot, not "
+                                + "live; re-run search_transfers for the current market state. "
+                                + "price is what it would have cost to take him when he was added "
+                                + "- the higher of the seller's asking price and the highest bid, "
+                                + "so it silently becomes the bid once bidding passes the ask. "
+                                + "askingPrice and highestBid are those two kept apart, taken from "
+                                + "the newest stored observation of him rather than from the "
+                                + "moment he was added - observedAt says when that was, and may be "
+                                + "later than the deadline beside it if he was re-listed. Both are "
+                                + "missing for an entry typed into the UI by hand, and askingPrice "
+                                + "alone is missing when Hattrick sent none for that listing, in "
+                                + "which case price is the highest bid. "
                                 + "salePrice and soldAt are different: they are filled in after the "
                                 + "watched transfer completed and say what the player actually went "
                                 + "for, so a target you lost still tells you the price it took. "
@@ -512,17 +529,50 @@ public final class TransferTools {
     }
 
     private static JsonObject listScout() throws McpToolException {
-        return LineupTools.onEdt(() -> {
+        final var out = LineupTools.onEdt(() -> {
             final var players = new JsonArray();
             for (final var entry : ScoutList.entries()) {
                 players.add(McpJson.scoutEntry(entry));
             }
-            final var out = new JsonObject();
-            out.addProperty("currency", McpJson.currency());
-            out.addProperty("count", players.size());
-            out.add("players", players);
-            return out;
+            final var json = new JsonObject();
+            json.addProperty("currency", McpJson.currency());
+            json.addProperty("count", players.size());
+            json.add("players", players);
+            return json;
         });
+
+        // The scout table has one price column and it holds max(asking price, highest bid), so it
+        // stops saying what the seller asked the moment bidding passes it. The corpus keeps the two
+        // apart - read them back off the EDT, where the database reads belong. Missing for an entry
+        // typed into the TransferScout tab by hand.
+        //
+        // This is the NEWEST observation of the player, not necessarily the one add_to_scout built
+        // the entry from: a later search_transfers over the same profile stores a fresher row, and a
+        // re-listed player's newest row belongs to a different transfer altogether. Fresher is the
+        // better number, but it is no longer the same instant as the frozen price and deadline
+        // beside it, so observedAt ships with it and the model can see which is which. Storing the
+        // pair on the scout entry instead would need a SCOUT column and a DBVersion migration to buy
+        // a staler answer.
+        for (final var element : out.getAsJsonArray("players")) {
+            final var player = element.getAsJsonObject();
+            final var listing = DBManager.instance()
+                    .loadLatestTransferListing(player.get("playerId").getAsInt());
+            if (listing == null) {
+                continue;
+            }
+            player.addProperty("observedAt",
+                    listing.getObservedAt() == null ? null : listing.getObservedAt().toHT());
+            // A stored 0 means Hattrick sent no AskingPrice for this listing, not that the seller
+            // asked nothing - about 6% of observed search hits, plus every snapshot that came from
+            // currentbids, which carries no asking price at all. Leave the key out rather than
+            // publish a zero the model would read as a price. A highestBid of 0 is left in: there,
+            // zero really does mean nobody has bid yet.
+            if (listing.getAskingPrice() > 0) {
+                player.addProperty("askingPrice", McpJson.money(listing.getAskingPrice()));
+            }
+            player.addProperty("highestBid", McpJson.money(listing.getHighestBid()));
+        }
+        return out;
     }
 
     /** The SCOUT.Info column is VARCHAR(256); an over-long note would fail the insert. */
@@ -589,6 +639,7 @@ public final class TransferTools {
                     item.highestBidTeamId() != 0 && item.highestBidTeamId() == current.teamId());
             json.addProperty("trackingTypeId", item.trackingTypeId());
             json.addProperty("category", bidCategory(item.trackingTypeId()));
+            addLocalBidContext(json, item.playerId());
             bids.add(json);
         }
 
@@ -601,6 +652,35 @@ public final class TransferTools {
                     + "2 / 8; pass includeAll to see every tracked transfer.");
         }
         return out;
+    }
+
+    /**
+     * The two prices {@code currentbids} does not carry, from what HO already stored: the seller's
+     * asking price out of the market corpus, and - once the transfer finished - what it went for
+     * next to what we bid, out of the bid ledger {@link #recordBidObservations} has just refreshed.
+     * <p>
+     * A bid is only worth what it is measured against. Asking price says how far bidding has run
+     * past what the seller wanted, and {@code salePrice} against {@code ourBid} is the one honest
+     * signal about a market a losing bid ever produces. Both are free here - already in the
+     * database, no CHPP call.
+     */
+    private static void addLocalBidContext(JsonObject json, int playerId) {
+        final var listing = DBManager.instance().loadLatestTransferListing(playerId);
+        // Asking price is 0 on a listing seen only through currentbids, which does not send one.
+        if (listing != null && listing.getAskingPrice() > 0) {
+            json.addProperty("askingPrice", McpJson.money(listing.getAskingPrice()));
+        }
+        final var ledger = DBManager.instance().loadTransferBid(playerId);
+        if (ledger == null) {
+            return;
+        }
+        if (ledger.getOurBid() != null) {
+            json.addProperty("ourBid", McpJson.money(ledger.getOurBid()));
+        }
+        if (ledger.getFinalPrice() != null) {
+            json.addProperty("salePrice", McpJson.money(ledger.getFinalPrice()));
+            json.addProperty("outcome", ledger.getOutcome());
+        }
     }
 
     /**

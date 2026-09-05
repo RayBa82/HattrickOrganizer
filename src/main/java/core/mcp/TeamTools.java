@@ -10,6 +10,7 @@ import core.model.player.MatchRoleID;
 import core.model.player.Specialty;
 import core.util.AmountOfMoney;
 import module.opponentspy.OppPlayerSkillEstimator;
+import module.transfer.XMLParser;
 import module.teamanalyzer.ht.HattrickManager;
 import module.teamanalyzer.manager.PlayerDataManager;
 import module.teamanalyzer.vo.PlayerInfo;
@@ -26,6 +27,7 @@ import core.model.UserParameter;
 import core.net.Connector;
 import core.net.OnlineWorker;
 import core.util.HODateTime;
+import core.util.HOLogger;
 
 import java.util.List;
 
@@ -136,26 +138,35 @@ public final class TeamTools {
                                                 + "default " + DEFAULT_HOME_MATCHES))),
                         TeamTools::arena),
                 new McpTool("download_team",
-                        "Re-downloads the team from Hattrick and rewrites HO's local database - "
-                                + "squad, finances, staff, stadium, team spirit - then "
-                                + "recalculates sub-skills. Every other tool answers from that "
-                                + "database, so call this when the user has done something in "
-                                + "Hattrick that HO cannot see yet: a transfer, a sacking, a "
-                                + "training change, a new week. Roughly a dozen CHPP requests and "
-                                + "ten to twenty seconds, during which HO's window is frozen, so "
-                                + "call it because something changed, not as a routine refresh. "
-                                + "It does not refresh matches, fixtures, the league table's "
-                                + "played results, hall of fame or youth data - those still need "
-                                + "a manual download in HO. It also replaces HO's stored lineup "
-                                + "with the match order Hattrick currently holds, so a lineup "
-                                + "built in HO but never uploaded is lost: check lineupReplaced "
-                                + "and previousLineup in the result before reporting success - a "
-                                + "null lineupReplaced means HO could not tell either way.",
-                        McpTool.schema(McpTool.properties(
-                                "resolvePrices", McpTool.prop("boolean",
-                                        "also look up what watched market players sold for - a "
-                                                + "burst of extra per-player CHPP lookups, "
-                                                + "default false"))),
+                        "Runs the same download as HO's own Download button and rewrites HO's "
+                                + "local database: squad, finances, staff, stadium, team spirit, "
+                                + "then matches and their lineups, youth match data, league "
+                                + "fixtures and the results other teams have played, hall of "
+                                + "fame, national-team matches for capped players, world league "
+                                + "data - then recalculates sub-skills, resolves what watched "
+                                + "market players sold for, and brings the team's transfer "
+                                + "history up to date. Which of those sections run follows the "
+                                + "filter the user last set in HO's Download dialog; the result's "
+                                + "'sections' says what actually ran. Every other tool answers "
+                                + "from that database, so call this when the user has done "
+                                + "something in Hattrick that HO cannot see yet: a transfer, a "
+                                + "sacking, a training change, a new week. Around twenty to thirty "
+                                + "CHPP requests on a quiet day, but sixty or more in the first "
+                                + "download after a league match day, because every newly played "
+                                + "match costs about six requests of its own - and more again "
+                                + "after a long gap, when matches and youth data backfill. Well "
+                                + "under a minute in the quiet case, several minutes in the worst, "
+                                + "and HO's window is frozen throughout, so call it because "
+                                + "something changed, not as a routine refresh. Two things it "
+                                + "does NOT refresh, both Download-dialog checkboxes that HO does "
+                                + "not persist and so are always off here: the match archive, and "
+                                + "previous-season fixtures. Ask the user to run HO's Download "
+                                + "for those. It also replaces HO's stored lineup with the match "
+                                + "order Hattrick currently holds, so a lineup built in HO but "
+                                + "never uploaded is lost: check lineupReplaced and previousLineup "
+                                + "in the result before reporting success - a null lineupReplaced "
+                                + "means HO could not tell either way.",
+                        McpTool.schema(McpTool.properties()),
                         TeamTools::downloadTeam)
         );
     }
@@ -680,7 +691,7 @@ public final class TeamTools {
     }
 
     /**
-     * Refresh HO's local database from Hattrick.
+     * Refresh HO's local database from Hattrick - everything the Download button downloads.
      * <p>
      * All of it runs inside one {@link LineupTools#onEdt} hop, because
      * {@link OnlineWorker#downloadTeamData()} touches HO's info line and the lineup panel and
@@ -691,18 +702,43 @@ public final class TeamTools {
      * {@code Connector} opens {@code OAuthDialog} on an HTTP 401 and a {@code JOptionPane} on
      * every other CHPP failure, both gated on that flag alone, and a modal dialog on the EDT would
      * block the EDT and the MCP server's single handler thread together, with nothing on the
-     * agent's side able to dismiss it. The wrap spans {@code resolveTransferListings()} too, which
-     * is CHPP traffic of its own. It sits here rather than inside {@code downloadTeamData()}
-     * because HO's Download button must keep those dialogs.
+     * agent's side able to dismiss it. Since the parity sections were added the flag has to cover
+     * {@code Helper.showMessage} too - see the guard there - because the match, fixture and lineup
+     * downloads raise their errors through that rather than through {@code Connector}. It sits
+     * here rather than inside the download routines because HO's Download button must keep those
+     * dialogs.
+     * <p>
+     * <b>Parity, and the two sections that cannot have it.</b> The sections below are
+     * {@code DownloadDialog.startDownload}'s, in its order, through the same extracted methods, and
+     * driven by the same saved {@link UserParameter} filter flags - so what comes down is whatever
+     * the user last ticked in the Download dialog. The match archive and previous-season fixtures
+     * are the exceptions: both are driven by dialog widgets with no persisted form, so a fresh
+     * dialog always starts them unticked and "whatever the user last ticked" is "neither". Old
+     * fixtures could not run here anyway - {@code downloadOldFixtures} opens a modal
+     * {@code LigaAuswahlDialog} per season.
+     * <p>
+     * The one deliberate deviation: team data is downloaded unconditionally, where the dialog
+     * skips it when {@code xmlDownload} is unticked. A tool called {@code download_team} that
+     * silently declined to download the team because of a checkbox in a dialog the agent cannot
+     * see would be worse than useless.
      */
     private static JsonObject downloadTeam(JsonObject args) throws McpToolException {
-        final var resolvePrices = McpJson.optBool(args, "resolvePrices", false);
         return LineupTools.onEdt(() -> {
             // Both before any CHPP traffic, so a refusal costs nothing.
             checkDownloadCap();
             requireTeamSelected();
 
             final var before = lineupSnapshot();
+            // Counted around the WHOLE call, not around the incremental pass, because three
+            // different things write TRANSFER during one download and only the last is ours:
+            // ConvertXml2Hrf.createHrf reconciles the economy's transfer sums against the table and
+            // calls PlayerTransfer.downloadMissingTransfers when they disagree (so a purchase made
+            // since the last download is usually already stored by the time the incremental pass
+            // runs, and it correctly finds nothing); updateTeamTransfers stores the pages the
+            // incremental pass fetched; and updatePlayerTransfers then stores each affected
+            // player's full history. Reporting only the middle one made this field read 0 on a
+            // download that had in fact just fetched a new transfer.
+            final var transfersBefore = DBManager.instance().getTransfers(0, true, true).size();
             final var wasSilent = Connector.instance().setSilentDownload(true);
             try {
                 final OnlineWorker.TeamDownload download;
@@ -713,33 +749,83 @@ public final class TeamTools {
                 }
                 downloadsThisSession++;
 
-                // Without this the training tools read sub-skills computed against the previous
-                // HRF. DownloadDialog:400 does the same after every download - and on the live
-                // model, which is the downloaded one only when the swap actually happened.
-                HOVerwaltung.instance().getModel().calcSubskills();
+                // Settled here rather than at the end of the call, and that is not just tidiness.
+                // downloadTeamData holds the only writer of HO's stored lineup (HRFStringParser
+                // -> HOModel.storeLineup); none of the parity sections below touches it -
+                // getAllLineups stores *match* lineups in MATCHLINEUP, and the dialog never
+                // downloads a next match order at all. Bracketing the whole widened call would
+                // therefore compare the same two things across a much longer window, and would
+                // start reporting an unrelated edit as a replacement the moment anything else on
+                // the EDT touched the lineup mid-download.
+                //
+                // No becameCurrent guard any more. Both snapshots read the stored row rather than
+                // the live model (see lineupSnapshot), and storeModel writes that row whether or
+                // not the model swap happened - so the case that used to report null, "HO cannot
+                // tell", is now answerable. Still null when there was nothing stored to compare
+                // against, which is a fresh install rather than an unknown.
+                Boolean lineupReplaced = null;
+                if (before != null) {
+                    final var after = lineupSnapshot();
+                    lineupReplaced = after != null && !before.equals(after);
+                }
 
-                if (resolvePrices) {
-                    OnlineWorker.resolveTransferListings();
+                final var model = HOVerwaltung.instance().getModel();
+                final var sections = new JsonObject();
+                OnlineWorker.downloadNtMatchesOfCappedPlayers(model);
+                sections.addProperty("nationalTeamMatches", true);
+
+                // The dialog guards everything from here on behind teamId > 0. requireTeamSelected
+                // already established it, but the model may have been swapped since.
+                if (model.getBasics().getTeamId() > 0) {
+                    OnlineWorker.downloadHallOfFameIfActive(model);
+                    sections.addProperty("hallOfFame", true);
+
+                    if (OnlineWorker.anyCurrentMatchTypeSelected()) {
+                        sections.addProperty("matches", OnlineWorker.downloadCurrentMatches(model));
+                    } else {
+                        sections.addProperty("matches", false);
+                    }
+
+                    if (UserParameter.instance().fixtures) {
+                        sections.addProperty("fixtures", OnlineWorker.downloadCurrentFixtures(model));
+                    } else {
+                        sections.addProperty("fixtures", false);
+                    }
+
+                    OnlineWorker.refreshWorldDetailsIfDue();
+                    sections.addProperty("worldDetails", true);
+                }
+
+                // Without this the training tools read sub-skills computed against the previous
+                // HRF. DownloadDialog does the same after every download - and on the live
+                // model, which is the downloaded one only when the swap actually happened.
+                model.calcSubskills();
+
+                // No longer optional. The button runs it on every download, and it is what fills
+                // in the sale price of a watched market player - the scout list's half of a
+                // refresh. Bounded by mcpResolveCap and its own 60s budget, and in the steady
+                // state it costs nothing, because only an expired-and-unresolved entry is a
+                // candidate.
+                OnlineWorker.resolveTransferListings();
+                sections.addProperty("transferPrices", true);
+
+                // Not part of button parity: the dialog never refreshes the transfer history
+                // wholesale, and the Transfers tab only backfills it once, on a database that
+                // holds none at all (TransfersPanel.refresh guards on getTransfers(...).isEmpty()).
+                // So a player bought since the last download could show up in the squad and
+                // nowhere else.
+                final int addedHere = XMLParser.updateTeamTransfersIncremental(
+                        model.getBasics().getTeamId());
+                sections.addProperty("teamTransfers", true);
+                if (addedHere > 0) {
+                    HOLogger.instance().info(TeamTools.class,
+                            "download_team: incremental pass stored " + addedHere + " transfer(s)");
                 }
 
                 // The download only wrote the database. Without this every HO tab keeps showing
                 // the old squad while the agent talks about the new one - worse than not
                 // refreshing at all, because the user's screen now disagrees with the agent.
                 RefreshManager.instance().doReInit();
-                // DownloadDialog:413 ends this way. Without it HO's progress bar stays mid-flight
-                // after the call returns.
-                HOMainFrame.instance().setInformationCompleted();
-
-                // Only comparable when the swap happened. When it did not, HOVerwaltung still
-                // holds the previous model with the user's in-memory lineup, so before and after
-                // are snapshots of the same object and always compare equal - even though
-                // storeModel has already overwritten the stored lineup. Null rather than false:
-                // "HO cannot tell" is not "nothing was lost".
-                Boolean lineupReplaced = null;
-                if (download.becameCurrent() && before != null) {
-                    final var after = lineupSnapshot();
-                    lineupReplaced = after != null && !before.equals(after);
-                }
 
                 final var json = new JsonObject();
                 json.addProperty("hrfId", download.model().getHrfId());
@@ -749,13 +835,24 @@ public final class TeamTools {
                 json.addProperty("becameCurrent", download.becameCurrent());
                 json.addProperty("players", download.model().getCurrentPlayers().size());
                 json.addProperty("subskillsRecalculated", true);
-                json.addProperty("pricesResolved", resolvePrices);
+                json.addProperty("newTransfers",
+                        DBManager.instance().getTransfers(0, true, true).size() - transfersBefore);
+                json.add("sections", sections);
+                json.addProperty("notRefreshed", "match archive and previous-season fixtures - "
+                        + "both are Download-dialog checkboxes that HO does not persist, so they "
+                        + "start off, and old fixtures need a league picker the agent cannot "
+                        + "answer. Ask the user to run HO's own Download for those.");
                 json.addProperty("lineupReplaced", lineupReplaced);
                 json.add("previousLineup",
                         Boolean.TRUE.equals(lineupReplaced) ? before : JsonNull.INSTANCE);
                 return json;
             } finally {
                 Connector.instance().setSilentDownload(wasSilent);
+                // DownloadDialog ends this way. Here it sits in the finally rather than on
+                // the success path: createHrf drives HO's progress bar as it goes, so a failure
+                // part-way through would otherwise leave the info panel stuck mid-download for
+                // the rest of the session.
+                HOMainFrame.instance().setInformationCompleted();
             }
         });
     }
@@ -783,8 +880,22 @@ public final class TeamTools {
     }
 
     /**
-     * The live lineup's positions, or null when HO holds no model yet - on a fresh install the
-     * first download has nothing to compare against.
+     * The <b>stored</b> lineup's positions, or null when HO holds no team or has nothing stored -
+     * on a fresh install the first download has nothing to compare against.
+     * <p>
+     * Read straight from the database rather than from {@code HOVerwaltung}'s live model, and that
+     * is the whole point. The live model gets its lineup from one of two places: after a download
+     * it is the object {@code HRFStringParser} just built, but after a restart it is
+     * {@code HOModel(int)} calling {@code loadNextMatchLineup} - a database round trip. Comparing a
+     * round-tripped object against a freshly parsed one compares two construction paths, not two
+     * lineups, so any field the round trip does not preserve exactly shows up as a difference. That
+     * made the first download after every HO restart report {@code lineupReplaced: true} whether or
+     * not anything had changed, which is worth no more than a flag that never fires.
+     * <p>
+     * Both snapshots now come through {@code loadNextMatchLineup}, so representation cancels and a
+     * difference means the stored row really did change. It also removes the old {@code null}
+     * answer: the comparison no longer depends on the model swap having happened, because
+     * {@code storeModel} writes the lineup either way.
      * <p>
      * No rating model, so no {@code ratings} block: this exists to be compared, and two full
      * rating passes on the EDT to produce a field that would then have to be ignored is a poor
@@ -795,7 +906,11 @@ public final class TeamTools {
         if (model == null || model.getBasics() == null) {
             return null;
         }
-        return LineupTools.describe(model.getCurrentLineup(), null);
+        final var stored = DBManager.instance().loadNextMatchLineup(model.getBasics().getTeamId());
+        if (stored == null || stored.getLineup() == null) {
+            return null;
+        }
+        return LineupTools.describe(stored.getLineup(), null);
     }
 
     /** What the agent is told about a failed download, and whether trying again could help. */

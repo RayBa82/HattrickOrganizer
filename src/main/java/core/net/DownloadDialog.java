@@ -3,35 +3,37 @@ package core.net;
 import core.db.DBManager;
 import core.db.user.UserManager;
 import core.file.hrf.HRFStringParser;
-import core.file.xml.TeamStats;
 import core.gui.HOMainFrame;
 import core.gui.RefreshManager;
 import core.gui.comp.CheckBoxTree.CheckBoxTree;
 import core.gui.comp.panel.ImagePanel;
-import core.model.*;
+import core.model.HOModel;
+import core.model.HOVerwaltung;
+import core.model.TranslationFacility;
+import core.model.UserParameter;
 import core.model.enums.MatchType;
 import core.model.match.MatchKurzInfo;
-import core.model.player.Player;
-import core.module.ModuleManager;
 import core.net.login.ProxyDialog;
 import core.util.HODateTime;
 import core.util.HOLogger;
 import core.util.Helper;
 import module.nthrf.NtTeamChooser;
 import module.nthrf.NthrfUtil;
-import module.series.MatchFixtures;
 import tool.updater.UpdateController;
 
 import javax.swing.*;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
 import java.awt.*;
-import java.awt.event.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.KeyEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
-import java.util.*;
-
-import static core.module.IModule.HALL_OF_FAME;
-import static core.module.IModule.STATUS_DEACTIVATED;
+import java.util.Map;
 
 /**
  * User dialog to download different hattrick data
@@ -277,12 +279,7 @@ public class DownloadDialog extends JDialog implements ActionListener {
 
 		if (UserParameter.instance().xmlDownload) { // download team data
 			bOK = OnlineWorker.getHrf(this);
-			List<Player> player = hov.getModel().getCurrentPlayers();
-			for (Player p : player) {
-				if (p.getNationalTeamId() != null && p.getNationalTeamId() != 0) {
-					OnlineWorker.getMatches(p.getNationalTeamId(), false, true, true);
-				}
-			}
+			OnlineWorker.downloadNtMatchesOfCappedPlayers(hov.getModel());
 		}
 
 		HOModel model = hov.getModel();
@@ -291,29 +288,10 @@ public class DownloadDialog extends JDialog implements ActionListener {
 		int progressIncrement = 3;
 		if (teamId > 0) {
 
-            // Check if Hall Of Fame module is active
-            if ( ModuleManager.instance().getModule(HALL_OF_FAME).getStatus() != STATUS_DEACTIVATED){
-                HOMainFrame.instance().setInformation(Helper.getTranslation("ls.update_status.hall_of_fame"), progressIncrement);
-                var hallOfFamesPlayer = OnlineWorker.downloadHallOfFame(teamId);
-                model.setHallOfFamesPlayers(hallOfFamesPlayer);
-                DBManager.instance().storeHallOfFame(model.getHrfId(), hallOfFamesPlayer);
-            }
+            OnlineWorker.downloadHallOfFameIfActive(model);
 
 			if (this.downloadFilter.isChecked(filterRoot.getCurrentMatches())) {
-				// Only get lineups for own fixtures
-				HOMainFrame.instance().setInformation(Helper.getTranslation("ls.update_status.match_info"), progressIncrement);
-				bOK = (OnlineWorker.getMatches(teamId, false, true, true) != null);
-				if (bOK) {
-					OnlineWorker.getAllLineups(10);
-				}
-
-				if (model.getBasics().hasYouthTeam()) {
-					var dateSinceTimestamp = DBManager.instance().getMinScoutingDate();
-					var dateSince = HODateTime.fromDbTimestamp(dateSinceTimestamp);
-					OnlineWorker.downloadMissingYouthMatchData(model, dateSince);
-					// delete old youth match lineups, no longer needed (no current youth player has trained then)
-					DBManager.instance().deleteYouthMatchDataBefore(dateSinceTimestamp);
-				}
+				bOK = OnlineWorker.downloadCurrentMatches(model);
 			}
 			if (bOK && m_jchMatchArchive.isSelected()) {
 				HOMainFrame.instance().setInformation(Helper.getTranslation("ls.update_status.match_info"), progressIncrement);
@@ -328,49 +306,7 @@ public class DownloadDialog extends JDialog implements ActionListener {
 			}
 
 			if (bOK && UserParameter.instance().fixtures) {
-				// in the last week of a season the LeagueLevelUnitID switches to the next season's value (no fixtures are available then)
-				if (model.getBasics().getSpieltag() < 16) {
-					HOMainFrame.instance().setInformation(Helper.getTranslation("ls.update_status.fixtures"), progressIncrement);
-					var leagueId = model.getXtraDaten().getLeagueLevelUnitID();
-					var fixtures = OnlineWorker.downloadLeagueFixtures(-1, leagueId);
-					if (fixtures != null) {
-						if ( fixtures.getMatches().isEmpty()){
-							// Matches are not available from hattrick. Initialize them
-							var teamStats = OnlineWorker.getSeriesDetails(leagueId);
-							var newFixtures = MatchFixtures.createFixtures(model.getXtraDaten().getSeriesMatchDate(),
-									teamStats.values().stream().sorted(Comparator.comparing(TeamStats::getPosition)).toList());
-							fixtures.addFixtures(newFixtures);
-						}
-						final MatchFixtures modelFixtures = hov.getModel().getFixtures();
-						if (modelFixtures != null) {
-							// state of previous download
-							var oldDownloadedFixtures = modelFixtures.getMatches();
-							// extract played matches of foreign teams
-							var newPlayedMatchesOfOtherTeams = fixtures.getMatches().stream()
-									.filter(i -> i.getToreHeim() >= 0 && i.getHeimId() != teamId && i.getGastId() != teamId)
-									.toList();
-							if (oldDownloadedFixtures != null) {
-								// matches that were not played on previous download
-								var notPlayedYet = oldDownloadedFixtures.stream()
-										.filter(i -> i.getToreHeim() < 0)
-										.toList();
-								// intersection of both lists gives the list of played matches since previous download
-								var latestPlayedMatches = newPlayedMatchesOfOtherTeams.stream()
-										.filter(i -> notPlayedYet.stream().anyMatch(j -> j.getMatchId() == i.getMatchId()))
-										.toList();
-								for (var m : latestPlayedMatches) {
-									if (!OnlineWorker.downloadMatchData(m.getMatchId(), MatchType.LEAGUE, true)) {
-										HOLogger.instance().error(OnlineWorker.class, "Error fetching Match: " + m.getMatchId());
-										break;
-									}
-								}
-							}
-						}
-						hov.getModel().saveFixtures(fixtures);
-					} else {
-						bOK = false;
-					}
-				}
+				bOK = OnlineWorker.downloadCurrentFixtures(model);
 			}
 
 			if (bOK) {
@@ -387,13 +323,7 @@ public class DownloadDialog extends JDialog implements ActionListener {
 				downloadOldFixtures(teamId, selection);
 			}
 
-			if (WorldDetailLeague.checkWorldDetailsDownload()) {
-				HOMainFrame.instance().setInformation(Helper.getTranslation("ls.update_status.world_details"), progressIncrement);
-				var allLeagues = OnlineWorker.downloadWorldDetails();
-				DBManager.instance().storeWorldDetailLeagues(allLeagues);
-				WorldDetailsManager.instance().refresh();
-				WorldDetailLeague.setLatestDownloadNow();
-			}
+			OnlineWorker.refreshWorldDetailsIfDue();
 		}
 
 		HOMainFrame.instance().setInformation(Helper.getTranslation("ls.update_status.calc_subskills"), progressIncrement);

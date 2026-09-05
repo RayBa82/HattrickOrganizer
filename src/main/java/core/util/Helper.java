@@ -244,10 +244,22 @@ public class Helper {
 	/**
 	 * Display a message dialog
 	 * Recursions are prevented
+	 * <p>
+	 * Nothing is shown while a silent download is in progress. {@code Connector} already gates its
+	 * own two dialogs on that flag, but the ~11 error dialogs {@code OnlineWorker} raises around
+	 * matches, fixtures and lineups come through here instead, and only one of them
+	 * ({@code downloadMatchData}) ever checked. A modal dialog raised from a silent download blocks
+	 * the event dispatch thread and, when the caller is the MCP server, its single handler thread
+	 * with it - and there is nobody on the agent's side who could dismiss it. The guard sits here
+	 * rather than at each call site because every one of them routes through this method.
 	 */
 	public static void showMessage(Component parent, String message, String titel, int typ) {
 		//new gui.ShowMessageThread( parent, message, titel, typ );
 		//Ignorieren, wenn schon ein Fehler angezeigt wird.
+		if (core.net.Connector.instance().isSilentDownload()) {
+			HOLogger.instance().warning(Helper.class, titel + ": " + message);
+			return;
+		}
 		if (!paneShown) {
 			paneShown = true;
 			javax.swing.JOptionPane.showMessageDialog(parent, message, titel, typ);

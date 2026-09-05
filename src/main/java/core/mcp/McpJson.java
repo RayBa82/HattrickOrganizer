@@ -259,12 +259,18 @@ public final class McpJson {
     /**
      * One entry of HO's local transfer scout list. Price and deadline are the snapshot taken when
      * the player was added, not the live market state.
+     * <p>
+     * {@code price} is the scout table's own column, which holds the higher of the asking price and
+     * the highest bid; the seller's asking price on its own lives in the TRANSFERLISTING snapshot.
      */
     public static JsonObject scoutEntry(module.transfer.scout.ScoutEintrag entry) {
         final var json = new JsonObject();
         json.addProperty("playerId", entry.getPlayerID());
         json.addProperty("playerName", entry.getName());
-        json.addProperty("askingPrice", money(entry.getPrice()));
+        // The scout's single price column is max(asking price, highest bid) - it is what it would
+        // cost to take the player now, not what the seller asked. TransferTools.listScout adds the
+        // two apart from the listing snapshot the entry was built from.
+        json.addProperty("price", money(entry.getPrice()));
         json.addProperty("deadline", entry.getDeadline() == null ? null
                 : HODateTime.fromDbTimestamp(entry.getDeadline()).toHT());
         json.addProperty("note", entry.getInfo());

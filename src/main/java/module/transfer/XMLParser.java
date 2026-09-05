@@ -13,6 +13,8 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Vector;
+import java.util.function.IntFunction;
+import java.util.function.IntPredicate;
 
 import core.util.StringUtils;
 import org.w3c.dom.Document;
@@ -259,6 +261,67 @@ public final class XMLParser {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Refresh this team's transfer history, fetching only what the database is missing.
+     * <p>
+     * {@link #updateTeamTransfers(int)} re-pages the entire lifetime history on every call and then
+     * makes one {@code transfersPlayer} request per player it saw. That is fine behind a button a
+     * user presses now and then - for a team with a few hundred transfers it is a dozen
+     * {@code transfersTeam} pages plus twenty-odd player lookups - but far too much for something
+     * that runs on every download. This stops at the first page that holds nothing new and only
+     * looks up the players whose transfers were new, which in the steady state is one page and no
+     * player lookups at all.
+     * <p>
+     * Pages come newest-first, so "every transfer on this page is already stored" means everything
+     * older is stored too. The stop test deliberately runs over the whole page rather than over the
+     * date-filtered part: a transfer outside the stored window is never written, so testing the
+     * filtered list would make such a page look permanently new and never terminate.
+     *
+     * @return how many transfers were stored
+     */
+    public static int updateTeamTransfersIncremental(int teamId) {
+        var fresh = collectNewTransfers(
+                page -> downloadTeamTransfers(teamId, page),
+                transferId -> DBManager.instance().loadPlayerTransfer(transferId) != null,
+                HODateTime.now().plus(1, ChronoUnit.DAYS));
+        if (fresh.isEmpty()) {
+            return 0;
+        }
+        for (var player : updateTeamTransfers(fresh)) {
+            updatePlayerTransfers(player.getPlayerId());
+        }
+        return fresh.size();
+    }
+
+    /**
+     * The paging and stop rule on its own, so it can be exercised without a network or a database.
+     *
+     * @param pager   fetches one page of transfers, newest page first
+     * @param isknown whether the database already holds that transfer id
+     * @param endDate the newest transfer date worth storing
+     */
+    static List<PlayerTransfer> collectNewTransfers(IntFunction<List<PlayerTransfer>> pager,
+                                                    IntPredicate isknown, HODateTime endDate) {
+        final var fresh = new ArrayList<PlayerTransfer>();
+        for (int page = 0; ; page++) {
+            var transfers = pager.apply(page);
+            if (transfers.isEmpty()) {
+                break;
+            }
+            var missing = transfers.stream()
+                    .filter(t -> !isknown.test(t.getTransferId()))
+                    .toList();
+            if (missing.isEmpty()) {
+                break;
+            }
+            missing.stream()
+                    .filter(t -> !t.getDate().isBefore(PlayerTransfer.activatedDate)
+                            && !t.getDate().isAfter(endDate))
+                    .forEach(fresh::add);
+        }
+        return fresh;
     }
 
     /**
