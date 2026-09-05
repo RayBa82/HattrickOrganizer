@@ -1456,3 +1456,33 @@ serialised (`McpJson.listing`) - `topSkillsOnly` was deleting it on the way out.
 **Verification:** full suite green - 705 tests, 0 failures. The two `TransferToolsTest` cases from
 the previous entry now assert the opposite for set pieces: 20 on the squad player survives into
 `setPieces` and stays out of `topSkills`, 13 on the listing survives the flat-key trim.
+
+## `get_stadium` — the arena sizer over MCP (2026-09-05)
+
+`get_finances` already carried the stands, and it kept getting asked a question it could not answer:
+how big *should* the stadium be. The maths for that had been sitting in `tool/arenasizer` since long
+before the MCP server — `ArenaSizer.calcConstructionArenas` (Hattrick's 60 / 23.5 / 14 / 2.5 percent
+split across terraces, basic seating, roof and VIP), `ArenaRebuild` (per-seat build cost plus the
+flat 100 000 fee, and demolition credit for shrinking), `ArenaMaintenance` and `ArenaAdmission` —
+reachable only from the Swing arena tool.
+
+`get_stadium` (`TeamTools`, tool 33) exposes it. It reuses the existing `stadium()` block verbatim
+so the stands, expansion in progress, recent home attendance and utilisation read the same as under
+`get_finances`, then adds the current arena's weekly maintenance and its sold-out gate receipts, and
+finally three sized arenas from the fan club: pessimistic, normal, optimistic (15 / 20 / 25
+spectators per supporter, the sizer's own constants). Each plan carries the sectors it would have,
+the delta to build per sector, the rebuild cost, and its own maintenance and sold-out gate — an
+expansion is a running-cost decision, not just a build-cost one. `supporters` overrides the fan
+club, `capacity` prices one specific target size instead of the three scenarios (via the sizer's
+three-size overload, asked for the same number thrice).
+
+Two things the sizer does that surprise on first read and are now pinned by tests: the sector splits
+truncate, so a "12 500" arena is 12 499 seats; and a plan with nothing to build costs zero, not the
+100 000 fixed fee — `ArenaRebuild.calculateCosts` short-circuits on all-zero deltas.
+
+**Verification:** `./gradlew test --tests "core.mcp.*"` green, 92 tests. Unlike the other tool tests
+this one is not surface-only — `TeamTools.plan` is pure, so the two new cases assert real sector
+deltas and real money against hand-computed krona.
+
+**Not shipped:** source only. The running server is the installed bundle, so this is invisible to
+`~/hattrick` until `./gradlew dmg` and a relaunch.
