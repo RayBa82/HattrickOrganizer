@@ -48,73 +48,139 @@ public class OnlineWorker {
 	private OnlineWorker() {
 	}
 
+	/** Why a team download produced nothing. The dialog wording stays in the UI layer. */
+	public enum Failure { NO_TEAM, CHPP_ERROR, PLAYING_MATCH, NO_DATA, UNPARSEABLE }
+
 	/**
-	 * Get and optionally save HRF
-	 *
+	 * A team download that stored nothing, carrying a machine-readable reason.
+	 * <p>
+	 * One exception type with a reason code rather than one type per outcome, because
+	 * {@link #getHrf} has to reproduce five different existing responses and because the MCP tool
+	 * wants something to switch on rather than a string to match against.
+	 */
+	public static class DownloadFailed extends Exception {
+		public final Failure reason;
+
+		public DownloadFailed(Failure reason, String message) {
+			this(reason, message, null);
+		}
+
+		public DownloadFailed(Failure reason, String message, Throwable cause) {
+			super(message, cause);
+			this.reason = reason;
+		}
+	}
+
+	/** What one team download produced. */
+	public record TeamDownload(String hrf, HOModel model, boolean becameCurrent) {
+	}
+
+	/**
+	 * Download the team from Hattrick, parse it and store it: everything {@link #getHrf} does apart
+	 * from the dialogs and the .hrf file save, in the same order.
+	 * <p>
+	 * Silent, not headless. It still writes HO's info line and calls
+	 * {@code backupRealGameSettings()} on the lineup panel, so it must run on the event dispatch
+	 * thread. What it never does is open a modal dialog: on the MCP server's single handler thread
+	 * that would block the EDT and the server together, with nothing on the agent's side able to
+	 * dismiss it.
+	 */
+	public static TeamDownload downloadTeamData() throws DownloadFailed {
+		final var hov = HOVerwaltung.instance();
+		final String hrf;
+		try {
+			hrf = ConvertXml2Hrf.createHrf();
+		} catch (IOException e) {
+			throw new DownloadFailed(Failure.CHPP_ERROR, getLangString("Downloadfehler")
+					+ " : Error converting xml 2 HRF. Corrupt/Missing Data : ", e);
+		}
+		if (hrf == null) {
+			throw new DownloadFailed(Failure.NO_TEAM, "No team selected.");
+		}
+		if (hrf.contains("playingMatch=true")) {
+			throw new DownloadFailed(Failure.PLAYING_MATCH, getLangString("NO_HRF_Spiel"));
+		}
+		if (hrf.contains("NOT AVAILABLE")) {
+			throw new DownloadFailed(Failure.NO_DATA, getLangString("NO_HRF_ERROR"));
+		}
+
+		// Create HOModel from the hrf data
+		final var homodel = HRFStringParser.parse(hrf);
+		if (homodel == null) {
+			throw new DownloadFailed(Failure.UNPARSEABLE, getLangString("Importfehler"));
+		}
+
+		// save the model in the database
+		homodel.storeModel();
+		homodel.setFixtures(hov.getModel().getFixtures());
+		// Add old players to the model
+		homodel.setFormerPlayers(DBManager.instance().loadAllPlayers());
+		// Only update when the model is newer than existing
+		final var becameCurrent = HOVerwaltung.isNewModel(homodel);
+		if (becameCurrent) {
+			hov.setModel(homodel);
+			// reset value of TS, confidence in Lineup Settings Panel after data download
+			Objects.requireNonNull(HOMainFrame.instance().getLineupPanel()).backupRealGameSettings();
+		}
+		return new TeamDownload(hrf, homodel, becameCurrent);
+	}
+
+	/**
+	 * Get and optionally save HRF.
+	 * <p>
+	 * Behaviour is unchanged: the download itself moved to {@link #downloadTeamData()} and what is
+	 * left here is the dialogs that used to sit inline in it.
 	 */
 	public static boolean getHrf(JDialog parent) {
-		// Show wait dialog
-		boolean ok = true;
 		try {
-			HOVerwaltung hov = HOVerwaltung.instance();
-			String hrf = null;
-			try {
-				hrf = ConvertXml2Hrf.createHrf();
-				if (hrf == null) {
-					return false;
-				}
-
-			} catch (IOException e) {
-				// Info
-				String msg = getLangString("Downloadfehler")
-						+ " : Error converting xml 2 HRF. Corrupt/Missing Data : ";
-				setInfoMsg(msg, InfoPanel.FEHLERFARBE);
-				Helper.showMessage(parent, msg + "\n" + e + "\n", getLangString("Fehler"),
-						JOptionPane.ERROR_MESSAGE);
-				ok = false;
-			}
-
-			if (hrf != null) {
-				if (hrf.contains("playingMatch=true")) {
-					HOMainFrame.instance().resetInformation();
-					JOptionPane.showMessageDialog(parent, getLangString("NO_HRF_Spiel"),
-							getLangString("NO_HRF_ERROR"), JOptionPane.INFORMATION_MESSAGE);
-				} else if (hrf.contains("NOT AVAILABLE")) {
-					HOMainFrame.instance().resetInformation();
-					JOptionPane.showMessageDialog(parent, getLangString("NO_HRF_ERROR"),
-							getLangString("NO_HRF_ERROR"), JOptionPane.INFORMATION_MESSAGE);
-				} else {
-					// Create HOModel from the hrf data
-					HOModel homodel = HRFStringParser.parse(hrf);
-					if (homodel == null) {
-						// Info
-						setInfoMsg(getLangString("Importfehler"), InfoPanel.FEHLERFARBE);
-						// Error
-						Helper.showMessage(parent, getLangString("Importfehler"),
-								getLangString("Fehler"), JOptionPane.ERROR_MESSAGE);
-					} else {
-						// save the model in the database
-						homodel.storeModel();
-						homodel.setFixtures(hov.getModel().getFixtures());
-						// Add old players to the model
-						homodel.setFormerPlayers(DBManager.instance().loadAllPlayers());
-						// Only update when the model is newer than existing
-						if (HOVerwaltung.isNewModel(homodel)) {
-							// Show
-							hov.setModel(homodel);
-							// reset value of TS, confidence in Lineup Settings Panel after data download
-							Objects.requireNonNull(HOMainFrame.instance().getLineupPanel()).backupRealGameSettings();
-						}
-						// Info
-						saveHRFToFile(parent,hrf);
-					}
-				}
-			}
+			saveHRFToFile(parent, downloadTeamData().hrf());
+			return true;
+		} catch (DownloadFailed e) {
+			return report(parent, e);
 		} finally {
-			HOMainFrame.instance().setInformation(getLangString("HRFErfolg"),0);
+			HOMainFrame.instance().setInformation(getLangString("HRFErfolg"), 0);
 			//HOMainFrame.instance().resetInformation();
 		}
-		return ok;
+	}
+
+	/**
+	 * The dialog {@link #getHrf} used to show for each failure, and the boolean it used to return.
+	 * <p>
+	 * The three {@code true} returns are deliberate. After a mid-match skip, a NOT AVAILABLE answer
+	 * or a parse failure nothing was stored, yet the old code left {@code ok} true and
+	 * {@link DownloadDialog} carried on downloading matches, fixtures and prices. That oddity is
+	 * preserved: this method's contract is that the Download button behaves exactly as before.
+	 * Changing when it flips is a separate decision with its own testing. The MCP tool does not
+	 * inherit it - to it all five reasons are errors, because in all five nothing was stored.
+	 */
+	private static boolean report(JDialog parent, DownloadFailed failure) {
+		switch (failure.reason) {
+			case NO_TEAM -> {
+				return false;
+			}
+			case CHPP_ERROR -> {
+				setInfoMsg(failure.getMessage(), InfoPanel.FEHLERFARBE);
+				Helper.showMessage(parent, failure.getMessage() + "\n" + failure.getCause() + "\n",
+						getLangString("Fehler"), JOptionPane.ERROR_MESSAGE);
+				return false;
+			}
+			case PLAYING_MATCH -> {
+				HOMainFrame.instance().resetInformation();
+				JOptionPane.showMessageDialog(parent, getLangString("NO_HRF_Spiel"),
+						getLangString("NO_HRF_ERROR"), JOptionPane.INFORMATION_MESSAGE);
+			}
+			case NO_DATA -> {
+				HOMainFrame.instance().resetInformation();
+				JOptionPane.showMessageDialog(parent, getLangString("NO_HRF_ERROR"),
+						getLangString("NO_HRF_ERROR"), JOptionPane.INFORMATION_MESSAGE);
+			}
+			case UNPARSEABLE -> {
+				setInfoMsg(getLangString("Importfehler"), InfoPanel.FEHLERFARBE);
+				Helper.showMessage(parent, getLangString("Importfehler"), getLangString("Fehler"),
+						JOptionPane.ERROR_MESSAGE);
+			}
+		}
+		return true;
 	}
 
 	/**
