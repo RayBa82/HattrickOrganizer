@@ -18,6 +18,8 @@ import tool.arenasizer.ArenaMaintenance;
 import tool.arenasizer.ArenaSizer;
 import tool.arenasizer.Stadium;
 
+import core.net.OnlineWorker;
+
 import java.util.List;
 
 /** The read only view of the team HO already knows about. */
@@ -611,5 +613,38 @@ public final class TeamTools {
             }
         }
         return json;
+    }
+
+    /** What the agent is told about a failed download, and whether trying again could help. */
+    record DownloadAdvice(String message, boolean retryable) {
+    }
+
+    /**
+     * The agent-facing rendering of an {@link OnlineWorker.Failure}. Unlike HO's Download button,
+     * all five reasons are errors here, because in all five nothing was stored.
+     * <p>
+     * A switch expression with no {@code default} on purpose: a constant added to
+     * {@link OnlineWorker.Failure} without a case here must fail the build, not return a blank
+     * error to an agent.
+     *
+     * @param detail the exception's own message, used where Hattrick's wording is the only thing
+     *               that says what actually went wrong
+     */
+    static DownloadAdvice advice(OnlineWorker.Failure reason, String detail) {
+        return switch (reason) {
+            case PLAYING_MATCH -> new DownloadAdvice(
+                    "Hattrick is playing your match right now and will not export team data. "
+                            + "Try again after it finishes.", true);
+            case NO_DATA -> new DownloadAdvice(
+                    "Hattrick returned no team data.", true);
+            case CHPP_ERROR -> new DownloadAdvice(
+                    "Hattrick refused the download: " + detail, false);
+            case UNPARSEABLE -> new DownloadAdvice(
+                    "HO could not read what Hattrick sent back. Retrying will not help - this is "
+                            + "worth reporting to the user, who can check HO's log.", false);
+            case NO_TEAM -> new DownloadAdvice(
+                    "No team is selected in HO, so there is nothing to download. Only the user can "
+                            + "fix this, in HO.", false);
+        };
     }
 }

@@ -4,6 +4,7 @@ import core.file.xml.SafeInsertMap;
 import core.util.AmountOfMoney;
 import module.opponentspy.OppPlayerSkillEstimator;
 import module.teamanalyzer.vo.PlayerInfo;
+import core.net.OnlineWorker;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -259,5 +260,25 @@ class TeamToolsTest {
         // a single yellow is worth reporting but does not stop him playing
         assertThat(map(bruised).get("bookingStatus").getAsString()).isEqualTo("yellow");
         assertThat(map(bruised).get("available").getAsBoolean()).isTrue();
+    }
+    @Test
+    void downloadAdvice_coversEveryFailureReasonAndSaysWhatIsWorthRetrying() {
+        // exhaustive by construction - this loop fails the moment a reason maps to nothing
+        for (final var reason : OnlineWorker.Failure.values()) {
+            assertThat(TeamTools.advice(reason, "detail").message())
+                    .as("advice for %s", reason).isNotBlank();
+        }
+        assertThat(TeamTools.advice(OnlineWorker.Failure.PLAYING_MATCH, null).retryable()).isTrue();
+        assertThat(TeamTools.advice(OnlineWorker.Failure.NO_DATA, null).retryable()).isTrue();
+        assertThat(TeamTools.advice(OnlineWorker.Failure.CHPP_ERROR, "boom").retryable()).isFalse();
+        assertThat(TeamTools.advice(OnlineWorker.Failure.UNPARSEABLE, null).retryable()).isFalse();
+        assertThat(TeamTools.advice(OnlineWorker.Failure.NO_TEAM, null).retryable()).isFalse();
+    }
+
+    @Test
+    void downloadAdvice_passesHattricksOwnWordingThroughForAChppError() {
+        // the underlying message verbatim - it is the only thing that says what actually broke
+        assertThat(TeamTools.advice(OnlineWorker.Failure.CHPP_ERROR, "Corrupt/Missing Data").message())
+                .contains("Corrupt/Missing Data");
     }
 }
