@@ -2,6 +2,7 @@ package core.net;
 
 import core.db.DBManager;
 import core.db.TransferListing;
+import core.file.xml.XMLPlayersParser;
 import core.util.HODateTime;
 import core.util.HOLogger;
 import module.transfer.XMLParser;
@@ -48,6 +49,16 @@ public final class TransferListingResolver {
     private static final java.time.Duration SCOUT_RETRY_GRACE = java.time.Duration.ofDays(14);
 
     /**
+     * How long after its deadline an unsold scout entry is still watched for a re-listing.
+     * <p>
+     * Longer than {@link #SCOUT_RETRY_GRACE} on purpose: that one bounds "what did he sell for", a
+     * question a completed transfer answers immediately, so a fortnight is generous. This bounds
+     * "is he back", which a seller may take months to answer - a young prospect withdrawn from the
+     * market is exactly the case where the wait is long and the payoff is highest.
+     */
+    private static final java.time.Duration SCOUT_WATCH_GRACE = java.time.Duration.ofDays(90);
+
+    /**
      * What the cap is actually protecting, and it is not a CHPP quota.
      * <p>
      * {@code transfersPlayer} is an ordinary read file: HO's own Transfers module already loops it
@@ -76,21 +87,51 @@ public final class TransferListingResolver {
         var calls = 0;
         final var seen = new HashSet<Integer>();
 
-        // The scout list first. It is short, it is what the user is actually waiting on, and its
-        // entries are not necessarily in TRANSFERLISTING at all: only the MCP search snapshots hits
-        // into that corpus, so a player added from HO's own transfer search tab or typed in by hand
-        // would otherwise never be resolved by the loop below.
+        // Half the cap, not all of it. SCOUT_WATCH_GRACE is six and a half times SCOUT_RETRY_GRACE,
+        // and a fresh ScoutEintrag defaults its deadline to the moment it was created
+        // (ScoutEintrag.java:22), so a hand-typed entry is a candidate from day one and stays one
+        // for 90 days. Unbounded, a long scout list would eat the whole run and the corpus pass
+        // below would never start.
+        //
+        // The per-candidate cost also doubled with this pass - one observe, plus one resolvePlayer
+        // while the entry is still inside SCOUT_RETRY_GRACE - so against the halved cap the scout
+        // pass gets through roughly a quarter as many entries per run as it used to. Ample at the
+        // default mcpResolveCap of 200; worth knowing if a user turns that right down.
+        final var scoutCap = Math.max(1, cap / 2);
+        final var looked = new HashSet<Integer>();   // playerdetails fetched for him this run
         for (final var candidate : scoutCandidates(now)) {
-            if (spent(calls, cap, deadline)) {
+            if (spent(calls, scoutCap, deadline)) {
                 break;
             }
-            if (!seen.add(candidate.playerId())) {
+            if (!looked.add(candidate.playerId())) {
                 continue;
             }
-            final var outcome = resolvePlayer(candidate.playerId(), candidate.deadline(), now);
-            calls += outcome.calls();
-            if (outcome.resolved()) {
-                resolved++;
+            final var observation = observe(candidate.playerId(), now);
+            calls++;
+            final var action = scoutAction(observation != null && observation.transferListed(),
+                    candidate.deadline(), now);
+            // The sale question first, and before the refresh: step 3 moves the deadline forward,
+            // after which isTheWatchedTransfer can never line this sale up with this entry again.
+            //
+            // ponytail: no SELLERTEAMID column on TRANSFERLISTING, so this still costs a
+            // transfersPlayer call - add the column and compare observation.owningTeamId() against
+            // it if the scout list ever grows enough for one call per watched entry to matter.
+            if (action.askAboutSale()) {
+                // Only here does he become "seen", because seen means "his sale has been asked
+                // about this run" and nothing else. Marking him on the look alone would be a
+                // regression: SCOUT_WATCH_GRACE is far wider than the window scoutAction asks in,
+                // so most candidates fall past this branch, and seen would then make the corpus
+                // loop below skip their TRANSFERLISTING rows for up to 90 days - rows the old,
+                // narrower candidate window left it free to resolve.
+                seen.add(candidate.playerId());
+                final var outcome = resolvePlayer(candidate.playerId(), candidate.deadline(), now);
+                calls += outcome.calls();
+                if (outcome.resolved()) {
+                    resolved++;
+                }
+            }
+            if (action.refreshEntry()) {
+                recordRelistingOnScoutList(candidate.playerId(), observation);
             }
         }
 
@@ -102,9 +143,11 @@ public final class TransferListingResolver {
                 break;
             }
             if (!seen.add(listing.getPlayerId())) {
-                continue;                      // already handled this player in this run
+                continue;                      // his sale was already asked about this run
             }
-            calls += fillMissingSkills(listing, now);
+            if (looked.add(listing.getPlayerId())) {
+                calls += observeForCorpus(listing, now);
+            }
             if (spent(calls, cap, deadline)) {
                 break;
             }
@@ -121,15 +164,17 @@ public final class TransferListingResolver {
     }
 
     /**
-     * Scouted players whose watched transfer has ended and whose sale price HO does not know.
+     * Scouted players whose watched transfer has ended: either his sale price is still unknown, or
+     * he is worth re-checking in case the seller has put him back on the market.
      * <p>
-     * Only for a while after the deadline. A scout entry has nowhere to record "looked, no sale"
-     * the way a listing row does, so without a cut-off an entry that never sold - withdrawn, or no
-     * bidder - would cost a CHPP call on every download for as long as it stayed on the list.
-     * A completed transfer is visible immediately, so a fortnight is generous.
+     * Bounded, because a scout entry has nowhere to record "looked, no sale" the way a listing row
+     * does - without a cut-off an entry that never sold would cost a CHPP call on every download
+     * for as long as it stayed on the list. {@link #SCOUT_WATCH_GRACE} is the wider of the two
+     * windows and so is the one that bounds the candidate set; {@link #scoutAction} decides which
+     * of the two questions each candidate is still inside.
      */
     private static List<Candidate> scoutCandidates(HODateTime now) {
-        final var giveUpBefore = new HODateTime(now.getInstant().minus(SCOUT_RETRY_GRACE));
+        final var giveUpBefore = new HODateTime(now.getInstant().minus(SCOUT_WATCH_GRACE));
         final var candidates = new ArrayList<Candidate>();
         for (final var entry : ScoutList.entries()) {
             if (entry.isSold() || entry.getDeadline() == null) {
@@ -172,19 +217,52 @@ public final class TransferListingResolver {
     }
 
     /**
-     * Give the corpus this player's skills if no snapshot of him carries any, so his price becomes
-     * a usable comparable rather than a number with nothing attached.
+     * Look at one player on the market and, if he is actually listed, snapshot him into the corpus.
      * <p>
-     * A search hit arrives with the full skill block, so this is for the rows that do not: anything
-     * from {@code currentbids} - bookmarks, mother-club, finished transfers, your own listings -
-     * and the occasional search hit whose deadline passed before it was fetched, which Hattrick
-     * returns stripped of everything but its market data.
+     * The skills-fill pass and the re-listing watch are the same operation - "call playerdetails,
+     * and if he is listed store a full row" - so they share one call rather than spending two.
      * <p>
-     * Runs before the sale resolve, so a row cannot be marked looked-at while still skill-less.
+     * Deliberately unguarded. The corpus pass's two short-circuits live at its own call site (see
+     * {@link #observeForCorpus}) and must not move in here: a scout entry normally <em>does</em>
+     * already have skill data, from the search hit it was created from, and it is exactly the entry
+     * worth re-checking.
+     *
+     * @return what Hattrick said, or null if the call failed
+     */
+    private static XMLPlayersParser.MarketPlayer observe(int playerId, HODateTime now) {
+        try {
+            final var m = OnlineWorker.downloadMarketPlayer(String.valueOf(playerId));
+            if (m == null || m.player().getPlayerId() == 0) {
+                return null;
+            }
+            if (m.transferListed()) {
+                DBManager.instance().storeTransferListing(
+                        TransferListing.fromPlayerDetails(m, now));
+            }
+            return m;
+        } catch (Exception e) {
+            HOLogger.instance().error(TransferListingResolver.class, e);
+            return null;
+        }
+    }
+
+    /**
+     * The corpus pass's use of {@link #observe}, with the two guards that belong to it and not to
+     * the watch.
+     * <p>
+     * A row already backed by a skill-bearing snapshot needs nothing, and a row whose deadline is
+     * more than {@link #SKILL_FILL_GRACE} old describes a player who has since been at his new club
+     * long enough to train - filing today's skills against that listing would let him vote in a
+     * valuation under skills he did not have when he sold.
+     * <p>
+     * Note what this pass can and cannot do, which the old code obscured: it stores something only
+     * when the player happens to be on the market again right now. The rows it was written for are
+     * unlisted players by definition, and Hattrick prunes an unlisted player's skills to stamina.
+     * That slice of the corpus is unfillable by any means.
      *
      * @return how many CHPP calls this made
      */
-    private static int fillMissingSkills(TransferListing listing, HODateTime now) {
+    private static int observeForCorpus(TransferListing listing, HODateTime now) {
         if (DBManager.instance().transferListingHasSkillData(listing.getPlayerId())) {
             return 0;
         }
@@ -192,18 +270,10 @@ public final class TransferListingResolver {
                 .plus(SKILL_FILL_GRACE).isBefore(now.getInstant())) {
             return 0;                          // long sold; today's skills are not the sale's
         }
-        try {
-            final var m = OnlineWorker.downloadMarketPlayer(
-                    String.valueOf(listing.getPlayerId()));
-            if (m != null && m.player().getPlayerId() != 0 && m.transferListed()) {
-                DBManager.instance().storeTransferListing(
-                        TransferListing.fromPlayerDetails(m, now));
-            }
-        } catch (Exception e) {
-            HOLogger.instance().error(TransferListingResolver.class, e);
-        }
+        observe(listing.getPlayerId(), now);
         return 1;
     }
+
 
     /** What one player cost us, and whether it produced a price. */
     private record Outcome(int calls, boolean resolved) {}
@@ -290,6 +360,21 @@ public final class TransferListingResolver {
     private static void recordOnScoutList(int playerId, long salePriceSek, HODateTime soldAt) {
         try {
             ScoutList.recordSale(playerId, salePriceSek, soldAt, SALE_WINDOW);
+        } catch (Exception e) {
+            HOLogger.instance().error(TransferListingResolver.class, e);
+        }
+    }
+
+    /**
+     * If the re-listed player is on the scout list, move his entry onto the new transfer.
+     * <p>
+     * Best effort, for the same reason {@link #recordOnScoutList} is: a failure here must not undo
+     * the TRANSFERLISTING row that {@link #observe} has already stored.
+     */
+    private static void recordRelistingOnScoutList(int playerId,
+                                                   XMLPlayersParser.MarketPlayer m) {
+        try {
+            ScoutList.recordRelisting(playerId, m.askingPrice(), m.highestBid(), m.deadline());
         } catch (Exception e) {
             HOLogger.instance().error(TransferListingResolver.class, e);
         }
