@@ -112,7 +112,48 @@ Documented example: `?file=transfersearch&version=1.1&ageMin=20&ageMax=22&skillT
 The file description states it is *not* meant to be polled by bots, only fetched on manual user
 request.
 
+## playerdetails (version 3.0)
+
+Requested by `Connector.downloadPlayerDetails`. Answers for **any** player, including a foreign one
+on a non-supporter account (`UserSupporterTier: none`), and carries `OwningTeam/TeamID`. This is the
+only CHPP file that can be asked about one named player's market status: `transfersearch` has no
+`playerId` parameter, and `currentbids` is read-and-delete only (`view` / `ignoreTransfer`, no
+add-to-hotlist action).
+
+Four things about it that cost a live fetch to learn:
+
+- **`<TransferDetails />` is present-but-empty when the player is not listed.**
+  `getElementsByTagName("TransferDetails").item(0)` returns a non-null `Element` for an unlisted
+  player, so a presence check reports everybody as listed. The detection signal is
+  `<TransferListed>`, a clean `True`/`False`. `<BidderTeam />` is the same trap one level down when
+  there are no bids.
+- **`<PlayerSkills>` is pruned, not withheld.** It is present in both responses. An unlisted player's
+  contains exactly one child, `<StaminaSkill>` — so stamina is public always and the other seven are
+  published only while he is on the market. Since `XMLManager.xmlIntValue` defaults a missing child
+  to `0`, parsing the block unconditionally reports seven real skills as zero.
+- **`Salary` carries the abroad surcharge.** A player with `<IsAbroad>True</IsAbroad>` reports a
+  salary exactly 1.2× the base wage that `transfersearch` reports for the same player. Both files
+  report SEK; the ×10 between SEK and a EUR display is a separate currency-rate concern.
+- The listed shape is:
+
+  ```xml
+  <TransferListed>True</TransferListed>
+  <TransferDetails>
+    <AskingPrice>2850000</AskingPrice>
+    <Deadline>2026-09-05 20:08:31</Deadline>
+    <HighestBid>0</HighestBid>
+    <BidderTeam />
+  </TransferDetails>
+  ```
+
+`XMLPlayersParser.parseMarketPlayerFromString` handles all of the above.
+`parsePlayerDetailsFromString` is a wrapper over it that returns `null` for a foreign player.
+`XMLPlayersParser.createPlayerDetails` reads the same `TransferDetails` block a third time, into the
+HRF hash; it is safe only by accident, because `xmlValue` returns `""` for a missing child rather
+than throwing.
+
 ## CHPP write actionTypes used by HO
+
 
 HO issues these write actions on behalf of the managed team (exposed over MCP, see
 `docs/superpowers/specs/2026-09-02-chpp-write-operations-over-mcp-design.md`):

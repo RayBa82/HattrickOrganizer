@@ -1198,10 +1198,22 @@ pessimistic — it contains full skill vectors for everyone those searches happe
 
 The rows that arrive without skills come from `currentbids` (bookmarks, mother-club, finished
 transfers, your own listings), which carries market data only, plus the occasional search hit whose
-deadline passed before it was fetched — Hattrick strips those to market data too.
-`fillMissingSkills` covers them with one `playerdetails` call. Its old guard also required a
-`TRANSFERBID` row, which happened to be true for everything from `currentbids` but excluded that
-second case; dropping the condition is both simpler and more complete.
+deadline passed before it was fetched — Hattrick strips those to market data too. An earlier note
+here said `fillMissingSkills` covers them with one `playerdetails` call. That was wrong twice over:
+
+- the call never worked for a market player at all. `parsePlayerDetailsFromString` returns `null`
+  for anyone outside your own team, so the pass spent one CHPP call per corpus row and stored
+  nothing, silently, on every run;
+- and it could not have worked even with that guard lifted, because those rows are unlisted players
+  by definition and Hattrick prunes an unlisted player's `PlayerSkills` down to `StaminaSkill`.
+  Worse, `xmlIntValue` defaults a missing child to `0`, so an unguarded parse would have filed seven
+  fabricated zero-skills into the corpus.
+
+That slice of the corpus is unfillable by any means. `observeForCorpus` (formerly
+`fillMissingSkills`) is now honest about it: it stores a row only when the player happens to be back
+on the market at the moment it runs, and stores nothing otherwise. The same call is what the scout
+re-listing watch uses — see `docs/superpowers/specs/2026-09-05-scout-relist-watch-design.md`.
+
 
 What the corpus can never hold is **sub-skills**. Hattrick publishes integer levels for market
 players, so two "defending 13" players can differ by almost a level in real strength. That is an
