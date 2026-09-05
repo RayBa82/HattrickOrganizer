@@ -685,7 +685,7 @@ Two changes: `SPEC_DOC` now names 200-206 by role plus 207-213 for the matching 
 `McpToolException` for a roleId no slot carries. No silent drops in either loop now — the field
 loop had the same hole for anything outside 100-113.
 
-**Side bugs found on the way, not fixed:**
+**Side bugs found on the way** (both fixed later - see *Three long-standing side bugs*):
 
 - `XMLMatchOrderParser`'s three forward cases guard on `"RightForward"` / `"CentralForward"` /
   `"LeftForward"` while writing `"…ID"` keys; every other role guards on the `…ID` key. The guard
@@ -806,13 +806,13 @@ just here. The three ints and two floats now go through `parseIntWithDefault` an
 null or empty string). Fixed in `PlayerInfo` rather than guarded per-player in `core.mcp`, since
 teamAnalyzer is the older and more exposed caller.
 
-**Found, not fixed:** all eight of `CalcPlayerBaseProvider`'s `setAs*` methods cascade
+**Found here, fixed later** (see *Three long-standing side bugs*): all eight of
+`CalcPlayerBaseProvider`'s `setAs*` methods cascade
 `if (age < 22) … else if (age >= 22) … else if (age >= 27) … else if (age >= 29) …` (25/28 in the
 goalkeeper case). The second branch swallows every age above 21, so the third and fourth are
-unreachable and every senior player is estimated on the 22-year-old base table. Left alone on
-purpose: it would change the numbers HO
-already shows in opponent-spy and special-event prediction, which is a behaviour change nobody asked
-for and which no test in this repo pins down.
+unreachable and every senior player is estimated on the 22-year-old base table. Left alone at the
+time because it changes the numbers HO already shows in opponent-spy and special-event prediction,
+which was a behaviour change nobody had asked for and which no test in this repo pinned down.
 
 **Verification:** full suite green (668 tests, 0 failures). `TeamToolsTest` now drives
 `TeamTools.opponentPlayer` over a hand-built `SafeInsertMap` shaped like the foreign-team players
@@ -1139,7 +1139,277 @@ players, so two "defending 13" players can differ by almost a level in real stre
 irreducible noise floor under any valuation built from this data, and no amount of accumulation
 removes it.
 
-**Verification:** full suite green — 694 tests, 59 suites, 0 failures. `ScoutTableTest` round-trips
+### Descriptions that had gone stale
+
+Two were wrong in a way that costs CHPP budget, since a model routes on them:
+
+- **`find_comparables`** never said it spends one of the session's ~20 searches, and never mentioned
+  that `estimate_market_value` does the same age / two-skill / specialty matching against stored
+  listings for free and with real sale prices. It now says to try the local one first and come here
+  for today's live market or a too-thin sample.
+- **`search_transfers`** never said its hits are stored permanently with their full skill set, or
+  that HO later fills in what those players sold for. A model had no way to know a search keeps
+  paying off after the results scroll past.
+
+The rest were already accurate: `estimate_market_value` and `list_scout` were rewritten with their
+behaviour, and `add_to_scout` reports which branch it took in `visibleInUi` rather than claiming
+anything in prose.
+
+### Nulls were being dropped on the wire
+
+`McpHttpServer` serialized with `new Gson()`, which omits nulls by default. So every field this code
+deliberately writes as null vanished: `details` on an expired market hit, `salePrice`/`soldAt` on a
+player who has not sold, `estimate` on an empty sample. `McpJson.hit` adds `JsonNull.INSTANCE`
+explicitly — clear intent, silently discarded.
+
+The cost is not cosmetic. An absent key is indistinguishable from a field the running build does not
+have, and a downstream session read a missing `salePrice` as "the feature is not shipped" and
+published that. It would have drawn the same wrong conclusion on the correct build.
+
+Now `new GsonBuilder().serializeNulls().create()`. As a side effect a parse-error response carries
+`"id": null`, which is what JSON-RPC 2.0 actually requires. Covered by a test, since the failure mode
+is invisible in normal use.
+
+### `transfersearch` Details is conditional — sourced, not inferred
+
+Several javadocs asserted that Hattrick drops the Details block once a deadline has passed. That was
+unsourced. The authoritative spec
+(<https://www.hattrick.org/Community/CHPP/NewDocs/Files/transfersearch.js>) confirms it verbatim:
+
+> Container with more details. Empty if the deadline has passed.
+
+So a search result *can* carry a hit with no skills. It needs a deadline to pass between the query
+and the response, or Hattrick's index to lag, so it is rare — but it is a documented shape, not a
+parser defensive check.
+
+The part worth knowing: **`SellerTeam` lives inside Details**, so it disappears with it. HO's parser
+substitutes `0` / `""` / `0` for `sellerTeamId`, `sellerTeamName` and `sellerLeagueId` rather than
+null, and those sit at the *top* level of a hit. An expired hit therefore reads `details: null`
+alongside a plausible-looking `sellerTeamId: 0` — a sentinel, not a team. `BidderTeam` is a separate
+top-level container and survives.
+
+Downstream this is already handled: `TransferListing.fromHit` stores such a row with market data
+only, `fillMissingSkills` fills its skills from one `playerdetails` call, and until then it cannot
+match `loadComparables` (the NULL age and skill columns exclude it), so it never pollutes a
+valuation.
+
+### The sale price is not in the HRF
+
+Worth stating precisely, because the download is the trigger and it is easy to assume it is also the
+source. A team download brings *this* team's own transfers. A player HO merely watched on the market
+belongs to somebody else, so what he went for is not in the HRF at all — it takes one
+`transfersPlayer` call per player. The pass piggybacks on the download because that is a moment the
+user chose to spend CHPP traffic, not because the data arrives with it. Hence the cap.
+
+That also fixes where it was hooked. It sat inside `OnlineWorker.getHrf`, which `DownloadDialog`
+only calls when the **team data** box is ticked — so a match-only download resolved nothing. It now
+runs at the end of the whole download routine, outside that branch:
+
+- fires on any download the user asked for, not only a team-data one;
+- runs after everything else, so it does not delay the parts being watched;
+- skipped when `bOK` is false — a broken download should not be followed by a burst of further CHPP
+  calls;
+- new progress key `ls.update_status.transfer_prices`, since up to 20 lookups is long enough that a
+  silent UI looks hung.
+
+`OnlineWorker.resolveTransferListings()` went public for it. The scheduling now lives in
+`DownloadDialog` next to every other download step, the logic stays in `OnlineWorker`.
+
+### Never fetch what is already local
+
+Every lookup the pass makes is now guarded against data HO already holds:
+
+| Call | Skipped when |
+|---|---|
+| `playerdetails` (skills fill) | any snapshot of that player already carries skills (`hasSkillData`) |
+| `transfersPlayer` (sale price) | the listing has a price, or was already looked at (`SALEPRICE`/`RESOLVEDAT`), or its deadline has not passed, or the player was handled earlier in this run |
+| `transfersPlayer` (sale price) | **new:** HO's own TRANSFER table already contains the transfer |
+
+The last one was the real hole. `DBManager.getTransfers(playerId, true)` is a plain local read, and
+the table is populated for every player we bought or sold — a team download stores our own transfers
+— and for anyone an earlier pass fetched. So the players we spent money on, the ones we most want
+priced, were the ones guaranteed to cost a redundant CHPP call. `resolvePlayer` now reads locally
+first and only calls out when the sale genuinely is not on disk; when it resolves locally it reports
+zero calls, so the cap is spent only on real traffic.
+
+Rainer's other condition was already met: a lookup only ever happens for a transfer whose deadline
+has passed. A live listing is never asked about.
+
+**A latent bug fell out of this.** The old code took `transfers.get(size - 1)` as "the most recent"
+— but `XMLParser.updatePlayerTransfers` treats that same element as the player's *first* transfer
+when deciding homegrown status, so the list is newest-first and that index was the **oldest**
+transfer. The 2-day window was silently masking it: an ancient transfer never matched, so nothing was
+written and the row looked simply unresolvable. `saleAt` now searches by date and does not care about
+the order, which is also what makes the local table usable, since it comes back ordered differently
+again. Covered by `TransferListingResolverTest`, which asserts the match holds with the history in
+either order.
+
+### The 20-per-download cap was a false analogy
+
+It was copied from `mcpSearchesPerSession`, which exists because Hattrick genuinely restricts
+transfer searches — market search has to be unlocked and is limited. `transfersPlayer` is nothing
+like that. It is an ordinary read file, and **HO already loops it over every outdated player with no
+limit at all**, in both `XMLParser.updateTeamTransfers` and `TransfersPanel`. There is no rate
+limiting anywhere in `core.net`.
+
+At 20 per download against 743 expired rows that meant ~37 downloads to clear the backlog, and the
+corpus was still growing — `basis` would have stayed `observed_listings` for over a month for no
+good reason.
+
+The real constraint is that a download runs on the event dispatch thread, so every lookup is time
+the UI is frozen. A count cannot express that: the same 200 calls are half a minute on a fast link
+and five on a bad one. So the pass now stops on **either** bound —
+
+- `mcpResolveCap` default raised 20 → 200, still user-visible in Options → MCP;
+- a 60-second wall-clock budget, which is what actually protects the UI.
+
+The current backlog clears in about four downloads instead of thirty-seven, and a slow connection
+degrades into "fewer per download" rather than a frozen window.
+
+**Verification:** full suite green — 700 tests, 60 suites, 0 failures. `ScoutTableTest` round-trips
 both nullable columns, unset and set, and checks `duplicate()` carries them (it feeds the table model
 and the details panel). `ScoutListTest` covers the window guard, including the hand-typed-entry case
 it exists for.
+
+## One vote per player, and no skills for a player long sold (2026-09-05)
+
+Two corrections to the valuation, from a peer session reading `sampleSize: 57` as 57 comparable
+players while shortlisting a real signing. It was 57 **rows**.
+
+- **`estimate_market_value` deduped by player id.** The corpus appends on every observation, so a
+  player who turned up in four searches held four rows and moved the median four times. The bias is
+  systematic, not random: the more often a profile is re-searched, the more the players who sat on
+  the market longest outvote everyone else. `TransferTools.betterObservation` keeps the row that
+  carries a resolved sale price, else the newest observation, and the list is handed on
+  newest-first, so the `comparables` evidence array is one row per player too. `comparablesMatched`
+  now counts distinct players — the number a caller was always reading it as — and a new
+  `observationsMatched` says how many rows they came from. **Expect `sampleSize` to drop; that is
+  the fix working.** `MIN_RESOLVED_SAMPLE` (3) now means three distinct sales, which is what it
+  should always have meant.
+- **`fillMissingSkills` stops after `SKILL_FILL_GRACE` (14 days past the deadline).** The pass fills
+  a skill-less row with one `playerdetails` call, but for the expired backlog that call happens long
+  after the player changed clubs — it records today's trained player against a months-old listing,
+  which then votes in a valuation under skills he did not have when he sold. A NULL-skill row cannot
+  match `loadComparables`, so leaving it empty keeps it out of the corpus rather than putting a lie
+  in it. Live and recently-expired listings are unaffected, which is the case the fill exists for.
+
+### What the corpus actually holds (measured 2026-09-05)
+
+Read off a read-only copy of the live database, since both changes above were argued from guesses
+about its shape:
+
+| | |
+|---|---|
+| rows / distinct players | 1306 / **778** |
+| rows with no skills | 2 |
+| players with no skills on any row (`fillMissingSkills`'s target) | 1 |
+| unresolved, deadline passed | 695 rows / 475 players |
+| resolved sale prices | 14 rows / 11 players |
+| scout entries | 15 |
+
+Two things follow. **The corpus is ~40% smaller than its row count** — 1306 observations of 778
+players — which is the dedupe's effect in aggregate and the reason `sampleSize` was never the number
+it read as. And **`SKILL_FILL_GRACE` strands nothing today**: two skill-less rows exist in the whole
+corpus, the one player who lacks skills everywhere has a deadline inside the window, and the oldest
+deadline in the entire backlog is five days old. The guard protects a future shape — an HO left
+dormant while its expired rows age past a fortnight — not a present case.
+
+With 11 players carrying a sale price, `basis: resolved_sales` (three distinct sales matching one
+profile) is still far off for essentially every profile. `observed_listings` and its upper-bound
+caveat are the normal answer for now, and that is drainage rate rather than a stall.
+
+### Not done: merging SCOUT and TRANSFERLISTING
+
+Proposed by the assistant session, declined after a design sync, on Rainer's call. The two tables
+look alike and are not: `TRANSFERLISTING` has `idColumns = 2` — `(PLAYERID, OBSERVEDAT)`, append-only,
+nearly everything nullable — and that time series is exactly what a valuation needs. `SCOUT` is keyed
+on player id, replaces on add, is almost entirely `NOT NULL`, and carries `Info`, `Wecker`,
+`Agreeability`, `Loyalty`, `MotherClub`, `Nationality` and `baseWage`, which the corpus has no source
+for — a merge would have to invent columns it cannot populate.
+
+The decisive one is `ScoutTable.saveScoutList`: `executePreparedDelete()` then store-each, driven
+from `TransferScoutPanel.saveScoutListe()` via `HOMainFrame.shutdown()`. Back the F7 tab with a
+1200-row table and one clean exit deletes every row the panel's `Vector` does not hold. Making it
+safe means rewriting the panel's persistence model plus every `ScoutEintrag` consumer
+(`ScoutThread`, `TransferScoutingTableModel`, the hand-entry panel, saved column layouts) against an
+append-only key — a day-plus of Swing work with no test harness, for something no user sees, since
+`TRANSFERLISTING` has no UI at all.
+
+If it is ever revisited, the shape that works: physical survivor is `TRANSFERLISTING` (renaming it to
+`SCOUT` collides with the existing table mid-migration), gaining `WATCHED BOOLEAN DEFAULT FALSE`,
+`INFO`, `WECKER` and the nullable SCOUT-only columns; `DBVersion` 1003 → 1004 inserts the SCOUT rows
+as observations with `OBSERVEDAT = Deadline` and `WATCHED = true`, then drops `SCOUT`; the panel
+loads `WHERE WATCHED = TRUE` and writes per row; the resolver's two-pass
+`scoutCandidates` / `loadUnresolved` split collapses into `ORDER BY WATCHED DESC, OBSERVEDAT ASC`.
+The cost hinges on whether the hand-entry panel is used: if every entry arrives through
+`add_to_scout`, the panel becomes read-only and the shutdown save is deleted rather than rewritten.
+
+**Verification:** full suite green — 701 tests, 60 suites, 0 failures. `TransferToolsTest` pins the
+merge rule (a resolved sale beats a newer asking price; otherwise newest wins). The dedupe itself is
+a `Collectors.toMap` over it, and `fillMissingSkills`'s guard rides the existing untested CHPP path.
+
+## Set pieces is not a positional skill (2026-09-05)
+
+`comparableQuery` ranks `POSITIONAL_SKILLS` by level and takes the top two, and set pieces was in
+that list. It is a specialist skill that says nothing about the position a player is bought for, and
+it is frequently a player's accidental second-highest — so a scoring-14 / set-pieces-11 striker was
+matched against set-piece takers rather than against strikers, and for a low-skilled player it could
+even have taken the *primary* slot. Removed from the list; the six real positional skills stay.
+
+This narrows and re-aims both `find_comparables` (the live CHPP query) and `estimate_market_value`
+(the same windows against the corpus), since they share the one query builder. `column()` still maps
+SETPIECES, and `minLevel`'s level-5 floor for it stays — both are cheap and neither is now reachable
+from this path.
+
+## Three long-standing side bugs (2026-09-05)
+
+All three had been found in earlier passes and recorded as "not fixed". Fixed now, in one commit
+separate from the valuation work, because the last of them changes numbers HO already shows.
+
+- **`XMLMatchOrderParser`'s forward guards were always true.** The three forward cases tested
+  `map.containsKey("RightForward")` while writing `"RightForwardID"`, so the key looked for never
+  existed, the first player always won the slot and `addAdditionalPlayer` was dead code for forwards
+  — alone among the roles that guard at all. Now `"...ForwardID"`, matching the winger and inner
+  midfield cases.
+- **`Lineup.toJson()` serialises positions positionally.** Each entry carries only the player id and
+  the behaviour (`MatchRoleID`'s two `@Expose` fields), so Hattrick derives the slot from the array
+  index: the order *is* the contract. Every builder happens to fill the vectors in ascending role id
+  and nothing enforced it. `toJson` now sorts both the field and bench vectors by role id — a no-op
+  today, and a future builder that is not ascending can no longer silently send a scrambled lineup.
+- **`CalcPlayerBaseProvider`'s age bands were unreachable.** All eight `setAs*` methods cascaded
+  `age < 22 / age >= 22 / age >= 27 / age >= 29` (25/28 for the goalkeeper), so the second branch
+  swallowed every age above 21 and the last two never ran: every senior player was estimated on the
+  22-year-old base table. The chains are now upper bounds — `< 22 / < 27 / < 29 / else` outfield,
+  `< 22 / < 25 / < 28 / else` in goal.
+
+  **This changes numbers HO already shows.** A 27-or-older opponent player now estimates higher in
+  opponent-spy, in `SpecialEventsPredictionManager`, and in `get_opponent_squad`'s `estimatedSkills`
+  — which is what the tables were written to say. Nothing else in the repo depended on the flat
+  behaviour.
+
+**Verification:** full suite green — 703 tests, 61 suites, 0 failures. The new
+`CalcPlayerBaseProviderTest` walks one outfield chain and the goalkeeper's (which has its own
+thresholds) across all four bands, so a re-introduced lower-bound cascade fails immediately. The
+parser guard and the `toJson` sort have no test: the first needs a match-order XML fixture and the
+second is a no-op against every lineup the repo can build, which is exactly the point of it.
+
+## estimate_market_value returns three skills a row (2026-09-05)
+
+The tool hands a model its subject plus up to forty comparables, and every one of them carried all
+seven skill levels - close to three hundred numbers whose only job was to be ignored. The fourth
+skill down has never decided a transfer price, and the reader has no way of knowing that, so it
+weighs them all. Each row now keeps its three best positional skills under `topSkills` and nothing
+else; wage, TSI, form, specialty and the prices are untouched, since those are what the judgement
+actually rests on.
+
+Set pieces is out for the reason `comparableQuery` already excludes it: a specialist skill, and a
+frequent accidental second-highest. `topSkillsOnly` strips it by name, since neither skill map ranks
+it.
+
+`McpJson.listing` now writes the skills under `get_player`'s names (`defending`, `playmaking`,
+`scoring`) rather than the CHPP's own (`defender`, `playmaker`, `scorer`), so the subject and the
+comparables read side by side. It has exactly one caller, so nothing else moved.
+
+**Verification:** full suite green - 705 tests, 0 failures. Two new `TransferToolsTest` cases pin the
+trim: one over a squad player (skills nested in `skills`/`skillsWithSublevel`), one over a listing
+(flat keys, nullable skills, set pieces highest but dropped).

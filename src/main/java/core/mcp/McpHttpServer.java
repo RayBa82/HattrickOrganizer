@@ -1,6 +1,7 @@
 package core.mcp;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -38,7 +39,15 @@ import java.util.concurrent.Executors;
 public final class McpHttpServer {
 
     private static final String DEFAULT_PROTOCOL_VERSION = "2024-11-05";
-    private static final Gson GSON = new Gson();
+    /**
+     * Nulls are serialized on purpose. Gson drops them by default, which silently discarded fields
+     * this code explicitly writes as null - {@code details} on an expired market hit, {@code
+     * salePrice} on a player who has not sold. A model then cannot tell "this player did not sell"
+     * from "this build has no such field", and reading an absent key as a missing feature has
+     * already caused a wrong conclusion downstream. It also makes {@code "id": null} appear on a
+     * parse-error response, which is what JSON-RPC 2.0 requires.
+     */
+    static final Gson GSON = new GsonBuilder().serializeNulls().create();
 
     private static McpHttpServer instance;
 

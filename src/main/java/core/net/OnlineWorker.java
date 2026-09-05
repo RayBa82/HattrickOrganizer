@@ -107,7 +107,6 @@ public class OnlineWorker {
 						}
 						// Info
 						saveHRFToFile(parent,hrf);
-						resolveTransferListings();
 					}
 				}
 			}
@@ -119,11 +118,17 @@ public class OnlineWorker {
 	}
 
 	/**
-	 * Fill the real sale price into expired transfer listings, right after a download the user
-	 * asked for. Capped by {@code mcpResolveCap}; a failure here must never fail the download, so
-	 * it is logged and swallowed.
+	 * Fill the real sale price into expired transfer listings and scout entries.
+	 * <p>
+	 * The price is <b>not</b> part of the HRF. A team download brings this team's own transfers,
+	 * but a player HO merely watched on the market belongs to somebody else, so what he went for
+	 * takes a separate {@code transfersPlayer} call each. This piggybacks on the download because
+	 * that is a moment the user chose to spend CHPP traffic, not because the data arrives with it -
+	 * hence the cap ({@code mcpResolveCap}).
+	 * <p>
+	 * A failure here must never fail the download, so it is logged and swallowed.
 	 */
-	private static void resolveTransferListings() {
+	public static void resolveTransferListings() {
 		try {
 			final var cap = UserParameter.instance().mcpResolveCap;
 			final var resolved = TransferListingResolver.resolve(cap);

@@ -110,7 +110,7 @@ public final class McpServerPanel extends ImagePanel {
         final var portValue = parse(port, 8765);
         final var capValue = parse(searchCap, 20);
         final var writeCapValue = parse(writeCap, 20);
-        final var resolveCapValue = parse(resolveCap, 20);
+        final var resolveCapValue = parse(resolveCap, 200);
         for (final var p : new UserParameter[]{UserParameter.instance(), UserParameter.temp()}) {
             p.mcpServerPort = portValue;
             p.mcpSearchesPerSession = capValue;
@@ -166,7 +166,7 @@ public final class McpServerPanel extends ImagePanel {
 
     /** Resolve on demand; the same pass also runs by itself after every team download. */
     private void resolveExpiredListings() {
-        final var resolved = TransferListingResolver.resolve(parse(resolveCap, 20));
+        final var resolved = TransferListingResolver.resolve(parse(resolveCap, 200));
         status.setText(TranslationFacility.tr("ls.options.mcp.resolve.done")
                 .replace("%count%", String.valueOf(resolved)));
     }

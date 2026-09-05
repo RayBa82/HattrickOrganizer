@@ -399,6 +399,17 @@ public class DownloadDialog extends JDialog implements ActionListener {
 		HOMainFrame.instance().setInformation(Helper.getTranslation("ls.update_status.calc_subskills"), progressIncrement);
 		model.calcSubskills();
 
+		// Last, and outside the team-data branch: what a watched market player sold for is not in
+		// the HRF, it is a separate lookup per player. Running it here means it happens on any
+		// download the user asked for, not only one with "team data" ticked, and it does not delay
+		// the parts they are watching for. Skipped when something upstream failed - a broken
+		// download should not be followed by a burst of further CHPP calls.
+		if (bOK) {
+			HOMainFrame.instance().setInformation(
+					Helper.getTranslation("ls.update_status.transfer_prices"), progressIncrement);
+			OnlineWorker.resolveTransferListings();
+		}
+
 		HOMainFrame.instance().setInformationCompleted();
 
 	}

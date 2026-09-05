@@ -307,7 +307,7 @@ public class Lineup{
 
 	/**
 	 * Setter for property m_iAttitude.
-	 * 
+	 *
 	 * @param m_iAttitude
 	 *            New value of property m_iAttitude.
 	 */
@@ -318,13 +318,13 @@ public class Lineup{
 
 	/**
 	 * Getter for property m_iAttitude.
-	 * 
+	 *
 	 * @return Value of property m_iAttitude.
 	 */
 	public final int getAttitude() {
 		return settings.m_iAttitude;
 	}
-	
+
 	public String getAttitudeName(int attitude) {
 		return switch (attitude) {
 			case IMatchDetails.EINSTELLUNG_NORMAL -> TranslationFacility.tr("ls.team.teamattitude_short.normal");
@@ -338,7 +338,7 @@ public class Lineup{
 		ratingRevision++;
 		settings.m_iStyleOfPlay = style;
 	}
-	
+
 	public int getCoachModifier() {
 		return settings.m_iStyleOfPlay;
 	}
@@ -510,7 +510,7 @@ public class Lineup{
 
 	/**
 	 * Setter for property m_iKapitaen.
-	 * 
+	 *
 	 * @param m_iKapitaen
 	 *            New value of property m_iKapitaen.
 	 */
@@ -520,7 +520,7 @@ public class Lineup{
 
 	/**
 	 * Getter for property m_iKapitaen.
-	 * 
+	 *
 	 * @return Value of property m_iKapitaen.
 	 */
 	public final int getCaptain() {
@@ -529,7 +529,7 @@ public class Lineup{
 
 	/**
 	 * Setter for property m_iKicker.
-	 * 
+	 *
 	 * @param m_iKicker
 	 *            New value of property m_iKicker.
 	 */
@@ -539,7 +539,7 @@ public class Lineup{
 
 	/**
 	 * Getter for property m_iKicker.
-	 * 
+	 *
 	 * @return Value of property m_iKicker.
 	 */
 	public final int getKicker() {
@@ -593,7 +593,7 @@ public class Lineup{
 
 	/**
 	 * Setter for property m_sHeimspiel.
-	 * 
+	 *
 	 * @param location
 	 *            New value of property m_sHeimspiel.
 	 */
@@ -604,7 +604,7 @@ public class Lineup{
 
 	/**
 	 * Get the location constant for the match (home/away/awayderby)
-	 * 
+	 *
 	 * @return the location constant for the match
 	 */
 	public final short getLocation() {
@@ -1027,7 +1027,7 @@ public class Lineup{
 
 	/**
 	 * Setter for property m_iTacticType.
-	 * 
+	 *
 	 * @param m_iTacticType
 	 *            New value of property m_iTacticType.
 	 */
@@ -1038,7 +1038,7 @@ public class Lineup{
 
 	/**
 	 * Getter for property m_iTacticType.
-	 * 
+	 *
 	 * @return Value of property m_iTacticType.
 	 */
 	public final int getTacticType() {
@@ -1483,6 +1483,12 @@ public class Lineup{
 
 	public String toJson()
 	{
+		// A serialised position carries only the player id and the behaviour, so Hattrick derives
+		// the slot from the array index: the order IS the contract. Every builder happens to fill
+		// these vectors in ascending role id today, and nothing enforced it - sorting here means a
+		// future one that does not cannot silently send a scrambled lineup.
+		m_vFieldPositions.sort(Comparator.comparingInt(MatchLineupPosition::getRoleId));
+		m_vBenchPositions.sort(Comparator.comparingInt(MatchLineupPosition::getRoleId));
 		Gson gson = new GsonBuilder().excludeFieldsWithoutExposeAnnotation().create();
 		return gson.toJson(this);
 	}

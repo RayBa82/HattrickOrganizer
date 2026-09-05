@@ -1,0 +1,73 @@
+package core.net;
+
+import core.util.AmountOfMoney;
+import core.util.HODateTime;
+import module.transfer.PlayerTransfer;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * Picking the transfer that belongs to a given listing out of a player's whole history. This is
+ * what decides whether a sale price is the right one, and it is also what stops a CHPP call when
+ * the answer is already in HO's own transfer table.
+ */
+class TransferListingResolverTest {
+
+    private static final HODateTime DEADLINE = HODateTime.fromHT("2026-09-02 20:15:00");
+
+    private static PlayerTransfer transfer(String date, long priceSek) {
+        final var t = new PlayerTransfer();
+        t.setDate(HODateTime.fromHT(date));
+        t.setPrice(new AmountOfMoney(priceSek));
+        return t;
+    }
+
+    @Test
+    void findsTheTransferAtTheDeadline() {
+        final var sale = transfer("2026-09-02 20:15:00", 1_700_000L);
+
+        assertThat(TransferListingResolver.saleAt(List.of(sale), DEADLINE)).isSameAs(sale);
+    }
+
+    /**
+     * The list is newest-first, and an earlier version indexed the last element as "the most
+     * recent" - which was the player's oldest transfer. Matching on the date is order-independent,
+     * so this passes whichever way round the history arrives.
+     */
+    @Test
+    void picksByDateNotByPosition() {
+        final var older = transfer("2024-03-11 20:00:00", 250_000L);
+        final var wanted = transfer("2026-09-02 20:15:00", 1_700_000L);
+        final var oldest = transfer("2022-01-05 20:00:00", 90_000L);
+
+        assertThat(TransferListingResolver.saleAt(List.of(wanted, older, oldest), DEADLINE))
+                .isSameAs(wanted);
+        assertThat(TransferListingResolver.saleAt(List.of(oldest, older, wanted), DEADLINE))
+                .isSameAs(wanted);
+    }
+
+    @Test
+    void toleratesSkewEitherSideOfTheDeadline() {
+        assertThat(TransferListingResolver.saleAt(
+                List.of(transfer("2026-09-01 20:15:00", 1L)), DEADLINE)).isNotNull();
+        assertThat(TransferListingResolver.saleAt(
+                List.of(transfer("2026-09-04 20:15:00", 1L)), DEADLINE)).isNotNull();
+    }
+
+    /** A player with a transfer history but none at this deadline: his listing did not sell. */
+    @Test
+    void returnsNullWhenNoTransferMatchesTheDeadline() {
+        assertThat(TransferListingResolver.saleAt(
+                List.of(transfer("2024-03-11 20:00:00", 250_000L)), DEADLINE)).isNull();
+        assertThat(TransferListingResolver.saleAt(List.of(), DEADLINE)).isNull();
+    }
+
+    @Test
+    void returnsNullWithoutADeadlineToMatchAgainst() {
+        assertThat(TransferListingResolver.saleAt(
+                List.of(transfer("2026-09-02 20:15:00", 1_700_000L)), null)).isNull();
+    }
+}

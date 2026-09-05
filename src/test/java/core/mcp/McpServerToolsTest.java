@@ -30,4 +30,20 @@ class McpServerToolsTest {
                         "respond_to_challenge", "get_league_table", "get_finances",
                         "add_to_scout", "list_scout", "estimate_market_value");
     }
+
+    /**
+     * A null field has to reach the client as an explicit null, not vanish. Gson drops nulls by
+     * default, and an absent key is indistinguishable from a field the build does not have - which
+     * has already been misread that way once.
+     */
+    @Test
+    void nullFieldsAreSerializedRatherThanDropped() {
+        final var json = new com.google.gson.JsonObject();
+        json.addProperty("salePrice", (Number) null);
+        json.add("details", com.google.gson.JsonNull.INSTANCE);
+        json.addProperty("playerId", 1001);
+
+        assertThat(McpHttpServer.GSON.toJson(json))
+                .isEqualTo("{\"salePrice\":null,\"details\":null,\"playerId\":1001}");
+    }
 }

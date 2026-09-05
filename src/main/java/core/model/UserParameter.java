@@ -117,8 +117,15 @@ public final class UserParameter extends Configuration {
     public int mcpSearchesPerSession = 20;
     /** How many CHPP writes (training, match order, challenges, bids) one HO session may issue in total. */
     public int mcpChppWritesPerSession = 20;
-    /** How many expired listings the sale-price resolve pass may look up per run. 0 switches it off. */
-    public int mcpResolveCap = 20;
+    /**
+     * How many expired listings the sale-price resolve pass may look up per run. 0 switches it off.
+     * <p>
+     * Not a CHPP quota - {@code transfersPlayer} is an ordinary read file HO already batches
+     * without limit elsewhere. This bounds how long a download spends on it, alongside the pass's
+     * own wall-clock budget, so a large backlog is worked off over a few downloads rather than
+     * freezing the UI on one.
+     */
+    public int mcpResolveCap = 200;
 
     //Whether or not the player analysis is packed vertically one below the other
     public boolean spieleranalyseVertikal = true;
@@ -706,7 +713,7 @@ public final class UserParameter extends Configuration {
         mcpServerPort = orDefault(getIntValue(values, "mcpServerPort"), 8765);
         mcpSearchesPerSession = orDefault(getIntValue(values, "mcpSearchesPerSession"), 20);
         mcpChppWritesPerSession = orDefault(getIntValue(values, "mcpChppWritesPerSession"), 20);
-        mcpResolveCap = orDefault(getIntValue(values, "mcpResolveCap"), 20);
+        mcpResolveCap = orDefault(getIntValue(values, "mcpResolveCap"), 200);
         ReleaseChannel = getStringValue(values, "ReleaseChannel");
         fixtures = getBooleanValue(values, "fixtures");
         downloadCurrentMatchlist = getBooleanValue(values, "currentMatchlist");

@@ -20,11 +20,13 @@ import module.transfer.search.TransferSearchConverter;
 
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 /**
  * Transfer market search and comparables.
@@ -35,15 +37,21 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class TransferTools {
 
-    /** The skills that say something about what a player is comparable to. */
+    /**
+     * The skills that say something about what a player is comparable to.
+     * <p>
+     * Set pieces is deliberately not among them. It is a specialist skill that says nothing about
+     * the position a player is bought for, and it is often his accidental second-highest: ranking
+     * it in matches a scoring-14 striker against set-piece takers instead of against strikers, and
+     * for a low-skilled player it could even take the primary slot.
+     */
     private static final List<TransferSearchQuery.Skill> POSITIONAL_SKILLS = List.of(
             TransferSearchQuery.Skill.KEEPER,
             TransferSearchQuery.Skill.DEFENDING,
             TransferSearchQuery.Skill.PLAYMAKING,
             TransferSearchQuery.Skill.PASSING,
             TransferSearchQuery.Skill.WINGER,
-            TransferSearchQuery.Skill.SCORING,
-            TransferSearchQuery.Skill.SETPIECES);
+            TransferSearchQuery.Skill.SCORING);
 
     private static final int DEFAULT_PAGE_SIZE = 50;
     private static final int MAX_PAGE_SIZE = 100;     // the CHPP maximum
@@ -68,14 +76,26 @@ public final class TransferTools {
                                 + "Narrow the "
                                 + "query rather than paging: Hattrick reports no exact total once "
                                 + "more than 100 players match. Searching needs the user to unlock "
-                                + "market search in HO first, and is capped per session.",
+                                + "market search in HO first, and is capped per session. "
+                                + "Every hit is also stored permanently, with its full skill set - "
+                                + "including the skills you did not query on - and after the "
+                                + "transfer completes HO fills in what the player actually sold "
+                                + "for. So a search keeps paying off: it is what estimate_market_value "
+                                + "later reads, for these players and for others of a similar "
+                                + "profile.",
                         searchSchema(),
                         args -> search(queryFrom(args))),
                 new McpTool("find_comparables",
-                        "Find players on the market comparable to one of your own, to value him "
-                                + "against live asking prices and bids. Derives the query from his "
-                                + "age, his two highest positional skills and his specialty, and "
-                                + "echoes the query it built so you can refine it.",
+                        "Find players CURRENTLY on the market comparable to one of your own, to "
+                                + "value him against live asking prices and bids. Derives the query "
+                                + "from his age, his two highest positional skills and his "
+                                + "specialty, and echoes the query it built so you can refine it. "
+                                + "This spends one of the session's transfer searches. "
+                                + "estimate_market_value does the same matching against listings HO "
+                                + "has already stored, for free and including what players actually "
+                                + "sold for - try that first, and come here when you need today's "
+                                + "live market rather than recent history, or when it reports too "
+                                + "thin a sample.",
                         McpTool.schema(McpTool.properties(
                                         "playerId", McpTool.prop("integer", "the player to value"),
                                         "ageTolerance", McpTool.prop("integer", "age window in years, default 1"),
@@ -165,7 +185,8 @@ public final class TransferTools {
                                 + "against the stored corpus on the same criteria find_comparables "
                                 + "uses (age window, his two best positional skills, his specialty) "
                                 + "and returns the matching listings themselves, each with wage, "
-                                + "TSI, form, every skill, asking price, highest bid and - once his "
+                                + "TSI, form, specialty, its three best positional skills "
+                                + "(topSkills), asking price, highest bid and - once his "
                                 + "transfer completed - what he actually sold for. YOU do the "
                                 + "valuation from those rows: weigh wage against skills, discount "
                                 + "stale observations, notice injuries and specialties. The "
@@ -218,11 +239,22 @@ public final class TransferTools {
         final var since = new HODateTime(HODateTime.now().getInstant()
                 .minus(java.time.Duration.ofDays(days)));
 
-        final var comparables = DBManager.instance().loadComparableTransferListings(
+        final var observations = DBManager.instance().loadComparableTransferListings(
                 query.ageMin(), query.ageMax(),
                 column(query.skillType1()), query.minSkillValue1(), query.maxSkillValue1(),
                 column(query.skillType2()), query.minSkillValue2(), query.maxSkillValue2(),
                 query.specialty(), since);
+
+        // One vote per player. The corpus appends on every observation, so a player who turned up
+        // in four searches is four rows: without this he moves the median four times and
+        // sampleSize counts rows rather than the players a caller reads it as. Keep his sale where
+        // we know it, else his newest observation, and hand the list over newest-first.
+        final var comparables = observations.stream()
+                .collect(Collectors.toMap(TransferListing::getPlayerId, l -> l,
+                        TransferTools::betterObservation))
+                .values().stream()
+                .sorted(Comparator.comparing(TransferTools::observedAt).reversed())
+                .toList();
 
         final var sales = comparables.stream()
                 .filter(l -> l.getSalePrice() != null)
@@ -244,7 +276,7 @@ public final class TransferTools {
         final var json = new JsonObject();
         json.addProperty("currency", McpJson.currency());
         // The player being valued, so the comparison is self-contained in one call.
-        json.add("player", McpJson.player(player));
+        json.add("player", topSkillsOnly(McpJson.player(player), playerSkillLevels(player)));
         json.addProperty("basis", useSales ? "resolved_sales" : "observed_listings");
         json.addProperty("sampleSize", sample.size());
         json.addProperty("resolvedSalesAvailable", sales.size());
@@ -257,13 +289,13 @@ public final class TransferTools {
         // what a player is worth. Reason over these rows instead of trusting the number.
         final var evidence = new JsonArray();
         comparables.stream()
-                .sorted(Comparator.comparing((TransferListing l) -> l.getObservedAt() == null
-                        ? HODateTime.fromHT("1990-01-01 00:00:00") : l.getObservedAt()).reversed())
                 .limit(MAX_COMPARABLES)
-                .forEach(l -> evidence.add(McpJson.listing(l)));
+                .forEach(l -> evidence.add(topSkillsOnly(McpJson.listing(l), listingSkillLevels(l))));
         json.add("comparables", evidence);
         json.addProperty("comparablesReturned", evidence.size());
         json.addProperty("comparablesMatched", comparables.size());
+        // How many rows those distinct players were collapsed from, so the gap is visible.
+        json.addProperty("observationsMatched", observations.size());
 
         if (sample.isEmpty()) {
             json.add("estimate", com.google.gson.JsonNull.INSTANCE);
@@ -274,9 +306,10 @@ public final class TransferTools {
         }
         json.addProperty("estimate", McpJson.money(median(sample)));
         json.addProperty("estimateNote", "Median over all " + sample.size() + " comparables, as a "
-                + "starting anchor only - it ignores wage, TSI, form, the skills outside the query "
-                + "window and how stale each observation is. The comparables array carries those, "
-                + "and is the better basis for a judgement.");
+                + "starting anchor only - it ignores wage, TSI, form, specialty and how stale each "
+                + "observation is. The comparables array carries those, and is the better basis "
+                + "for a judgement. Each row lists only its three best positional skills; set "
+                + "pieces and the skills below the top three are not returned.");
         final var range = new JsonArray();
         range.add(McpJson.money(sample.get(0)));
         range.add(McpJson.money(sample.get(sample.size() - 1)));
@@ -289,6 +322,81 @@ public final class TransferTools {
                     + "bids were used instead - read the estimate as an upper bound.");
         }
         return json;
+    }
+
+    /**
+     * Drops every positional skill from a serialised player or listing except his three best, which
+     * move to {@code topSkills}. A valuation turns on what a player would be bought for, and seven
+     * levels a row over forty rows buries that in numbers the reader has no use for - the fourth
+     * skill down has never decided a price. Set pieces is not among them, for the reason
+     * {@link #comparableQuery} leaves it out: it is a specialist skill, not a position.
+     * <p>
+     * Specialty, wage, TSI, form and the prices stay - they are what the remaining judgement rests
+     * on.
+     */
+    static JsonObject topSkillsOnly(JsonObject json, Map<String, Integer> levels) {
+        // A player nests his skills in two blocks, a listing writes them flat; set pieces is in
+        // neither map, so it is named here to make sure it goes too.
+        json.remove("skills");
+        json.remove("skillsWithSublevel");
+        json.remove("setPieces");
+        levels.keySet().forEach(json::remove);
+
+        // Ties break by name so the same player always serialises the same way.
+        final var top = new JsonObject();
+        levels.entrySet().stream()
+                .filter(e -> e.getValue() != null)
+                .sorted(Map.Entry.<String, Integer>comparingByValue().reversed()
+                        .thenComparing(Map.Entry.comparingByKey()))
+                .limit(3)
+                .forEach(e -> top.addProperty(e.getKey(), e.getValue()));
+        json.add("topSkills", top);
+        return json;
+    }
+
+    /** The positional skills of a squad player, under the names {@link McpJson#player} writes. */
+    static Map<String, Integer> playerSkillLevels(Player player) {
+        final var levels = new LinkedHashMap<String, Integer>();
+        for (final var skill : POSITIONAL_SKILLS) {
+            levels.put(skillName(skill), player.getValue4Skill(skill.toPlayerSkill()));
+        }
+        return levels;
+    }
+
+    /** The positional skills of a stored listing, under the names {@link #playerSkillLevels} uses. */
+    static Map<String, Integer> listingSkillLevels(TransferListing l) {
+        final var levels = new LinkedHashMap<String, Integer>();
+        levels.put("keeper", l.getKeeper());
+        levels.put("defending", l.getDefender());
+        levels.put("playmaking", l.getPlaymaker());
+        levels.put("passing", l.getPassing());
+        levels.put("winger", l.getWinger());
+        levels.put("scoring", l.getScorer());
+        return levels;
+    }
+
+    /** {@code SCORING} -> {@code "scoring"}: the name get_player reports the skill under. */
+    private static String skillName(TransferSearchQuery.Skill skill) {
+        return skill.name().toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * Which of two observations of the same player represents him: the one that carries what he
+     * actually sold for, else the newest.
+     */
+    static TransferListing betterObservation(TransferListing a, TransferListing b) {
+        final var aSold = a.getSalePrice() != null;
+        final var bSold = b.getSalePrice() != null;
+        if (aSold != bSold) {
+            return aSold ? a : b;
+        }
+        return observedAt(a).compareTo(observedAt(b)) >= 0 ? a : b;
+    }
+
+    /** A listing's observation date, never null, so it can be sorted and compared. */
+    private static HODateTime observedAt(TransferListing listing) {
+        return listing.getObservedAt() == null
+                ? HODateTime.fromHT("1990-01-01 00:00:00") : listing.getObservedAt();
     }
 
     /** The middle value; for an even sample the mean of the two middle ones. */

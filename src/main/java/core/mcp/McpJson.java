@@ -227,6 +227,10 @@ public final class McpJson {
         json.addProperty("deadline", l.getDeadline() == null ? null : l.getDeadline().toHT());
         json.addProperty("askingPrice", money(l.getAskingPrice()));
         json.addProperty("highestBid", money(l.getHighestBid()));
+        // Who was leading when this was observed. The seller is not kept - a listing snapshot
+        // stores the bidder only, so seller-side signals are available on a live search_transfers
+        // hit and nowhere else.
+        json.addProperty("bidderName", l.getBidderName());
         json.addProperty("sold", l.getSalePrice() != null);
         json.addProperty("salePrice", l.getSalePrice() == null ? null : money(l.getSalePrice()));
         json.addProperty("age", l.getAge());
@@ -240,12 +244,14 @@ public final class McpJson {
         json.addProperty("cards", l.getCards());
         json.addProperty("injuryLevel", l.getInjuryLevel());
         json.addProperty("stamina", l.getStamina());
+        // Under get_player's names, not the CHPP's own (playmaker / scorer / defender), so a
+        // comparable and the player it is compared to can be read side by side.
         json.addProperty("keeper", l.getKeeper());
-        json.addProperty("playmaker", l.getPlaymaker());
-        json.addProperty("scorer", l.getScorer());
+        json.addProperty("defending", l.getDefender());
+        json.addProperty("playmaking", l.getPlaymaker());
         json.addProperty("passing", l.getPassing());
         json.addProperty("winger", l.getWinger());
-        json.addProperty("defender", l.getDefender());
+        json.addProperty("scoring", l.getScorer());
         json.addProperty("setPieces", l.getSetPieces());
         return json;
     }

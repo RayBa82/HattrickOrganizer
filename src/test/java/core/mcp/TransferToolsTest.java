@@ -4,12 +4,14 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import core.constants.player.PlayerSkill;
+import core.db.TransferListing;
 import core.constants.player.PlayerSpeciality;
 import core.file.xml.XMLCurrentBidsParser;
 import core.model.player.Player;
 import core.net.ChppWriteService;
 import core.net.TransferSearchQuery;
 import core.util.AmountOfMoney;
+import core.util.HODateTime;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -34,6 +36,31 @@ class TransferToolsTest {
         if (originalService != null) ChppWriteService.setInstanceForTest(originalService);
         TransferTools.clearPendingBidsForTest();
         AmountOfMoney.Companion.setExchangeRate(BigDecimal.ONE);   // other tests set it; reset
+    }
+
+    private static TransferListing observation(String observedAt, Long salePrice) {
+        final var listing = new TransferListing();
+        listing.setPlayerId(1);
+        listing.setObservedAt(HODateTime.fromHT(observedAt));
+        listing.setSalePrice(salePrice);
+        return listing;
+    }
+
+    /**
+     * The corpus appends, so one player can hold several rows and would otherwise vote once per
+     * row in estimate_market_value's median.
+     */
+    @Test
+    void betterObservation_keepsTheSaleThenTheNewest() {
+        final var older = observation("2026-08-01 10:00:00", null);
+        final var newer = observation("2026-09-01 10:00:00", null);
+        final var sold = observation("2026-07-01 10:00:00", 1_000_000L);
+
+        assertThat(TransferTools.betterObservation(older, newer)).isSameAs(newer);
+        assertThat(TransferTools.betterObservation(newer, older)).isSameAs(newer);
+        // What he went for beats a newer asking price, however recent that ask is.
+        assertThat(TransferTools.betterObservation(newer, sold)).isSameAs(sold);
+        assertThat(TransferTools.betterObservation(sold, newer)).isSameAs(sold);
     }
 
     private static McpTool bidTool() {
@@ -361,6 +388,53 @@ class TransferToolsTest {
         assertThat(query.minSkillValue1()).isEqualTo(3);       // keeper minimum level
         assertThat(query.maxSkillValue1() - query.minSkillValue1()).isLessThanOrEqualTo(4);
         assertThat(query.validationErrorKey()).isNull();
+    }
+
+    /**
+     * estimate_market_value hands a model up to forty rows; seven skill levels each is noise it has
+     * no use for, so every row keeps its three best positional skills and nothing else. Set pieces
+     * is dropped however high it is, for the same reason comparableQuery never ranks it.
+     */
+    @Test
+    void topSkillsOnly_keepsTheThreeBestPositionalSkillsAndDropsSetPieces() {
+        //                      kp de pm pa wi sc sp st ex ld
+        final var p = player(24, 1, 7, 12, 9, 6, 5, 20, 8, 4, 2);
+
+        final var json = TransferTools.topSkillsOnly(McpJson.player(p),
+                TransferTools.playerSkillLevels(p));
+
+        assertThat(json.getAsJsonObject("topSkills").keySet())
+                .containsExactly("playmaking", "passing", "defending");
+        assertThat(json.getAsJsonObject("topSkills").get("playmaking").getAsInt()).isEqualTo(12);
+        assertThat(json.has("skills")).isFalse();
+        assertThat(json.has("skillsWithSublevel")).isFalse();
+        // Specialty and the price-bearing fields are what is left to judge on.
+        assertThat(json.has("specialtyName")).isTrue();
+        assertThat(json.has("wage")).isTrue();
+        assertThat(json.has("tsi")).isTrue();
+    }
+
+    /** A listing carries nullable skills, and its flat skill keys have to go with the trim. */
+    @Test
+    void topSkillsOnly_dropsAListingsFlatSkillsAndIgnoresNulls() {
+        final var l = new TransferListing();
+        l.setPlayerId(7);
+        l.setKeeper(3);
+        l.setDefender(11);
+        l.setPlaymaker(6);
+        l.setScorer(14);
+        l.setSetPieces(13);
+        l.setWinger(null);            // an observation can be missing a skill
+        l.setPassing(null);
+
+        final var json = TransferTools.topSkillsOnly(McpJson.listing(l),
+                TransferTools.listingSkillLevels(l));
+
+        assertThat(json.getAsJsonObject("topSkills").keySet())
+                .containsExactly("scoring", "defending", "playmaking");
+        assertThat(json.has("defending")).isFalse();
+        assertThat(json.has("setPieces")).isFalse();
+        assertThat(json.has("askingPrice")).isTrue();
     }
 
     /** Hattrick rejects a young age window wider than a year, so an 18yo's window is clamped. */

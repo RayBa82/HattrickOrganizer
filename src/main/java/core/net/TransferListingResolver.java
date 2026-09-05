@@ -34,8 +34,30 @@ public final class TransferListingResolver {
      */
     private static final java.time.Duration SALE_WINDOW = java.time.Duration.ofDays(2);
 
+    /**
+     * How long after a deadline a {@code playerdetails} fetch still describes the player that was
+     * on the market. Past that he has been at his new club long enough to have trained, so filling
+     * his skills in would file today's player against a months-old listing and let him vote in a
+     * valuation under skills he did not have when he sold. No skills at all is the better answer:
+     * a row with NULL skills cannot match {@code loadComparables}, so it stays out rather than
+     * lying.
+     */
+    private static final java.time.Duration SKILL_FILL_GRACE = java.time.Duration.ofDays(14);
+
     /** How long after its deadline a scout entry is still worth asking about. */
     private static final java.time.Duration SCOUT_RETRY_GRACE = java.time.Duration.ofDays(14);
+
+    /**
+     * What the cap is actually protecting, and it is not a CHPP quota.
+     * <p>
+     * {@code transfersPlayer} is an ordinary read file: HO's own Transfers module already loops it
+     * over every outdated player with no limit at all ({@code XMLParser.updateTeamTransfers},
+     * {@code TransfersPanel}), and there is no rate limiting anywhere in {@code core.net}. The
+     * limit that matters is that a download runs on the event dispatch thread, so every lookup is
+     * time the UI is frozen. A count alone cannot express that - the same 200 calls are half a
+     * minute on a fast link and five minutes on a bad one - so the run also stops on the clock.
+     */
+    private static final java.time.Duration TIME_BUDGET = java.time.Duration.ofSeconds(60);
 
     private TransferListingResolver() {
     }
@@ -49,6 +71,7 @@ public final class TransferListingResolver {
             return 0;
         }
         final var now = HODateTime.now();
+        final var deadline = System.nanoTime() + TIME_BUDGET.toNanos();
         var resolved = 0;
         var calls = 0;
         final var seen = new HashSet<Integer>();
@@ -57,15 +80,16 @@ public final class TransferListingResolver {
         // entries are not necessarily in TRANSFERLISTING at all: only the MCP search snapshots hits
         // into that corpus, so a player added from HO's own transfer search tab or typed in by hand
         // would otherwise never be resolved by the loop below.
-        for (final var playerId : scoutCandidates(now)) {
-            if (calls >= cap) {
+        for (final var candidate : scoutCandidates(now)) {
+            if (spent(calls, cap, deadline)) {
                 break;
             }
-            if (!seen.add(playerId)) {
+            if (!seen.add(candidate.playerId())) {
                 continue;
             }
-            calls++;
-            if (resolvePlayer(playerId, now)) {
+            final var outcome = resolvePlayer(candidate.playerId(), candidate.deadline(), now);
+            calls += outcome.calls();
+            if (outcome.resolved()) {
                 resolved++;
             }
         }
@@ -74,21 +98,22 @@ public final class TransferListingResolver {
         // player repeatedly observed holds several. Over-fetch so a handful of duplicates cannot
         // starve the run, and let the call count be what the cap bounds.
         for (final var listing : DBManager.instance().loadUnresolvedTransferListings(cap * 5)) {
-            if (calls >= cap) {
+            if (spent(calls, cap, deadline)) {
                 break;
             }
             if (!seen.add(listing.getPlayerId())) {
                 continue;                      // already handled this player in this run
             }
             calls += fillMissingSkills(listing, now);
-            if (calls >= cap) {
+            if (spent(calls, cap, deadline)) {
                 break;
             }
             if (listing.getDeadline() == null || listing.getDeadline().compareTo(now) >= 0) {
                 continue;                      // not expired yet, nothing to resolve
             }
-            calls++;
-            if (resolvePlayer(listing.getPlayerId(), now)) {
+            final var outcome = resolvePlayer(listing.getPlayerId(), listing.getDeadline(), now);
+            calls += outcome.calls();
+            if (outcome.resolved()) {
                 resolved++;
             }
         }
@@ -103,19 +128,27 @@ public final class TransferListingResolver {
      * bidder - would cost a CHPP call on every download for as long as it stayed on the list.
      * A completed transfer is visible immediately, so a fortnight is generous.
      */
-    private static List<Integer> scoutCandidates(HODateTime now) {
+    private static List<Candidate> scoutCandidates(HODateTime now) {
         final var giveUpBefore = new HODateTime(now.getInstant().minus(SCOUT_RETRY_GRACE));
-        final var ids = new ArrayList<Integer>();
+        final var candidates = new ArrayList<Candidate>();
         for (final var entry : ScoutList.entries()) {
             if (entry.isSold() || entry.getDeadline() == null) {
                 continue;
             }
             final var deadline = HODateTime.fromDbTimestamp(entry.getDeadline());
             if (deadline.compareTo(now) < 0 && deadline.compareTo(giveUpBefore) > 0) {
-                ids.add(entry.getPlayerID());
+                candidates.add(new Candidate(entry.getPlayerID(), deadline));
             }
         }
-        return ids;
+        return candidates;
+    }
+
+    /** A scouted player and the deadline of the transfer that was being watched. */
+    private record Candidate(int playerId, HODateTime deadline) {}
+
+    /** Whether this run is out of budget - either bound stops it, whichever comes first. */
+    private static boolean spent(int calls, int cap, long deadlineNanos) {
+        return calls >= cap || System.nanoTime() - deadlineNanos >= 0;
     }
 
     /**
@@ -135,6 +168,10 @@ public final class TransferListingResolver {
         if (DBManager.instance().transferListingHasSkillData(listing.getPlayerId())) {
             return 0;
         }
+        if (listing.getDeadline() != null && listing.getDeadline().getInstant()
+                .plus(SKILL_FILL_GRACE).isBefore(now.getInstant())) {
+            return 0;                          // long sold; today's skills are not the sale's
+        }
         try {
             final var player = OnlineWorker.downloadPlayerDetails(
                     String.valueOf(listing.getPlayerId()));
@@ -148,36 +185,79 @@ public final class TransferListingResolver {
         return 1;
     }
 
-    /** @return whether a sale price was found and stored */
-    private static boolean resolvePlayer(int playerId, HODateTime now) {
-        final boolean found;
+    /** What one player cost us, and whether it produced a price. */
+    private record Outcome(int calls, boolean resolved) {}
+
+    /**
+     * Fill in what this player's expired listing sold for.
+     * <p>
+     * Local first, always: HO's own TRANSFER table may already hold the very transfer being asked
+     * about - certainly so if we won the auction, since a team download stores our own transfers,
+     * and also whenever an earlier pass fetched this player's history. Spending a CHPP call on a
+     * sale already sitting in the database is exactly the waste worth avoiding, and it would hit
+     * hardest on the players we actually bought.
+     */
+    private static Outcome resolvePlayer(int playerId, HODateTime deadline, HODateTime now) {
+        final var known = saleAt(DBManager.instance().getTransfers(playerId, true), deadline);
+        if (known != null) {
+            applySale(playerId, known);
+            DBManager.instance().markTransferListingResolveAttempted(playerId, now);
+            return new Outcome(0, true);
+        }
+
+        final List<module.transfer.PlayerTransfer> fetched;
         try {
-            found = applySale(playerId, XMLParser.updatePlayerTransfers(playerId));
+            fetched = XMLParser.updatePlayerTransfers(playerId);
         } catch (Exception e) {
             // The lookup failed rather than answered - leave the rows alone so a network blip does
             // not burn their one attempt.
             HOLogger.instance().error(TransferListingResolver.class, e);
-            return false;
+            return new Outcome(1, false);
+        }
+        final var sale = saleAt(fetched, deadline);
+        if (sale != null) {
+            applySale(playerId, sale);
         }
         // The call answered. Whatever it did not account for - a listing that was withdrawn, or
         // expired with no bidder - is marked looked-at so it is never asked about again.
         DBManager.instance().markTransferListingResolveAttempted(playerId, now);
-        return found;
+        return new Outcome(1, sale != null);
     }
 
-    private static boolean applySale(int playerId, List<module.transfer.PlayerTransfer> transfers) {
-        if (transfers.isEmpty()) {
-            return false;
+    /**
+     * The transfer that completed at this deadline, or null if none of them did.
+     * <p>
+     * Searched rather than indexed. The previous version took {@code transfers.get(size - 1)} as
+     * "the most recent", but {@link XMLParser#updatePlayerTransfers} treats that same element as
+     * the player's *first* ever transfer when deciding whether he is homegrown - so the list is
+     * newest-first and that index was the oldest transfer, not the newest. Matching on the date
+     * instead does not care about the order at all.
+     */
+    static module.transfer.PlayerTransfer saleAt(
+            List<module.transfer.PlayerTransfer> transfers, HODateTime deadline) {
+        if (deadline == null) {
+            return null;
         }
-        final var sale = transfers.get(transfers.size() - 1);          // the most recent one
-        if (sale.getPrice() == null || sale.getPrice().getSwedishKrona() == null) {
-            return false;
+        final var from = deadline.getInstant().minus(SALE_WINDOW);
+        final var to = deadline.getInstant().plus(SALE_WINDOW);
+        for (final var transfer : transfers) {
+            if (transfer.getDate() == null || transfer.getPrice() == null
+                    || transfer.getPrice().getSwedishKrona() == null) {
+                continue;
+            }
+            final var date = transfer.getDate().getInstant();
+            if (!date.isBefore(from) && !date.isAfter(to)) {
+                return transfer;
+            }
         }
+        return null;
+    }
+
+    private static void applySale(int playerId, module.transfer.PlayerTransfer sale) {
         final var salePriceSek = sale.getPrice().getSwedishKrona().longValue();
         DBManager.instance().storeTransferListingSalePrice(playerId, sale.getDate(),
                 salePriceSek, SALE_WINDOW);
         recordOnScoutList(playerId, salePriceSek, sale.getDate());
-        return true;
     }
 
     /**

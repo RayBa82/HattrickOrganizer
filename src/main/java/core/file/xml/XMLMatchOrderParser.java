@@ -16,7 +16,7 @@ import org.w3c.dom.NodeList;
 
 /**
  * Parser for the matchorders.
- * 
+ *
  * @author TheTom
  */
 public class XMLMatchOrderParser {
@@ -148,7 +148,7 @@ public class XMLMatchOrderParser {
 				}
 			}
 			case IMatchRoleID.rightForward -> {
-				if (!map.containsKey("RightForward")) {
+if (!map.containsKey("RightForwardID")) {
 					map.put("RightForwardID", spielerID);
 					map.put("RightForwardName", name);
 					map.put("RightForwardOrder", behavior);
@@ -157,7 +157,7 @@ public class XMLMatchOrderParser {
 				}
 			}
 			case IMatchRoleID.centralForward -> {
-				if (!map.containsKey("CentralForward")) {
+if (!map.containsKey("CentralForwardID")) {
 					map.put("CentralForwardID", spielerID);
 					map.put("CentralForwardName", name);
 					map.put("CentralForwardOrder", behavior);
@@ -166,7 +166,7 @@ public class XMLMatchOrderParser {
 				}
 			}
 			case IMatchRoleID.leftForward -> {
-				if (!map.containsKey("LeftForward")) {
+if (!map.containsKey("LeftForwardID")) {
 					map.put("LeftForwardID", spielerID);
 					map.put("LeftForwardName", name);
 					map.put("LeftForwardOrder", behavior);
@@ -239,7 +239,7 @@ public class XMLMatchOrderParser {
 				map.put("CaptainName", name);
 			}
 		}
-		
+
 		// Penalty positions
 		for (int i = IMatchRoleID.penaltyTaker1; i <= IMatchRoleID.penaltyTaker11 ; i++) {
 			if (roleID == i) {
@@ -382,16 +382,16 @@ public class XMLMatchOrderParser {
 				// in case attitude is not available TODO: check if this is really mandatory
 				hash.put("Attitude", "0");
 			}
-			
+
 			ele = (Element) root.getElementsByTagName("CoachModifier").item(0);
-			
+
 			// 'coachModifier' is called 'styleOfPlay' in HT
 			if (XMLManager.getAttributeValue(ele, "Available").trim().equalsIgnoreCase("true")) {
 				hash.put("StyleOfPlay", XMLManager.getFirstChildNodeValue(ele));
 			} else {
 				hash.put("StyleOfPlay", "0");
 			}
-			
+
 
 			ele = (Element) root.getElementsByTagName("HomeTeamID").item(0);
 			hash.put("HomeTeamID", XMLManager.getFirstChildNodeValue(ele));
@@ -409,7 +409,7 @@ public class XMLMatchOrderParser {
 			hash.put("ArenaID", XMLManager.getFirstChildNodeValue(ele));
 			ele = (Element) root.getElementsByTagName("ArenaName").item(0);
 			hash.put("ArenaName", XMLManager.getFirstChildNodeValue(ele));
-			
+
 			ele = (Element) root.getElementsByTagName("TacticType").item(0);
 
 			hash.put("TacticType", XMLManager.getFirstChildNodeValue(ele));

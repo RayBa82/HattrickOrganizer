@@ -22,12 +22,12 @@ public class CalcPlayerBaseProvider {
 		calcPlayer.injuryStatus = injury_status;
 
 		setBaseSkills(calcPlayer);
-		
+
 		return calcPlayer;
 	}
 
 	public void setBaseSkills(CalcVariables calcPlayer) {
-		
+
 		switch (calcPlayer.role) {
 			case IMatchRoleID.KEEPER:
 				setAsGoalkeeper(calcPlayer, calcPlayer.specialty);
@@ -91,7 +91,7 @@ public class CalcPlayerBaseProvider {
 			case IMatchRoleID.FORWARD_TOWING:
 				setAsForwardToWing(calcPlayer);
 				break;
-	
+
 			default:
 				setAsGoalkeeper(calcPlayer, calcPlayer.specialty);
 				break;
@@ -105,15 +105,15 @@ public class CalcPlayerBaseProvider {
 				calcPlayer.setGoalkeeping(7, 1);
 				calcPlayer.setDefending(6);
 				calcPlayer.setSetPieces(5);
-			} else if (calcPlayer.age >= 22) {
+} else if (calcPlayer.age < 25) {
 				calcPlayer.setGoalkeeping(15, 1);
 				calcPlayer.setDefending(15);
 				calcPlayer.setSetPieces(5);
-			} else if (calcPlayer.age >= 25) {
+} else if (calcPlayer.age < 28) {
 				calcPlayer.setGoalkeeping(17, 1);
 				calcPlayer.setDefending(15);
 				calcPlayer.setSetPieces(20);
-			} else if (calcPlayer.age >= 28) {
+} else {
 				calcPlayer.setGoalkeeping(20, 1);
 				calcPlayer.setDefending(16);
 				calcPlayer.setSetPieces(20);
@@ -126,19 +126,19 @@ public class CalcPlayerBaseProvider {
 				calcPlayer.setPassing(5);
 				calcPlayer.setSetPieces(4);
 
-			} else if (calcPlayer.age >= 22) {
+} else if (calcPlayer.age < 25) {
 				calcPlayer.setGoalkeeping(15, 1);
 				calcPlayer.setDefending(15);
 				calcPlayer.setPassing(7);
 				calcPlayer.setSetPieces(5);
 
-			} else if (calcPlayer.age >= 25) {
+} else if (calcPlayer.age < 28) {
 				calcPlayer.setGoalkeeping(17, 1);
 				calcPlayer.setDefending(15);
 				calcPlayer.setPassing(7);
 				calcPlayer.setSetPieces(19);
 
-			} else if (calcPlayer.age >= 28) {
+} else {
 				calcPlayer.setGoalkeeping(20, 1);
 				calcPlayer.setDefending(15);
 				calcPlayer.setPassing(7);
@@ -154,17 +154,17 @@ public class CalcPlayerBaseProvider {
 			calcPlayer.setDefending(7, 1);
 			calcPlayer.setPassing(6);
 			calcPlayer.setSetPieces(2);
-		} else if (calcPlayer.age >= 22) {
+} else if (calcPlayer.age < 27) {
 			calcPlayer.setPlaymaking(15);
 			calcPlayer.setDefending(15, 1);
 			calcPlayer.setPassing(7);
 			calcPlayer.setSetPieces(2);
-		} else if (calcPlayer.age >= 27) {
+} else if (calcPlayer.age < 29) {
 			calcPlayer.setPlaymaking(17);
 			calcPlayer.setDefending(17, 1);
 			calcPlayer.setPassing(7);
 			calcPlayer.setSetPieces(2);
-		} else if (calcPlayer.age >= 29) {
+} else {
 			calcPlayer.setPlaymaking(17);
 			calcPlayer.setDefending(18, 1);
 			calcPlayer.setPassing(7);
@@ -180,19 +180,19 @@ public class CalcPlayerBaseProvider {
 			calcPlayer.setWing(6);
 			calcPlayer.setPassing(5);
 			calcPlayer.setSetPieces(2);
-		} else if (calcPlayer.age >= 22) {
+} else if (calcPlayer.age < 27) {
 			calcPlayer.setPlaymaking(14);
 			calcPlayer.setDefending(15, 1);
 			calcPlayer.setWing(15);
 			calcPlayer.setPassing(6);
 			calcPlayer.setSetPieces(2);
-		} else if (calcPlayer.age >= 27) {
+} else if (calcPlayer.age < 29) {
 			calcPlayer.setPlaymaking(14);
 			calcPlayer.setDefending(17, 1);
 			calcPlayer.setWing(16);
 			calcPlayer.setPassing(6);
 			calcPlayer.setSetPieces(2);
-		} else if (calcPlayer.age >= 29) {
+} else {
 			calcPlayer.setPlaymaking(14);
 			calcPlayer.setDefending(18, 1);
 			calcPlayer.setWing(17);
@@ -209,19 +209,19 @@ public class CalcPlayerBaseProvider {
 			calcPlayer.setScoring(4);
 			calcPlayer.setPassing(7);
 			calcPlayer.setSetPieces(2);
-		} else if (calcPlayer.age >= 22) {
+} else if (calcPlayer.age < 27) {
 			calcPlayer.setPlaymaking(15, 1);
 			calcPlayer.setDefending(11);
 			calcPlayer.setScoring(6);
 			calcPlayer.setPassing(13);
 			calcPlayer.setSetPieces(2);
-		} else if (calcPlayer.age >= 27) {
+} else if (calcPlayer.age < 29) {
 			calcPlayer.setPlaymaking(18, 1);
 			calcPlayer.setDefending(11);
 			calcPlayer.setScoring(6);
 			calcPlayer.setPassing(13);
 			calcPlayer.setSetPieces(2);
-		} else if (calcPlayer.age >= 29) {
+} else {
 			calcPlayer.setPlaymaking(19, 1);
 			calcPlayer.setDefending(11);
 			calcPlayer.setScoring(6);
@@ -239,19 +239,19 @@ public class CalcPlayerBaseProvider {
 			calcPlayer.setWing(7, 1);
 			calcPlayer.setPassing(5);
 			calcPlayer.setSetPieces(2);
-		} else if (calcPlayer.age >= 22) {
+} else if (calcPlayer.age < 27) {
 			calcPlayer.setPlaymaking(13);
 			calcPlayer.setDefending(11);
 			calcPlayer.setWing(16, 1);
 			calcPlayer.setPassing(9);
 			calcPlayer.setSetPieces(2);
-		} else if (calcPlayer.age >= 27) {
+} else if (calcPlayer.age < 29) {
 			calcPlayer.setPlaymaking(16);
 			calcPlayer.setDefending(11);
 			calcPlayer.setWing(17, 1);
 			calcPlayer.setPassing(9);
 			calcPlayer.setSetPieces(2);
-		} else if (calcPlayer.age >= 29) {
+} else {
 			calcPlayer.setPlaymaking(18);
 			calcPlayer.setDefending(11);
 			calcPlayer.setWing(17, 1);
@@ -268,19 +268,19 @@ public class CalcPlayerBaseProvider {
 			calcPlayer.setScoring(6, 1);
 			calcPlayer.setPassing(6);
 			calcPlayer.setSetPieces(2);
-		} else if (calcPlayer.age >= 22) {
+} else if (calcPlayer.age < 27) {
 			calcPlayer.setPlaymaking(12);
 			calcPlayer.setWing(10);
 			calcPlayer.setScoring(13, 1);
 			calcPlayer.setPassing(11);
 			calcPlayer.setSetPieces(2);
-		} else if (calcPlayer.age >= 27) {
+} else if (calcPlayer.age < 29) {
 			calcPlayer.setPlaymaking(14);
 			calcPlayer.setWing(12);
 			calcPlayer.setScoring(15, 1);
 			calcPlayer.setPassing(13);
 			calcPlayer.setSetPieces(2);
-		} else if (calcPlayer.age >= 29) {
+} else {
 			calcPlayer.setPlaymaking(14);
 			calcPlayer.setWing(12);
 			calcPlayer.setScoring(17, 1);
@@ -297,19 +297,19 @@ public class CalcPlayerBaseProvider {
 			calcPlayer.setScoring(6);
 			calcPlayer.setPassing(6);
 			calcPlayer.setSetPieces(2);
-		} else if (calcPlayer.age >= 22) {
+} else if (calcPlayer.age < 27) {
 			calcPlayer.setPlaymaking(13, 1);
 			calcPlayer.setWing(5);
 			calcPlayer.setScoring(12);
 			calcPlayer.setPassing(13);
 			calcPlayer.setSetPieces(2);
-		} else if (calcPlayer.age >= 27) {
+} else if (calcPlayer.age < 29) {
 			calcPlayer.setPlaymaking(16, 1);
 			calcPlayer.setWing(7);
 			calcPlayer.setScoring(14);
 			calcPlayer.setPassing(16);
 			calcPlayer.setSetPieces(2);
-		} else if (calcPlayer.age >= 29) {
+} else {
 			calcPlayer.setPlaymaking(16, 1);
 			calcPlayer.setWing(7);
 			calcPlayer.setScoring(14);
@@ -326,19 +326,19 @@ public class CalcPlayerBaseProvider {
 			calcPlayer.setScoring(6, 1);
 			calcPlayer.setPassing(6);
 			calcPlayer.setSetPieces(2);
-		} else if (calcPlayer.age >= 22) {
+} else if (calcPlayer.age < 27) {
 			calcPlayer.setPlaymaking(9);
 			calcPlayer.setWing(13);
 			calcPlayer.setScoring(13, 1);
 			calcPlayer.setPassing(10);
 			calcPlayer.setSetPieces(2);
-		} else if (calcPlayer.age >= 27) {
+} else if (calcPlayer.age < 29) {
 			calcPlayer.setPlaymaking(11);
 			calcPlayer.setWing(16);
 			calcPlayer.setScoring(15, 1);
 			calcPlayer.setPassing(12);
 			calcPlayer.setSetPieces(2);
-		} else if (calcPlayer.age >= 29) {
+} else {
 			calcPlayer.setPlaymaking(11);
 			calcPlayer.setWing(16);
 			calcPlayer.setScoring(18, 1);
