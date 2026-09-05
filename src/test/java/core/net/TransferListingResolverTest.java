@@ -70,4 +70,66 @@ class TransferListingResolverTest {
         assertThat(TransferListingResolver.saleAt(
                 List.of(transfer("2026-09-02 20:15:00", 1_700_000L)), null)).isNull();
     }
+
+    private static final HODateTime NOW = HODateTime.fromHT("2026-09-05 12:00:00");
+
+    /**
+     * The sale question is asked whenever the entry's <em>old</em> deadline is still inside
+     * SCOUT_RETRY_GRACE, whether or not he is listed again. "He is listed, so he did not sell" is
+     * false - a buyer re-listing a player he has just bought is ordinary Hattrick behaviour - and
+     * this is the last moment the sale can be recorded: the refresh moves the deadline forward and
+     * isTheWatchedTransfer will never line up with that sale again.
+     */
+    @Test
+    void aRelistingInsideTheRetryGraceStillAsksAboutTheSale() {
+        final var recent = HODateTime.fromHT("2026-09-01 20:15:00");   // 4 days ago
+
+        final var action = TransferListingResolver.scoutAction(true, recent, NOW);
+
+        assertThat(action.askAboutSale()).isTrue();
+        assertThat(action.refreshEntry()).isTrue();
+    }
+
+    @Test
+    void pastTheRetryGraceTheWatchContinuesAlone() {
+        final var old = HODateTime.fromHT("2026-08-01 20:15:00");      // 35 days ago
+
+        final var action = TransferListingResolver.scoutAction(true, old, NOW);
+
+        assertThat(action.askAboutSale()).isFalse();
+        assertThat(action.refreshEntry()).isTrue();
+    }
+
+    @Test
+    void anUnlistedPlayerIsAskedAboutButHisEntryIsLeftAlone() {
+        final var recent = HODateTime.fromHT("2026-09-01 20:15:00");
+
+        final var action = TransferListingResolver.scoutAction(false, recent, NOW);
+
+        assertThat(action.askAboutSale()).isTrue();
+        assertThat(action.refreshEntry()).isFalse();
+    }
+
+    /** Off the market and long past the retry grace: nothing left to do but keep watching. */
+    @Test
+    void anUnlistedPlayerPastTheRetryGraceCostsNothingBeyondTheLook() {
+        final var old = HODateTime.fromHT("2026-08-01 20:15:00");
+
+        final var action = TransferListingResolver.scoutAction(false, old, NOW);
+
+        assertThat(action.askAboutSale()).isFalse();
+        assertThat(action.refreshEntry()).isFalse();
+    }
+
+    /**
+     * {@code scoutCandidates} filters these out, so this is a guard rather than a live path - but
+     * the function is package-private and pure, and a null deadline must never become "ask about a
+     * sale at no particular date", which is how a player's decade-old transfer ends up recorded as
+     * this entry's.
+     */
+    @Test
+    void aDeadlinelessCandidateIsNeverAskedAboutASale() {
+        assertThat(TransferListingResolver.scoutAction(true, null, NOW).askAboutSale()).isFalse();
+        assertThat(TransferListingResolver.scoutAction(true, null, NOW).refreshEntry()).isTrue();
+    }
 }

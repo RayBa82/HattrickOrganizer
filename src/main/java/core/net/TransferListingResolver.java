@@ -146,6 +146,26 @@ public final class TransferListingResolver {
     /** A scouted player and the deadline of the transfer that was being watched. */
     private record Candidate(int playerId, HODateTime deadline) {}
 
+    /** What the scout pass does about one candidate, once the observation has come back. */
+    record ScoutAction(boolean askAboutSale, boolean refreshEntry) {}
+
+    /**
+     * The two independent questions a scout candidate raises, decided together so the branch table
+     * is one testable thing rather than a shape spread across the loop.
+     * <p>
+     * They are independent because "he is listed again" does not answer "did he sell": a buyer
+     * re-listing a player he has just bought is ordinary Hattrick behaviour, and once the refresh
+     * has moved the deadline forward the sale can never be matched to this entry again.
+     *
+     * @param oldDeadline the deadline the entry was watching, before any refresh
+     */
+    static ScoutAction scoutAction(boolean transferListed, HODateTime oldDeadline, HODateTime now) {
+        final var stillWorthAsking = oldDeadline != null
+                && oldDeadline.getInstant().plus(SCOUT_RETRY_GRACE).isAfter(now.getInstant());
+        return new ScoutAction(stillWorthAsking, transferListed);
+    }
+
+
     /** Whether this run is out of budget - either bound stops it, whichever comes first. */
     private static boolean spent(int calls, int cap, long deadlineNanos) {
         return calls >= cap || System.nanoTime() - deadlineNanos >= 0;
