@@ -77,6 +77,15 @@ public class ScoutEintrag extends AbstractTable.Storable {
     protected AmountOfMoney m_iPrice;
 
     /**
+     * What the player actually sold for, filled in by the resolve pass once his transfer completed.
+     * Null while he is still listed, and for an entry whose sale HO never saw.
+     */
+    protected AmountOfMoney m_clSalePrice;
+
+    /** When that sale completed. Null whenever {@link #m_clSalePrice} is. */
+    protected java.sql.Timestamp m_clSoldAt;
+
+    /**
      * Speciality
      */
     protected int m_iSpeciality;
@@ -362,6 +371,27 @@ public class ScoutEintrag extends AbstractTable.Storable {
         return m_iPrice;
     }
 
+    public final void setSalePrice(AmountOfMoney salePrice) {
+        this.m_clSalePrice = salePrice;
+    }
+
+    public final AmountOfMoney getSalePrice() {
+        return m_clSalePrice;
+    }
+
+    public final void setSoldAt(java.sql.Timestamp soldAt) {
+        this.m_clSoldAt = soldAt;
+    }
+
+    public final java.sql.Timestamp getSoldAt() {
+        return m_clSoldAt;
+    }
+
+    /** Whether HO knows what this player went for. */
+    public final boolean isSold() {
+        return m_clSalePrice != null;
+    }
+
     public final void setSpeciality(int m_iSpeciality) {
         this.m_iSpeciality = m_iSpeciality;
     }
@@ -606,6 +636,9 @@ public class ScoutEintrag extends AbstractTable.Storable {
         eintrag.setStandards(getStandards());
         eintrag.setInfo(getInfo());
         eintrag.setPrice(getPrice());
+        eintrag.setSalePrice(getSalePrice());
+        eintrag.setSoldAt(getSoldAt() == null ? null
+                : new java.sql.Timestamp(getSoldAt().getTime()));
         eintrag.setWecker(isWecker());
         eintrag.setDeadline(new java.sql.Timestamp(getDeadline().getTime()));
         eintrag.setAgreeability(getAgreeability());

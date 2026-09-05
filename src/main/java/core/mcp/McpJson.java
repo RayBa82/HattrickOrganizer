@@ -214,6 +214,43 @@ public final class McpJson {
     }
 
     /**
+     * One stored observation of a player on the transfer market - a comparable, as evidence rather
+     * than as a number. {@code salePrice} is what he actually went for and is null until the
+     * resolve pass has seen his transfer complete; until then asking price and highest bid say only
+     * what was wanted and offered.
+     */
+    public static JsonObject listing(core.db.TransferListing l) {
+        final var json = new JsonObject();
+        json.addProperty("playerId", l.getPlayerId());
+        json.addProperty("playerName", l.getPlayerName());
+        json.addProperty("observedAt", l.getObservedAt() == null ? null : l.getObservedAt().toHT());
+        json.addProperty("deadline", l.getDeadline() == null ? null : l.getDeadline().toHT());
+        json.addProperty("askingPrice", money(l.getAskingPrice()));
+        json.addProperty("highestBid", money(l.getHighestBid()));
+        json.addProperty("sold", l.getSalePrice() != null);
+        json.addProperty("salePrice", l.getSalePrice() == null ? null : money(l.getSalePrice()));
+        json.addProperty("age", l.getAge());
+        json.addProperty("ageDays", l.getAgeDays());
+        json.addProperty("salary", l.getSalary() == null ? null : money(l.getSalary()));
+        json.addProperty("tsi", l.getTsi());
+        json.addProperty("form", l.getForm());
+        json.addProperty("experience", l.getExperience());
+        json.addProperty("leadership", l.getLeadership());
+        json.addProperty("specialty", l.getSpecialty());
+        json.addProperty("cards", l.getCards());
+        json.addProperty("injuryLevel", l.getInjuryLevel());
+        json.addProperty("stamina", l.getStamina());
+        json.addProperty("keeper", l.getKeeper());
+        json.addProperty("playmaker", l.getPlaymaker());
+        json.addProperty("scorer", l.getScorer());
+        json.addProperty("passing", l.getPassing());
+        json.addProperty("winger", l.getWinger());
+        json.addProperty("defender", l.getDefender());
+        json.addProperty("setPieces", l.getSetPieces());
+        return json;
+    }
+
+    /**
      * One entry of HO's local transfer scout list. Price and deadline are the snapshot taken when
      * the player was added, not the live market state.
      */
@@ -225,6 +262,10 @@ public final class McpJson {
         json.addProperty("deadline", entry.getDeadline() == null ? null
                 : HODateTime.fromDbTimestamp(entry.getDeadline()).toHT());
         json.addProperty("note", entry.getInfo());
+        // Filled in once the watched transfer completed; null while he is still listed.
+        json.addProperty("salePrice", entry.isSold() ? money(entry.getSalePrice()) : null);
+        json.addProperty("soldAt", entry.getSoldAt() == null ? null
+                : HODateTime.fromDbTimestamp(entry.getSoldAt()).toHT());
         json.addProperty("age", entry.getAlter());
         json.addProperty("ageDays", entry.getAgeDays());
         json.addProperty("salary", money(entry.getbaseWage()));

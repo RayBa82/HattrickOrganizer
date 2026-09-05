@@ -15,6 +15,7 @@ import core.util.HODateTime;
 import core.util.HOLogger;
 import module.transfer.PlayerTransfer;
 import module.transfer.scout.ScoutEintrag;
+import module.transfer.scout.ScoutList;
 import module.transfer.search.TransferSearchConverter;
 
 import java.util.Arrays;
@@ -148,25 +149,33 @@ public final class TransferTools {
                 new McpTool("list_scout",
                         "Read back HO's local transfer scout list - the shortlist add_to_scout "
                                 + "writes, with the market data and skills as they were when each "
-                                + "player was added. Asking price and deadline are that snapshot, "
+                                + "player was added. askingPrice and deadline are that snapshot, "
                                 + "not live; re-run search_transfers for the current market state. "
+                                + "salePrice and soldAt are different: they are filled in after the "
+                                + "watched transfer completed and say what the player actually went "
+                                + "for, so a target you lost still tells you the price it took. "
+                                + "Both are null while he is still listed. "
                                 + "Distinct from get_open_bids, which reads Hattrick's own tracking "
                                 + "list.",
                         McpTool.schema(McpTool.properties()),
                         args -> listScout()),
                 new McpTool("estimate_market_value",
-                        "What one of your players is worth, from the transfer listings HO has "
-                                + "already seen - no CHPP call, no search cap. Matches him against "
-                                + "the stored corpus on the same criteria find_comparables uses "
-                                + "(age window, his two best positional skills, his specialty) and "
-                                + "returns the median. Reports its basis: resolved_sales means real "
-                                + "sale prices, observed_listings means asking prices and highest "
-                                + "bids of players still on or recently on the market, which run "
-                                + "high because an asking price is what a seller wants. Sale prices "
-                                + "are filled in after a team download, so the basis improves on "
-                                + "its own. Always read sampleSize before trusting the number; a "
-                                + "thin sample means widen the tolerances or run search_transfers "
-                                + "over that profile to feed the corpus.",
+                        "Evidence for valuing one of your players, from the transfer listings HO "
+                                + "has already seen - no CHPP call, no search cap. Matches him "
+                                + "against the stored corpus on the same criteria find_comparables "
+                                + "uses (age window, his two best positional skills, his specialty) "
+                                + "and returns the matching listings themselves, each with wage, "
+                                + "TSI, form, every skill, asking price, highest bid and - once his "
+                                + "transfer completed - what he actually sold for. YOU do the "
+                                + "valuation from those rows: weigh wage against skills, discount "
+                                + "stale observations, notice injuries and specialties. The "
+                                + "estimate field is only a median and is a starting anchor, not an "
+                                + "answer. basis says what it rests on: resolved_sales means real "
+                                + "sale prices, observed_listings means asking prices and bids, "
+                                + "which run high because an asking price is what a seller wants. "
+                                + "Sale prices fill in after each team download, so this improves "
+                                + "on its own. A thin sampleSize means widen the tolerances, or run "
+                                + "search_transfers over that profile to feed the corpus.",
                         McpTool.schema(McpTool.properties(
                                         "playerId", McpTool.prop("integer", "the player to value"),
                                         "ageTolerance", McpTool.prop("integer", "age window in years, default 1"),
@@ -191,6 +200,9 @@ public final class TransferTools {
      * enough for the difference to matter.
      */
     private static final int MIN_RESOLVED_SAMPLE = 3;
+
+    /** How many comparable rows come back as evidence. Enough to reason over, small enough to read. */
+    private static final int MAX_COMPARABLES = 40;
 
     private static JsonObject estimateMarketValue(JsonObject args) throws McpToolException {
         final var playerId = McpJson.reqInt(args, "playerId");
@@ -231,14 +243,28 @@ public final class TransferTools {
 
         final var json = new JsonObject();
         json.addProperty("currency", McpJson.currency());
-        json.addProperty("playerId", playerId);
-        json.addProperty("playerName", player.getFullName());
+        // The player being valued, so the comparison is self-contained in one call.
+        json.add("player", McpJson.player(player));
         json.addProperty("basis", useSales ? "resolved_sales" : "observed_listings");
         json.addProperty("sampleSize", sample.size());
         json.addProperty("resolvedSalesAvailable", sales.size());
         json.addProperty("observedListingsAvailable", asks.size());
         json.addProperty("comparableQuery", query.toQueryString());
         json.addProperty("observedWithinDays", days);
+
+        // The evidence, not just the summary. The median below is a crude anchor: it collapses
+        // wage, TSI, form, the other skills and how long ago each was seen, all of which change
+        // what a player is worth. Reason over these rows instead of trusting the number.
+        final var evidence = new JsonArray();
+        comparables.stream()
+                .sorted(Comparator.comparing((TransferListing l) -> l.getObservedAt() == null
+                        ? HODateTime.fromHT("1990-01-01 00:00:00") : l.getObservedAt()).reversed())
+                .limit(MAX_COMPARABLES)
+                .forEach(l -> evidence.add(McpJson.listing(l)));
+        json.add("comparables", evidence);
+        json.addProperty("comparablesReturned", evidence.size());
+        json.addProperty("comparablesMatched", comparables.size());
+
         if (sample.isEmpty()) {
             json.add("estimate", com.google.gson.JsonNull.INSTANCE);
             json.addProperty("note", "Nothing comparable in the corpus yet. Widen ageTolerance / "
@@ -247,6 +273,10 @@ public final class TransferTools {
             return json;
         }
         json.addProperty("estimate", McpJson.money(median(sample)));
+        json.addProperty("estimateNote", "Median over all " + sample.size() + " comparables, as a "
+                + "starting anchor only - it ignores wage, TSI, form, the skills outside the query "
+                + "window and how stale each observation is. The comparables array carries those, "
+                + "and is the better basis for a judgement.");
         final var range = new JsonArray();
         range.add(McpJson.money(sample.get(0)));
         range.add(McpJson.money(sample.get(sample.size() - 1)));
@@ -287,16 +317,9 @@ public final class TransferTools {
 
     // ------------------------------------------------------------------ transfer scout list
     //
-    // The scout list is written through the live TransferScoutPanel, never straight to the SCOUT
-    // table. HOMainFrame.shutdown() saves that panel's in-memory list with a delete-all-then-insert
-    // (TransferScoutPanel.saveScoutListe), so a row written behind an already-open Transfers tab
-    // would be silently dropped hours later at exit. Going through the panel also refreshes the
-    // table and the deadline alarm thread. Panel access must happen on the EDT.
-
-    /** The scout panel, creating the Transfers tab if the user has not opened it yet. */
-    private static module.transfer.scout.TransferScoutPanel scoutPanel() {
-        return core.gui.HOMainFrame.instance().getTransferScoutPanel().getScoutPanel();
-    }
+    // Which copy of the list is authoritative depends on whether the Transfers tab is open, and
+    // reaching for the panel when it is not would create and select that tab. ScoutList owns both
+    // of those rules; see its javadoc. Everything here runs on the EDT because it does.
 
     private static JsonObject addToScout(JsonObject args) throws McpToolException {
         final var requested = McpJson.reqArray(args, "players");
@@ -331,27 +354,29 @@ public final class TransferTools {
         }
 
         return LineupTools.onEdt(() -> {
-            final var panel = scoutPanel();
+            final var tabOpen = ScoutList.isLive();
+            final var list = ScoutList.entries();
+            for (final var entry : entries.values()) {
+                list.remove(entry);                // equals is by player id, so this replaces
+                list.add(entry);
+            }
+            // The panel only persists at shutdown; save now so the shortlist survives a crash.
+            ScoutList.save(list);
+
             final var added = new JsonArray();
             for (final var entry : entries.values()) {
-                // Dedupes on its own: ScoutEintrag.equals is by player id, and addScoutEintrag
-                // removes an equal entry first.
-                panel.addScoutEintrag(entry);
                 final var json = new JsonObject();
                 json.addProperty("playerId", entry.getPlayerID());
                 json.addProperty("name", entry.getName());
                 added.add(json);
             }
-            // The panel only persists at shutdown; write through now so the shortlist survives a
-            // crash, and so the DB matches what the panel holds.
-            panel.saveScoutListe();
-
             final var out = new JsonObject();
             out.addProperty("status", "ok");
             out.addProperty("addedCount", added.size());
             out.add("added", added);
-            out.addProperty("scoutListSize",
-                    panel.getTransferTable().getTransferTableModel().getScoutListe().size());
+            out.addProperty("scoutListSize", list.size());
+            out.addProperty("visibleInUi", tabOpen ? "yes, the TransferScout table refreshed"
+                    : "the Transfers tab is closed; the entries are stored and show when it opens");
             if (!notFound.isEmpty()) {
                 out.add("notFound", notFound);
                 out.addProperty("notFoundNote", "No stored market snapshot for these players - run "
@@ -364,8 +389,7 @@ public final class TransferTools {
     private static JsonObject listScout() throws McpToolException {
         return LineupTools.onEdt(() -> {
             final var players = new JsonArray();
-            for (final var entry : scoutPanel().getTransferTable().getTransferTableModel()
-                    .getScoutListe()) {
+            for (final var entry : ScoutList.entries()) {
                 players.add(McpJson.scoutEntry(entry));
             }
             final var out = new JsonObject();

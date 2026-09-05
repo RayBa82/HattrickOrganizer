@@ -396,6 +396,17 @@ public class TransferScoutingTableModel extends HOTableModel {
                                 ColorLabelEntry.FG_STANDARD,
                                 ColorLabelEntry.BG_STANDARD, SwingConstants.RIGHT);
                     }
+                },
+                // What the watched transfer actually ended at, filled in once it completed.
+                // Empty while the player is still listed.
+                new TransferScoutTableColumn(id++, "ls.scout.saleprice") {
+                    @Override
+                    public IHOTableCellEntry getTableEntry(ScoutEintrag scouting) {
+                        return new ColorLabelEntry(
+                                scouting.isSold() ? scouting.getSalePrice().toLocaleString() : "",
+                                ColorLabelEntry.FG_STANDARD,
+                                ColorLabelEntry.BG_STANDARD, SwingConstants.RIGHT);
+                    }
                 }
         )).toArray(new TransferScoutTableColumn[0]);
 

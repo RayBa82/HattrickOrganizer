@@ -84,9 +84,29 @@ public class TransferListingTable extends AbstractTable {
      * @param max how many rows to return - the resolve pass is capped, one CHPP call per row
      */
     public List<TransferListing> loadUnresolved(int max) {
+        // RESOLVEDAT IS NULL means "never looked up", not "never sold". Plenty of listings never
+        // produce a sale - withdrawn, expired without a bid, relisted - and without this they would
+        // sit at the head of an oldest-first queue and be retried on every single download, forever.
+        // As those accumulate they would eat the whole call budget and new listings would stop
+        // resolving, so the corpus would get worse as it got bigger.
         final var sql = createSelectStatement(
-                "WHERE SALEPRICE IS NULL ORDER BY OBSERVEDAT ASC LIMIT " + Math.max(max, 0));
+                "WHERE SALEPRICE IS NULL AND RESOLVEDAT IS NULL ORDER BY OBSERVEDAT ASC LIMIT "
+                        + Math.max(max, 0));
         return load(TransferListing.class, connectionManager.executeQuery(sql));
+    }
+
+    /**
+     * Note that HO looked this player up and found no sale for his expired listings, so they are
+     * not asked about again. Only for a CHPP call that actually answered - a network failure must
+     * not burn a listing's one attempt.
+     */
+    public void markResolveAttempted(int playerId, HODateTime now) {
+        connectionManager.executeUpdate("UPDATE " + getTableName()
+                + " SET RESOLVEDAT='" + HODateTime.toDbTimestamp(now) + "'"
+                + " WHERE PLAYERID=" + playerId
+                + " AND SALEPRICE IS NULL"
+                + " AND RESOLVEDAT IS NULL"
+                + " AND DEADLINE < '" + HODateTime.toDbTimestamp(now) + "'");
     }
 
     /** Whether any snapshot of this player carries skill data (a search hit, or the skills-fill pass). */

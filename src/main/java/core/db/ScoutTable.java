@@ -45,7 +45,10 @@ final class ScoutTable extends AbstractTable {
 				ColumnDescriptor.Builder.newInstance().setColumnName("Nationality").setGetter((o) -> ((ScoutEintrag) o).getNationality()).setSetter((o, v) -> ((ScoutEintrag) o).setNationality((int) v)).setType(Types.INTEGER).isNullable(false).build(),
 				ColumnDescriptor.Builder.newInstance().setColumnName("Leadership").setGetter((o) -> ((ScoutEintrag) o).getLeadership()).setSetter((o, v) -> ((ScoutEintrag) o).setLeadership((int) v)).setType(Types.INTEGER).isNullable(false).build(),
 				ColumnDescriptor.Builder.newInstance().setColumnName("Loyalty").setGetter((o) -> ((ScoutEintrag) o).getLoyalty()).setSetter((o, v) -> ((ScoutEintrag) o).setLoyalty((int) v)).setType(Types.INTEGER).isNullable(false).build(),
-				ColumnDescriptor.Builder.newInstance().setColumnName("MotherClub").setGetter((o) -> ((ScoutEintrag) o).isHomegrown()).setSetter((o, v) -> ((ScoutEintrag) o).setHomegrown((boolean) v)).setType(Types.BOOLEAN).isNullable(false).build()
+				ColumnDescriptor.Builder.newInstance().setColumnName("MotherClub").setGetter((o) -> ((ScoutEintrag) o).isHomegrown()).setSetter((o, v) -> ((ScoutEintrag) o).setHomegrown((boolean) v)).setType(Types.BOOLEAN).isNullable(false).build(),
+				// Filled in by the resolve pass once the watched transfer completed; null until then.
+				ColumnDescriptor.Builder.newInstance().setColumnName("SalePrice").setGetter((o) -> { var p = ((ScoutEintrag) o).getSalePrice(); return p == null ? null : p.getSwedishKrona(); }).setSetter((o, v) -> ((ScoutEintrag) o).setSalePrice((AmountOfMoney) v)).setType(Types.DECIMAL).isNullable(true).build(),
+				ColumnDescriptor.Builder.newInstance().setColumnName("SoldAt").setGetter((o) -> ((ScoutEintrag) o).getSoldAt()).setSetter((o, v) -> ((ScoutEintrag) o).setSoldAt(v == null ? null : ((HODateTime) v).toDbTimestamp())).setType(Types.TIMESTAMP).isNullable(true).build()
 		};
 	}
 

@@ -60,12 +60,12 @@ import java.util.stream.Collectors;
 public class DBManager implements PersistenceManager {
 
 	/** database versions */
-	private static final int DBVersion = 1002; // HO 10.0 version
+	private static final int DBVersion = 1003; // HO 10.0 version
 	/**
 	 * Previous db version is used by development versions to ensure that db upgrade will rerun on each
 	 * new installed preliminary version
 	 */
-	private static final int previousDBVersion = 1001;
+	private static final int previousDBVersion = 1002;
 	private static final double DBConfigVersion = 10d; // HO 10.0 version
 
 	/** 2004-06-14 11:00:00.0 */
@@ -1535,6 +1535,11 @@ public class DBManager implements PersistenceManager {
 											  java.time.Duration window) {
 		((TransferListingTable) getTable(TransferListingTable.TABLENAME))
 				.storeSalePrice(playerId, saleDate, salePrice, window);
+	}
+
+	public void markTransferListingResolveAttempted(int playerId, HODateTime now) {
+		((TransferListingTable) getTable(TransferListingTable.TABLENAME))
+				.markResolveAttempted(playerId, now);
 	}
 
 	public List<TransferListing> loadComparableTransferListings(int ageMin, int ageMax,

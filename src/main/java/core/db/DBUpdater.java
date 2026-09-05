@@ -93,6 +93,8 @@ final class DBUpdater {
 					case 1001:
 						updateDBv1002(DBVersion);
 					case 1002:
+						updateDBv1003(DBVersion);
+					case 1003:
 				}
 
 			} catch (Exception e) {
@@ -172,6 +174,15 @@ final class DBUpdater {
 		dbManager.getTable(TransferBidTable.TABLENAME).createTable();
 
 		updateDBVersion(dbVersion, 1002);
+	}
+
+	/** HO 10.0.3: what a scouted player actually sold for, once his transfer completed. */
+	private void updateDBv1003(int dbVersion) throws SQLException {
+		var scoutTable = dbManager.getTable(ScoutTable.TABLENAME);
+		scoutTable.tryAddColumn("SalePrice", "DECIMAL");
+		scoutTable.tryAddColumn("SoldAt", "TIMESTAMP");
+
+		updateDBVersion(dbVersion, 1003);
 	}
 
     private void updateDBv901(int dbVersion) throws SQLException {

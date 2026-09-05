@@ -168,6 +168,38 @@ class TransferListingTableTest {
         assertThat(table.loadUnresolved(10)).anyMatch(l -> l.getPlayerId() == 777888999);
     }
 
+    /**
+     * The property that decides whether the corpus improves with age: a listing that never produced
+     * a sale must drop out of the queue instead of being retried on every download forever.
+     */
+    @Test
+    void aLookedAtListingWithNoSaleStopsComingBackAsUnresolved() {
+        final var afterDeadline = HODateTime.fromHT("2026-09-03 10:00:00");
+        table.storeListing(TransferListing.fromHit(hit(424242, details()),
+                HODateTime.fromHT("2026-08-30 14:00:00")));
+        assertThat(table.loadUnresolved(50)).anyMatch(l -> l.getPlayerId() == 424242);
+
+        table.markResolveAttempted(424242, afterDeadline);
+
+        assertThat(table.loadUnresolved(50)).noneMatch(l -> l.getPlayerId() == 424242);
+        // Still unsold - "looked at" is not "sold".
+        assertThat(table.loadComparables(23, 25, "PLAYMAKER", 11, 13, "DEFENDER", 5, 7, null,
+                HODateTime.fromHT("2026-08-01 00:00:00")))
+                .filteredOn(l -> l.getPlayerId() == 424242)
+                .allMatch(l -> l.getSalePrice() == null);
+    }
+
+    /** A listing whose deadline has not passed is not "looked at" - it has not had its chance. */
+    @Test
+    void doesNotMarkAListingThatHasNotExpiredYet() {
+        table.storeListing(TransferListing.fromHit(hit(434343, details()),
+                HODateTime.fromHT("2026-08-30 14:00:00")));
+
+        table.markResolveAttempted(434343, HODateTime.fromHT("2026-09-01 10:00:00"));
+
+        assertThat(table.loadUnresolved(50)).anyMatch(l -> l.getPlayerId() == 434343);
+    }
+
     @Test
     void loadsComparablesInsideTheAgeSkillAndRecencyWindow() {
         final var observedAt = HODateTime.fromHT("2026-08-30 14:00:00");

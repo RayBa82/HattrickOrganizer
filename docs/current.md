@@ -994,7 +994,152 @@ corpus instead of the CHPP market. No call, no search cap.
   still evidence about that season. Bounding the *read* keeps the history without letting it vote.
 - Empty sample returns `estimate: null` with the fix in the note, rather than a fabricated number.
 
+**It returns the comparables, not just the number.** The first version handed back a median and hid
+the rows, which is backwards when the caller is a model: a median collapses wage, TSI, form, the
+skills outside the query window and how stale each observation is — exactly the things an LLM can
+weigh and a median cannot. `comparables` now carries up to 40 matching listings, newest observation
+first, each with those fields plus asking price, highest bid and the sale price where known, and
+`comparablesMatched` says how many the query found in total. The subject player rides along under
+`player`, so one call is self-contained. `estimate` stays as a labelled anchor and `estimateNote`
+says plainly not to trust it over the rows.
+
 The skill column name reaches the SQL by concatenation, so `TransferListingTable.loadComparables`
 validates it against the table's own declared columns and throws otherwise.
 
 **Verification:** full suite green — 685 tests, 57 suites, 0 failures.
+
+## `add_to_scout` must not materialise the Transfers tab (2026-09-05)
+
+The first version reached the scout panel through `HOMainFrame.getTransferScoutPanel()`
+unconditionally. `HOTabbedPane.getModulePanel` **creates the tab and calls `setSelectedIndex`** when
+it is not already there, so a scout write with the Transfers tab closed would have switched the
+user's visible tab out from under them mid-task.
+
+`HOMainFrame.storeUserSettings` already guards the very same call with
+`isModuleTabVisible(IModule.TRANSFERS)` for this reason; the tools now do too:
+
+- **Tab open** — write through the panel, as before. The in-memory `Vector` is the authority and
+  `saveScoutListe()` would otherwise clobber a direct table write at shutdown.
+- **Tab closed** — write straight to `SCOUT`. No in-memory list exists to disagree with, and the
+  panel loads from the table when the user opens it.
+
+Both branches still run on the EDT: the visibility check reads Swing state.
+
+`add_to_scout` reports which branch it took in `visibleInUi`, so the agent can tell the user whether
+the table refreshed in front of them or the entries are waiting for the tab to open.
+
+### Scout entries are not re-priced
+
+Worth being explicit, because it is easy to assume otherwise: a scout entry keeps the asking price
+and deadline from the moment it was added, forever. Nothing updates it — not the resolve pass, not
+`ScoutThread` (which only fires deadline alarms). Sale prices land in `TRANSFERLISTING` and
+`TRANSFER`, which is what `estimate_market_value` reads; they do not flow back into `SCOUT`.
+This is pre-existing HO behaviour, not something the MCP tools changed, and `list_scout` says so.
+
+### …except for the sale, which is now explicit data (DB 1003)
+
+A resolved sale writes two new SCOUT columns rather than a line of free text:
+
+| Column | Type | Meaning |
+|---|---|---|
+| `SalePrice` | `DECIMAL`, nullable | what the player actually went for |
+| `SoldAt` | `TIMESTAMP`, nullable | when that transfer completed |
+
+Both null while he is still listed, and for an entry whose sale HO never saw. `ScoutEintrag.isSold()`
+is the readable test. The **asking price column is left alone** — it means "asking price" everywhere
+else in this table and HO's scout UI has read it that way for years.
+
+A number rather than a note because it is one a tool can compare against a bid and the table can sort
+and format; the note version could only be read. `list_scout` returns `salePrice` and `soldAt`
+alongside the snapshot `askingPrice`, and the tool description spells out which is which — the two
+are easy to confuse and mean opposite things about time.
+
+Visible in HO too: a "Sold for" column at the end of the transfer scout table (key
+`ls.scout.saleprice`, English only). Appending it keeps every existing column id stable, so saved
+column layouts are unaffected.
+
+**Migration:** `DBVersion` 1002 → 1003, `previousDBVersion` 1001 → 1002, `updateDBv1003` adds the two
+columns with `tryAddColumn`. That is guarded by `columnExistsInTable`, so the migration re-run DEV
+builds do on every start is a no-op — the same property `createTable` has, and worth checking for the
+same reason.
+
+`module.transfer.scout.ScoutList` owns the open-tab / closed-tab rule that `add_to_scout`,
+`list_scout` and the resolver all need, so the branching exists once rather than in each caller.
+The resolver hops onto the EDT for it and swallows failures — recording a sale must never undo a
+sale price that is already stored — and skips an entry that already carries one.
+
+### The scout list is resolved on every download, and first
+
+The pass originally iterated `TRANSFERLISTING` only, which would have left most scout entries
+permanently unresolved: **only the MCP `search_transfers` snapshots hits into that corpus**.
+`TransferSearchPanel` — HO's own transfer search tab — calls `OnlineWorker.searchTransfers` and
+stores nothing, and a hand-typed entry was never there either. So a player added to the scout list
+through the UI had no listing row for the resolver to walk.
+
+`resolve` now walks the scout list first and the corpus with what is left of the cap. The scout list
+is short, it is what the user is actually waiting on, and it must not starve behind hundreds of
+listing rows. Both passes share the `seen` set, so a player on both costs one CHPP call, and that
+call writes both places.
+
+Trigger: `OnlineWorker.getHrf`, i.e. `DownloadDialog` → *download team data*. That runs on the EDT
+(`actionPerformed`, no worker thread), which is also where the Options button runs, so the resolver
+touches `ScoutList` — Swing state — from the right thread. The `invokeLater` that the first version
+used is gone: deferring meant the scout write landed after the listing write and after the download
+UI had closed, for no benefit.
+
+### A default deadline must not match an unrelated transfer
+
+`ScoutEintrag` defaults its deadline to the moment it was created, so an entry typed in by hand and
+never given a real one looks expired immediately. Its player's most recent transfer — possibly
+seasons old — would then be recorded as "the sale".
+
+`ScoutList.isTheWatchedTransfer` guards it: the sale date has to sit within the same 2-day window of
+the entry's deadline that `storeSalePrice` uses on the corpus, and a missing date on either side is
+a no. A Hattrick transfer completes at its deadline, so the window only absorbs skew.
+
+### The corpus has to get better as it grows, not worse
+
+`loadUnresolved` selected `WHERE SALEPRICE IS NULL` and ordered oldest first. Nothing ever gives a
+sale price to a listing that did not sell — withdrawn, expired with no bidder, relisted — and plenty
+do not. Those rows would have sat permanently at the head of the queue and been retried on **every**
+download. As they accumulated they would have consumed the whole 20-call budget and new listings
+would have stopped resolving: the corpus getting worse the bigger it got, which is the opposite of
+the point.
+
+`RESOLVEDAT` now means "HO looked", not "it sold", and `loadUnresolved` adds `AND RESOLVEDAT IS
+NULL`. `markResolveAttempted` stamps it after a lookup that *answered*, over that player's expired
+rows still lacking a price. A thrown exception deliberately does not mark: a network blip must not
+burn a listing's one attempt.
+
+The scout list has the same failure mode and nowhere to record the attempt, so `scoutCandidates`
+stops offering an entry once its deadline is more than a fortnight past. A completed transfer shows
+up immediately, so anything still unresolved after that never sold.
+
+### What a corpus row actually holds
+
+Worth stating, because it changes how narrow the corpus really is: `transfersearch` returns the
+**complete** skill block per hit — all seven positional skills plus stamina, form, experience,
+leadership, specialty, TSI, salary, age/ageDays, cards and injury — and `TransferListing.fromHit`
+stores every one of them as its exact level. Not the search window: the values.
+
+So a row records skills *outside* the query that found it. A search for wing backs on DEF 12-14
+also deposits those players' passing, playmaking, set pieces, keeper and scoring, all usable as
+evidence for profiles never searched for. "The corpus only contains what you searched for" was too
+pessimistic — it contains full skill vectors for everyone those searches happened to surface.
+
+The rows that arrive without skills come from `currentbids` (bookmarks, mother-club, finished
+transfers, your own listings), which carries market data only, plus the occasional search hit whose
+deadline passed before it was fetched — Hattrick strips those to market data too.
+`fillMissingSkills` covers them with one `playerdetails` call. Its old guard also required a
+`TRANSFERBID` row, which happened to be true for everything from `currentbids` but excluded that
+second case; dropping the condition is both simpler and more complete.
+
+What the corpus can never hold is **sub-skills**. Hattrick publishes integer levels for market
+players, so two "defending 13" players can differ by almost a level in real strength. That is an
+irreducible noise floor under any valuation built from this data, and no amount of accumulation
+removes it.
+
+**Verification:** full suite green — 694 tests, 59 suites, 0 failures. `ScoutTableTest` round-trips
+both nullable columns, unset and set, and checks `duplicate()` carries them (it feeds the table model
+and the details panel). `ScoutListTest` covers the window guard, including the hand-typed-entry case
+it exists for.
