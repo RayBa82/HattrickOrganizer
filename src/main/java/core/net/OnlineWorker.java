@@ -17,6 +17,7 @@ import core.model.match.*;
 import core.model.misc.Regiondetails;
 import core.model.player.Player;
 import core.util.HODateTime;
+import core.model.UserParameter;
 import core.util.HOLogger;
 import core.util.Helper;
 import core.util.StringUtils;
@@ -106,6 +107,7 @@ public class OnlineWorker {
 						}
 						// Info
 						saveHRFToFile(parent,hrf);
+						resolveTransferListings();
 					}
 				}
 			}
@@ -114,6 +116,24 @@ public class OnlineWorker {
 			//HOMainFrame.instance().resetInformation();
 		}
 		return ok;
+	}
+
+	/**
+	 * Fill the real sale price into expired transfer listings, right after a download the user
+	 * asked for. Capped by {@code mcpResolveCap}; a failure here must never fail the download, so
+	 * it is logged and swallowed.
+	 */
+	private static void resolveTransferListings() {
+		try {
+			final var cap = UserParameter.instance().mcpResolveCap;
+			final var resolved = TransferListingResolver.resolve(cap);
+			if (resolved > 0) {
+				HOLogger.instance().info(OnlineWorker.class,
+						"Resolved sale price of " + resolved + " transfer listing(s)");
+			}
+		} catch (Exception e) {
+			HOLogger.instance().error(OnlineWorker.class, e);
+		}
 	}
 
 	/**

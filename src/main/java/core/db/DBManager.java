@@ -60,12 +60,12 @@ import java.util.stream.Collectors;
 public class DBManager implements PersistenceManager {
 
 	/** database versions */
-	private static final int DBVersion = 1001; // HO 10.0 version
+	private static final int DBVersion = 1002; // HO 10.0 version
 	/**
 	 * Previous db version is used by development versions to ensure that db upgrade will rerun on each
 	 * new installed preliminary version
 	 */
-	private static final int previousDBVersion = 1000;
+	private static final int previousDBVersion = 1001;
 	private static final double DBConfigVersion = 10d; // HO 10.0 version
 
 	/** 2004-06-14 11:00:00.0 */
@@ -282,6 +282,7 @@ public class DBManager implements PersistenceManager {
 		tables.put(HOColorTable.TABLENAME, new HOColorTable(connectionManager));
         tables.put(HallOfFamePlayersTable.TABLENAME, new HallOfFamePlayersTable(connectionManager));
 		tables.put(TransferListingTable.TABLENAME, new TransferListingTable(connectionManager));
+		tables.put(TransferBidTable.TABLENAME, new TransferBidTable(connectionManager));
 	}
 
 	/**
@@ -1526,9 +1527,31 @@ public class DBManager implements PersistenceManager {
 		return ((TransferListingTable) getTable(TransferListingTable.TABLENAME)).loadLatestForPlayer(playerId);
 	}
 
-	public void storeTransferListingSalePrice(int playerId, HODateTime observedAt, long salePrice) {
+	public boolean transferListingHasSkillData(int playerId) {
+		return ((TransferListingTable) getTable(TransferListingTable.TABLENAME)).hasSkillData(playerId);
+	}
+
+	public void storeTransferListingSalePrice(int playerId, HODateTime saleDate, long salePrice,
+											  java.time.Duration window) {
 		((TransferListingTable) getTable(TransferListingTable.TABLENAME))
-				.storeSalePrice(playerId, observedAt, salePrice);
+				.storeSalePrice(playerId, saleDate, salePrice, window);
+	}
+
+	public List<TransferListing> loadComparableTransferListings(int ageMin, int ageMax,
+																String skill1, int min1, int max1,
+																String skill2, int min2, int max2,
+																Integer specialty, HODateTime observedSince) {
+		return ((TransferListingTable) getTable(TransferListingTable.TABLENAME))
+				.loadComparables(ageMin, ageMax, skill1, min1, max1, skill2, min2, max2,
+						specialty, observedSince);
+	}
+
+	public void storeTransferBid(TransferBid bid) {
+		((TransferBidTable) getTable(TransferBidTable.TABLENAME)).storeBid(bid);
+	}
+
+	public TransferBid loadTransferBid(int playerId) {
+		return ((TransferBidTable) getTable(TransferBidTable.TABLENAME)).loadBid(playerId);
 	}
 
 	/**

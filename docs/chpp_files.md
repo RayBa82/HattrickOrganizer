@@ -16,7 +16,7 @@ Updates to a newer version should be documented here in the `Used Version` colum
 | challenges             | Challenges                                                                                  | 1.6 (2016-10-27)         | 1.6          |
 | club                   | Information about specialists and youth                                                     | 1.5 (2015-09-22)         | 1.5          |
 | cupmatches             | Information about cup matches                                                               | 1.4 (2011-06-03)         | -            |
-| currentbids            | Shows the current transfer activity for a team.                                             | 1.0 (2014-02-10)         | -            |
+| currentbids            | Shows the current transfer activity for a team.                                             | 1.0 (2014-02-10)         | 1.0          |
 | economy                | Economy                                                                                     | 1.4 (2022-03-09)         | 1.3          |
 | fans                   | Fanclub information                                                                         | 1.3 (2018-06-01)         | -            |
 | hofplayers             | Hall of Fame Players                                                                        | 1.2 (2020-06-02)         | 1.2          |

@@ -3,14 +3,19 @@ package core.mcp;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import core.db.DBManager;
+import core.db.TransferBid;
 import core.db.TransferListing;
+import core.file.xml.XMLCurrentBidsParser;
 import core.file.xml.XMLTransferSearchParser;
 import core.model.player.Player;
 import core.net.TransferSearchQuery;
 import core.net.ChppWriteService;
 import core.net.TransferSearchService;
 import core.util.HODateTime;
+import core.util.HOLogger;
 import module.transfer.PlayerTransfer;
+import module.transfer.scout.ScoutEintrag;
+import module.transfer.search.TransferSearchConverter;
 
 import java.util.Arrays;
 import java.util.Comparator;
@@ -41,6 +46,9 @@ public final class TransferTools {
 
     private static final int DEFAULT_PAGE_SIZE = 50;
     private static final int MAX_PAGE_SIZE = 100;     // the CHPP maximum
+
+    /** How long a losing bid keeps showing in the default view after its deadline. */
+    private static final java.time.Duration LOSING_BID_GRACE = java.time.Duration.ofHours(24);
 
     private TransferTools() {
     }
@@ -102,8 +110,369 @@ public final class TransferTools {
                                         "confirmToken", McpTool.prop("string",
                                                 "the token from step 1 (required in step 2, omit in step 1)")),
                                 "playerId"),
-                        TransferTools::placeBid)
+                        TransferTools::placeBid),
+                new McpTool("get_open_bids",
+                        "Players this team has an active transfer bid on, from Hattrick's own bid "
+                                + "tracking (file=currentbids) - so it also sees bids placed on the "
+                                + "Hattrick site, not just through place_bid. By default returns "
+                                + "transfers you have bid on whose deadline has not passed, plus "
+                                + "bids you were losing for up to 24h after their deadline so a "
+                                + "recent loss still shows, each flagged with whether you are the "
+                                + "current leading bidder. "
+                                + "Pass includeAll for every tracked transfer - your listed "
+                                + "players, bookmarked players, mother-club and finished transfers "
+                                + "too - each with its raw trackingTypeId.",
+                        McpTool.schema(McpTool.properties(
+                                "includeAll", McpTool.prop("boolean",
+                                        "return every tracked transfer, not just your open bids; "
+                                                + "default false"))),
+                        TransferTools::openBids),
+                new McpTool("add_to_scout",
+                        "Put players on HO's transfer scout list, so a shortlist survives the "
+                                + "session. This is HO's OWN local list - it is not a Hattrick "
+                                + "bookmark, costs no CHPP call, and the user will not see these "
+                                + "players on hattrick.org, only on HO's Transfers -> "
+                                + "TransferScout tab (get_open_bids reads Hattrick's separate "
+                                + "tracking list). Each player must have been seen by an earlier "
+                                + "search_transfers in this database - the entry is built from that "
+                                + "stored market snapshot. Adding a player already on the list "
+                                + "replaces his entry.",
+                        McpTool.schema(McpTool.properties(
+                                        "players", McpTool.prop("array",
+                                                "the players to add, either bare player ids or "
+                                                        + "{playerId, note} objects; the note is "
+                                                        + "free text kept in the scout entry's "
+                                                        + "notes column, e.g. why he is a target")),
+                                "players"),
+                        TransferTools::addToScout),
+                new McpTool("list_scout",
+                        "Read back HO's local transfer scout list - the shortlist add_to_scout "
+                                + "writes, with the market data and skills as they were when each "
+                                + "player was added. Asking price and deadline are that snapshot, "
+                                + "not live; re-run search_transfers for the current market state. "
+                                + "Distinct from get_open_bids, which reads Hattrick's own tracking "
+                                + "list.",
+                        McpTool.schema(McpTool.properties()),
+                        args -> listScout()),
+                new McpTool("estimate_market_value",
+                        "What one of your players is worth, from the transfer listings HO has "
+                                + "already seen - no CHPP call, no search cap. Matches him against "
+                                + "the stored corpus on the same criteria find_comparables uses "
+                                + "(age window, his two best positional skills, his specialty) and "
+                                + "returns the median. Reports its basis: resolved_sales means real "
+                                + "sale prices, observed_listings means asking prices and highest "
+                                + "bids of players still on or recently on the market, which run "
+                                + "high because an asking price is what a seller wants. Sale prices "
+                                + "are filled in after a team download, so the basis improves on "
+                                + "its own. Always read sampleSize before trusting the number; a "
+                                + "thin sample means widen the tolerances or run search_transfers "
+                                + "over that profile to feed the corpus.",
+                        McpTool.schema(McpTool.properties(
+                                        "playerId", McpTool.prop("integer", "the player to value"),
+                                        "ageTolerance", McpTool.prop("integer", "age window in years, default 1"),
+                                        "skillTolerance", McpTool.prop("integer", "skill window in levels, default 1"),
+                                        "observedWithinDays", McpTool.prop("integer",
+                                                "ignore listings older than this many days, default "
+                                                        + DEFAULT_CORPUS_DAYS + " (one Hattrick season)")),
+                                "playerId"),
+                        TransferTools::estimateMarketValue)
         );
+    }
+
+    // ------------------------------------------------------------------ market value
+
+    /** One Hattrick season. Older listings priced a market that has moved on. */
+    private static final int DEFAULT_CORPUS_DAYS = 112;
+
+    /**
+     * Below this many resolved sales the observed listings are the better estimate, thin as they
+     * are: one real sale is a single draw, twenty asking prices at least bracket the market.
+     * ponytail: a flat threshold, not a weighting. Blend the two if the corpus ever gets big
+     * enough for the difference to matter.
+     */
+    private static final int MIN_RESOLVED_SAMPLE = 3;
+
+    private static JsonObject estimateMarketValue(JsonObject args) throws McpToolException {
+        final var playerId = McpJson.reqInt(args, "playerId");
+        final var player = McpJson.model().getCurrentPlayer(playerId);
+        if (player == null) {
+            throw new McpToolException("No player with id " + playerId + " is in the squad. "
+                    + "Call get_squad for the ids HO knows about.");
+        }
+        final var query = comparableQuery(player,
+                McpJson.optInt(args, "ageTolerance", 1),
+                McpJson.optInt(args, "skillTolerance", 1));
+        final var days = Math.max(McpJson.optInt(args, "observedWithinDays", DEFAULT_CORPUS_DAYS), 1);
+        final var since = new HODateTime(HODateTime.now().getInstant()
+                .minus(java.time.Duration.ofDays(days)));
+
+        final var comparables = DBManager.instance().loadComparableTransferListings(
+                query.ageMin(), query.ageMax(),
+                column(query.skillType1()), query.minSkillValue1(), query.maxSkillValue1(),
+                column(query.skillType2()), query.minSkillValue2(), query.maxSkillValue2(),
+                query.specialty(), since);
+
+        final var sales = comparables.stream()
+                .filter(l -> l.getSalePrice() != null)
+                .map(TransferListing::getSalePrice)
+                .sorted()
+                .toList();
+        // An expired listing keeps its last observed state, so the highest bid is the better
+        // reading of what it was worth whenever bidding got past the asking price.
+        final var asks = comparables.stream()
+                .filter(l -> l.getSalePrice() == null)
+                .map(l -> Math.max(l.getAskingPrice(), l.getHighestBid()))
+                .filter(p -> p > 0)
+                .sorted()
+                .toList();
+
+        final var useSales = sales.size() >= MIN_RESOLVED_SAMPLE;
+        final var sample = useSales ? sales : asks;
+
+        final var json = new JsonObject();
+        json.addProperty("currency", McpJson.currency());
+        json.addProperty("playerId", playerId);
+        json.addProperty("playerName", player.getFullName());
+        json.addProperty("basis", useSales ? "resolved_sales" : "observed_listings");
+        json.addProperty("sampleSize", sample.size());
+        json.addProperty("resolvedSalesAvailable", sales.size());
+        json.addProperty("observedListingsAvailable", asks.size());
+        json.addProperty("comparableQuery", query.toQueryString());
+        json.addProperty("observedWithinDays", days);
+        if (sample.isEmpty()) {
+            json.add("estimate", com.google.gson.JsonNull.INSTANCE);
+            json.addProperty("note", "Nothing comparable in the corpus yet. Widen ageTolerance / "
+                    + "skillTolerance, or run search_transfers over this profile - every hit it "
+                    + "returns is stored and becomes a comparable.");
+            return json;
+        }
+        json.addProperty("estimate", McpJson.money(median(sample)));
+        final var range = new JsonArray();
+        range.add(McpJson.money(sample.get(0)));
+        range.add(McpJson.money(sample.get(sample.size() - 1)));
+        json.add("range", range);
+        if (!useSales) {
+            json.addProperty("note", sales.isEmpty()
+                    ? "No resolved sale prices for this profile yet, so this is what sellers asked "
+                    + "and bidders bid, not what players went for - read it as an upper bound."
+                    : sales.size() + " resolved sale(s) is too thin a sample, so asking prices and "
+                    + "bids were used instead - read the estimate as an upper bound.");
+        }
+        return json;
+    }
+
+    /** The middle value; for an even sample the mean of the two middle ones. */
+    private static long median(List<Long> sorted) {
+        final var middle = sorted.size() / 2;
+        return sorted.size() % 2 == 1
+                ? sorted.get(middle)
+                : (sorted.get(middle - 1) + sorted.get(middle)) / 2;
+    }
+
+    /** The TRANSFERLISTING column a market search skill is stored in. */
+    private static String column(TransferSearchQuery.Skill skill) {
+        return switch (skill) {
+            case KEEPER -> "KEEPER";
+            case DEFENDING -> "DEFENDER";
+            case PLAYMAKING -> "PLAYMAKER";
+            case PASSING -> "PASSING";
+            case WINGER -> "WINGER";
+            case SCORING -> "SCORER";
+            case SETPIECES -> "SETPIECES";
+            case STAMINA -> "STAMINA";
+            case LEADERSHIP -> "LEADERSHIP";
+            case EXPERIENCE -> "EXPERIENCE";
+        };
+    }
+
+    // ------------------------------------------------------------------ transfer scout list
+    //
+    // The scout list is written through the live TransferScoutPanel, never straight to the SCOUT
+    // table. HOMainFrame.shutdown() saves that panel's in-memory list with a delete-all-then-insert
+    // (TransferScoutPanel.saveScoutListe), so a row written behind an already-open Transfers tab
+    // would be silently dropped hours later at exit. Going through the panel also refreshes the
+    // table and the deadline alarm thread. Panel access must happen on the EDT.
+
+    /** The scout panel, creating the Transfers tab if the user has not opened it yet. */
+    private static module.transfer.scout.TransferScoutPanel scoutPanel() {
+        return core.gui.HOMainFrame.instance().getTransferScoutPanel().getScoutPanel();
+    }
+
+    private static JsonObject addToScout(JsonObject args) throws McpToolException {
+        final var requested = McpJson.reqArray(args, "players");
+        if (requested.isEmpty()) {
+            throw new IllegalArgumentException("players is empty - pass at least one player id.");
+        }
+
+        // Resolve off the EDT: this is the part that hits the database.
+        final var entries = new java.util.LinkedHashMap<Integer, ScoutEintrag>();
+        final var notFound = new JsonArray();
+        for (final var element : requested) {
+            final int playerId;
+            final String note;
+            if (element.isJsonObject()) {
+                final var object = element.getAsJsonObject();
+                playerId = McpJson.reqInt(object, "playerId");
+                note = McpJson.optString(object, "note", null);
+            } else {
+                playerId = element.getAsInt();
+                note = null;
+            }
+            final var listing = DBManager.instance().loadLatestTransferListing(playerId);
+            if (listing == null) {
+                notFound.add(playerId);
+                continue;
+            }
+            final var entry = TransferSearchConverter.toScoutEintrag(listing);
+            if (note != null && !note.isBlank()) {
+                entry.setInfo(truncateInfo(entry.getInfo() + note));
+            }
+            entries.put(playerId, entry);
+        }
+
+        return LineupTools.onEdt(() -> {
+            final var panel = scoutPanel();
+            final var added = new JsonArray();
+            for (final var entry : entries.values()) {
+                // Dedupes on its own: ScoutEintrag.equals is by player id, and addScoutEintrag
+                // removes an equal entry first.
+                panel.addScoutEintrag(entry);
+                final var json = new JsonObject();
+                json.addProperty("playerId", entry.getPlayerID());
+                json.addProperty("name", entry.getName());
+                added.add(json);
+            }
+            // The panel only persists at shutdown; write through now so the shortlist survives a
+            // crash, and so the DB matches what the panel holds.
+            panel.saveScoutListe();
+
+            final var out = new JsonObject();
+            out.addProperty("status", "ok");
+            out.addProperty("addedCount", added.size());
+            out.add("added", added);
+            out.addProperty("scoutListSize",
+                    panel.getTransferTable().getTransferTableModel().getScoutListe().size());
+            if (!notFound.isEmpty()) {
+                out.add("notFound", notFound);
+                out.addProperty("notFoundNote", "No stored market snapshot for these players - run "
+                        + "search_transfers for them first, then add them.");
+            }
+            return out;
+        });
+    }
+
+    private static JsonObject listScout() throws McpToolException {
+        return LineupTools.onEdt(() -> {
+            final var players = new JsonArray();
+            for (final var entry : scoutPanel().getTransferTable().getTransferTableModel()
+                    .getScoutListe()) {
+                players.add(McpJson.scoutEntry(entry));
+            }
+            final var out = new JsonObject();
+            out.addProperty("currency", McpJson.currency());
+            out.addProperty("count", players.size());
+            out.add("players", players);
+            return out;
+        });
+    }
+
+    /** The SCOUT.Info column is VARCHAR(256); an over-long note would fail the insert. */
+    private static String truncateInfo(String info) {
+        return info.length() <= 256 ? info : info.substring(0, 256);
+    }
+
+    /** trackingTypeId 2 (leading bid) / 8 (losing bid) are the ones you have actually bid on. */
+    private static boolean isOwnBidCategory(int trackingTypeId) {
+        return trackingTypeId == 2 || trackingTypeId == 8;
+    }
+
+    /** Only 5 / 8 / 9 are named by the CHPP doc; the rest are carried through as inferred labels. */
+    private static String bidCategory(int trackingTypeId) {
+        return switch (trackingTypeId) {
+            case 1 -> "selling";
+            case 2 -> "leading_bid";
+            case 3 -> "mother_club";
+            case 4 -> "previous_club";
+            case 5 -> "hotlisted";
+            case 8 -> "losing_bid";
+            case 9 -> "finished";
+            case 10 -> "transfer_prospect";
+            default -> "unknown_" + trackingTypeId;
+        };
+    }
+
+    private static JsonObject openBids(JsonObject args) throws McpToolException {
+        final var includeAll = McpJson.optBool(args, "includeAll", false);
+        final XMLCurrentBidsParser.CurrentBids current;
+        try {
+            current = ChppWriteService.instance().listCurrentBidsForAgent();
+        } catch (ChppWriteService.ChppWriteException e) {
+            throw new McpToolException(e.getMessage());
+        }
+
+        final var now = HODateTime.now();
+        recordBidObservations(current, now);
+
+        final var bids = new JsonArray();
+        for (final var item : current.items()) {
+            if (!includeAll) {
+                if (!isOwnBidCategory(item.trackingTypeId())) {
+                    continue;
+                }
+                final var deadline = HODateTime.fromHT(item.deadline());
+                // Leading bids drop the moment they expire; losing bids linger a day so a recent
+                // loss is still reported on the next check.
+                final var cutoff = item.trackingTypeId() == 8
+                        ? new HODateTime(now.getInstant().minus(LOSING_BID_GRACE))
+                        : now;
+                if (deadline != null && deadline.isBefore(cutoff)) {
+                    continue;
+                }
+            }
+            final var json = new JsonObject();
+            json.addProperty("playerId", item.playerId());
+            json.addProperty("playerName", item.playerName());
+            json.addProperty("transferId", item.transferId());
+            json.addProperty("deadline", item.deadline());
+            json.addProperty("highestBid", McpJson.money(item.highestBidAmount()));
+            json.addProperty("highestBidTeamName", item.highestBidTeamName());
+            json.addProperty("leading",
+                    item.highestBidTeamId() != 0 && item.highestBidTeamId() == current.teamId());
+            json.addProperty("trackingTypeId", item.trackingTypeId());
+            json.addProperty("category", bidCategory(item.trackingTypeId()));
+            bids.add(json);
+        }
+
+        final var out = new JsonObject();
+        out.addProperty("currency", McpJson.currency());
+        out.addProperty("count", bids.size());
+        out.add("bids", bids);
+        if (!includeAll) {
+            out.addProperty("note", "leading_bid / losing_bid are inferred from trackingTypeId "
+                    + "2 / 8; pass includeAll to see every tracked transfer.");
+        }
+        return out;
+    }
+
+    /**
+     * Snapshot every tracked transfer into the bid ledger ({@link core.db.TransferBid}) and the
+     * market corpus ({@link TransferListing}) - the data is already in hand, so it costs no CHPP
+     * traffic, and a losing bid still leaves a record of what the player sold for.
+     * <p>
+     * ponytail: best-effort. The CHPP call has already succeeded and consumed its rate budget, so a
+     * database hiccup logs and is dropped rather than failing the tool call.
+     */
+    private static void recordBidObservations(XMLCurrentBidsParser.CurrentBids current, HODateTime now) {
+        try {
+            for (final var item : current.items()) {
+                final var existing = DBManager.instance().loadTransferBid(item.playerId());
+                DBManager.instance().storeTransferBid(
+                        TransferBid.fromObservation(existing, item, current.teamId(), now));
+                DBManager.instance().storeTransferListing(TransferListing.fromBidItem(item, now));
+            }
+        } catch (RuntimeException e) {
+            HOLogger.instance().log(TransferTools.class, e);
+        }
     }
 
     /** Amounts are in Swedish krona - already converted from the user's currency in {@link #previewBid}. */
@@ -202,6 +571,7 @@ public final class TransferTools {
         } catch (ChppWriteService.ChppWriteException e) {
             throw new McpToolException(e.getMessage());
         }
+        recordOurBid(pending, result);
         final var out = new JsonObject();
         out.addProperty("status", "ok");
         out.addProperty("currency", McpJson.currency());
@@ -214,6 +584,32 @@ public final class TransferTools {
         out.addProperty("note", "Bid placed. Poll get_player or search_transfers for the updated "
                 + "market state.");
         return out;
+    }
+
+    /**
+     * Record what HO just bid in the ledger, so the eventual sale price can be compared against it
+     * even if the bid is lost. Keyed on the player; the market state is refreshed by the next
+     * {@code get_open_bids}. ponytail: best-effort, same reasoning as {@link #recordBidObservations}.
+     */
+    private static void recordOurBid(PendingBid pending, ChppWriteService.BidResult result) {
+        try {
+            final var now = HODateTime.now();
+            var bid = DBManager.instance().loadTransferBid(pending.playerId());
+            if (bid == null) {
+                bid = new TransferBid();
+                bid.setPlayerId(pending.playerId());
+                bid.setFirstSeenAt(now);
+            }
+            bid.setOurBid(pending.bidAmountSek());
+            bid.setOurMaxBid(pending.maxBidAmountSek());
+            bid.setBidPlacedAt(now);
+            bid.setDeadline(HODateTime.fromHT(result.deadline()));
+            bid.setLatestHighestBid(result.highestBid());
+            bid.setLastSeenAt(now);
+            DBManager.instance().storeTransferBid(bid);
+        } catch (RuntimeException e) {
+            HOLogger.instance().log(TransferTools.class, e);
+        }
     }
 
     private static JsonObject searchSchema() {

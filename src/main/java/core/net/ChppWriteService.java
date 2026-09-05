@@ -2,6 +2,7 @@ package core.net;
 
 import core.file.xml.XMLCHPPPreParser;
 import core.file.xml.XMLChallengesParser;
+import core.file.xml.XMLCurrentBidsParser;
 import core.file.xml.XMLManager;
 import core.file.xml.XMLTrainingParser;
 import core.model.HOVerwaltung;
@@ -221,6 +222,27 @@ public class ChppWriteService {
         final var was = Connector.instance().setSilentDownload(true);
         try {
             return Connector.instance().challenges(actionType, params);
+        } finally {
+            Connector.instance().setSilentDownload(was);
+        }
+    }
+
+    // ===================== current bids =====================
+
+    /** A read. Shares the silent-fetch handling but does not count against the write cap. */
+    public XMLCurrentBidsParser.CurrentBids listCurrentBidsForAgent() throws ChppWriteException {
+        final var xml = fetchCurrentBids();
+        if (xml == null || xml.isBlank()) {
+            throw new ChppWriteException(null,
+                    "Hattrick rejected the current-bids list: " + reason());
+        }
+        return XMLCurrentBidsParser.parse(xml);
+    }
+
+    protected String fetchCurrentBids() {
+        final var was = Connector.instance().setSilentDownload(true);
+        try {
+            return Connector.instance().currentBids();
         } finally {
             Connector.instance().setSilentDownload(was);
         }

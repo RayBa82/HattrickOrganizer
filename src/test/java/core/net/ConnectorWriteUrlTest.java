@@ -59,4 +59,11 @@ class ConnectorWriteUrlTest {
                 .contains("bidAmount=1500000")
                 .contains("maxBidAmount=2000000");
     }
+
+    @Test
+    void currentBidsUrl_isJustFileAndVersion() {
+        assertThat(Connector.currentBidsUrl())
+                .contains("file=currentbids")
+                .contains("version=1.0");
+    }
 }

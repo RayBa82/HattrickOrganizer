@@ -466,3 +466,535 @@ Capture real responses and adjust the fixtures if anything differs.
 
 **Verification status:** full suite green (631 tests, 0 failures). No live CHPP round-trip;
 all three write families' wire format and response shape are from the CHPP docs.
+
+## `get_open_bids` — the transfers you've bid on (2026-09-03)
+
+New read tool on `TransferTools`, 26 tools total. Answers "which players have I bid on that are
+still open, and am I winning?" — which nothing exposed before, because HO never tracked its own
+outgoing bids (`place_bid` persists nothing; `TRANSFERLISTING` is market-search snapshots only).
+
+- **CHPP `currentbids` (version 1.0)** is the source — Hattrick's own bid-tracking list, so it also
+  sees bids placed on the Hattrick website, not just through `place_bid`. `Connector.currentBids()`
+  (`file=currentbids&version=1.0`, no params — `actionType=view` and `teamId` both default),
+  `ChppWriteService.listCurrentBidsForAgent()` (a read, silent-fetch wrapper, no write-cap charge,
+  same shape as `listChallengesForAgent`), `XMLCurrentBidsParser` is new.
+- **Wire structure** (from `Files/currentbids.js` — the `File.aspx` page is Cloudflare-walled, the
+  `.js` is not): `<HattrickData>` → `<TeamId>` then repeated `<BidItems TrackingTypeId="N">`, each
+  holding `<BidItem>` with `TransferId` / `PlayerId` / `PlayerName` / `<HighestBid>` (`Amount`,
+  `TeamId`, `TeamName` — the block is empty when there are no bids) / `Deadline`. The parser keeps
+  `Deadline` as the raw `yyyy-MM-dd HH:mm:ss` string and returns `CurrentBids(teamId, items)` so
+  `leading` = `HighestBid/TeamId == HattrickData/TeamId` needs no loaded `HOModel`.
+- **Attribute casing bug (fixed 2026-09-03).** The real `currentbids` response names the group
+  attribute `TrackingTypeID` (capital `ID`, like `TeamID`/`MatchID` elsewhere), not
+  `TrackingTypeId`. The parser read the wrong casing, so every group came back as id 0, every row
+  fell out of `isOwnBidCategory`, and `get_open_bids` reported "no open bids" even for a transfer
+  the user had bid on and been outbid. `XMLCurrentBidsParser.trackingTypeAttr` now accepts both
+  spellings. Casing confirmed against `pychpp` (`BidItems[@TrackingTypeID=...]`); no live round-trip.
+- **`trackingTypeId` is only partly documented.** The doc names 5/8/9 for `ignoreTransfer` as
+  "hotlisted, losing bids, finished". The rest of the mapping the tool uses —
+  1 selling, 2 leading_bid, 3 mother_club, 4 previous_club, 10 transfer_prospect — is from the
+  `lucianoq/hattrick` Go library, **not CHPP-verified**. `get_open_bids` carries the raw
+  `trackingTypeId` on every row and says so in a `note`. Capture a real response and confirm 2 = "I
+  hold the leading bid" before trusting the default filter.
+- **Default** returns trackingTypeId 2 or 8 (the ones you've actually bid on): leading bids (2)
+  need a future `Deadline`, losing bids (8) stay for 24h past their deadline so a recent loss is
+  still reported (`LOSING_BID_GRACE`). `includeAll` returns every tracked transfer with its raw
+  category. Each row:
+  `playerId`, `playerName`, `transferId`, `deadline`, `highestBid` (user currency, `McpJson.money`),
+  `highestBidTeamName`, `leading`, `trackingTypeId`, `category`.
+- OAuth: `currentbids` `view` needs no extra scope beyond a normal read token (only `ignoreTransfer`
+  / `deleteAllFinished`, not implemented, need `place_bid` scope which the write pass already added).
+
+**Verification status:** full suite green (640 tests, 55 suites, 0 failures). No live CHPP round-trip — wire
+format from the `currentbids.js` spec, `trackingTypeId` labels partly from a third-party library.
+
+## `TRANSFERBID` — the bid ledger for market-value tracking (2026-09-03)
+
+`get_open_bids` and `place_bid` now persist, so a losing bid still leaves a record of what the
+player sold for. Nothing is exposed as a new tool yet — this is the data layer a later valuation
+tool (or a `get_open_bids` enrichment) will read.
+
+- **New table `TRANSFERBID`** (`core.db.TransferBid` / `TransferBidTable`, `DBVersion` 1001→1002,
+  `DBUpdater.updateDBv1002`). Keyed on **`PLAYERID`**, one row per player — a re-listing overwrites
+  the previous bid; the full observation history stays in `TRANSFERLISTING`. Columns: `OURBID` /
+  `OURMAXBID` / `BIDPLACEDAT` (from `place_bid`, Swedish krona, null for a website bid), `DEADLINE`,
+  `LATESTHIGHESTBID` / `LATESTLEADING` / `LATESTTRACKINGTYPEID` (refreshed each `get_open_bids`),
+  `FINALPRICE` / `OUTCOME` (`won`/`lost`, set once), `FIRSTSEENAT` / `LASTSEENAT`.
+  - No `TRANSFERID` column: `AbstractTable`'s load path reads every `BIGINT` with `rs.getInt`
+    (`getInteger`), so a real Hattrick transfer id would overflow. The id was informational only, so
+    it was dropped rather than working around the framework.
+  - `TransferBid.fromObservation(existing, item, teamId, now)` is the pure merge: refresh the
+    `latest*` fields, preserve `ourBid`, and on `trackingTypeId == 9` (finished) with a passed
+    deadline and a non-zero highest bid, set `finalPrice` once and `outcome` from `latestLeading`.
+  - VARCHAR nulls come back as `""` from `AbstractTable.getString`, so `outcome` is `""` while a
+    transfer is open, never null. Consumers must treat `""` as "no outcome".
+- **`TransferTools.recordBidObservations`** runs on every `get_open_bids`, for **all** tracked
+  transfers (not just own-bid categories): upserts the ledger row and writes a thin
+  `TransferListing.fromBidItem` snapshot (market data, skills null) so the existing resolve pass
+  fills the sale price in. **`TransferTools.recordOurBid`** runs after a successful `place_bid`
+  commit. Both are best-effort — the CHPP call already succeeded and spent its budget, so a DB error
+  logs and is dropped, it does not fail the tool call. Same untested-glue status as `search()`'s
+  `storeTransferListing`; the pure factories and the table are unit-tested.
+- **Skills-fill** is a second branch in the Options → MCP server *resolve* button
+  (`McpServerPanel.resolveExpiredListings`): for an unresolved listing whose player has a
+  `TRANSFERBID` row but no skill-bearing `TRANSFERLISTING` snapshot
+  (`transferListingHasSkillData` = any row with `PLAYMAKER IS NOT NULL`), one
+  `OnlineWorker.downloadPlayerDetails` call writes a `TransferListing.fromPlayerDetails` snapshot.
+  Both CHPP calls (`transfersPlayer` + `playerdetails`) share the one `resolveCap` per run. Still a
+  human-only button — an agent must not be able to start a batch of CHPP calls.
+- This covers the narrow case of a player bid on via the Hattrick website and never searched in HO;
+  a player found through `search_transfers` / `find_comparables` already has a rich `TRANSFERLISTING`
+  row.
+
+**Verification status:** full suite green (653 tests, 0 failures). No live CHPP round-trip.
+
+## The Lineup tab silently clears slots an MCP write filled (2026-09-03)
+
+A peer MCP session reported `apply_lineup` returning a filled left forward (roleId 113) that a
+later `get_lineup` showed as empty, with every other slot from the same write intact. Root cause is
+in HO's own Lineup tab, not in the MCP layer.
+
+**`PlayerPositionPanel.setPlayersList` empties any position whose occupant is not in the panel's
+candidate list:**
+
+```java
+// Put back current player if new filters allows it
+this.iSelectedPlayerId = -1;
+if (oSelectedPlayer != null) { /* … only if oSelectedPlayer is in oCandidates … */ }
+
+Lineup lineup = HOVerwaltung.instance().getModel().getCurrentLineup();
+if (iSelectedPlayerId == -1) {
+    switch (m_iPositionID) {
+        case IMatchRoleID.setPieces -> lineup.setKicker(0);
+        case IMatchRoleID.captain   -> lineup.setCaptain(0);
+        default                     -> lineup.setSpielerAtPosition(m_iPositionID, 0);
+    }
+}
+```
+
+`oCandidates` is `LineupPositionsPanel.refresh`'s `filteredPlayers`, which applies the assistant
+panel's two user toggles: the **squad-group filter** (`isAssistantGroupFilter` / `getAssistantGroup`
+/ `isAssistantSelectedGroupExcluded`) and **exclude players from the last match**
+(`isAssistantExcludeLastMatch`, which drops anyone in `getPreviousLineup()`'s starting eleven).
+`refresh()` runs on every Lineup tab refresh — no click on the slot itself is needed. So a player
+the filter hides gets wiped out of the *model*, not merely out of the combo box.
+
+**The toggle in play was exclude-last-match, not the group filter.** Kruzslicz was in the starting
+eleven of the 2026-09-01 friendly (matchId 771367534, at roleId 111) and was the *only* member of
+the league eleven who had played it — every other starter from that friendly was a B-team player
+who was not fielded, and every other member of the league eleven sat that match out. The set of
+players the filter hid maps one-to-one onto the set of slots that got zeroed. His squad group is
+A-Team, so the group filter could not have singled him out.
+
+Confirmed reproducible: the same slot was wiped a second time on a later tab refresh, no download,
+`hrfId` still 13, the other ten slots intact.
+
+That matches the report exactly: the write landed, the user then looked at the Lineup tab during an
+intervening turn, the tab refreshed, and the one player the filter excluded was zeroed. It also
+explains why the lineup was a broken 3-4-0 to begin with.
+
+For an agent it was silent: `hrfId` and `snapshotDate` never move (the model is not rebuilt), so
+nothing in a tool response hinted that the state had changed underneath.
+
+### The fix is in the tool, not in the tab
+
+**The Lineup tab's behaviour is deliberate and stays as it is.** The filter is how the manager says
+which players are in contention, and having it clear a slot is the intended gesture — the way to
+undo it is to change the setting in HO. The bug was never that HO dropped the player; it was that
+`apply_lineup` reported success for a write HO was about to undo.
+
+Turning the write-back around in `PlayerPositionPanel.setPlayersList` was tried first and
+**reverted**: it stops a filter from ever unfielding an already-fielded player, which changes what
+the Swing UI does for every user, not just for MCP callers.
+
+So `apply_lineup` now refreshes the Lineup tab *before* it stores or reports anything:
+
+```java
+final var team = model.getCurrentLineupTeam();
+applySpec(team.getLineup(), spec);
+final var lineupPanel = HOMainFrame.instance().getLineupPanel();
+if (lineupPanel != null) {
+    lineupPanel.update();          // let HO's own filters have their say, now
+}
+model.storeLineup(team);
+final var result = describe(team.getLineup(), ratingModel);
+final var refused = refusedByHo(team.getLineup(), spec);
+// -> result.notApplied + result.warning
+```
+
+The eviction therefore happens *inside* the tool call rather than minutes later, so what gets
+stored and reported is the lineup HO is really left holding. Two consequences:
+
+- `describe` already re-reads the live `Lineup`, so the returned formation and ratings are now the
+  settled ones — the reported 3-5-1 instead of a 3-5-2 that will not survive.
+- `refusedByHo` diffs the spec against that settled lineup and adds a `notApplied` array (`roleId`,
+  `requestedPlayerId`, `actualPlayerId`) plus a `warning` naming the two assistant settings and
+  telling the caller not to report those positions as set. A payload an LLM might skim past is not
+  enough on its own; the explicit list and warning are what make the failure unmissable.
+
+This also fixes a smaller pre-existing gap: `apply_lineup` never notified the UI at all, so the
+Lineup tab did not show an agent's write until it refreshed for some other reason. `set_player_group`
+already called `lineupPanel.update()`; now both writers do.
+
+Deliberately **not** done: predicting the filter verdict in `core.mcp` by reading
+`isAssistantGroupFilter` / `isAssistantExcludeLastMatch` and reimplementing
+`LineupPositionsPanel.refresh`'s rules. Asking the panel to reconcile and then reading the result
+cannot drift from what the panel actually does.
+
+**Residual gap:** if the Lineup module panel has not been built, `getLineupPanel()` returns `null`,
+nothing reconciles during the call, and the report is optimistic again — the eviction then happens
+when the tab is first opened. Lineup is a startup module (`ModuleManager.firstStart`), so the panel
+normally exists, but an agent talking to an HO whose Lineup module the user deactivated is still
+exposed.
+
+**Ruled out, with evidence — for anyone who reaches for these first:**
+
+- **The `apply_lineup` response is a real read-back, not an echo of the request.** `LineupTools.apply`
+  runs `applySpec` → `HOModel.storeLineup(team)` → `describe(team.getLineup(), …)`, and `describe`
+  iterates `lineup.getAllPositions()`.
+- **The multi-slot write does not lose a slot.** `LineupApplyOrderTest` replays the reported batch
+  (a broken 3-4-0 rewritten as a 3-5-2, including the 103→101, 104→103, 102→105, 109→107, 106→109
+  moves) on a real `Lineup`. All fourteen slots land, in ascending roleId order and with the
+  emptied slots written last. The eleven-player guard in
+  `MatchRoleID.setPlayerIdIfValidForLineup` never trips, because each move frees its old slot
+  before filling the new one.
+- **The persist is complete.** `MatchLineupPlayerTable.storeMatchLineupPlayers` deletes every row
+  for the match/team and re-inserts every position with `playerId > 0`. HSQLDB's own write log
+  (`<dbFolder>/database.log`) holds such a cycle verbatim — 17 deletes, then 17 inserts including
+  roleId 113.
+- **Both tools see the same object.** `HOModel` caches `aufstellung`, and `getCurrentLineup()`
+  returns `team.getLineup()` by reference.
+
+**Separate, and also real:** every CHPP download rebuilds the model from a fresh HRF, and
+`HRFStringParser` (~line 177) calls `hoModel.storeLineup(new MatchLineupTeam(…))` with the lineup
+section `ConvertXml2Hrf` filled from `OnlineWorker.downloadNextMatchOrder` — i.e. **Hattrick's**
+stored match order. A download therefore also discards a local lineup edit. Not what happened here
+(`hrfId` stayed 13 throughout), but the same class of hazard.
+
+Practical consequence for callers: `apply_lineup`'s return value proves the write reached HO, not
+that it survives. Re-read with `get_lineup` immediately before `send_match_order`.
+
+**Also fixed: `apply_lineup` dropped every bench write.** `SPEC_DOC` advertised bench roleIds
+114-118. A `Lineup`'s bench vector holds 200-213 (`initPositionen553`); 114-118 are the *match
+lineup file* ids and belong to no slot, and `setSpielerAtPosition` resolves through
+`getPositionById` and returns without a word when that finds nothing. This is the cause of the
+already-observed "the bench param does not take" note in the assistant repo's `docs/mcp-tools.md`.
+
+Two changes: `SPEC_DOC` now names 200-206 by role plus 207-213 for the matching backups, and
+`applySpec` routes both its loops through a new `LineupTools.requireSlot`, which throws
+`McpToolException` for a roleId no slot carries. No silent drops in either loop now — the field
+loop had the same hole for anything outside 100-113.
+
+**Side bugs found on the way, not fixed:**
+
+- `XMLMatchOrderParser`'s three forward cases guard on `"RightForward"` / `"CentralForward"` /
+  `"LeftForward"` while writing `"…ID"` keys; every other role guards on the `…ID` key. The guard
+  is therefore always true and `addAdditionalPlayer` is dead code for forwards.
+- `Lineup.toJson()` serialises `positions` **positionally** — each entry is only
+  `{"id": playerId, "behaviour": b}` with no roleId (`MatchRoleID`'s two `@Expose` fields), so
+  Hattrick derives the slot from the array index. Correct today because `m_vFieldPositions` is only
+  ever built in ascending order, but nothing enforces that.
+
+**Verification:** full suite green (657 tests, 0 failures). `LineupApplyOrderTest` covers the batch
+replay, the `requireSlot` refusal and `refusedByHo`. No Swing source was changed. The one path with
+no coverage here is the `lineupPanel.update()` call itself — there is no harness for the Lineup tab,
+so it wants a manual pass: turn on *exclude players from the last match*, apply a lineup that fields
+someone who played the last match, and confirm the response comes back with `notApplied` naming
+that slot rather than reporting it as set.
+
+## `get_opponent_ratings` — the missing half of `predict_match`
+
+`predict_match` and `simulate_lineup` require the opponent's seven sector ratings as arguments, and
+the only tool that produced such numbers was `get_match`. But `get_matches` reads
+`getOwnPlayedMatchInfo`, and HO's database only ever holds matches involving **us**. For the team we
+are about to play — which is the only opponent anyone wants to simulate against — there was nothing
+to read, so the two simulator tools were unusable unless the fixture happened to be a rematch. That
+is the gap this closes: `get_upcoming_matches` gives an opponent's `teamId`, and
+`get_opponent_ratings` turns that id into the arguments `predict_match` asks for, under exactly
+those names.
+
+**Flow** (`MatchTools.opponentRatings`): `Connector.getMatchesArchive(teamId, now-days, now)` →
+`XMLMatchArchivParser` → drop the unfinished ones and, unless `competitiveOnly` is off, the
+friendlies and tournaments (reserves play those, so their ratings say little about the side that
+turns up for a league game) → sort by date descending → for the newest `count` (default 5), one
+`Connector.downloadMatchdetails` + `XMLMatchdetailsParser` each. Roughly one CHPP request per match
+plus one for the archive; it is a read, so the write cap is not involved.
+
+Deliberately **not** routed through `OnlineWorker`. `getMatchArchive` and `downloadMatchData` are the
+UI orchestration layer: they drive `HOMainFrame.setWaitInformation()` and pop modal
+`Helper.showMessage` dialogs on failure, which would hang a tool call, and `downloadMatchData` also
+persists the match, downloads both teams' logos and re-reads the arena. Going to `Connector` and the
+parser directly is what the rest of `core.mcp` already does (`TransferTools` uses
+`TransferSearchService`, the writes use `ChppWriteService`) and it stores nothing — a scouting read
+should not rewrite the user's match history. `module.teamAnalyzer` remains the place that does
+persist another team's matches, and when it has, `get_opponent_ratings` reuses the stored details
+instead of downloading them again.
+
+**Output.** `opponentRatings` is a copy-paste block: the seven averages under the
+`opponentMidfield` … `opponentAttackRight` names, plus `opponentName`. `opponentTacticType` and
+`opponentTacticSkill` come from the **most recent** match rather than an average — a tactic is a
+choice, not a quantity, and averaging one invents a tactic nobody played. `matches[]` carries each
+match through the existing `side()` serialiser, so the per-match keys are identical to `get_match`'s,
+with `location` and the real opponent added. The averages are read back out of those same
+`JsonObject`s (`SECTOR_KEYS`, in the same order as `OPPONENT_SECTORS`), which is why the average can
+never disagree with the list it is an average of.
+
+**Bug fixed on the way: `get_match`'s `no_match_details` status was dead code.**
+`MatchDetailsTable.loadMatchDetails` returns `new Matchdetails()` — never null — for a match it holds
+no row for, so `details == null` was never true and a match whose details were never downloaded came
+back as `status: ok` with every rating at zero. `MatchTools.storedDetails` now asks the content
+(`details.getMatchID() == matchId`), which is also how `get_opponent_ratings` decides whether it has
+to download. `DBManager` itself was left alone: a dozen callers rely on the non-null return
+(`MatchLineupTeam`, `MatchLineup`, `YouthTraining`, `module.series.Model`), and changing that
+contract to fix one reader would be the wrong end of the stick. `TeamTools`'s attendance loop was
+already safe — it guards on `getZuschauer() <= 0`.
+
+**Verification:** full suite green (662 tests, 0 failures). `MatchToolsTest` now covers
+`opponentReport` over a hand-built pair of `Matchdetails` — one home, one away for the same scouted
+team — pinning the side pick (averaging the wrong end would hand `predict_match` the ratings of the
+scouted team's *opponents*), the tactic-from-newest rule, and, against the live `predict_match`
+schema, that every required argument is present in `opponentRatings`. Its four schema tests also
+stopped indexing `tools()` positionally and use the `tool(name)` helper that was already in the file,
+so inserting a tool no longer breaks them. The download path itself is untested — same as every other
+CHPP path in the repo — and wants a manual pass against a real opponent id.
+
+## `get_opponent_squad` — who they have, and who can play
+
+The companion to `get_opponent_ratings`: that one says how well a team performed, this one says
+*with whom*. `HattrickManager.downloadPlayers(teamId)` → `XMLPlayersParser` → `PlayerInfo`, one CHPP
+request, mapped to JSON in `TeamTools.opponentPlayer`.
+
+Routed through `module.teamAnalyzer.ht.HattrickManager` rather than `Connector` directly — the
+opposite call from the one `get_opponent_ratings` makes, and deliberately so. `PlayerInfo` is the
+only class in the codebase that knows what the players file yields for a **foreign** team: it reads
+age, TSI, form, stamina, experience, loyalty, motherclub, salary, specialty, cards, injury level,
+transfer-listed and the `LastMatch` block, and it reads **no skills at all**, because Hattrick does
+not publish another team's skills. That omission is the whole shape of this tool, and it is
+load-bearing knowledge worth reusing rather than re-deriving from the CHPP docs. The call also files
+the result in the Team Analyzer's own player store (`TAPlayerTable`, keyed player+week) — the same
+rows that module writes when the user opens its tab, so the write is additive rather than a
+surprise.
+
+**Three things the payload gives that nothing else does:**
+
+- **Availability.** `injuryWeeks` (-1 fit, 0 bruised, above that weeks left) and `bookingStatus`
+  (`none` / `yellow` / `doubleYellow` / `suspended`) collapse into one `available` flag. Knowing
+  their first-choice keeper is suspended is worth more than any rating average.
+- **Their last eleven, free.** Every player carries `lastMatch.matchId` and `lastMatch.roleId`, so
+  the players sharing the highest `matchId` *are* that match's XI, positioned. No extra requests, no
+  lineup downloads.
+- **`estimatedSkills`.** Since there are no real skills, the payload runs
+  `module.opponentspy.OppPlayerSkillEstimator` — HO's own estimator, the one
+  `SpecialEventsPredictionManager` uses — over age, wage, TSI, form, stamina, specialty and the
+  position the player last played. Named `estimated*` and captioned in the response `note`, because
+  a model handed a bare `skills` block will quote it as fact.
+
+The estimator is position-driven and `CalcPlayerBaseProvider.setBaseSkills`'s fall-through branch is
+`setAsGoalkeeper`, so a player whose last position is unknown (never played, or came off the bench —
+`MatchRoleID.getPosition` returns `UNKNOWN`) gets **no** `estimatedSkills` rather than a keeper's.
+Emitting a striker with goalkeeping 15 would be worse than emitting nothing.
+
+**Bug fixed: a player who has never played crashed the whole squad download.**
+`XMLPlayersParser.createPlayer` fills the six `LastMatch_*` keys inside a try/catch, so for a player
+with no `<LastMatch>` block they end up absent — and for an empty one they end up `""` via
+`SafeInsertMap`. `PlayerInfo`'s constructor then ran `Integer.parseInt(null)` and
+`Float.parseFloat(null)` on them, throwing `NumberFormatException` / `NullPointerException` straight
+out of `HattrickManager.downloadPlayers`, whose try/catch only wraps the `Connector` call. One
+matchless player therefore took the entire scouted squad with it — in the Team Analyzer too, not
+just here. The three ints and two floats now go through `parseIntWithDefault` and a new
+`parseFloatWithDefault` (`lastMatchDate` was already safe — `HODateTime.fromHT` returns null for a
+null or empty string). Fixed in `PlayerInfo` rather than guarded per-player in `core.mcp`, since
+teamAnalyzer is the older and more exposed caller.
+
+**Found, not fixed:** all eight of `CalcPlayerBaseProvider`'s `setAs*` methods cascade
+`if (age < 22) … else if (age >= 22) … else if (age >= 27) … else if (age >= 29) …` (25/28 in the
+goalkeeper case). The second branch swallows every age above 21, so the third and fourth are
+unreachable and every senior player is estimated on the 22-year-old base table. Left alone on
+purpose: it would change the numbers HO
+already shows in opponent-spy and special-event prediction, which is a behaviour change nobody asked
+for and which no test in this repo pins down.
+
+**Verification:** full suite green (668 tests, 0 failures). `TeamToolsTest` now drives
+`TeamTools.opponentPlayer` over a hand-built `SafeInsertMap` shaped like the foreign-team players
+file: the visible attributes and the wage conversion, the `lastMatch` block, the suspended /
+injured / single-yellow availability cases, the estimate gating (present for roleId 112, absent for
+roleId 0), and the matchless player that used to throw. The estimator's own arithmetic is
+deliberately not pinned — only that the seven expected keys appear — since it is HO's model, not
+this tool's. The download itself is untested, as every CHPP path in this repo is.
+
+## `get_player_history` — the past, which nothing read before
+
+Requested by the assistant repo's session: every tool so far reads the present (`get_squad`) or the
+forecast (`get_training`), and their sell decisions hang on a question only the past can answer — is
+this trainee's growth flattening? HO already holds the answer and is the *only* place that does:
+`SPIELER` stores one row per player per downloaded HRF, i.e. a dated skill snapshot series, and
+`DBManager.loadPlayerHistory(playerId)` already returns it ordered by date. No new query, no
+migration, no CHPP request — the data was simply never exposed.
+
+Added to `TrainingTools`, next to the forecast it mirrors. Arguments: `playerIds` (default the
+current squad), `weeks` (default 26), `includeSnapshots` (default **false**).
+
+**The series is irregular by nature** — HRFs exist only where the user actually downloaded one — and
+that is the whole design constraint. Every derived number sits next to the coverage it came from:
+
+- **`levelsPerHtYear`** is the trained skill's **sub-skill-inclusive** gain between
+  `coverage.firstDate` and `coverage.lastDate`, over `coverage.observedWeeks`, times 16. Using
+  `getValue4Skill + getSub4Skill` rather than counting whole level-ups is what makes it responsive:
+  a player at 5.95 reads as growing, instead of as flat until he pops. It is **null** when there is
+  no trained skill, fewer than two snapshots, or an observed span under `MIN_RATE_WEEKS` (3) — two
+  snapshots two days apart would otherwise extrapolate one level into nearly sixty a year.
+- **`coverage.gaps`** lists every hole longer than `GAP_DAYS` (8), with its length. Training resolves
+  weekly, so anything longer leaves an update unobserved and a level-up inside it cannot be dated.
+  A weekly downloader produces no gaps; a missed fortnight produces one.
+- **`coverage.firstDate`** is the player's real first snapshot in the window, never padded to the
+  window start — a player bought halfway through has a short span, and the span is what the rate is
+  divided by.
+- **`daysSinceLastSnapshot`** covers the other end: a series that stops three weeks ago says nothing
+  about now. `weeksSinceLastLevelUp` is measured from `lastDate` rather than from today for exactly
+  that reason, and `asOf` is returned so the caller can do the subtraction itself.
+
+`derived.trainedSkill` is resolved live from `WeeklyTrainingType.instance(training.getTrainingType())
+.getPrimaryTrainingSkill()` rather than hard-coded, since the trained skill changes; `levelUps`
+covers all eight tracked skills, so when training switched mid-window the caller can see where the
+growth actually went. Skill *drops* are reported the same way as rises (`from` above `to`) — a skill
+falling back with age is as much a sell signal as one climbing.
+
+Two things fell out for free: an id that has **left** the squad still works, because the snapshots
+outlive the player (useful for costing a trainee already sold), and `snapshots[].skills` carries the
+sub-level, so the raw curve is smooth rather than a staircase.
+
+**Deliberately uppercase skill names** (`"PASSING"`), matching `get_training`'s existing
+`primarySkill` and `skillChanges[].skill`, not `get_squad`'s lowercase `skills` map. Within one tool
+group, consistency with the neighbour won.
+
+**Verification:** full suite green (677 tests, 0 failures). `TrainingToolsTest` drives
+`TrainingTools.historyOf` — the per-player report, split from the database read for exactly this
+purpose — over hand-built `Player` series: seventeen weekly snapshots climbing passing 5.0 → 7.0
+assert `observedWeeks` 16 and `levelsPerHtYear` 2.0 with no gaps; a three-week hole asserts one gap
+of 21 days; a two-day span asserts a null rate beside a counted level-up; a rise-then-drop asserts
+both are dated and only the rise counts; the same 16-week climb with every sub-skill at zero asserts
+`rateBasis: "integer"` beside an identical-looking 2.0, and a series with one populated sub-skill but
+whole-level endpoints asserts `"subskill"`; and the empty / single-snapshot cases assert their status
+markers. TSI and wage drift are asserted in the user's currency.
+
+**`derived.rateBasis`** — `"subskill"` or `"integer"` — added after the assistant repo asked for it,
+and it is the sharpest thing in the payload. Sub-skills are not downloaded; they are HO's estimates
+from replaying the training history, and a player HO never replayed carries zero in all of them. The
+rate then silently becomes a count of whole levels while still arriving as a plausible float, and no
+caller can tell from the numbers, because a genuine 5.00 and an estimate-less 5 are the same value.
+`snapshotCount` / `observedWeeks` are a proxy for a *short* history, not for a sub-skill-less one,
+and the two come apart. Computed over the whole series rather than the two endpoints: the replay
+populates all of a player's rows at once, so it is all-or-nothing in practice, and testing only the
+endpoints would call a player who happened to level at both ends estimate-less.
+
+## Opponent scouting: still not done
+
+The *predicted* XI, as opposed to the last one.
+`module.teamAnalyzer.report.TeamReport` + `SpotReport` + `TeamLineupBuilder` already compute
+who-usually-plays-where by appearance frequency across a filtered set of matches, which is strictly
+better than "whoever played last". Not reused, because the path into it runs through
+`MatchPopulator`, which reads `SystemManager.getActiveTeamId()` static state and needs
+`DBManager.loadMatchLineup` — so driving it from a tool call would mean both mutating the team the
+user has selected in the Team Analyzer tab and persisting the opponent's match lineups. `lastMatch`
+covers the common case at zero cost; the appearance-frequency version wants either a teamId
+parameter threaded through `MatchPopulator` or its own lineup fetch.
+
+## `add_to_scout` / `list_scout` — the shortlist survives the session (2026-09-05)
+
+Requested by the team-assistant session: `search_transfers` produces a shortlist that evaporates at
+session end, and nothing could write it anywhere HO would show it again.
+
+**HO's scout list is purely local.** `SCOUT` is a plain `AbstractTable`, written and read only by
+`TransferScoutPanel`. It is *not* a Hattrick bookmark: `bookmarks` is a read-only CHPP file HO does
+not use at all (`docs/chpp_files.md`), and there is no CHPP action that adds one. So these two tools
+cost no CHPP request, and the user sees the entries only on HO's Transfers → TransferScout tab, never
+on hattrick.org. Both tool descriptions say so, and point at `get_open_bids` for the Hattrick-side
+tracking list.
+
+**The write goes through the panel, never to the table.** `TransferScoutPanel.saveScoutListe()` is a
+delete-all-then-insert of the panel's *in-memory* `Vector`, and `HOMainFrame.shutdown()` calls it
+(`HOMainFrame.java:283`). A row written straight into `SCOUT` behind an already-open Transfers tab
+would therefore be wiped at exit, hours later and silently — the same class of bug as the Lineup tab
+clearing MCP-filled slots, but with the damage deferred to shutdown. Routing through
+`TransferScoutPanel.addScoutEintrag` instead also refreshes the table and re-points the `ScoutThread`
+deadline alarm at the new list. `getTransferScoutPanel()` creates the Transfers tab on demand, so the
+tool works whether or not the user has opened it; that is exactly what shutdown already does.
+
+Dedupe is free: `ScoutEintrag.equals` is by player id and `addScoutEintrag` removes an equal entry
+first, so re-adding a player replaces him. After adding, the tool calls `saveScoutListe()` itself —
+the panel otherwise only persists at exit, and writing the live list back is staleness-free by
+construction.
+
+**Where the data comes from.** `add_to_scout` takes player ids only, and builds the entry from the
+newest `TRANSFERLISTING` row (`DBManager.loadLatestTransferListing`) — no CHPP call. Every hit of a
+`search_transfers` is snapshotted into that corpus already, so the shortlist workflow is covered
+end to end; a player never searched for comes back in `notFound` with the fix in the message.
+`TransferSearchConverter.toScoutEintrag` gained a `TransferListing` overload next to the `Hit` one,
+and `notes()` now takes the two boxed values so both call it. Nationality is not part of a listing
+snapshot and stays at the default.
+
+`list_scout` reads the panel's list back, market data as of when each player was added rather than
+live. `LineupTools.onEdt` went package-private and is shared — every panel touch is on the EDT.
+
+No `remove_from_scout`: deprioritised by the requester, and the user can prune in the UI.
+No schema change, so no `DBVersion` bump.
+
+## Market value: real sale prices, and `estimate_market_value` (2026-09-05)
+
+The corpus existed but held nothing to value against — 200 observations, **zero** resolved sale
+prices. Asking prices are what sellers want, not what players go for, so until sale prices land the
+corpus can only ever produce an upper bound.
+
+### The resolve pass was reinventing something HO already had
+
+`McpServerPanel.resolveExpiredListings()` called `XMLParser.getAllPlayerTransfers(playerId)`,
+took the last transfer's price, stamped it on one `TRANSFERLISTING` row and **threw the
+`PlayerTransfer` records away**. `XMLParser.updatePlayerTransfers(playerId)` was already sitting
+next to it: same single `transfersPlayer` call, but it stores every transfer in HO's own `TRANSFER`
+table — which the per-player transfer history UI (`PlayerDetailPanel`) already reads, and which two
+other call sites already use.
+
+So the pass now reuses it, and `updatePlayerTransfers` returns the transfers instead of `void` (the
+two existing callers ignore the value). One CHPP call, two places that keep the answer.
+
+No pollution of the team views: `TransferTable.getTransfers(season, bought, sold)` and
+`get_team_transfers` filter on `buyerid` / `sellerid` being the managed team, which a market
+player's transfer never is.
+
+The pass moved out of the Swing panel into `core.net.TransferListingResolver` so it has two callers:
+the Options button, and `OnlineWorker.getHrf` after a successful download. Still never a tool call —
+an agent cannot start a batch of CHPP calls, which was the point of keeping it in the UI.
+
+Two correctness fixes while extracting it:
+
+- **One call per player, not per observation.** A player seen in four searches is four rows, and the
+  old loop would have made four identical `transfersPlayer` calls. It now dedupes by player id and
+  over-fetches rows (`cap * 5`) so a handful of duplicates cannot starve a run whose real bound is
+  the call count.
+- **`storeSalePrice` is keyed on the deadline, not on one observation.** One lookup resolves every
+  row of the listing that sold, within a 2-day window of the sale date — a Hattrick transfer
+  completes at its deadline, so the window only absorbs skew and still leaves an earlier, separately
+  listed spell of the same player unresolved.
+
+`mcpResolveCap` (default 20) is a new `UserParameter`; the Options field was previously not
+persisted at all and reset to 20 on every dialog open.
+
+### `estimate_market_value`
+
+Reuses `comparableQuery(player, ageTolerance, skillTolerance)` — the same age window, two best
+positional skills and specialty that `find_comparables` derives — but runs it against the local
+corpus instead of the CHPP market. No call, no search cap.
+
+- `basis: resolved_sales` once at least 3 comparable sales are known, else `observed_listings`,
+  which is flagged in the response as an upper bound. The threshold is flat and marked `ponytail:`;
+  one real sale is a single draw, twenty asking prices at least bracket the market.
+- Median, not mean — a corpus with one absurd asking price should not move the number.
+- `observedWithinDays` (default 112, one Hattrick season) is **what stands in for pruning**.
+  Nothing deletes from `TRANSFERLISTING`, and it shouldn't: a listing from three seasons ago is
+  still evidence about that season. Bounding the *read* keeps the history without letting it vote.
+- Empty sample returns `estimate: null` with the fix in the note, rather than a fabricated number.
+
+The skill column name reaches the SQL by concatenation, so `TransferListingTable.loadComparables`
+validates it against the table's own declared columns and throws otherwise.
+
+**Verification:** full suite green — 685 tests, 57 suites, 0 failures.

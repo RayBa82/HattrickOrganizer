@@ -1,12 +1,11 @@
 package core.option;
 
-import core.db.DBManager;
 import core.gui.comp.panel.ImagePanel;
 import core.mcp.McpHttpServer;
 import core.model.TranslationFacility;
 import core.model.UserParameter;
+import core.net.TransferListingResolver;
 import core.net.TransferSearchService;
-import core.util.HODateTime;
 import core.util.HOLogger;
 
 import javax.swing.*;
@@ -14,7 +13,8 @@ import java.awt.*;
 
 /**
  * The MCP server switch, and the resolve button the design deliberately keeps in HO's own UI rather
- * than exposing as a tool: it starts a batch of CHPP calls, so it stays a human action.
+ * than exposing as a tool: it starts a batch of CHPP calls, so it stays a human action. The same
+ * pass also runs after a team download - still the user's own action, never an agent's.
  */
 public final class McpServerPanel extends ImagePanel {
 
@@ -63,7 +63,8 @@ public final class McpServerPanel extends ImagePanel {
         resolve.addActionListener(e -> resolveExpiredListings());
         add(resolve, c);
         c.gridx = 1;
-        addField(c, c.gridy, "ls.options.mcp.resolve.cap", resolveCap, "20");
+        addField(c, c.gridy, "ls.options.mcp.resolve.cap", resolveCap,
+                String.valueOf(UserParameter.instance().mcpResolveCap));
 
         c.gridx = 0;
         c.gridy++;
@@ -109,10 +110,12 @@ public final class McpServerPanel extends ImagePanel {
         final var portValue = parse(port, 8765);
         final var capValue = parse(searchCap, 20);
         final var writeCapValue = parse(writeCap, 20);
+        final var resolveCapValue = parse(resolveCap, 20);
         for (final var p : new UserParameter[]{UserParameter.instance(), UserParameter.temp()}) {
             p.mcpServerPort = portValue;
             p.mcpSearchesPerSession = capValue;
             p.mcpChppWritesPerSession = writeCapValue;
+            p.mcpResolveCap = resolveCapValue;
         }
     }
 
@@ -161,34 +164,9 @@ public final class McpServerPanel extends ImagePanel {
         url.setText(running ? "http://127.0.0.1:" + McpHttpServer.instance().port() + "/mcp" : "");
     }
 
-    /**
-     * Fill in what expired listings actually sold for.
-     * <p>
-     * One CHPP transfersPlayer call per listing, capped per run, only ever from this button - an
-     * agent must not be able to start a batch of CHPP calls.
-     */
+    /** Resolve on demand; the same pass also runs by itself after every team download. */
     private void resolveExpiredListings() {
-        final var cap = parse(resolveCap, 20);
-        final var now = HODateTime.now();
-        var resolved = 0;
-        for (final var listing : DBManager.instance().loadUnresolvedTransferListings(cap)) {
-            if (listing.getDeadline() == null || listing.getDeadline().compareTo(now) >= 0) {
-                continue;                      // not expired yet, nothing to resolve
-            }
-            try {
-                // module.transfer.XMLParser makes the transfersPlayer call itself
-                final var transfers = module.transfer.XMLParser.getAllPlayerTransfers(listing.getPlayerId());
-                if (transfers.isEmpty()) {
-                    continue;
-                }
-                final var sale = transfers.get(transfers.size() - 1);   // the most recent one
-                DBManager.instance().storeTransferListingSalePrice(listing.getPlayerId(),
-                        listing.getObservedAt(), sale.getPrice().getSwedishKrona().longValue());
-                resolved++;
-            } catch (Exception e) {
-                HOLogger.instance().error(getClass(), e);
-            }
-        }
+        final var resolved = TransferListingResolver.resolve(parse(resolveCap, 20));
         status.setText(TranslationFacility.tr("ls.options.mcp.resolve.done")
                 .replace("%count%", String.valueOf(resolved)));
     }

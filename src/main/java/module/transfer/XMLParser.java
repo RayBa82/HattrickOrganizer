@@ -295,7 +295,13 @@ public final class XMLParser {
         return players.stream().filter(i -> !i.isFired()).toList();
     }
 
-    public static void updatePlayerTransfers(int playerID) {
+    /**
+     * Fetch a player's real transfer history from CHPP and store every transfer.
+     *
+     * @return the transfers, newest last - so a caller that needs the sale price does not have to
+     *         make the call a second time.
+     */
+    public static List<PlayerTransfer> updatePlayerTransfers(int playerID) {
         var transfers = getAllPlayerTransfers(playerID);
         if (!transfers.isEmpty()) {
             var firstTransfer = transfers.get(transfers.size()-1);
@@ -312,5 +318,6 @@ public final class XMLParser {
                 DBManager.instance().storePlayerNotes(notes);
             }
         }
+        return transfers;
     }
 }

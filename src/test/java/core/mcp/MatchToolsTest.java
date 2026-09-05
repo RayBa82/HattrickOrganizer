@@ -2,6 +2,8 @@ package core.mcp;
 
 import com.google.gson.JsonObject;
 import core.file.xml.XMLChallengesParser;
+import core.model.enums.MatchType;
+import core.model.match.Matchdetails;
 import core.net.ChppWriteService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -37,13 +39,14 @@ class MatchToolsTest {
     @Test
     void tools_areTheMatchTools() {
         assertThat(MatchTools.tools()).extracting(McpTool::name)
-                .containsExactly("get_matches", "get_match", "predict_match", "simulate_lineup",
+                .containsExactly("get_matches", "get_match", "get_opponent_ratings",
+                        "predict_match", "simulate_lineup",
                         "list_challenges", "arrange_challenge", "respond_to_challenge");
     }
 
     @Test
     void getMatches_takesNoRequiredArguments() {
-        final var getMatches = MatchTools.tools().get(0);
+        final var getMatches = tool("get_matches");
 
         assertThat(getMatches.inputSchema().getAsJsonArray("required")).isEmpty();
         final var properties = getMatches.inputSchema().getAsJsonObject("properties");
@@ -53,7 +56,7 @@ class MatchToolsTest {
 
     @Test
     void getMatch_requiresOnlyTheMatchId_matchTypeIsOptional() {
-        final var getMatch = MatchTools.tools().get(1);
+        final var getMatch = tool("get_match");
 
         assertThat(getMatch.inputSchema().getAsJsonArray("required"))
                 .extracting(element -> element.getAsString())
@@ -63,7 +66,7 @@ class MatchToolsTest {
 
     @Test
     void predictMatch_requiresAllSevenOpponentSectors() {
-        final var predictMatch = MatchTools.tools().get(2);
+        final var predictMatch = tool("predict_match");
 
         assertThat(predictMatch.inputSchema().getAsJsonArray("required"))
                 .extracting(element -> element.getAsString())
@@ -79,7 +82,7 @@ class MatchToolsTest {
 
     @Test
     void simulateLineup_addsAnOptionalLineupToPredictMatchsArguments() {
-        final var simulateLineup = MatchTools.tools().get(3);
+        final var simulateLineup = tool("simulate_lineup");
 
         assertThat(simulateLineup.name()).isEqualTo("simulate_lineup");
         // same opponent side as predict_match, and only that side is required
@@ -158,5 +161,133 @@ class MatchToolsTest {
         assertThat(result.getAsJsonArray("incoming")).isEmpty();
         assertThat(result.getAsJsonArray("outgoing").get(0).getAsJsonObject()
                 .get("trainingMatchId").getAsLong()).isEqualTo(1L);
+    }
+
+    // ---- get_opponent_ratings ----------------------------------------------------------------
+    //
+    // The downloading is left to the handler; what is worth pinning down is the report over the
+    // matches it fetched, since averaging the wrong end of a fixture would hand predict_match the
+    // ratings of the scouted team's opponents.
+
+    private static final int TARGET = 100;
+
+    /** Newest first, the way {@link MatchTools#opponentReport} is given them. */
+    private static List<Matchdetails> twoMatchesOfTargetTeam() {
+        // Newest: the scouted team at home, midfield 12, on a tactic at level 7.
+        final var atHome = new Matchdetails();
+        atHome.setMatchID(1);
+        atHome.setMatchType(MatchType.LEAGUE);
+        atHome.setHeimId(TARGET);
+        atHome.setHeimName("Target FC");
+        atHome.setGastId(200);
+        atHome.setGastName("Their Visitors");
+        atHome.setHomeMidfield(12);
+        atHome.setHomeLeftDef(10);
+        atHome.setHomeMidDef(10);
+        atHome.setHomeRightDef(10);
+        atHome.setHomeLeftAtt(8);
+        atHome.setHomeMidAtt(8);
+        atHome.setHomeRightAtt(8);
+        atHome.setHomeTacticType(3);
+        atHome.setHomeTacticSkill(7);
+        // The other side of that same match, which must not leak into the report.
+        atHome.setGuestMidfield(2);
+        atHome.setGuestLeftDef(2);
+        atHome.setGuestMidDef(2);
+        atHome.setGuestRightDef(2);
+        atHome.setGuestLeftAtt(2);
+        atHome.setGuestMidAtt(2);
+        atHome.setGuestRightAtt(2);
+        atHome.setGuestTacticType(9);
+        atHome.setGuestTacticSkill(1);
+
+        // Older: the same team away, midfield 8 - so the average midfield is 10.
+        final var away = new Matchdetails();
+        away.setMatchID(2);
+        away.setMatchType(MatchType.CUP);
+        away.setHeimId(300);
+        away.setHeimName("Someone Else");
+        away.setGastId(TARGET);
+        away.setGastName("Target FC");
+        away.setGuestMidfield(8);
+        away.setGuestLeftDef(6);
+        away.setGuestMidDef(6);
+        away.setGuestRightDef(6);
+        away.setGuestLeftAtt(4);
+        away.setGuestMidAtt(4);
+        away.setGuestRightAtt(4);
+        away.setHomeMidfield(20);
+        away.setHomeLeftDef(20);
+        away.setHomeMidDef(20);
+        away.setHomeRightDef(20);
+        away.setHomeLeftAtt(20);
+        away.setHomeMidAtt(20);
+        away.setHomeRightAtt(20);
+
+        return List.of(atHome, away);
+    }
+
+    @Test
+    void opponentReport_averagesTheScoutedTeamsOwnSectorsWhicheverEndItPlayedAt() {
+        final var report = MatchTools.opponentReport(TARGET, twoMatchesOfTargetTeam());
+
+        assertThat(report.get("teamId").getAsInt()).isEqualTo(TARGET);
+        assertThat(report.get("teamName").getAsString()).isEqualTo("Target FC");
+        assertThat(report.get("matchesUsed").getAsInt()).isEqualTo(2);
+
+        final var ratings = report.getAsJsonObject("opponentRatings");
+        assertThat(ratings.get("opponentName").getAsString()).isEqualTo("Target FC");
+        assertThat(ratings.get("opponentMidfield").getAsDouble()).isEqualTo(10.0);
+        assertThat(ratings.get("opponentDefenceLeft").getAsDouble()).isEqualTo(8.0);
+        assertThat(ratings.get("opponentDefenceCentral").getAsDouble()).isEqualTo(8.0);
+        assertThat(ratings.get("opponentDefenceRight").getAsDouble()).isEqualTo(8.0);
+        assertThat(ratings.get("opponentAttackLeft").getAsDouble()).isEqualTo(6.0);
+        assertThat(ratings.get("opponentAttackCentral").getAsDouble()).isEqualTo(6.0);
+        assertThat(ratings.get("opponentAttackRight").getAsDouble()).isEqualTo(6.0);
+    }
+
+    @Test
+    void opponentReport_takesTheTacticFromTheMostRecentMatchNotAnAverage() {
+        final var ratings = MatchTools.opponentReport(TARGET, twoMatchesOfTargetTeam())
+                .getAsJsonObject("opponentRatings");
+
+        assertThat(ratings.get("opponentTacticType").getAsInt()).isEqualTo(3);
+        assertThat(ratings.get("opponentTacticSkill").getAsInt()).isEqualTo(7);
+    }
+
+    @Test
+    void opponentReport_namesTheRealOpponentAndTheLocationOfEachMatch() {
+        final var matches = MatchTools.opponentReport(TARGET, twoMatchesOfTargetTeam())
+                .getAsJsonArray("matches");
+
+        assertThat(matches).hasSize(2);
+        final var newest = matches.get(0).getAsJsonObject();
+        assertThat(newest.get("location").getAsString()).isEqualTo("home");
+        assertThat(newest.get("opponentTeamId").getAsInt()).isEqualTo(200);
+        assertThat(newest.get("matchType").getAsString()).isEqualTo("LEAGUE");
+        assertThat(newest.get("midfield").getAsInt()).isEqualTo(12);
+
+        final var older = matches.get(1).getAsJsonObject();
+        assertThat(older.get("location").getAsString()).isEqualTo("away");
+        assertThat(older.get("opponentTeamId").getAsInt()).isEqualTo(300);
+        assertThat(older.get("opponentTeamName").getAsString()).isEqualTo("Someone Else");
+        assertThat(older.get("midfield").getAsInt()).isEqualTo(8);
+    }
+
+    /**
+     * The whole point of the tool: opponentRatings is copyable into predict_match. A rename on
+     * either side would leave a required argument missing, so assert against the live schema.
+     */
+    @Test
+    void opponentReport_fillsEveryArgumentPredictMatchRequires() {
+        final var ratings = MatchTools.opponentReport(TARGET, twoMatchesOfTargetTeam())
+                .getAsJsonObject("opponentRatings");
+
+        final var required = tool("predict_match").inputSchema().getAsJsonArray("required");
+        assertThat(required).isNotEmpty();
+        for (final var name : required) {
+            assertThat(ratings.has(name.getAsString()))
+                    .as("opponentRatings is missing %s", name.getAsString()).isTrue();
+        }
     }
 }

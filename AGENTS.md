@@ -99,6 +99,9 @@ hdiutil create -volname "HO 10.0" -srcfolder build/dmgroot -ov -format UDZO \
   -fs HFS+ build/macapp/HO-10.0.dmg
 ```
 
+`./gradlew dmg` wraps exactly this (app-image + `hdiutil`, not `jpackage --type dmg`) and
+writes `build/macapp/HO-10.0.dmg`.
+
 - `--input`/`--dest` must be **absolute** — jpackage reports "main JAR not present in input directory"
   for relative paths even when the jar is there.
 - `--arguments INSTALLED` is what makes the bundle usable: without it HO runs portable and writes

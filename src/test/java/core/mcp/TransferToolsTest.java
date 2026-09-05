@@ -1,9 +1,11 @@
 package core.mcp;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import core.constants.player.PlayerSkill;
 import core.constants.player.PlayerSpeciality;
+import core.file.xml.XMLCurrentBidsParser;
 import core.model.player.Player;
 import core.net.ChppWriteService;
 import core.net.TransferSearchQuery;
@@ -12,6 +14,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.List;
+import java.util.stream.StreamSupport;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -81,7 +85,135 @@ class TransferToolsTest {
     void tools_areTheTransferTools() {
         assertThat(TransferTools.tools()).extracting(McpTool::name)
                 .containsExactly("search_transfers", "find_comparables", "get_team_transfers",
-                        "place_bid");
+                        "place_bid", "get_open_bids", "add_to_scout", "list_scout",
+                        "estimate_market_value");
+    }
+
+    private static McpTool openBidsTool() {
+        return TransferTools.tools().stream()
+                .filter(t -> t.name().equals("get_open_bids")).findFirst().orElseThrow();
+    }
+
+    private void installBidsService(XMLCurrentBidsParser.CurrentBids bids) {
+        originalService = ChppWriteService.instance();
+        ChppWriteService.setInstanceForTest(new ChppWriteService() {
+            @Override
+            public XMLCurrentBidsParser.CurrentBids listCurrentBidsForAgent() {
+                return bids;
+            }
+        });
+    }
+
+    /** My team is 1234. A mix of categories, deadlines in the far future and far past. */
+    private static XMLCurrentBidsParser.CurrentBids sampleBids() {
+        final var future = "2030-01-01 20:00:00";
+        final var past = "2000-01-01 20:00:00";
+        return new XMLCurrentBidsParser.CurrentBids(1234, List.of(
+                new XMLCurrentBidsParser.BidItem(2, 500, 111, "Leading Larry",
+                        1_500_000, 1234, "My Team", future),
+                new XMLCurrentBidsParser.BidItem(8, 501, 222, "Outbid Ollie",
+                        2_000_000, 9999, "Rival FC", future),
+                new XMLCurrentBidsParser.BidItem(8, 502, 223, "Expired Ed",
+                        3_000_000, 9999, "Rival FC", past),
+                new XMLCurrentBidsParser.BidItem(5, 503, 333, "Hotlist Harry",
+                        0, 0, "", future),
+                new XMLCurrentBidsParser.BidItem(1, 504, 444, "Selling Sam",
+                        800_000, 7777, "Buyer FC", future),
+                new XMLCurrentBidsParser.BidItem(9, 505, 555, "Finished Fred",
+                        900_000, 1234, "My Team", past)));
+    }
+
+    private static List<Integer> playerIds(JsonArray bids) {
+        return StreamSupport.stream(bids.spliterator(), false)
+                .map(b -> b.getAsJsonObject().get("playerId").getAsInt())
+                .toList();
+    }
+
+    @Test
+    void openBids_returnsOnlyActiveBidCategoriesWithAFutureDeadline() throws Exception {
+        installBidsService(sampleBids());
+        final var result = openBidsTool().handler().call(new JsonObject());
+        assertThat(playerIds(result.getAsJsonArray("bids")))
+                .containsExactlyInAnyOrder(111, 222);   // leading + losing, both future
+    }
+
+    @Test
+    void openBids_keepsALosingBidForADayAfterItsDeadlineButNotALeadingOne() throws Exception {
+        final var threeHoursAgo = new core.util.HODateTime(
+                core.util.HODateTime.now().getInstant().minus(java.time.Duration.ofHours(3))).toHT();
+        installBidsService(new XMLCurrentBidsParser.CurrentBids(1234, List.of(
+                new XMLCurrentBidsParser.BidItem(8, 600, 666, "Just Lost Lou",
+                        2_000_000, 9999, "Rival FC", threeHoursAgo),
+                new XMLCurrentBidsParser.BidItem(2, 601, 667, "Just Won Wade",
+                        2_000_000, 1234, "My Team", threeHoursAgo))));
+        final var result = openBidsTool().handler().call(new JsonObject());
+        assertThat(playerIds(result.getAsJsonArray("bids"))).containsExactly(666);
+    }
+
+    @Test
+    void openBids_flagsWhetherYouAreTheLeadingBidder() throws Exception {
+        installBidsService(sampleBids());
+        final var bids = openBidsTool().handler().call(new JsonObject()).getAsJsonArray("bids");
+        for (final var b : bids) {
+            final var o = b.getAsJsonObject();
+            assertThat(o.get("leading").getAsBoolean())
+                    .isEqualTo(o.get("playerId").getAsInt() == 111);
+        }
+    }
+
+    @Test
+    void openBids_includeAllReturnsEveryTrackedTransfer() throws Exception {
+        installBidsService(sampleBids());
+        final var a = new JsonObject();
+        a.addProperty("includeAll", true);
+        final var result = openBidsTool().handler().call(a);
+        assertThat(playerIds(result.getAsJsonArray("bids")))
+                .containsExactly(111, 222, 223, 333, 444, 555);
+    }
+
+    @Test
+    void openBids_recordsEveryTrackedTransferInTheBidLedger() throws Exception {
+        installBidsService(sampleBids());
+        openBidsTool().handler().call(new JsonObject());
+
+        // "Finished Fred" (555): trackingTypeId 9, we held the leading bid, deadline past.
+        final var fred = core.db.DBManager.instance().loadTransferBid(555);
+        assertThat(fred).isNotNull();
+        assertThat(fred.getFinalPrice()).isEqualTo(900_000L);
+        assertThat(fred.getOutcome()).isEqualTo("won");
+
+        // "Hotlist Harry" (333): tracked, never bid on - still recorded, with no own bid.
+        final var harry = core.db.DBManager.instance().loadTransferBid(333);
+        assertThat(harry).isNotNull();
+        assertThat(harry.getOurBid()).isNull();
+        assertThat(harry.getFinalPrice()).isNull();
+    }
+
+    @Test
+    void step2_recordsOurBidInTheLedger() throws Exception {
+        installRecordingService();   // placeBidForAgent -> BidResult(1_750_000, ...)
+        final var token = bidTool().handler().call(step1(515151, 1_500_000L))
+                .get("confirmToken").getAsString();
+        final var a = new JsonObject();
+        a.addProperty("playerId", 515151);
+        a.addProperty("confirmToken", token);
+        bidTool().handler().call(a);
+
+        final var bid = core.db.DBManager.instance().loadTransferBid(515151);
+        assertThat(bid).isNotNull();
+        assertThat(bid.getOurBid()).isEqualTo(1_500_000L);
+        assertThat(bid.getLatestHighestBid()).isEqualTo(1_750_000L);
+    }
+
+    @Test
+    void openBids_convertsHighestBidToTheUsersCurrency() throws Exception {
+        AmountOfMoney.Companion.setExchangeRate(BigDecimal.TEN);   // a euro league
+        installBidsService(sampleBids());
+        final var bids = openBidsTool().handler().call(new JsonObject()).getAsJsonArray("bids");
+        final var larry = StreamSupport.stream(bids.spliterator(), false)
+                .map(com.google.gson.JsonElement::getAsJsonObject)
+                .filter(o -> o.get("playerId").getAsInt() == 111).findFirst().orElseThrow();
+        assertThat(larry.get("highestBid").getAsLong()).isEqualTo(150_000);   // 1.5M krona / 10
     }
 
     @Test

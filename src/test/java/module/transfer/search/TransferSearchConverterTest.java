@@ -1,5 +1,6 @@
 package module.transfer.search;
 
+import core.db.TransferListing;
 import core.file.xml.XMLTransferSearchParser.Details;
 import core.file.xml.XMLTransferSearchParser.Hit;
 import core.model.TranslationFacility;
@@ -86,5 +87,42 @@ class TransferSearchConverterTest {
 
         assertThat(entry.getPlayerID()).isEqualTo(111222333);
         assertThat(entry.getAlter()).isEqualTo(17);
+    }
+
+    // --- from a stored listing, the path add_to_scout takes -----------------------------------
+
+    @Test
+    void toScoutEintrag_ofAListing_copiesTheMarketDataAndSkills() {
+        final var entry = TransferSearchConverter.toScoutEintrag(
+                TransferListing.fromHit(hit(details()), DEADLINE));
+
+        assertThat(entry.getPlayerID()).isEqualTo(111222333);
+        assertThat(entry.getName()).isEqualTo("Sven Persson");
+        assertThat(entry.getDeadline()).isEqualTo(DEADLINE.toDbTimestamp());
+        assertThat(entry.getAlter()).isEqualTo(24);
+        assertThat(entry.getAgeDays()).isEqualTo(77);
+        assertThat(entry.getTSI()).isEqualTo(29000);
+        assertThat(entry.getKondition()).isEqualTo(8);
+        assertThat(entry.getSpielaufbau()).isEqualTo(12);
+        assertThat(entry.getStandards()).isEqualTo(10);
+        // The highest bid is above the asking price, so it is what the scout entry shows.
+        assertThat(entry.getPrice().getSwedishKrona().longValue()).isEqualTo(1650000L);
+    }
+
+    /**
+     * A listing snapshotted from {@code currentbids} carries market data only. It must not blow up
+     * on the boxed skill fields, and must keep the defaults of a fresh entry.
+     */
+    @Test
+    void toScoutEintrag_ofASkilllessListing_keepsTheDefaults() {
+        final var listing = new TransferListing();
+        listing.setPlayerId(111222333);
+        listing.setPlayerName("Sven Persson");
+
+        final var entry = TransferSearchConverter.toScoutEintrag(listing);
+
+        assertThat(entry.getPlayerID()).isEqualTo(111222333);
+        assertThat(entry.getAlter()).isEqualTo(17);
+        assertThat(entry.getInfo()).isEmpty();
     }
 }

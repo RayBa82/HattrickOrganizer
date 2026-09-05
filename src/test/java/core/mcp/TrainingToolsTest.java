@@ -1,9 +1,19 @@
 package core.mcp;
 
 import com.google.gson.JsonObject;
+import core.constants.player.PlayerSkill;
+import core.model.player.Player;
 import core.net.ChppWriteService;
+import core.util.AmountOfMoney;
+import core.util.HODateTime;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.math.BigDecimal;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -45,12 +55,12 @@ class TrainingToolsTest {
     @Test
     void tools_areTheTrainingTools() {
         assertThat(TrainingTools.tools()).extracting(McpTool::name)
-                .containsExactly("get_training", "set_training");
+                .containsExactly("get_training", "get_player_history", "set_training");
     }
 
     @Test
     void getTraining_takesNoRequiredArguments() {
-        final var getTraining = TrainingTools.tools().get(0);
+        final var getTraining = tool("get_training");
 
         assertThat(getTraining.inputSchema().getAsJsonArray("required")).isEmpty();
         final var properties = getTraining.inputSchema().getAsJsonObject("properties");
@@ -84,5 +94,250 @@ class TrainingToolsTest {
         assertThat(result.get("status").getAsString()).isEqualTo("ok");
         assertThat(result.getAsJsonObject("committed").get("intensity").getAsInt()).isEqualTo(40);
         assertThat(result.get("note").getAsString()).contains("not refreshed");
+    }
+
+    // ---- get_player_history ------------------------------------------------------------------
+    //
+    // The database read is left to the handler; what is worth pinning down is the diffing and the
+    // coverage arithmetic, since a growth rate quoted off a series with holes in it is how a
+    // caller ends up selling a player who is still improving.
+
+    /** A euro league, so the wage drift is visible in the user's currency. */
+    @BeforeEach
+    void euroLeague() {
+        AmountOfMoney.Companion.setExchangeRate(BigDecimal.TEN);
+    }
+
+    @Test
+    void getPlayerHistory_takesNoRequiredArgumentsAndDefaultsToDerivedOnly() {
+        final var tool = tool("get_player_history");
+
+        assertThat(tool.inputSchema().getAsJsonArray("required")).isEmpty();
+        final var properties = tool.inputSchema().getAsJsonObject("properties");
+        assertThat(properties.has("playerIds")).isTrue();
+        assertThat(properties.has("weeks")).isTrue();
+        assertThat(properties.has("includeSnapshots")).isTrue();
+        assertThat(properties.getAsJsonObject("includeSnapshots").get("description").getAsString())
+                .contains("default false");
+    }
+
+    /**
+     * One snapshot: passing at {@code level + sub}, taken {@code daysAgo} before now so the window
+     * arithmetic is relative to something stable.
+     */
+    private static Player snapshot(String date, int age, int passing, double sub, int tsi, long wage) {
+        return snapshot(HODateTime.fromHT(date), age, passing, sub, tsi, wage);
+    }
+
+    private static Player snapshot(HODateTime date, int age, int passing, double sub, int tsi,
+                                   long wage) {
+        final var player = new Player();
+        player.setPlayerId(475805295);
+        player.setFirstName("Adrián");
+        player.setLastName("Walter");
+        player.setHrfDate(date);
+        player.setAge(age);
+        player.setAgeDays(10);
+        player.setValue4Skill(PlayerSkill.PASSING, passing);
+        player.setSubskill4PlayerSkill(PlayerSkill.PASSING, sub);
+        player.setTsi(tsi);
+        player.setWage(new AmountOfMoney(wage));
+        return player;
+    }
+
+    /** Seventeen weekly snapshots - exactly one Hattrick year - with passing climbing 5.0 to 7.0. */
+    private static List<Player> oneHattrickYear() {
+        final var start = HODateTime.fromHT("2026-01-01 12:00:00");
+        final var series = new ArrayList<Player>();
+        for (int week = 0; week <= 16; week++) {
+            final var precise = 5.0 + week * (2.0 / 16);
+            series.add(snapshot(start.plus(week * 7, ChronoUnit.DAYS), 19,
+                    (int) Math.floor(precise), precise - Math.floor(precise),
+                    4200 + week * 300, 9000 + week * 20L));
+        }
+        return series;
+    }
+
+    @Test
+    void playerHistory_ratesTwoLevelsInSixteenWeeksAsTwoLevelsPerHattrickYear() {
+        final var json = TrainingTools
+                .historyOf(475805295, oneHattrickYear(), PlayerSkill.PASSING, false);
+        final var derived = json.getAsJsonObject("derived");
+
+        assertThat(json.get("status").getAsString()).isEqualTo("ok");
+        assertThat(json.get("name").getAsString()).isEqualTo("Adrián Walter");
+        assertThat(derived.get("trainedSkill").getAsString()).isEqualTo("PASSING");
+        assertThat(derived.get("trainedSkillStart").getAsDouble()).isEqualTo(5.0);
+        assertThat(derived.get("trainedSkillEnd").getAsDouble()).isEqualTo(7.0);
+        assertThat(derived.get("trainedSkillLevelUps").getAsInt()).isEqualTo(2);
+
+        // sixteen observed weeks is one Hattrick year, so the rate is the raw gain
+        assertThat(json.getAsJsonObject("coverage").get("observedWeeks").getAsDouble())
+                .isEqualTo(16.0);
+        assertThat(derived.get("levelsPerHtYear").getAsDouble()).isEqualTo(2.0);
+        assertThat(derived.get("rateBasis").getAsString()).isEqualTo("subskill");
+        // weekly downloads leave no hole worth reporting
+        assertThat(json.getAsJsonObject("coverage").getAsJsonArray("gaps")).isEmpty();
+    }
+
+    /**
+     * A player HO never replayed training for carries zero in every sub-skill, and the rate then
+     * quietly becomes a count of whole levels while still looking like a measured float. Nothing in
+     * the numbers gives that away - a genuine 5.00 and an estimate-less 5 are the same value - so
+     * rateBasis has to say it outright.
+     */
+    @Test
+    void playerHistory_saysWhenTheRateIsWholeLevelsBecauseHoHasNoSubSkills() {
+        final var start = HODateTime.fromHT("2026-01-01 12:00:00");
+        final var noSubs = new ArrayList<Player>();
+        for (int week = 0; week <= 16; week++) {
+            noSubs.add(snapshot(start.plus(week * 7, ChronoUnit.DAYS), 19,
+                    5 + week / 8, 0.0, 4200, 9000));
+        }
+
+        final var derived = TrainingTools.historyOf(1, noSubs, PlayerSkill.PASSING, false)
+                .getAsJsonObject("derived");
+
+        assertThat(derived.get("rateBasis").getAsString()).isEqualTo("integer");
+        // the number still arrives, and still looks exactly like a measured one
+        assertThat(derived.get("levelsPerHtYear").getAsDouble()).isEqualTo(2.0);
+    }
+
+    /** One populated snapshot is enough: the replay fills a player's rows all at once. */
+    @Test
+    void playerHistory_callsTheBasisSubskillWhenTheEndpointsHappenToBeWholeLevels() {
+        final var series = List.of(
+                snapshot("2026-01-01 12:00:00", 19, 5, 0.0, 4200, 9000),
+                snapshot("2026-02-01 12:00:00", 19, 5, 0.4, 4500, 9000),
+                snapshot("2026-03-01 12:00:00", 19, 6, 0.0, 4900, 9200));
+
+        assertThat(TrainingTools.historyOf(1, series, PlayerSkill.PASSING, false)
+                .getAsJsonObject("derived").get("rateBasis").getAsString()).isEqualTo("subskill");
+    }
+
+    @Test
+    void playerHistory_reportsTsiAndWageDriftInTheUsersCurrency() {
+        final var derived = TrainingTools
+                .historyOf(475805295, oneHattrickYear(), PlayerSkill.PASSING, false)
+                .getAsJsonObject("derived");
+
+        assertThat(derived.getAsJsonObject("tsi").get("start").getAsInt()).isEqualTo(4200);
+        assertThat(derived.getAsJsonObject("tsi").get("end").getAsInt()).isEqualTo(9000);
+        assertThat(derived.getAsJsonObject("tsi").get("change").getAsInt()).isEqualTo(4800);
+        // 9000 krona in, 9320 out, a tenth of each in a euro league
+        assertThat(derived.getAsJsonObject("wage").get("start").getAsLong()).isEqualTo(900L);
+        assertThat(derived.getAsJsonObject("wage").get("end").getAsLong()).isEqualTo(932L);
+    }
+
+    @Test
+    void playerHistory_datesEveryLevelChangeIncludingADrop() {
+        final var series = List.of(
+                snapshot("2026-01-01 12:00:00", 30, 9, 0.9, 5000, 9000),
+                snapshot("2026-02-01 12:00:00", 30, 10, 0.1, 5200, 9400),
+                snapshot("2026-03-01 12:00:00", 31, 9, 0.8, 4800, 9400));
+
+        final var levelUps = TrainingTools
+                .historyOf(1, series, PlayerSkill.PASSING, false).getAsJsonArray("levelUps");
+
+        assertThat(levelUps).hasSize(2);
+        final var up = levelUps.get(0).getAsJsonObject();
+        assertThat(up.get("skill").getAsString()).isEqualTo("PASSING");
+        assertThat(up.get("from").getAsInt()).isEqualTo(9);
+        assertThat(up.get("to").getAsInt()).isEqualTo(10);
+        assertThat(up.get("date").getAsString()).startsWith("2026-02-01");
+        assertThat(up.get("ageAtChange").getAsInt()).isEqualTo(30);
+        // a skill that fell back is reported the same way, from above to below
+        final var down = levelUps.get(1).getAsJsonObject();
+        assertThat(down.get("from").getAsInt()).isEqualTo(10);
+        assertThat(down.get("to").getAsInt()).isEqualTo(9);
+        // only the rise counts as a level-up
+        assertThat(TrainingTools.historyOf(1, series, PlayerSkill.PASSING, false)
+                .getAsJsonObject("derived").get("trainedSkillLevelUps").getAsInt()).isEqualTo(1);
+    }
+
+    /**
+     * The load-bearing case. A fortnight with no download hides a training update, so the caller
+     * has to be able to see the hole rather than read a confident rate off it.
+     */
+    @Test
+    void playerHistory_reportsHolesInTheSeries() {
+        final var series = List.of(
+                snapshot("2026-01-01 12:00:00", 19, 5, 0.0, 4200, 9000),
+                snapshot("2026-01-08 12:00:00", 19, 5, 0.2, 4300, 9000),
+                // three weeks with no download
+                snapshot("2026-01-29 12:00:00", 19, 6, 0.1, 4900, 9200),
+                snapshot("2026-02-05 12:00:00", 19, 6, 0.3, 5000, 9200));
+
+        final var coverage = TrainingTools
+                .historyOf(1, series, PlayerSkill.PASSING, false).getAsJsonObject("coverage");
+
+        assertThat(coverage.get("snapshotCount").getAsInt()).isEqualTo(4);
+        assertThat(coverage.get("firstDate").getAsString()).startsWith("2026-01-01");
+        assertThat(coverage.get("lastDate").getAsString()).startsWith("2026-02-05");
+        assertThat(coverage.get("observedWeeks").getAsDouble()).isEqualTo(5.0);
+
+        final var gaps = coverage.getAsJsonArray("gaps");
+        assertThat(gaps).hasSize(1);
+        assertThat(gaps.get(0).getAsJsonObject().get("from").getAsString()).startsWith("2026-01-08");
+        assertThat(gaps.get(0).getAsJsonObject().get("to").getAsString()).startsWith("2026-01-29");
+        assertThat(gaps.get(0).getAsJsonObject().get("days").getAsDouble()).isEqualTo(21.0);
+    }
+
+    @Test
+    void playerHistory_refusesToQuoteARateOffTooShortASpan() {
+        final var series = List.of(
+                snapshot("2026-01-01 12:00:00", 19, 5, 0.0, 4200, 9000),
+                snapshot("2026-01-03 12:00:00", 19, 6, 0.0, 4900, 9200));
+
+        final var json = TrainingTools.historyOf(1, series, PlayerSkill.PASSING, false);
+
+        // two days apart: one level over that span would extrapolate to nearly sixty a year
+        assertThat(json.getAsJsonObject("derived").get("levelsPerHtYear").isJsonNull()).isTrue();
+        assertThat(json.getAsJsonObject("derived").get("trainedSkillLevelUps").getAsInt())
+                .isEqualTo(1);
+    }
+
+    @Test
+    void playerHistory_saysSoWhenThereIsNothingToReport() {
+        final var empty = TrainingTools.historyOf(999, List.of(), PlayerSkill.PASSING, false);
+        assertThat(empty.get("status").getAsString()).isEqualTo("no_history");
+        assertThat(empty.has("derived")).isFalse();
+
+        final var one = TrainingTools.historyOf(1,
+                List.of(snapshot("2026-01-01 12:00:00", 19, 5, 0.0, 4200, 9000)),
+                PlayerSkill.PASSING, false);
+        assertThat(one.get("status").getAsString()).isEqualTo("single_snapshot");
+        assertThat(one.getAsJsonArray("levelUps")).isEmpty();
+        assertThat(one.getAsJsonObject("derived").get("levelsPerHtYear").isJsonNull()).isTrue();
+        assertThat(one.getAsJsonObject("derived").get("weeksSinceLastLevelUp").isJsonNull()).isTrue();
+    }
+
+    @Test
+    void playerHistory_keepsTheRawSeriesBehindTheFlag() {
+        final var series = oneHattrickYear();
+
+        assertThat(TrainingTools.historyOf(1, series, PlayerSkill.PASSING, false)
+                .has("snapshots")).isFalse();
+
+        final var snapshots = TrainingTools.historyOf(1, series, PlayerSkill.PASSING, true)
+                .getAsJsonArray("snapshots");
+        assertThat(snapshots).hasSize(series.size());
+        final var first = snapshots.get(0).getAsJsonObject();
+        assertThat(first.get("date").getAsString()).startsWith("2026-01-01");
+        // the sub-skill rides along, so the curve does not have to wait for a whole level
+        assertThat(first.getAsJsonObject("skills").get("PASSING").getAsDouble()).isEqualTo(5.0);
+        assertThat(snapshots.get(8).getAsJsonObject().getAsJsonObject("skills")
+                .get("PASSING").getAsDouble()).isEqualTo(6.0);
+    }
+
+    @Test
+    void playerHistory_leavesTheTrainedSkillBlockOutWhenNothingIsTrained() {
+        final var derived = TrainingTools.historyOf(1, oneHattrickYear(), null, false)
+                .getAsJsonObject("derived");
+
+        assertThat(derived.get("trainedSkill").isJsonNull()).isTrue();
+        assertThat(derived.has("levelsPerHtYear")).isFalse();
+        // the money drift does not depend on what is being trained
+        assertThat(derived.getAsJsonObject("tsi").get("change").getAsInt()).isEqualTo(4800);
     }
 }

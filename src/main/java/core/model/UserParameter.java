@@ -117,6 +117,8 @@ public final class UserParameter extends Configuration {
     public int mcpSearchesPerSession = 20;
     /** How many CHPP writes (training, match order, challenges, bids) one HO session may issue in total. */
     public int mcpChppWritesPerSession = 20;
+    /** How many expired listings the sale-price resolve pass may look up per run. 0 switches it off. */
+    public int mcpResolveCap = 20;
 
     //Whether or not the player analysis is packed vertically one below the other
     public boolean spieleranalyseVertikal = true;
@@ -452,6 +454,7 @@ public final class UserParameter extends Configuration {
         map.put("mcpServerPort", String.valueOf(mcpServerPort));
         map.put("mcpSearchesPerSession", String.valueOf(mcpSearchesPerSession));
         map.put("mcpChppWritesPerSession", String.valueOf(mcpChppWritesPerSession));
+        map.put("mcpResolveCap", String.valueOf(mcpResolveCap));
 
         if (ReleaseChannel == null) {
             ReleaseChannel = "Stable";
@@ -703,6 +706,7 @@ public final class UserParameter extends Configuration {
         mcpServerPort = orDefault(getIntValue(values, "mcpServerPort"), 8765);
         mcpSearchesPerSession = orDefault(getIntValue(values, "mcpSearchesPerSession"), 20);
         mcpChppWritesPerSession = orDefault(getIntValue(values, "mcpChppWritesPerSession"), 20);
+        mcpResolveCap = orDefault(getIntValue(values, "mcpResolveCap"), 20);
         ReleaseChannel = getStringValue(values, "ReleaseChannel");
         fixtures = getBooleanValue(values, "fixtures");
         downloadCurrentMatchlist = getBooleanValue(values, "currentMatchlist");

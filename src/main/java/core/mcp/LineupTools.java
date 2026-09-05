@@ -27,9 +27,12 @@ public final class LineupTools {
 
     private static final String SPEC_DOC =
             "A lineup: positions is a list of {roleId, playerId, behaviour}, roleId 100 keeper "
-                    + "through 113 left forward for the field and 114-118 for the bench, behaviour "
-                    + "0 normal, 1 offensive, 2 defensive, 3 towards middle, 4 towards wing. "
-                    + "tactic, attitude, styleOfPlay, captainId and setPiecesTakerId are optional.";
+                    + "through 113 left forward for the field. bench takes the same shape, with "
+                    + "roleId 200 keeper, 201 central defender, 202 wing back, 203 inner "
+                    + "midfielder, 204 forward, 205 winger, 206 extra, and 207-213 for the "
+                    + "matching backups in that order. behaviour is 0 normal, 1 offensive, "
+                    + "2 defensive, 3 towards middle, 4 towards wing. tactic, attitude, "
+                    + "styleOfPlay, captainId and setPiecesTakerId are optional.";
 
     private LineupTools() {
     }
@@ -63,7 +66,12 @@ public final class LineupTools {
                         LineupTools::optimize),
                 new McpTool("apply_lineup",
                         "Write a lineup into HO. This changes what the Lineup tab shows and what HO "
-                                + "would upload; it does not send anything to Hattrick.",
+                                + "would upload; it does not send anything to Hattrick. HO can "
+                                + "refuse a position: the Lineup tab's assistant filter unfields a "
+                                + "player it hides. The returned lineup is therefore what HO holds "
+                                + "afterwards, not an echo of the request, and any position it "
+                                + "would not keep is listed under notApplied with a warning. Read "
+                                + "those before telling anyone the lineup is set.",
                         lineupSchema(),
                         LineupTools::apply),
                 new McpTool("set_player_group",
@@ -176,18 +184,33 @@ public final class LineupTools {
         }
     }
 
+    /**
+     * Rejects a roleId no slot of the lineup carries. {@link Lineup#setSpielerAtPosition} resolves
+     * through {@code getPositionById} and returns without a word when that finds nothing, so an
+     * off-by-one bench id used to be dropped in silence.
+     */
+    static void requireSlot(Lineup lineup, int roleId) throws McpToolException {
+        if (lineup.getPositionById(roleId) == null) {
+            throw new McpToolException("No lineup slot has roleId " + roleId
+                    + "; the field is 100-113 and the bench 200-213.");
+        }
+    }
+
     private static void applySpec(Lineup lineup, JsonObject spec) throws McpToolException {
         rejectUnavailable(spec);
         for (final var element : McpJson.reqArray(spec, "positions")) {
             final var position = element.getAsJsonObject();
-            lineup.setSpielerAtPosition(McpJson.reqInt(position, "roleId"),
-                    McpJson.reqInt(position, "playerId"),
+            final var roleId = McpJson.reqInt(position, "roleId");
+            requireSlot(lineup, roleId);
+            lineup.setSpielerAtPosition(roleId, McpJson.reqInt(position, "playerId"),
                     (byte) McpJson.optInt(position, "behaviour", IMatchRoleID.NORMAL));
         }
         if (spec.has("bench")) {
             for (final var element : spec.getAsJsonArray("bench")) {
                 final var slot = element.getAsJsonObject();
-                lineup.setSpielerAtPosition(McpJson.reqInt(slot, "roleId"), McpJson.reqInt(slot, "playerId"));
+                final var roleId = McpJson.reqInt(slot, "roleId");
+                requireSlot(lineup, roleId);
+                lineup.setSpielerAtPosition(roleId, McpJson.reqInt(slot, "playerId"));
             }
         }
         if (spec.has("tactic")) {
@@ -251,9 +274,73 @@ public final class LineupTools {
             // path the Lineup tab uses.
             final var team = model.getCurrentLineupTeam();
             applySpec(team.getLineup(), spec);
+            // Give the Lineup tab its say before storing or reporting anything. Its assistant
+            // filters do not merely hide a player: PlayerPositionPanel.setPlayersList clears any
+            // slot whose occupant the active filter would not offer, so a player placed here can
+            // be unfielded again the moment the tab refreshes. Refreshing now makes that happen
+            // inside the call, so what gets stored and reported is the lineup HO is really left
+            // holding. It also makes the tab show the write, the way set_player_group already does.
+            final var lineupPanel = HOMainFrame.instance().getLineupPanel();
+            if (lineupPanel != null) {
+                lineupPanel.update();
+            }
             model.storeLineup(team);
-            return describe(team.getLineup(), ratingModel);
+            final var result = describe(team.getLineup(), ratingModel);
+            final var refused = refusedByHo(team.getLineup(), spec);
+            if (!refused.isEmpty()) {
+                result.add("notApplied", refused);
+                result.addProperty("warning", "HO did not keep " + refused.size()
+                        + " of the requested positions - the lineup above is what it actually "
+                        + "holds, not what was asked for. The Lineup tab's assistant filter "
+                        + "unfields a player it hides, so this is usually its squad-group filter "
+                        + "or its \"exclude players from the last match\" setting. Turn that "
+                        + "setting off in HO, or field a player the filter allows. Do not report "
+                        + "these positions as set.");
+            }
+            return result;
         });
+    }
+
+    /**
+     * The positions the spec asked for that the lineup does not hold once HO has had its say.
+     * <p>
+     * Empty in the ordinary case. A non-empty result is the honest answer to "did the write take",
+     * and is the reason {@code apply_lineup} refreshes the Lineup tab before reporting: without
+     * that the answer would be yes, and the tab would quietly undo it afterwards.
+     */
+    static JsonArray refusedByHo(Lineup lineup, JsonObject spec) throws McpToolException {
+        final var refused = new JsonArray();
+        for (final var wanted : requestedSlots(spec)) {
+            final var slot = lineup.getPositionById(wanted.roleId);
+            if (slot != null && slot.getPlayerId() != wanted.playerId) {
+                final var entry = new JsonObject();
+                entry.addProperty("roleId", wanted.roleId);
+                entry.addProperty("requestedPlayerId", wanted.playerId);
+                entry.addProperty("actualPlayerId", slot.getPlayerId());
+                refused.add(entry);
+            }
+        }
+        return refused;
+    }
+
+    private record RequestedSlot(int roleId, int playerId) {
+    }
+
+    private static List<RequestedSlot> requestedSlots(JsonObject spec) throws McpToolException {
+        final var slots = new ArrayList<RequestedSlot>();
+        for (final var element : McpJson.reqArray(spec, "positions")) {
+            final var position = element.getAsJsonObject();
+            slots.add(new RequestedSlot(McpJson.reqInt(position, "roleId"),
+                    McpJson.reqInt(position, "playerId")));
+        }
+        if (spec.has("bench")) {
+            for (final var element : spec.getAsJsonArray("bench")) {
+                final var slot = element.getAsJsonObject();
+                slots.add(new RequestedSlot(McpJson.reqInt(slot, "roleId"),
+                        McpJson.reqInt(slot, "playerId")));
+            }
+        }
+        return slots;
     }
 
     private static JsonObject setPlayerGroup(JsonObject args) throws McpToolException {
@@ -324,8 +411,11 @@ public final class LineupTools {
         return json;
     }
 
-    /** Run on the event dispatch thread and propagate any failure back to the caller. */
-    private static JsonObject onEdt(EdtTask task) throws McpToolException {
+    /**
+     * Run on the event dispatch thread and propagate any failure back to the caller. Shared with
+     * the other tool classes that reconcile against a live HO panel.
+     */
+    static JsonObject onEdt(EdtTask task) throws McpToolException {
         if (SwingUtilities.isEventDispatchThread()) {
             return task.run();
         }
@@ -352,7 +442,7 @@ public final class LineupTools {
     }
 
     @FunctionalInterface
-    private interface EdtTask {
+    interface EdtTask {
         JsonObject run() throws McpToolException;
     }
 }

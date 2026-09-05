@@ -2,9 +2,17 @@ package core.mcp;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import core.constants.player.PlayerSkill;
 import core.db.DBManager;
 import core.model.misc.Economy;
+import core.model.player.IMatchRoleID;
+import core.model.player.MatchRoleID;
+import core.model.player.Specialty;
 import core.util.AmountOfMoney;
+import module.opponentspy.OppPlayerSkillEstimator;
+import module.teamanalyzer.ht.HattrickManager;
+import module.teamanalyzer.manager.PlayerDataManager;
+import module.teamanalyzer.vo.PlayerInfo;
 import tool.arenasizer.Stadium;
 
 import java.util.List;
@@ -13,6 +21,14 @@ import java.util.List;
 public final class TeamTools {
 
     private static final int DEFAULT_HOME_MATCHES = 5;
+
+    /** The seven skills the opponent estimator fills in, and the names {@code get_squad} uses. */
+    private static final PlayerSkill[] ESTIMATED_SKILLS = {
+            PlayerSkill.KEEPER, PlayerSkill.DEFENDING, PlayerSkill.PLAYMAKING, PlayerSkill.WINGER,
+            PlayerSkill.PASSING, PlayerSkill.SCORING, PlayerSkill.SETPIECES};
+
+    private static final String[] ESTIMATED_SKILL_NAMES = {
+            "keeper", "defending", "playmaking", "winger", "passing", "scoring", "setPieces"};
 
     private TeamTools() {
     }
@@ -39,6 +55,25 @@ public final class TeamTools {
                                 McpTool.properties("playerId", McpTool.prop("integer", "the Hattrick player id")),
                                 "playerId"),
                         args -> player(McpJson.reqInt(args, "playerId"))),
+                new McpTool("get_opponent_squad",
+                        "Another team's squad, fetched from Hattrick: every player with age, TSI, "
+                                + "form, stamina, experience, loyalty, specialty, wage, injuries "
+                                + "and cards, plus where and how long he last played. Two things "
+                                + "it gives that nothing else does: who is unavailable for their "
+                                + "next match (injured or suspended), and their last eleven - the "
+                                + "players sharing the highest lastMatch.matchId started that "
+                                + "match, and lastMatch.roleId says where (100 keeper through 113 "
+                                + "left forward). Hattrick does not publish another team's skills, "
+                                + "so unlike get_squad there are none; estimatedSkills is HO's own "
+                                + "opponent-spy guess inferred from the visible attributes, not "
+                                + "data. One CHPP request. Pair it with get_opponent_ratings, "
+                                + "which gives the sector ratings predict_match needs.",
+                        McpTool.schema(McpTool.properties(
+                                        "teamId", McpTool.prop("integer",
+                                                "the Hattrick team id, e.g. an opponent id from "
+                                                        + "get_upcoming_matches")),
+                                "teamId"),
+                        TeamTools::opponentSquad),
                 new McpTool("get_upcoming_matches",
                         "The fixture list of the current series.",
                         McpTool.schema(new JsonObject()),
@@ -191,6 +226,109 @@ public final class TeamTools {
         }
         json.add("transfers", transfers);
         return json;
+    }
+
+    /**
+     * get_opponent_squad: the players file for a team that is not ours.
+     * <p>
+     * Routed through {@link HattrickManager#downloadPlayers} rather than {@code Connector} directly
+     * because that is the one call in the codebase that knows what the players file yields for a
+     * *foreign* team — {@link PlayerInfo} deliberately reads only the fields Hattrick publishes for
+     * one, which is why there are no skills here. It also files the result in the Team Analyzer's
+     * player store, the same rows that module writes when the user opens its tab.
+     */
+    private static JsonObject opponentSquad(JsonObject args) throws McpToolException {
+        // The estimator and the Team Analyzer store both read the current season and week off the
+        // loaded snapshot, so fail with the usual message rather than a NullPointerException.
+        McpJson.model();
+        final var teamId = McpJson.reqInt(args, "teamId");
+
+        final var players = HattrickManager.downloadPlayers(teamId);
+        if (players == null || players.isEmpty()) {
+            throw new McpToolException("Hattrick returned no squad for team " + teamId
+                    + ". Check the team id - get_upcoming_matches lists the ones in our series.");
+        }
+
+        final var estimator = new OppPlayerSkillEstimator();
+        final var squad = new JsonArray();
+        for (final var info : players) {
+            squad.add(opponentPlayer(info, estimator));
+        }
+
+        final var json = new JsonObject();
+        json.addProperty("teamId", teamId);
+        json.addProperty("playerCount", players.size());
+        json.addProperty("currency", McpJson.currency());
+        json.add("players", squad);
+        json.addProperty("note", "Hattrick publishes no skills for another team's players. "
+                + "estimatedSkills is HO's opponent-spy estimate from age, wage, TSI, form, "
+                + "stamina, specialty and the position the player last played (estimatedForRoleId) "
+                + "- a guess, and absent entirely for a player whose last position is unknown. The "
+                + "players sharing the highest lastMatch.matchId were that match's eleven.");
+        return json;
+    }
+
+    static JsonObject opponentPlayer(PlayerInfo info, OppPlayerSkillEstimator estimator) {
+        final var json = new JsonObject();
+        json.addProperty("playerId", info.getPlayerId());
+        json.addProperty("name", info.getName());
+        json.addProperty("age", info.getAge());
+        json.addProperty("tsi", info.getTsi());
+        json.addProperty("wage", money(info.getSalary()));
+        json.addProperty("form", info.getForm());
+        json.addProperty("stamina", info.getStamina());
+        json.addProperty("experience", info.getExperience());
+        json.addProperty("loyalty", info.getLoyalty());
+        json.addProperty("motherclub", info.isMotherClubBonus());
+        json.addProperty("specialty", info.getSpecialEvent());
+        final var specialty = Specialty.getSpecialty(info.getSpecialEvent());
+        json.addProperty("specialtyName", specialty == null ? null : specialty.toString());
+        // -1 fit, 0 bruised, above that the weeks left - the same scale get_squad reports.
+        json.addProperty("injuryWeeks", info.getInjuryLevel());
+        json.addProperty("bookingStatus", bookingStatus(info.getBookingStatus()));
+        json.addProperty("transferListed", info.isTransferListed());
+        json.addProperty("available", info.getInjuryLevel() <= 0
+                && info.getBookingStatus() != PlayerDataManager.SUSPENDED);
+
+        // Where and how well he last played: the only performance data Hattrick publishes about
+        // another team's player, and collectively the eleven that started their last match.
+        final var last = new JsonObject();
+        last.addProperty("matchId", info.getLastMatchId());
+        last.addProperty("date",
+                info.getLastMatchDate() == null ? null : info.getLastMatchDate().toHT());
+        last.addProperty("roleId", info.getLastMatchPosition());
+        last.addProperty("playedMinutes", info.getLastMatchPlayedMinutes());
+        last.addProperty("rating", info.getRating());
+        last.addProperty("ratingEndOfMatch", info.getLastMatchRatingEndOfGame());
+        json.add("lastMatch", last);
+
+        // The estimator picks its starting skills off the position, and its fall-through branch is
+        // "goalkeeper" - so an unknown position has to skip the estimate rather than be given a
+        // keeper's. A player who has never played, or came off the bench, lands here.
+        final var position = MatchRoleID.getPosition(info.getLastMatchPosition(), IMatchRoleID.NORMAL);
+        if (position != IMatchRoleID.UNKNOWN && position != IMatchRoleID.EXTRA) {
+            final var estimated = estimator.calcPlayer(info.getAge(), info.getSalary(),
+                    info.getTsi(), info.getForm(), info.getStamina(), info.getSpecialEvent(),
+                    position, info.getInjuryLevel());
+            final var skills = new JsonObject();
+            for (int i = 0; i < ESTIMATED_SKILLS.length; i++) {
+                skills.addProperty(ESTIMATED_SKILL_NAMES[i],
+                        estimated.getValue4Skill(ESTIMATED_SKILLS[i]));
+            }
+            json.add("estimatedSkills", skills);
+            json.addProperty("estimatedForRoleId", info.getLastMatchPosition());
+        }
+        return json;
+    }
+
+    /** The card state as a word, rather than the packed int teamAnalyzer stores it as. */
+    private static String bookingStatus(int bookingStatus) {
+        return switch (bookingStatus) {
+            case PlayerDataManager.YELLOW -> "yellow";
+            case PlayerDataManager.DOUBLE_YELLOW -> "doubleYellow";
+            case PlayerDataManager.SUSPENDED -> "suspended";
+            default -> "none";
+        };
     }
 
     private static JsonObject fixtures() throws McpToolException {

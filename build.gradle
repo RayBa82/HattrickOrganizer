@@ -520,13 +520,14 @@ tasks.register("pushDB") {
 
 tasks.register("jpackageDmg", Exec) {
     group 'sub tasks'
-    description "Packages the distribution into an unsigned macOS .dmg using the JDK's jpackage."
+    description "Packages the distribution into an unsigned macOS .dmg (jpackage app-image + hdiutil)."
     dependsOn tasks.createDistribution
     onlyIf { org.gradle.internal.os.OperatingSystem.current().isMacOsX() }
 
     // jpackage wants a CFBundleVersion (max 3 numeric parts), not the 4-part build version
     def appVersion = version.toString().split(/\./).take(2).join('.')
     def macappDir = file("${buildDir}/macapp")
+    def dmgRoot = file("${buildDir}/dmgroot")
     def icns = file("${buildDir}/HO.icns")
 
     doFirst {
@@ -540,20 +541,25 @@ tasks.register("jpackageDmg", Exec) {
              "--out", "${iconset}/icon_${s}x${s}@2x.png"]*.toString().execute().waitFor()
         }
         ["iconutil", "-c", "icns", iconset.path, "-o", icns.path].execute().waitFor()
-        delete macappDir      // jpackage refuses to overwrite an existing .dmg
+        delete macappDir, dmgRoot      // jpackage refuses to overwrite an existing app image
         macappDir.mkdirs()
+        dmgRoot.mkdirs()
     }
 
-    // --input/--dest must be absolute, otherwise jpackage cannot find the main jar
-    commandLine 'jpackage', '--type', 'dmg',
-            '--input', "${buildDir}/install/XXX",
-            '--dest', macappDir.path,
-            '--name', 'HO',
-            '--main-jar', 'HO.jar',
-            '--main-class', 'core.HOLauncher',
-            '--app-version', appVersion,
-            '--arguments', 'INSTALLED',
-            '--icon', icns.path
+    // NOT `jpackage --type dmg`: on JDK 21+ it drives Finder over AppleScript and DMGsetup.scpt
+    // never matches HO.app, so the app icon lands on top of the Applications icon and can't be
+    // dragged across. Build the app image, then lay the volume out by hand (real symlink, no
+    // .DS_Store, Finder auto-arranges). --input/--dest must be absolute for jpackage.
+    commandLine 'bash', '-c', """
+        set -e
+        jpackage --type app-image --input '${buildDir}/install/XXX' --dest '${macappDir}' \\
+            --name HO --main-jar HO.jar --main-class core.HOLauncher \\
+            --app-version '${appVersion}' --arguments INSTALLED --icon '${icns}'
+        cp -R '${macappDir}/HO.app' '${dmgRoot}/'
+        ln -s /Applications '${dmgRoot}/Applications'
+        hdiutil create -volname 'HO ${appVersion}' -srcfolder '${dmgRoot}' -ov -format UDZO \\
+            -fs HFS+ '${macappDir}/HO-${appVersion}.dmg'
+    """
 }
 
 tasks.register("dmg", GradleBuild) {

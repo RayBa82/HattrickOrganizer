@@ -91,6 +91,8 @@ final class DBUpdater {
 					case 1000:
 						updateDBv1001(DBVersion);
 					case 1001:
+						updateDBv1002(DBVersion);
+					case 1002:
 				}
 
 			} catch (Exception e) {
@@ -163,6 +165,13 @@ final class DBUpdater {
 		dbManager.getTable(TransferListingTable.TABLENAME).createTable();
 
 		updateDBVersion(dbVersion, 1001);
+	}
+
+	/** HO 10.0.2: the ledger of transfers this team has bid on. */
+	private void updateDBv1002(int dbVersion) throws SQLException {
+		dbManager.getTable(TransferBidTable.TABLENAME).createTable();
+
+		updateDBVersion(dbVersion, 1002);
 	}
 
     private void updateDBv901(int dbVersion) throws SQLException {

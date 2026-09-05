@@ -3,14 +3,21 @@ package core.mcp;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import core.db.DBManager;
+import core.file.xml.XMLMatchArchivParser;
+import core.file.xml.XMLMatchdetailsParser;
 import core.model.enums.MatchType;
 import core.net.ChppWriteService;
+import core.net.Connector;
 import core.model.match.MatchKurzInfo;
 import core.model.match.Matchdetails;
 import core.prediction.engine.MatchPredictionManager;
 import core.rating.RatingPredictionModel.RatingSector;
+import core.util.HODateTime;
 import module.lineup.Lineup;
 
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -23,11 +30,18 @@ public final class MatchTools {
 
     private static final int DEFAULT_COUNT = 10;
     private static final int DEFAULT_SIMULATIONS = 1000;
+    private static final int DEFAULT_OPPONENT_MATCHES = 5;
+    private static final int DEFAULT_OPPONENT_DAYS = 120;
 
     private static final String[] OPPONENT_SECTORS = {
             "opponentMidfield", "opponentDefenceLeft", "opponentDefenceCentral",
             "opponentDefenceRight", "opponentAttackLeft", "opponentAttackCentral",
             "opponentAttackRight"};
+
+    /** The keys {@link #side} writes the same seven sectors under, in the same order. */
+    private static final String[] SECTOR_KEYS = {
+            "midfield", "defenceLeft", "defenceCentral", "defenceRight",
+            "attackLeft", "attackCentral", "attackRight"};
 
     private MatchTools() {
     }
@@ -60,12 +74,42 @@ public final class MatchTools {
                                                         + "ambiguous across source systems")),
                                 "matchId"),
                         MatchTools::match),
+                new McpTool("get_opponent_ratings",
+                        "The sector ratings another team actually earned in its recent matches, "
+                                + "averaged and named exactly as predict_match and simulate_lineup "
+                                + "want them. This is the link between get_upcoming_matches, which "
+                                + "gives the next opponent's teamId, and a prediction: HO only "
+                                + "stores matches involving us, so for a team we have not played "
+                                + "there is nothing for get_match to read. Fetches that team's "
+                                + "match archive and the details of its most recent games from "
+                                + "Hattrick - roughly one request per match, so keep count small. "
+                                + "Copy the opponentRatings object straight into predict_match, but "
+                                + "read the per-match list too: a rating depends on the XI they "
+                                + "fielded and on who was at home.",
+                        McpTool.schema(McpTool.properties(
+                                        "teamId", McpTool.prop("integer",
+                                                "the Hattrick team id, e.g. an opponent id from "
+                                                        + "get_upcoming_matches"),
+                                        "count", McpTool.prop("integer",
+                                                "how many recent matches to average, default "
+                                                        + DEFAULT_OPPONENT_MATCHES),
+                                        "competitiveOnly", McpTool.prop("boolean",
+                                                "league, cup, qualification and masters only, "
+                                                        + "leaving out the friendlies and "
+                                                        + "tournaments teams field reserves in; "
+                                                        + "default true"),
+                                        "days", McpTool.prop("integer",
+                                                "how far back to search, in days; default "
+                                                        + DEFAULT_OPPONENT_DAYS)),
+                                "teamId"),
+                        MatchTools::opponentRatings),
                 new McpTool("predict_match",
                         "Run HO's Monte Carlo match simulator: our current lineup against an "
                                 + "opponent whose seven sector ratings you supply, and get win, "
                                 + "draw and loss probabilities plus goals and chances per match. "
-                                + "Take the opponent's ratings from get_match on one of their "
-                                + "recent games.",
+                                + "Get the opponent's ratings from get_opponent_ratings, which "
+                                + "returns them under exactly these argument names, or from "
+                                + "get_match on a game we played against them.",
                         McpTool.schema(opponentProperties(new JsonObject()), OPPONENT_SECTORS),
                         MatchTools::predict),
                 new McpTool("simulate_lineup",
@@ -248,7 +292,7 @@ public final class MatchTools {
         }
 
         final var json = summary(info, teamId);
-        final var details = DBManager.instance().loadMatchDetails(info.getMatchType().getId(), matchId);
+        final var details = storedDetails(info.getMatchType(), matchId);
         if (details == null) {
             // The result row and the details are downloaded separately, so "no details" is a real
             // state the user can fix, not an empty match.
@@ -265,6 +309,139 @@ public final class MatchTools {
         json.add("home", side(details, true));
         json.add("away", side(details, false));
         json.add("ourPlayers", playerRatings(matchId, info.getMatchType(), teamId));
+        return json;
+    }
+
+    /**
+     * The stored details of a match, or null when HO never downloaded them.
+     * <p>
+     * {@link DBManager#loadMatchDetails} hands back a blank {@link Matchdetails} rather than null
+     * for a match it holds no row for, so "does HO have this" has to be asked of the content - a
+     * null check reports a match with every rating at zero as a complete one.
+     */
+    static Matchdetails storedDetails(MatchType matchType, int matchId) {
+        final var details = DBManager.instance().loadMatchDetails(matchType.getId(), matchId);
+        return details != null && details.getMatchID() == matchId ? details : null;
+    }
+
+    /**
+     * get_opponent_ratings: what a team - any team, not just one we have played - earned in its
+     * recent matches, averaged into the arguments predict_match asks for.
+     */
+    private static JsonObject opponentRatings(JsonObject args) throws McpToolException {
+        final var teamId = McpJson.reqInt(args, "teamId");
+        final var count = Math.max(1, McpJson.optInt(args, "count", DEFAULT_OPPONENT_MATCHES));
+        final var days = Math.max(1, McpJson.optInt(args, "days", DEFAULT_OPPONENT_DAYS));
+        final var competitiveOnly = McpJson.optBool(args, "competitiveOnly", true);
+
+        final var now = HODateTime.now();
+        final var archive = Connector.instance()
+                .getMatchesArchive(teamId, now.minus(days, ChronoUnit.DAYS), now);
+        if (archive == null || archive.isBlank()) {
+            throw new McpToolException("Hattrick returned no match archive for team " + teamId
+                    + ". Check the team id.");
+        }
+
+        final var candidates = new ArrayList<>(XMLMatchArchivParser.parseMatchesFromString(archive));
+        candidates.removeIf(m -> m.getMatchStatus() != MatchKurzInfo.FINISHED
+                || m.getMatchType() == null
+                || m.getMatchSchedule() == null
+                // Reserves play the friendlies and the tournaments, so their ratings say little
+                // about the side that will turn up for a league game.
+                || (competitiveOnly && !(m.getMatchType().isOfficial() && !m.getMatchType().isFriendly())));
+        candidates.sort(Comparator.comparing(MatchKurzInfo::getMatchSchedule).reversed());
+
+        final var details = new ArrayList<Matchdetails>();
+        for (final var match : candidates) {
+            if (details.size() >= count) {
+                break;
+            }
+            final var loaded = opponentMatchDetails(match);
+            if (loaded != null) {
+                details.add(loaded);
+            }
+        }
+        if (details.isEmpty()) {
+            throw new McpToolException("Team " + teamId + " has no finished match in the last " + days
+                    + " days that could be read" + (competitiveOnly ? " (competitiveOnly is on)" : "")
+                    + ". Widen days, or set competitiveOnly false.");
+        }
+
+        final var json = opponentReport(teamId, details);
+        json.addProperty("matchesFound", candidates.size());
+        return json;
+    }
+
+    /** Whatever HO already stored for the match, else one matchdetails request. */
+    private static Matchdetails opponentMatchDetails(MatchKurzInfo match) {
+        final var stored = storedDetails(match.getMatchType(), match.getMatchID());
+        if (stored != null) {
+            return stored;
+        }
+        final var xml = Connector.instance()
+                .downloadMatchdetails(match.getMatchID(), match.getMatchType());
+        if (xml == null || xml.isBlank()) {
+            return null;
+        }
+        // No MatchLineup, which only costs the match report and the highlights - the ratings,
+        // tactic and formation this reads are parsed either way.
+        return XMLMatchdetailsParser.parseMatchdetailsFromString(xml, null);
+    }
+
+    /**
+     * The report itself, over the matches to average - newest first. Separate from the downloading
+     * above so the averaging and the home/away side pick can be tested without a network.
+     */
+    static JsonObject opponentReport(int teamId, List<Matchdetails> details) {
+        final var latest = details.get(0);
+        final var latestHome = latest.getHomeTeamId() == teamId;
+        final var sums = new double[SECTOR_KEYS.length];
+        final var matches = new JsonArray();
+        String teamName = null;
+
+        for (final var d : details) {
+            final var home = d.getHomeTeamId() == teamId;
+            final var entry = side(d, home);
+            for (int i = 0; i < SECTOR_KEYS.length; i++) {
+                sums[i] += entry.get(SECTOR_KEYS[i]).getAsDouble();
+            }
+            final var type = d.getMatchType();
+            entry.addProperty("matchId", d.getMatchID());
+            if (type != null) {
+                entry.addProperty("matchTypeId", type.getId());
+                entry.addProperty("matchType", type.name());
+            }
+            entry.addProperty("date", d.getMatchDate() == null ? null : d.getMatchDate().toHT());
+            entry.addProperty("location", home ? "home" : "away");
+            entry.addProperty("opponentTeamId", home ? d.getGuestTeamId() : d.getHomeTeamId());
+            entry.addProperty("opponentTeamName", home ? d.getGuestTeamName() : d.getHomeTeamName());
+            matches.add(entry);
+
+            final var name = entry.get("teamName");
+            if (teamName == null && name != null && !name.isJsonNull()) {
+                teamName = name.getAsString();
+            }
+        }
+
+        final var ratings = new JsonObject();
+        ratings.addProperty("opponentName", teamName == null ? "Opponent" : teamName);
+        for (int i = 0; i < SECTOR_KEYS.length; i++) {
+            ratings.addProperty(OPPONENT_SECTORS[i],
+                    Math.round(sums[i] / details.size() * 100.0) / 100.0);
+        }
+        // A tactic is a choice, not a quantity - averaging it would invent one nobody played. The
+        // most recent match is the best single guess at what they will pick next.
+        ratings.addProperty("opponentTacticType",
+                latestHome ? latest.getHomeTacticType() : latest.getGuestTacticType());
+        ratings.addProperty("opponentTacticSkill",
+                latestHome ? latest.getHomeTacticSkill() : latest.getGuestTacticSkill());
+
+        final var json = new JsonObject();
+        json.addProperty("teamId", teamId);
+        json.addProperty("teamName", teamName);
+        json.addProperty("matchesUsed", details.size());
+        json.add("opponentRatings", ratings);
+        json.add("matches", matches);
         return json;
     }
 

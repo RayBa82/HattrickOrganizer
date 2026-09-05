@@ -1,5 +1,6 @@
 package core.db;
 
+import core.file.xml.XMLCurrentBidsParser.BidItem;
 import core.file.xml.XMLTransferSearchParser.Details;
 import core.file.xml.XMLTransferSearchParser.Hit;
 import core.util.HODateTime;
@@ -11,11 +12,16 @@ import org.junit.jupiter.api.TestInstance;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class TransferListingTableTest {
+
+    private static final HODateTime DEADLINE = HODateTime.fromHT("2026-09-02 20:15:00");
 
     private Connection conn;
     private TransferListingTable table;
@@ -37,7 +43,7 @@ class TransferListingTableTest {
 
     private static Hit hit(int playerId, Details details) {
         return new Hit(playerId, "Sven Persson", 3, 1_500_000L,
-                HODateTime.fromHT("2026-09-02 20:15:00"), 1_650_000L, "Bidding Boys",
+                DEADLINE, 1_650_000L, "Bidding Boys",
                 555444, "Selling Sam", 2, details);
     }
 
@@ -76,13 +82,127 @@ class TransferListingTableTest {
         assertThat(loaded.getSalePrice()).isNull();
     }
 
+    /** A currentbids observation has the market data but no skills - it must still round-trip. */
+    @Test
+    void snapshotsABidItemWithNoSkillsAsAnUnresolvedListing() {
+        final var observedAt = HODateTime.fromHT("2026-08-30 15:00:00");
+        final var item = new BidItem(8, 777123, 123123123, "Bid Target", 2_400_000L,
+                4242, "Rival FC", "2026-09-03 20:15:00");
+
+        table.storeListing(TransferListing.fromBidItem(item, observedAt));
+
+        final var loaded = table.loadUnresolved(50).stream()
+                .filter(l -> l.getPlayerId() == 123123123).findFirst().orElseThrow();
+        assertThat(loaded.getHighestBid()).isEqualTo(2_400_000L);
+        assertThat(loaded.getBidderName()).isEqualTo("Rival FC");
+        assertThat(loaded.getPlaymaker()).isNull();
+        assertThat(loaded.getTsi()).isNull();
+        assertThat(loaded.getSalePrice()).isNull();
+    }
+
+    /** The skills-fill pass turns a player-details download into a skill-bearing snapshot. */
+    @Test
+    void snapshotsPlayerDetailsAsASkillBearingListing() {
+        final var observedAt = HODateTime.fromHT("2026-08-30 16:00:00");
+        final var p = new core.model.player.Player();
+        p.setPlayerId(88991122);
+        p.setAge(27);
+        p.setValue4Skill(core.constants.player.PlayerSkill.PLAYMAKING, 13);
+        p.setValue4Skill(core.constants.player.PlayerSkill.SCORING, 9);
+
+        table.storeListing(TransferListing.fromPlayerDetails(p, observedAt));
+
+        final var loaded = table.loadUnresolved(50).stream()
+                .filter(l -> l.getPlayerId() == 88991122).findFirst().orElseThrow();
+        assertThat(loaded.getAge()).isEqualTo(27);
+        assertThat(loaded.getPlaymaker()).isEqualTo(13);
+        assertThat(loaded.getScorer()).isEqualTo(9);
+        assertThat(loaded.getSalePrice()).isNull();
+    }
+
+    @Test
+    void hasSkillDataIsTrueOnlyOnceASkillBearingSnapshotExists() {
+        final var observedAt = HODateTime.fromHT("2026-08-30 17:00:00");
+        final var item = new BidItem(2, 601, 55667788, "Skilless Sam", 1_000_000L, 1, "T",
+                "2026-09-04 20:00:00");
+        table.storeListing(TransferListing.fromBidItem(item, observedAt));
+        assertThat(table.hasSkillData(55667788)).isFalse();
+
+        table.storeListing(TransferListing.fromHit(hit(55667788, details()),
+                HODateTime.fromHT("2026-08-30 18:00:00")));
+        assertThat(table.hasSkillData(55667788)).isTrue();
+    }
+
     @Test
     void storesASalePriceAndDropsTheRowOutOfTheUnresolvedList() {
         final var observedAt = HODateTime.fromHT("2026-08-30 14:00:00");
         table.storeListing(TransferListing.fromHit(hit(777888999, details()), observedAt));
 
-        table.storeSalePrice(777888999, observedAt, 1_700_000L);
+        table.storeSalePrice(777888999, DEADLINE, 1_700_000L, Duration.ofDays(2));
 
         assertThat(table.loadUnresolved(10)).noneMatch(l -> l.getPlayerId() == 777888999);
+    }
+
+    /** One lookup resolves every observation of the listing that sold, not just one row. */
+    @Test
+    void storesASalePriceOnEveryObservationOfTheSameListing() {
+        table.storeListing(TransferListing.fromHit(hit(777888999, details()),
+                HODateTime.fromHT("2026-08-30 14:00:00")));
+        table.storeListing(TransferListing.fromHit(hit(777888999, details()),
+                HODateTime.fromHT("2026-08-31 09:00:00")));
+
+        table.storeSalePrice(777888999, DEADLINE, 1_700_000L, Duration.ofDays(2));
+
+        assertThat(table.loadUnresolved(10)).noneMatch(l -> l.getPlayerId() == 777888999);
+    }
+
+    /** A separate, earlier spell on the market is a different listing and must stay unresolved. */
+    @Test
+    void leavesAListingOutsideTheSaleWindowUnresolved() {
+        table.storeListing(TransferListing.fromHit(hit(777888999, details()),
+                HODateTime.fromHT("2026-08-30 14:00:00")));
+
+        final var muchLater = HODateTime.fromHT("2026-11-30 20:00:00");
+        table.storeSalePrice(777888999, muchLater, 1_700_000L, Duration.ofDays(2));
+
+        assertThat(table.loadUnresolved(10)).anyMatch(l -> l.getPlayerId() == 777888999);
+    }
+
+    @Test
+    void loadsComparablesInsideTheAgeSkillAndRecencyWindow() {
+        final var observedAt = HODateTime.fromHT("2026-08-30 14:00:00");
+        table.storeListing(TransferListing.fromHit(hit(1001, details()), observedAt));
+
+        final var d = details();       // age 24, playmaker 12, defender 6, specialty 2
+        assertThat(table.loadComparables(23, 25, "PLAYMAKER", 11, 13, "DEFENDER", 5, 7,
+                d.specialty(), HODateTime.fromHT("2026-08-01 00:00:00")))
+                .anyMatch(l -> l.getPlayerId() == 1001);
+
+        // Outside the age window
+        assertThat(table.loadComparables(30, 32, "PLAYMAKER", 11, 13, "DEFENDER", 5, 7,
+                d.specialty(), HODateTime.fromHT("2026-08-01 00:00:00")))
+                .noneMatch(l -> l.getPlayerId() == 1001);
+
+        // Observed before the recency bound
+        assertThat(table.loadComparables(23, 25, "PLAYMAKER", 11, 13, "DEFENDER", 5, 7,
+                d.specialty(), HODateTime.fromHT("2026-09-01 00:00:00")))
+                .noneMatch(l -> l.getPlayerId() == 1001);
+    }
+
+    /**
+     * Every column TransferTools maps a market-search skill onto has to exist here, or the query
+     * would be malformed SQL. The name reaches the statement by concatenation, so it is validated.
+     */
+    @Test
+    void acceptsEverySkillColumnAndRejectsAnythingElse() {
+        final var since = HODateTime.fromHT("2026-08-01 00:00:00");
+        for (final var skill : new String[]{"KEEPER", "DEFENDER", "PLAYMAKER", "PASSING",
+                "WINGER", "SCORER", "SETPIECES", "STAMINA", "LEADERSHIP", "EXPERIENCE"}) {
+            assertThatCode(() -> table.loadComparables(17, 40, skill, 0, 20, skill, 0, 20,
+                    null, since)).doesNotThrowAnyException();
+        }
+        assertThatThrownBy(() -> table.loadComparables(17, 40, "PLAYMAKER); DROP TABLE X --", 0, 20,
+                "DEFENDER", 0, 20, null, since))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

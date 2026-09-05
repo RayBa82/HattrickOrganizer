@@ -394,6 +394,17 @@ public class Connector {
 		return getCHPPWebFile(placeBidUrl(playerId, teamId, bidAmount, maxBidAmount));
 	}
 
+	// ---- current bids (file=currentbids, version 1.0) ----
+
+	static String currentBidsUrl() {
+		return htUrl + "?file=currentbids&version=1.0";
+	}
+
+	/** Active, recently finished and hotlisted transfers tracked for the user's senior team. */
+	public String currentBids() {
+		return getCHPPWebFile(currentBidsUrl());
+	}
+
 	/**
 	 * Download match details, including match events
 	 */

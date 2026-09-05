@@ -94,12 +94,16 @@ public class PlayerInfo extends AbstractTable.Storable {
 
         this.teamId = Integer.parseInt(i.get("TeamID"));
         this.tsi = Integer.parseInt(i.get("MarketValue"));
+
+        // A player who has never played has no LastMatch block at all, and XMLPlayersParser fills
+        // these keys inside a try/catch - so they can be absent, or present and empty. Both used to
+        // throw out of here and take the whole squad download with them.
         this.lastMatchDate = HODateTime.fromHT(i.get("LastMatch_Date"));
-        this.rating = Float.parseFloat(i.get("LastMatch_Rating"));
-        this.lastMatchId = Integer.parseInt(i.get("LastMatch_id"));
-        this.lastMatchPosition = Integer.parseInt(i.get("LastMatch_PositionCode"));
-        this.lastMatchPlayedMinutes = Integer.parseInt(i.get("LastMatch_PlayedMinutes"));
-        this.lastMatchRatingEndOfGame = Float.parseFloat(i.get("LastMatch_RatingEndOfGame"));
+        this.rating = parseFloatWithDefault(i.get("LastMatch_Rating"), 0f);
+        this.lastMatchId = parseIntWithDefault(i.get("LastMatch_id"), 0);
+        this.lastMatchPosition = parseIntWithDefault(i.get("LastMatch_PositionCode"), 0);
+        this.lastMatchPlayedMinutes = parseIntWithDefault(i.get("LastMatch_PlayedMinutes"), 0);
+        this.lastMatchRatingEndOfGame = parseFloatWithDefault(i.get("LastMatch_RatingEndOfGame"), 0f);
     }
 
     private int parseIntWithDefault(String s, int i) {
@@ -108,6 +112,14 @@ public class PlayerInfo extends AbstractTable.Storable {
         } catch (NumberFormatException ignored) {
         }
         return i;
+    }
+
+    private float parseFloatWithDefault(String s, float f) {
+        try {
+            return Float.parseFloat(s);
+        } catch (NumberFormatException | NullPointerException ignored) {
+        }
+        return f;
     }
 
     private boolean parseBooleanWithDefault(String s, boolean res) {

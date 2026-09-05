@@ -89,6 +89,13 @@ public class TransferListingTable extends AbstractTable {
         return load(TransferListing.class, connectionManager.executeQuery(sql));
     }
 
+    /** Whether any snapshot of this player carries skill data (a search hit, or the skills-fill pass). */
+    public boolean hasSkillData(int playerId) {
+        final var sql = createSelectStatement(
+                "WHERE PLAYERID = " + playerId + " AND PLAYMAKER IS NOT NULL LIMIT 1");
+        return !load(TransferListing.class, connectionManager.executeQuery(sql)).isEmpty();
+    }
+
     /** The most recent snapshot of this player's market listing, or null if none was ever seen. */
     public TransferListing loadLatestForPlayer(int playerId) {
         final var sql = createSelectStatement(
@@ -97,12 +104,61 @@ public class TransferListingTable extends AbstractTable {
         return rows.isEmpty() ? null : rows.get(0);
     }
 
-    /** Record what an observed listing actually sold for. */
-    public void storeSalePrice(int playerId, HODateTime observedAt, long salePrice) {
+    /**
+     * Record what a player actually sold for, on every unresolved observation of the listing that
+     * produced the sale.
+     * <p>
+     * Keyed on the deadline rather than on one observation: a listing seen in four searches is four
+     * rows, and one CHPP lookup should resolve all of them. A Hattrick transfer completes at its
+     * deadline, so {@code window} around the sale date picks out exactly the listing that sold and
+     * leaves an earlier, separately-listed spell of the same player alone.
+     */
+    public void storeSalePrice(int playerId, HODateTime saleDate, long salePrice,
+                               java.time.Duration window) {
+        final var from = new HODateTime(saleDate.getInstant().minus(window));
+        final var to = new HODateTime(saleDate.getInstant().plus(window));
         connectionManager.executeUpdate("UPDATE " + getTableName()
                 + " SET SALEPRICE=" + salePrice
                 + ", RESOLVEDAT='" + HODateTime.toDbTimestamp(HODateTime.now()) + "'"
                 + " WHERE PLAYERID=" + playerId
-                + " AND OBSERVEDAT='" + HODateTime.toDbTimestamp(observedAt) + "'");
+                + " AND SALEPRICE IS NULL"
+                + " AND DEADLINE >= '" + HODateTime.toDbTimestamp(from) + "'"
+                + " AND DEADLINE <= '" + HODateTime.toDbTimestamp(to) + "'");
+    }
+
+    /**
+     * Observations of players comparable to one of ours, for valuation: an age window, two skill
+     * windows and optionally a specialty.
+     * <p>
+     * {@code observedSince} is what stands in for pruning. Nothing deletes from this table, so a
+     * listing from three seasons ago would otherwise drag an estimate towards a market that no
+     * longer exists; bounding the read keeps the history for later without letting it vote now.
+     */
+    public List<TransferListing> loadComparables(int ageMin, int ageMax,
+                                                 String skill1, int min1, int max1,
+                                                 String skill2, int min2, int max2,
+                                                 Integer specialty, HODateTime observedSince) {
+        final var where = new StringBuilder("WHERE AGE BETWEEN " + ageMin + " AND " + ageMax
+                + " AND " + skillColumn(skill1) + " BETWEEN " + min1 + " AND " + max1
+                + " AND " + skillColumn(skill2) + " BETWEEN " + min2 + " AND " + max2
+                + " AND OBSERVEDAT >= '" + HODateTime.toDbTimestamp(observedSince) + "'");
+        if (specialty != null) {
+            where.append(" AND SPECIALTY = ").append(specialty);
+        }
+        return load(TransferListing.class, connectionManager.executeQuery(
+                createSelectStatement(where.toString())));
+    }
+
+    /**
+     * The caller names the skill column, and it is concatenated into SQL, so it is checked against
+     * the columns this table actually declares rather than trusted.
+     */
+    private String skillColumn(String name) {
+        for (final var column : getColumns()) {
+            if (column.getColumnName().equalsIgnoreCase(name)) {
+                return column.getColumnName();
+            }
+        }
+        throw new IllegalArgumentException("No column " + name + " in " + getTableName());
     }
 }

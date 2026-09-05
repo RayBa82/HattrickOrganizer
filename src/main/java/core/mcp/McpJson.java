@@ -13,6 +13,7 @@ import core.model.player.IMatchRoleID;
 import core.model.player.Player;
 import core.rating.RatingPredictionModel;
 import core.util.AmountOfMoney;
+import core.util.HODateTime;
 import core.util.HOLogger;
 import module.lineup.Lineup;
 
@@ -209,6 +210,37 @@ public final class McpJson {
         details.addProperty("defender", d.defender());
         details.addProperty("setPieces", d.setPieces());
         json.add("details", details);
+        return json;
+    }
+
+    /**
+     * One entry of HO's local transfer scout list. Price and deadline are the snapshot taken when
+     * the player was added, not the live market state.
+     */
+    public static JsonObject scoutEntry(module.transfer.scout.ScoutEintrag entry) {
+        final var json = new JsonObject();
+        json.addProperty("playerId", entry.getPlayerID());
+        json.addProperty("playerName", entry.getName());
+        json.addProperty("askingPrice", money(entry.getPrice()));
+        json.addProperty("deadline", entry.getDeadline() == null ? null
+                : HODateTime.fromDbTimestamp(entry.getDeadline()).toHT());
+        json.addProperty("note", entry.getInfo());
+        json.addProperty("age", entry.getAlter());
+        json.addProperty("ageDays", entry.getAgeDays());
+        json.addProperty("salary", money(entry.getbaseWage()));
+        json.addProperty("tsi", entry.getTSI());
+        json.addProperty("form", entry.getForm());
+        json.addProperty("experience", entry.getErfahrung());
+        json.addProperty("leadership", entry.getLeadership());
+        json.addProperty("specialty", entry.getSpeciality());
+        json.addProperty("stamina", entry.getKondition());
+        json.addProperty("keeper", entry.getTorwart());
+        json.addProperty("playmaker", entry.getSpielaufbau());
+        json.addProperty("scorer", entry.getTorschuss());
+        json.addProperty("passing", entry.getPasspiel());
+        json.addProperty("winger", entry.getFluegelspiel());
+        json.addProperty("defender", entry.getVerteidigung());
+        json.addProperty("setPieces", entry.getStandards());
         return json;
     }
 

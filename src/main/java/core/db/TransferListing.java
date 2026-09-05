@@ -1,6 +1,9 @@
 package core.db;
 
+import core.constants.player.PlayerSkill;
+import core.file.xml.XMLCurrentBidsParser.BidItem;
 import core.file.xml.XMLTransferSearchParser.Hit;
+import core.model.player.Player;
 import core.util.HODateTime;
 import lombok.Getter;
 import lombok.Setter;
@@ -80,6 +83,54 @@ public class TransferListing extends AbstractTable.Storable {
         listing.winger = details.winger();
         listing.defender = details.defender();
         listing.setPieces = details.setPieces();
+        return listing;
+    }
+
+    /**
+     * A snapshot built from a {@code currentbids} item: the market data is there, the skills are
+     * not, so it lands as an unresolved listing the resolve pass fills the sale price in for.
+     */
+    public static TransferListing fromBidItem(BidItem item, HODateTime observedAt) {
+        final var listing = new TransferListing();
+        listing.playerId = item.playerId();
+        listing.observedAt = observedAt;
+        listing.playerName = item.playerName();
+        listing.deadline = HODateTime.fromHT(item.deadline());
+        listing.highestBid = item.highestBidAmount();
+        listing.bidderName = item.highestBidTeamName();
+        return listing;
+    }
+
+    /**
+     * A skills-only snapshot from a {@code playerdetails} download: the skills-fill pass runs this
+     * for players HO bid on but never saw on the market, so the valuation corpus has their skills
+     * even though the market data (asking price, bids) is not part of a player-details response.
+     */
+    public static TransferListing fromPlayerDetails(Player p, HODateTime observedAt) {
+        final var listing = new TransferListing();
+        listing.playerId = p.getPlayerId();
+        listing.observedAt = observedAt;
+        listing.playerName = p.getFullName();
+        listing.age = p.getAge();
+        listing.ageDays = p.getAgeDays();
+        listing.tsi = p.getTsi();
+        listing.specialty = p.getSpecialty();
+        listing.form = p.getValue4Skill(PlayerSkill.FORM);
+        listing.experience = p.getValue4Skill(PlayerSkill.EXPERIENCE);
+        listing.leadership = p.getValue4Skill(PlayerSkill.LEADERSHIP);
+        listing.cards = p.getTotalCards();
+        listing.injuryLevel = p.getInjuryWeeks();
+        listing.stamina = p.getValue4Skill(PlayerSkill.STAMINA);
+        listing.keeper = p.getValue4Skill(PlayerSkill.KEEPER);
+        listing.playmaker = p.getValue4Skill(PlayerSkill.PLAYMAKING);
+        listing.scorer = p.getValue4Skill(PlayerSkill.SCORING);
+        listing.passing = p.getValue4Skill(PlayerSkill.PASSING);
+        listing.winger = p.getValue4Skill(PlayerSkill.WINGER);
+        listing.defender = p.getValue4Skill(PlayerSkill.DEFENDING);
+        listing.setPieces = p.getValue4Skill(PlayerSkill.SETPIECES);
+        final var wage = p.getWage();
+        listing.salary = wage == null || wage.getSwedishKrona() == null
+                ? null : wage.getSwedishKrona().longValue();
         return listing;
     }
 }
