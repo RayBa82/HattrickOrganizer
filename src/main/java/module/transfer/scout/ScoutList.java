@@ -93,6 +93,54 @@ public final class ScoutList {
     }
 
     /**
+     * Move a scout entry onto the transfer the seller has just re-listed him on, so the watch list
+     * stops presenting a deadline that has already passed as if it were live.
+     * <p>
+     * Refuses a sold entry: once {@code recordSale} has answered "he went for X", that is the end
+     * of what this list is watching, and a later listing by the buyer is somebody else's transfer.
+     *
+     * @param askingPrice the new asking price in swedish krona
+     * @param highestBid  the standing bid, if any, in swedish krona
+     * @param deadline    the new deadline
+     * @return whether a scout entry for that player was found and updated
+     */
+    public static boolean recordRelisting(int playerId, long askingPrice, long highestBid,
+                                          HODateTime deadline) {
+        if (deadline == null) {
+            return false;
+        }
+        final var entries = entries();
+        for (final var entry : entries) {
+            if (entry.getPlayerID() != playerId) {
+                continue;
+            }
+            if (entry.isSold()) {
+                return false;
+            }
+            applyRelisting(entry, askingPrice, highestBid, deadline);
+            save(entries);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * The fields a re-listing changes, and only those. Skills and TSI are deliberately left alone:
+     * they ride on the fresh TRANSFERLISTING row, which {@code TransferTools.listScout} joins in.
+     * <p>
+     * {@code Price} may be a number the user typed themselves - a hand-added entry carries whatever
+     * they entered - and this overwrites it. That is intended: the column means "what it would cost
+     * to take him now" everywhere else, including {@code TransferSearchConverter}.
+     */
+    static void applyRelisting(ScoutEintrag entry, long askingPrice, long highestBid,
+                               HODateTime deadline) {
+        entry.setPrice(new AmountOfMoney(Math.max(askingPrice, highestBid)));
+        entry.setDeadline(deadline.toDbTimestamp());
+        entry.setWecker(false);   // a has-already-rung latch; left true the alarm never fires again
+    }
+
+
+    /**
      * Whether a sale is the one this entry was watching, rather than some earlier transfer of the
      * same player. A Hattrick transfer completes at its deadline, so the two line up.
      * <p>

@@ -1,56 +1,74 @@
 package module.transfer.scout;
 
+import core.util.AmountOfMoney;
 import core.util.HODateTime;
 import org.junit.jupiter.api.Test;
-
-import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The guard that decides whether a transfer CHPP reports is the one a scout entry was watching.
- * Getting it wrong writes a price from an unrelated, possibly seasons-old transfer.
+ * What a re-listing does to a scout entry. The persistence half of {@link ScoutList} reaches for
+ * the Transfers tab when it is open, so only the field mutation is unit-testable - which is the
+ * half with the decisions in it.
  */
 class ScoutListTest {
 
-    private static final Duration WINDOW = Duration.ofDays(2);
-    private static final HODateTime DEADLINE = HODateTime.fromHT("2026-09-02 20:15:00");
+    private static final HODateTime OLD_DEADLINE = HODateTime.fromHT("2026-08-20 20:15:00");
+    private static final HODateTime NEW_DEADLINE = HODateTime.fromHT("2026-09-12 20:08:31");
 
-    private static ScoutEintrag watching(HODateTime deadline) {
-        final var entry = new ScoutEintrag();
-        entry.setPlayerID(1001);
-        entry.setDeadline(deadline == null ? null : deadline.toDbTimestamp());
-        return entry;
+    private static ScoutEintrag entry() {
+        final var e = new ScoutEintrag();
+        e.setPlayerID(476487492);
+        e.setName("Bruno Gaspar");
+        e.setPrice(new AmountOfMoney(1_500_000L));
+        e.setDeadline(OLD_DEADLINE.toDbTimestamp());
+        return e;
     }
 
     @Test
-    void acceptsASaleAtTheDeadline() {
-        assertThat(ScoutList.isTheWatchedTransfer(watching(DEADLINE), DEADLINE, WINDOW)).isTrue();
+    void aRelistingMovesTheDeadlineAndThePriceForward() {
+        final var e = entry();
+
+        ScoutList.applyRelisting(e, 2_850_000L, 0L, NEW_DEADLINE);
+
+        assertThat(e.getDeadline()).isEqualTo(NEW_DEADLINE.toDbTimestamp());
+        assertThat(e.getPrice().getSwedishKrona().longValue()).isEqualTo(2_850_000L);
     }
 
+    /** Same rule as a fresh search hit: the column means "what it would cost to take him now". */
     @Test
-    void acceptsASaleWithinTheWindowEitherSide() {
-        assertThat(ScoutList.isTheWatchedTransfer(watching(DEADLINE),
-                HODateTime.fromHT("2026-09-01 20:15:00"), WINDOW)).isTrue();
-        assertThat(ScoutList.isTheWatchedTransfer(watching(DEADLINE),
-                HODateTime.fromHT("2026-09-04 20:15:00"), WINDOW)).isTrue();
+    void aStandingBidAboveTheAskIsWhatThePriceBecomes() {
+        final var e = entry();
+
+        ScoutList.applyRelisting(e, 2_850_000L, 3_100_000L, NEW_DEADLINE);
+
+        assertThat(e.getPrice().getSwedishKrona().longValue()).isEqualTo(3_100_000L);
     }
 
     /**
-     * The case that matters: a hand-typed entry keeps ScoutEintrag's default deadline of "now", so
-     * it looks expired immediately. Its player's last transfer must not be taken as this sale.
+     * {@code m_bWecker} is a has-already-rung latch, not a user preference - {@code ScoutThread}
+     * fires only when it is false and sets it true, and nothing in src/main/java ever sets it back.
+     * Left true, the alarm never fires again for the new deadline, and the watch is pointless.
      */
     @Test
-    void rejectsASaleFarFromTheDeadline() {
-        assertThat(ScoutList.isTheWatchedTransfer(watching(DEADLINE),
-                HODateTime.fromHT("2026-05-02 20:15:00"), WINDOW)).isFalse();
-        assertThat(ScoutList.isTheWatchedTransfer(watching(DEADLINE),
-                HODateTime.fromHT("2026-11-02 20:15:00"), WINDOW)).isFalse();
+    void aRelistingRearmsTheAlarm() {
+        final var e = entry();
+        e.setWecker(true);
+
+        ScoutList.applyRelisting(e, 2_850_000L, 0L, NEW_DEADLINE);
+
+        assertThat(e.isWecker()).isFalse();
     }
 
+    /** He has not sold. recordSale owns those two columns. */
     @Test
-    void rejectsWhenEitherDateIsMissing() {
-        assertThat(ScoutList.isTheWatchedTransfer(watching(DEADLINE), null, WINDOW)).isFalse();
-        assertThat(ScoutList.isTheWatchedTransfer(watching(null), DEADLINE, WINDOW)).isFalse();
+    void aRelistingLeavesTheSaleColumnsAlone() {
+        final var e = entry();
+
+        ScoutList.applyRelisting(e, 2_850_000L, 0L, NEW_DEADLINE);
+
+        assertThat(e.getSalePrice()).isNull();
+        assertThat(e.getSoldAt()).isNull();
+        assertThat(e.isSold()).isFalse();
     }
 }
