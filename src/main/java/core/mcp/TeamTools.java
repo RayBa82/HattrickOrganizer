@@ -41,7 +41,11 @@ public final class TeamTools {
                 new McpTool("get_team",
                         "The user's team: name, league, finances, stadium, team spirit and "
                                 + "confidence, the head coach and the rest of the staff, as of the "
-                                + "latest download.",
+                                + "latest download. economy.playersSalary is the last weekly "
+                                + "settlement, not a roll-up of the current squad: it does not move "
+                                + "when a player joins or leaves mid-week, so it will not match the "
+                                + "wages get_squad reports and it is not evidence that the local "
+                                + "data is stale.",
                         McpTool.schema(new JsonObject()),
                         args -> team()),
                 new McpTool("get_squad",
