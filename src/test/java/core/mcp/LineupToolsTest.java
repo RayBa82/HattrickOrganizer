@@ -13,7 +13,7 @@ class LineupToolsTest {
     @Test
     void tools_areTheLineupTools() {
         assertThat(LineupTools.tools()).extracting(McpTool::name)
-                .containsExactly("get_lineup", "evaluate_lineup", "optimize_lineup", "apply_lineup",
+                .containsExactly("get_lineup", "apply_lineup",
                         "set_player_group", "send_match_order");
     }
 

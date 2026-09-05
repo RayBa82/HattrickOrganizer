@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * Scoring and setting lineups.
  * <p>
- * {@code evaluate_lineup} and {@code optimize_lineup} work on a scratch {@link Lineup} scored with a
+ * {@link #scratchLineup} builds a hypothetical {@link Lineup} for simulate_lineup to score on a
  * private rating model, so a model can try any number of variants without touching, or being
  * polluted by, the live lineup. {@code apply_lineup} and {@code set_player_group} write, and
  * they do so on the EDT.
@@ -41,46 +41,23 @@ public final class LineupTools {
     public static List<McpTool> tools() {
         return List.of(
                 new McpTool("get_lineup",
-                        "The lineup currently set in HO, with its sector ratings and formation.",
+                        "The lineup currently set in HO, with its sector ratings and formation. "
+                                + "simulate_lineup scores a hypothetical one instead.",
                         McpTool.schema(new JsonObject()),
                         args -> currentLineup()),
-                new McpTool("evaluate_lineup",
-                        "Score a hypothetical lineup without changing anything in HO. Returns the "
-                                + "seven sector ratings over 90 minutes and the formation. Call it "
-                                + "as often as you like - it has no side effects.",
-                        lineupSchema(),
-                        LineupTools::evaluate),
-                new McpTool("optimize_lineup",
-                        "Let HO's lineup assistant build a baseline lineup out of the given players, "
-                                + "then refine it yourself with evaluate_lineup. Unlike "
-                                + "evaluate_lineup this one runs through HO's shared rating state, "
-                                + "so call it once for a starting point rather than in a loop.",
-                        McpTool.schema(McpTool.properties(
-                                        "availablePlayerIds", McpTool.prop("array", "player ids to choose from; the whole squad if omitted"),
-                                        "sectorsStrengthPriority", McpTool.prop("integer", "0 balanced, 1 defence, 2 midfield, 3 attack"),
-                                        "withForm", McpTool.prop("boolean", "weigh current form"),
-                                        "idealPosFirst", McpTool.prop("boolean", "fill each player's best position first"),
-                                        "considerInjured", McpTool.prop("boolean", "allow injured players"),
-                                        "considerSuspended", McpTool.prop("boolean", "allow suspended players"),
-                                        "useAverageRating", McpTool.prop("boolean", "optimise the match average rather than the kick off rating")),
-                                "sectorsStrengthPriority"),
-                        LineupTools::optimize),
                 new McpTool("apply_lineup",
-                        "Write a lineup into HO. This changes what the Lineup tab shows and what HO "
-                                + "would upload; it does not send anything to Hattrick. HO can "
-                                + "refuse a position: the Lineup tab's assistant filter unfields a "
-                                + "player it hides. The returned lineup is therefore what HO holds "
-                                + "afterwards, not an echo of the request, and any position it "
-                                + "would not keep is listed under notApplied with a warning. Read "
-                                + "those before telling anyone the lineup is set.",
+                        "Write a lineup into HO. Changes what the Lineup tab shows and what HO "
+                                + "would upload; sends nothing to Hattrick. HO can refuse a "
+                                + "position - the Lineup tab's assistant filter unfields a player it "
+                                + "hides - so the returned lineup is what HO holds afterwards, not "
+                                + "an echo. Read notApplied before reporting the lineup as set.",
                         lineupSchema(),
                         LineupTools::apply),
                 new McpTool("set_player_group",
                         "File players under a squad group - the A/B/C team markers HO shows beside "
-                                + "them and the lineup assistant selects on. Pass an empty group to "
-                                + "take the listed players out of whatever group they are in. Only "
-                                + "the listed players change, so moving a squad means calling this "
-                                + "once per group; get_squad reports each player's current group.",
+                                + "them and the lineup assistant selects on. An empty group clears "
+                                + "it. Only the listed players change, so moving a squad means one "
+                                + "call per group; get_squad reports each player's current group.",
                         McpTool.schema(McpTool.properties(
                                         "playerIds", McpTool.prop("array", "player ids to file"),
                                         "group", McpTool.prop("string",
@@ -89,12 +66,11 @@ public final class LineupTools {
                                 "playerIds", "group"),
                         LineupTools::setPlayerGroup),
                 new McpTool("send_match_order",
-                        "Send THE LINEUP CURRENTLY SET IN HO for a match to Hattrick as the match "
-                                + "order. This leaves the machine and OVERWRITES whatever order "
-                                + "Hattrick currently holds for that match. Build the lineup with "
-                                + "apply_lineup and review it with get_lineup first. League matches "
-                                + "are matchType 1; for cup, friendly or tournament take the "
-                                + "matchType id from get_matches.",
+                        "Send THE LINEUP CURRENTLY SET IN HO to Hattrick as the match order. This "
+                                + "leaves the machine and OVERWRITES the order Hattrick holds for "
+                                + "that match. Build it with apply_lineup and re-read it with "
+                                + "get_lineup first. League matches are matchType 1; take other ids "
+                                + "from get_matches.",
                         McpTool.schema(McpTool.properties(
                                         "matchId", McpTool.prop("integer", "the Hattrick match id"),
                                         "matchType", McpTool.prop("integer",
@@ -156,7 +132,7 @@ public final class LineupTools {
 
     /**
      * Rejects a spec that fields an injured or suspended player, unless the caller opted out with
-     * {@code allowUnavailable}. Both evaluate_lineup and apply_lineup route through here, so the
+     * {@code allowUnavailable}. Both simulate_lineup and apply_lineup route through here, so the
      * check sits here rather than in either tool.
      */
     private static void rejectUnavailable(JsonObject spec) throws McpToolException {
@@ -231,33 +207,6 @@ public final class LineupTools {
         }
     }
 
-    private static JsonObject evaluate(JsonObject spec) throws McpToolException {
-        return McpJson.ratings(McpJson.privateRatingModel(), scratchLineup(spec));
-    }
-
-    private static JsonObject optimize(JsonObject args) throws McpToolException {
-        final var model = McpJson.model();
-
-        List<Player> candidates = new ArrayList<>(model.getCurrentPlayers());
-        if (args.has("availablePlayerIds")) {
-            final var wanted = new ArrayList<Integer>();
-            args.getAsJsonArray("availablePlayerIds").forEach(e -> wanted.add(e.getAsInt()));
-            candidates = candidates.stream().filter(p -> wanted.contains(p.getPlayerId())).toList();
-        }
-
-        final var lineup = new Lineup();
-        lineup.optimizeLineup(candidates,
-                (byte) McpJson.reqInt(args, "sectorsStrengthPriority"),
-                args.has("withForm") && args.get("withForm").getAsBoolean(),
-                args.has("idealPosFirst") && args.get("idealPosFirst").getAsBoolean(),
-                args.has("considerInjured") && args.get("considerInjured").getAsBoolean(),
-                args.has("considerSuspended") && args.get("considerSuspended").getAsBoolean(),
-                args.has("useAverageRating") && args.get("useAverageRating").getAsBoolean());
-
-        // describe() re-scores on a private model, but optimizeLineup itself already went through
-        // HOVerwaltung's shared one - see the note at the top of this task.
-        return describe(lineup, McpJson.privateRatingModel());
-    }
 
     private static JsonObject currentLineup() throws McpToolException {
         final var model = McpJson.model();

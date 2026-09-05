@@ -60,12 +60,10 @@ public final class MatchTools {
                                                 + "and tournaments; default true"))),
                         MatchTools::matches),
                 new McpTool("get_match",
-                        "One played match in full: both sides' sector ratings, HatStats, tactic and "
-                                + "formation, the attendance, and our own players' match ratings. "
-                                + "This is what makes a prediction checkable against what happened, "
-                                + "and it is where the opponent ratings predict_match wants come "
-                                + "from. Read the top level status: 'ok', or 'no_match_details' "
-                                + "when HO has the result but never downloaded the details.",
+                        "One played match in full: both sides' sector ratings, HatStats, tactic, "
+                                + "formation, attendance, and our own players' match ratings. Read "
+                                + "the top level status: 'ok', or 'no_match_details' when HO has the "
+                                + "result but never downloaded the details.",
                         McpTool.schema(McpTool.properties(
                                         "matchId", McpTool.prop("integer", "the Hattrick match id"),
                                         "matchType", McpTool.prop("integer",
@@ -75,17 +73,11 @@ public final class MatchTools {
                                 "matchId"),
                         MatchTools::match),
                 new McpTool("get_opponent_ratings",
-                        "The sector ratings another team actually earned in its recent matches, "
-                                + "averaged and named exactly as predict_match and simulate_lineup "
-                                + "want them. This is the link between get_upcoming_matches, which "
-                                + "gives the next opponent's teamId, and a prediction: HO only "
-                                + "stores matches involving us, so for a team we have not played "
-                                + "there is nothing for get_match to read. Fetches that team's "
-                                + "match archive and the details of its most recent games from "
-                                + "Hattrick - roughly one request per match, so keep count small. "
-                                + "Copy the opponentRatings object straight into predict_match, but "
-                                + "read the per-match list too: a rating depends on the XI they "
-                                + "fielded and on who was at home.",
+                        "The sector ratings another team earned in its recent matches, averaged and "
+                                + "named exactly as simulate_lineup wants them. HO stores only "
+                                + "matches involving us, so for a team we have not played this is "
+                                + "the only source. Roughly one CHPP request per match, so keep "
+                                + "count small.",
                         McpTool.schema(McpTool.properties(
                                         "teamId", McpTool.prop("integer",
                                                 "the Hattrick team id, e.g. an opponent id from "
@@ -103,31 +95,20 @@ public final class MatchTools {
                                                         + DEFAULT_OPPONENT_DAYS)),
                                 "teamId"),
                         MatchTools::opponentRatings),
-                new McpTool("predict_match",
-                        "Run HO's Monte Carlo match simulator: our current lineup against an "
-                                + "opponent whose seven sector ratings you supply, and get win, "
-                                + "draw and loss probabilities plus goals and chances per match. "
-                                + "Get the opponent's ratings from get_opponent_ratings, which "
-                                + "returns them under exactly these argument names, or from "
-                                + "get_match on a game we played against them.",
-                        McpTool.schema(opponentProperties(new JsonObject()), OPPONENT_SECTORS),
-                        MatchTools::predict),
                 new McpTool("simulate_lineup",
-                        "predict_match for a lineup you have not set: a hypothetical XI, supplied "
-                                + "the same way as evaluate_lineup, against an opponent whose seven "
-                                + "sector ratings you supply. Nothing in HO changes - the scratch "
-                                + "lineup is scored on a private model - so call it in a loop to "
-                                + "compare XIs against the next opponent. Omit positions and it "
-                                + "falls back to the current lineup, exactly like predict_match.",
+                        "Score a lineup. Omit positions to score the one HO currently holds. Supply "
+                                + "all seven opponent sector ratings (copy them from "
+                                + "get_opponent_ratings) for a Monte Carlo win/draw/loss forecast; "
+                                + "omit them for sector ratings and formation alone. Nothing in HO "
+                                + "changes, so call it in a loop.",
                         McpTool.schema(
-                                opponentProperties(LineupTools.lineupSchema().getAsJsonObject("properties")),
-                                OPPONENT_SECTORS),
+                                opponentProperties(LineupTools.lineupSchema().getAsJsonObject("properties"))),
                         MatchTools::simulateLineup),
                 new McpTool("list_challenges",
-                        "Friendly challenges: the ones this team has sent (outgoing) and the ones "
-                                + "other teams have sent it (incoming). accept / decline / withdraw "
-                                + "need a trainingMatchId that only this list provides. A read - "
-                                + "does not spend the write cap.",
+                        "Friendly challenges this team has sent (outgoing) and been sent "
+                                + "(incoming). accept / decline / withdraw need a trainingMatchId "
+                                + "that only this list provides. A read - does not spend the write "
+                                + "cap.",
                         McpTool.schema(McpTool.properties(
                                 "weekend", McpTool.prop("boolean",
                                         "list weekend friendly challenges instead of midweek; default false"))),
@@ -326,7 +307,7 @@ public final class MatchTools {
 
     /**
      * get_opponent_ratings: what a team - any team, not just one we have played - earned in its
-     * recent matches, averaged into the arguments predict_match asks for.
+     * recent matches, averaged into the arguments simulate_lineup asks for.
      */
     private static JsonObject opponentRatings(JsonObject args) throws McpToolException {
         final var teamId = McpJson.reqInt(args, "teamId");
@@ -486,25 +467,41 @@ public final class MatchTools {
         return players;
     }
 
-    /** predict_match: our current HO lineup versus the supplied opponent. */
-    private static JsonObject predict(JsonObject args) throws McpToolException {
-        return simulate(McpJson.model().getCurrentLineup(), args);
-    }
-
     /**
-     * simulate_lineup: same simulator, but on a scratch lineup built from the args - or, when no
-     * positions are given, on the current lineup, which makes it a drop-in for predict_match.
+     * simulate_lineup, the one lineup-scoring tool. The lineup is a scratch XI built from the args,
+     * or HO's own when no positions are given; the opponent half is optional, and without it the
+     * answer is the sector ratings alone - no Monte Carlo run.
+     * <p>
+     * A partial opponent is refused rather than silently treated as "no opponent": six sectors out
+     * of seven is a caller who meant to simulate and dropped one, and answering that with ratings
+     * would look like a working call.
      */
     private static JsonObject simulateLineup(JsonObject args) throws McpToolException {
+        // Argument shape before any model access, so a malformed call is a -32602 rather than
+        // "no snapshot loaded" from whichever lookup happened to run first.
+        final List<String> missing = java.util.Arrays.stream(OPPONENT_SECTORS)
+                .filter(sector -> !args.has(sector) || args.get(sector).isJsonNull())
+                .toList();
+        if (!missing.isEmpty() && missing.size() < OPPONENT_SECTORS.length) {
+            throw new IllegalArgumentException("All seven opponent sector ratings are needed to "
+                    + "simulate, or none of them to score the lineup on its own. Missing: "
+                    + String.join(", ", missing) + ". get_opponent_ratings returns all seven under "
+                    + "exactly these names.");
+        }
+
         final var lineup = args.has("positions")
                 ? LineupTools.scratchLineup(args)
                 : McpJson.model().getCurrentLineup();
+        if (!missing.isEmpty()) {
+            // No opponent: score the lineup on its own, on a private model like the simulation does.
+            return McpJson.ratings(McpJson.privateRatingModel(), lineup);
+        }
         return simulate(lineup, args);
     }
 
     private static JsonObject simulate(Lineup lineup, JsonObject args) throws McpToolException {
         final var model = McpJson.model();
-        // Private model for the same reason evaluate_lineup uses one: never touch HO's own rating
+        // Private model for the same reason the ratings-only path uses one: never touch HO's own
         // state from a tool call.
         final var ratingModel = McpJson.privateRatingModel();
         final var manager = MatchPredictionManager.instance();
@@ -562,9 +559,10 @@ public final class MatchTools {
     }
 
     /**
-     * Adds the opponent side and the simulation controls to a properties object - the half of the
-     * schema that predict_match and simulate_lineup share. The seven sector ratings are the only
-     * required arguments ({@link #OPPONENT_SECTORS}); everything else has a default.
+    /**
+     * Adds the opponent side and the simulation controls to a properties object - the half of
+     * simulate_lineup's schema that turns a scoring call into a simulation. Nothing here is
+     * required, but the seven sector ratings ({@link #OPPONENT_SECTORS}) are all-or-nothing.
      */
     private static JsonObject opponentProperties(JsonObject properties) {
         properties.add("opponentMidfield", McpTool.prop("number", "opponent midfield rating"));

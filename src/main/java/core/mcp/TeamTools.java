@@ -50,23 +50,17 @@ public final class TeamTools {
     public static List<McpTool> tools() {
         return List.of(
                 new McpTool("get_team",
-                        "The user's team: name, league, finances, stadium, team spirit and "
-                                + "confidence, the head coach and the rest of the staff, as of the "
-                                + "latest download. economy.playersSalary is the last weekly "
-                                + "settlement, not a roll-up of the current squad: it does not move "
-                                + "when a player joins or leaves mid-week, so it will not match the "
-                                + "wages get_squad reports and it is not evidence that the local "
-                                + "data is stale.",
+                        "The user's team as of the latest download: name, league, cash, stadium, "
+                                + "team spirit and confidence, the head coach and the rest of the "
+                                + "staff. get_finances has the full statement.",
                         McpTool.schema(new JsonObject()),
                         args -> team()),
                 new McpTool("get_squad",
-                        "Every player in the squad with skills, form, stamina, loyalty, TSI, wage "
-                                + "(in the user's currency, as get_team reports it), "
+                        "Every player in the squad with skills, form, stamina, loyalty, TSI, wage, "
                                 + "specialty, injuries, cards, squad group and the three character "
-                                + "traits (agreeability, aggressiveness, honesty, each 0-5 low to "
-                                + "high), plus a positionRatings map giving "
-                                + "what the player is worth in each of the fourteen field slots "
-                                + "(100 keeper through 113 left forward) at normal behaviour.",
+                                + "traits (0-5), plus a positionRatings map giving what he is worth "
+                                + "in each of the fourteen field slots (100 keeper through 113 left "
+                                + "forward) at normal behaviour.",
                         McpTool.schema(new JsonObject()),
                         args -> squad()),
                 new McpTool("get_player",
@@ -76,18 +70,11 @@ public final class TeamTools {
                                 "playerId"),
                         args -> player(McpJson.reqInt(args, "playerId"))),
                 new McpTool("get_opponent_squad",
-                        "Another team's squad, fetched from Hattrick: every player with age, TSI, "
-                                + "form, stamina, experience, loyalty, specialty, wage, injuries "
-                                + "and cards, plus where and how long he last played. Two things "
-                                + "it gives that nothing else does: who is unavailable for their "
-                                + "next match (injured or suspended), and their last eleven - the "
-                                + "players sharing the highest lastMatch.matchId started that "
-                                + "match, and lastMatch.roleId says where (100 keeper through 113 "
-                                + "left forward). Hattrick does not publish another team's skills, "
-                                + "so unlike get_squad there are none; estimatedSkills is HO's own "
-                                + "opponent-spy guess inferred from the visible attributes, not "
-                                + "data. One CHPP request. Pair it with get_opponent_ratings, "
-                                + "which gives the sector ratings predict_match needs.",
+                        "Another team's squad from Hattrick: the visible attributes, injuries, "
+                                + "cards and where each player last played - so it answers who is "
+                                + "unavailable and who their last eleven were (the players sharing "
+                                + "the highest lastMatch.matchId). Hattrick publishes no foreign "
+                                + "skills; estimatedSkills is HO's guess, not data. One CHPP request.",
                         McpTool.schema(McpTool.properties(
                                         "teamId", McpTool.prop("integer",
                                                 "the Hattrick team id, e.g. an opponent id from "
@@ -99,101 +86,59 @@ public final class TeamTools {
                         McpTool.schema(new JsonObject()),
                         args -> fixtures()),
                 new McpTool("get_league_table",
-                        "The standings of our series: all eight teams with position, record, "
-                                + "points and goals. get_team only reports our own row, and "
-                                + "promotion, relegation and the season expectations all hang off "
-                                + "the whole table.",
+                        "The standings of our series: all eight teams with position, record, points "
+                                + "and goals. get_team reports only our own row.",
                         McpTool.schema(new JsonObject()),
                         args -> leagueTable()),
                 new McpTool("get_finances",
                         "The full weekly financial statement with last week's copy beside it, the "
-                                + "fan club and the staff levels that drive the cost line, and the "
-                                + "stadium: its stands, what is under construction, and what "
-                                + "actually turned up at the last home matches. Capacity on its "
-                                + "own cannot answer an expansion question - the utilisation ratio "
-                                + "can. Every amount is in the currency field's currency, the one "
-                                + "the user sees in Hattrick.",
+                                + "fan club, the staff levels that drive the cost line, and the "
+                                + "stadium with its recent home attendance and utilisation. Pass "
+                                + "sizeArena to add HO's arena sizer - what to build, and what it "
+                                + "costs to build and to keep. Amounts are in the currency field's "
+                                + "currency.",
                         McpTool.schema(McpTool.properties(
                                 "homeMatches", McpTool.prop("integer",
                                         "how many recent home matches to read the attendance of, "
-                                                + "default " + DEFAULT_HOME_MATCHES))),
-                        TeamTools::finances),
-                new McpTool("get_stadium",
-                        "The stadium and what HO's arena sizer makes of it. Reports the stands, "
-                                + "any expansion in progress, the recent home attendance and the "
-                                + "resulting utilisation, then the weekly maintenance bill and the "
-                                + "gate receipts a sold-out match would bring in - and finally the "
-                                + "capacity the fan club supports, with the rebuild cost of getting "
-                                + "there. Three sizes are given rather than one because attendance "
-                                + "swings with form and opponent: pessimistic, normal and "
-                                + "optimistic. Each carries its own maintenance and sold-out gate, "
-                                + "so an expansion can be judged against what it costs to keep. "
-                                + "Pass capacity to price one specific target size instead. Every "
-                                + "amount is in the currency field's currency.",
-                        McpTool.schema(McpTool.properties(
+                                                + "default " + DEFAULT_HOME_MATCHES),
+                                "sizeArena", McpTool.prop("boolean",
+                                        "add the arena sizer block: three target sizes "
+                                                + "(pessimistic, normal, optimistic - attendance "
+                                                + "swings with form and opponent), each with its "
+                                                + "rebuild cost, weekly maintenance and sold-out "
+                                                + "gate; default false"),
                                 "supporters", McpTool.prop("integer",
-                                        "size the arena for this fan club instead of the current one"),
+                                        "size the arena for this fan club instead of the current "
+                                                + "one; implies sizeArena"),
                                 "capacity", McpTool.prop("integer",
-                                        "price this exact total capacity instead of the three scenarios"),
-                                "homeMatches", McpTool.prop("integer",
-                                        "how many recent home matches to read the attendance of, "
-                                                + "default " + DEFAULT_HOME_MATCHES))),
-                        TeamTools::arena),
+                                        "price this exact total capacity instead of the three "
+                                                + "scenarios; implies sizeArena"))),
+                        TeamTools::finances),
                 new McpTool("download_team",
-                        "Runs the same download as HO's own Download button and rewrites HO's "
-                                + "local database: squad, finances, staff, stadium, team spirit, "
-                                + "then matches and their lineups, youth match data, league "
-                                + "fixtures and the results other teams have played, hall of "
-                                + "fame, national-team matches for capped players, world league "
-                                + "data - then recalculates sub-skills, resolves what watched "
-                                + "market players sold for, and brings the team's transfer "
-                                + "history up to date. Which of those sections run follows the "
-                                + "filter the user last set in HO's Download dialog; the result's "
-                                + "'sections' says what actually ran. Every other tool answers "
-                                + "from that database, so call this when the user has done "
-                                + "something in Hattrick that HO cannot see yet: a transfer, a "
-                                + "sacking, a training change, a new week. Around twenty to thirty "
-                                + "CHPP requests on a quiet day, but sixty or more in the first "
-                                + "download after a league match day, because every newly played "
-                                + "match costs about six requests of its own - and more again "
-                                + "after a long gap, when matches and youth data backfill. Well "
-                                + "under a minute in the quiet case, several minutes in the worst, "
-                                + "and HO's window is frozen throughout, so call it because "
-                                + "something changed, not as a routine refresh. Two things it "
-                                + "does NOT refresh, both Download-dialog checkboxes that HO does "
-                                + "not persist and so are always off here: the match archive, and "
-                                + "previous-season fixtures. Ask the user to run HO's Download "
-                                + "for those. It also replaces HO's stored lineup with the match "
-                                + "order Hattrick currently holds, so a lineup built in HO but "
-                                + "never uploaded is lost: check lineupReplaced and previousLineup "
-                                + "in the result before reporting success - a null lineupReplaced "
-                                + "means HO could not tell either way.",
+                        "Runs HO's own Download and rewrites the local database - squad, finances, "
+                                + "staff, stadium, matches, fixtures, transfers, sub-skills. Call it "
+                                + "when the user changed something in Hattrick that HO cannot see. "
+                                + "Twenty to sixty-plus CHPP requests with HO's window frozen "
+                                + "throughout, so not a routine refresh. It replaces HO's stored "
+                                + "lineup with Hattrick's match order: check lineupReplaced.",
                         McpTool.schema(McpTool.properties()),
                         TeamTools::downloadTeam)
         );
     }
 
     /**
-     * The stadium on its own, joined with the arena sizer. {@code get_finances} carries the same
-     * stands as one line of the statement; here they are the subject, and the sizer answers the
-     * question the statement raises - how big should it be, and what does that cost.
+     * HO's arena sizer: what to build, and what that costs to build and to keep.
+     * <p>
+     * A block inside {@code get_finances} rather than a tool of its own. The stands it reasons
+     * about are already one line of the statement, and shipping them from two tools meant two
+     * byte-identical copies of the same stadium block in every session.
      */
-    private static JsonObject arena(JsonObject args) throws McpToolException {
-        final var model = McpJson.model();
-        final var current = model.getStadium();
-        if (current == null) {
-            throw new McpToolException("HO holds no stadium for the latest download.");
-        }
-
+    private static JsonObject arenaSizer(Stadium current, int currentFans, JsonObject args) {
         final var json = new JsonObject();
-        json.addProperty("currency", McpJson.currency());
-        json.add("stadium", stadium(current, model.getBasics().getTeamId(),
-                McpJson.optInt(args, "homeMatches", DEFAULT_HOME_MATCHES)));
         json.addProperty("weeklyMaintenance", money(ArenaMaintenance.calculateCosts(current)));
         json.addProperty("soldOutGateReceipts", money(ArenaAdmission.calculateIncome(current)));
 
-        final var supporters = McpJson.optInt(args, "supporters",
-                model.getClub() == null ? 0 : model.getClub().getFans());
+        final var supporters = McpJson.optInt(args, "supporters", currentFans);
         json.addProperty("supporters", supporters);
 
         final var capacity = McpJson.optInteger(args, "capacity");
@@ -263,7 +208,6 @@ public final class TeamTools {
             economyJson.addProperty("currency", McpJson.currency());
             economyJson.addProperty("cash", money(economy.getCash()));
             economyJson.addProperty("expectedWeeksTotal", money(economy.getExpectedWeeksTotal()));
-            economyJson.addProperty("playersSalary", money(economy.getCostsPlayers()));
             json.add("economy", economyJson);
         }
         if (stadium != null) {
@@ -558,6 +502,13 @@ public final class TeamTools {
         if (model.getStadium() != null) {
             json.add("stadium", stadium(model.getStadium(), model.getBasics().getTeamId(),
                     McpJson.optInt(args, "homeMatches", DEFAULT_HOME_MATCHES)));
+            // Off by default - the sizer is three more objects of arithmetic nobody asked for when
+            // the question was "how much cash do we have". Naming either knob implies wanting it.
+            if (McpJson.optBool(args, "sizeArena", false)
+                    || args.has("supporters") || args.has("capacity")) {
+                json.add("arenaSizer", arenaSizer(model.getStadium(),
+                        model.getClub() == null ? 0 : model.getClub().getFans(), args));
+            }
         }
         return json;
     }

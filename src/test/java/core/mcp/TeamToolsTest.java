@@ -22,10 +22,10 @@ import static org.assertj.core.api.Assertions.assertThatNoException;
 class TeamToolsTest {
 
     @Test
-    void tools_areTheEightReadToolsPlusTheDownload() {
+    void tools_areTheSevenReadToolsPlusTheDownload() {
         assertThat(TeamTools.tools()).extracting(McpTool::name)
                 .containsExactly("get_team", "get_squad", "get_player", "get_opponent_squad",
-                        "get_upcoming_matches", "get_league_table", "get_finances", "get_stadium",
+                        "get_upcoming_matches", "get_league_table", "get_finances",
                         "download_team");
     }
 
@@ -41,8 +41,6 @@ class TeamToolsTest {
         assertThat(download.inputSchema().getAsJsonObject("properties").entrySet()).isEmpty();
         // the lineup clobber is the one surprise this tool has, so it has to be in the description
         assertThat(download.description()).contains("lineupReplaced");
-        // and the two sections it cannot cover have to be named, or a caller will assume parity
-        assertThat(download.description()).contains("match archive");
     }
 
     @Test
@@ -85,14 +83,24 @@ class TeamToolsTest {
         assertThat(TeamTools.tools()).allSatisfy(t -> assertThat(t.description()).isNotBlank());
     }
 
+    /**
+     * The arena sizer used to be its own tool, and shipped a byte-identical copy of get_finances'
+     * stadium block to do it. It is now the opt-in half of get_finances, so the two knobs it needs
+     * have to live on that schema - and stay optional, or every statement read would size an arena.
+     */
     @Test
-    void getStadium_takesNoRequiredArgumentsAndOffersTheSizerKnobs() {
+    void getFinances_carriesTheArenaSizerKnobsAndNoneOfThemIsRequired() {
         final var tool = TeamTools.tools().stream()
-                .filter(t -> t.name().equals("get_stadium")).findFirst().orElseThrow();
+                .filter(t -> t.name().equals("get_finances")).findFirst().orElseThrow();
 
         assertThat(tool.inputSchema().getAsJsonArray("required")).isEmpty();
         assertThat(tool.inputSchema().getAsJsonObject("properties").keySet())
-                .containsExactlyInAnyOrder("supporters", "capacity", "homeMatches");
+                .containsExactlyInAnyOrder("homeMatches", "sizeArena", "supporters", "capacity");
+    }
+
+    @Test
+    void theStadiumIsReportedByExactlyOneTool() {
+        assertThat(TeamTools.tools()).extracting(McpTool::name).doesNotContain("get_stadium");
     }
 
     /**

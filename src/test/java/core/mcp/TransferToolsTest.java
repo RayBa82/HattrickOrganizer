@@ -111,9 +111,45 @@ class TransferToolsTest {
     @Test
     void tools_areTheTransferTools() {
         assertThat(TransferTools.tools()).extracting(McpTool::name)
-                .containsExactly("search_transfers", "find_comparables", "get_team_transfers",
-                        "place_bid", "get_open_bids", "add_to_scout", "list_scout",
-                        "estimate_market_value");
+                .containsExactly("search_transfers", "get_team_transfers",
+                        "place_bid", "get_open_bids", "add_to_scout", "remove_from_scout",
+                        "list_scout", "estimate_market_value");
+    }
+
+    /**
+     * find_comparables was estimate_market_value's live twin: the same three arguments and the same
+     * matching, differing only in corpus versus a live transfersearch. It is now the {@code live}
+     * flag, which is strictly better - the search writes its hits into TRANSFERLISTING first, so
+     * one call returns today's market AND a median that already counts it.
+     */
+    @Test
+    void estimateMarketValue_absorbedFindComparablesAsAFlag() {
+        assertThat(TransferTools.tools()).extracting(McpTool::name)
+                .doesNotContain("find_comparables");
+
+        final var tool = TransferTools.tools().stream()
+                .filter(t -> t.name().equals("estimate_market_value")).findFirst().orElseThrow();
+        final var properties = tool.inputSchema().getAsJsonObject("properties");
+        assertThat(properties.keySet())
+                .contains("playerId", "ageTolerance", "skillTolerance", "live");
+        assertThat(tool.inputSchema().getAsJsonArray("required"))
+                .extracting(com.google.gson.JsonElement::getAsString)
+                .containsExactly("playerId");
+    }
+
+    @Test
+    void removeFromScout_requiresPlayerIdsAndRejectsAnEmptyList() {
+        final var tool = TransferTools.tools().stream()
+                .filter(t -> t.name().equals("remove_from_scout")).findFirst().orElseThrow();
+
+        assertThat(tool.inputSchema().getAsJsonArray("required"))
+                .extracting(com.google.gson.JsonElement::getAsString)
+                .containsExactly("playerIds");
+
+        final var empty = JsonParser.parseString("{\"playerIds\":[]}").getAsJsonObject();
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> tool.handler().call(empty))
+                .withMessageContaining("at least one player id");
     }
 
     private static McpTool openBidsTool() {
@@ -459,8 +495,8 @@ class TransferToolsTest {
     @Test
     void queryFrom_readsSkillNamesRatherThanChppNumbers() {
         final var args = JsonParser.parseString("""
-                {"ageMin":20,"ageMax":22,"skillType1":"PLAYMAKING","minSkillValue1":7,
-                 "maxSkillValue1":9,"priceMax":2000000}""").getAsJsonObject();
+                {"ageMin":20,"ageMax":22,"skills":[{"skill":"PLAYMAKING","min":7,"max":9}],
+                 "priceMax":2000000}""").getAsJsonObject();
 
         AmountOfMoney.Companion.setExchangeRate(BigDecimal.TEN);   // a euro league
 
@@ -475,9 +511,77 @@ class TransferToolsTest {
     @Test
     void queryFrom_capsPageSizeAtTheChppMaximum() {
         final var args = JsonParser.parseString("""
-                {"ageMin":20,"ageMax":22,"skillType1":"SCORING","minSkillValue1":7,
-                 "maxSkillValue1":9,"pageSize":500}""").getAsJsonObject();
+                {"ageMin":20,"ageMax":22,"skills":[{"skill":"SCORING","min":7,"max":9}],
+                 "pageSize":500}""").getAsJsonObject();
 
         assertThat(TransferTools.queryFrom(args).pageSize()).isEqualTo(100);
+    }
+
+    /**
+     * The skills array replaced twelve flat skillType/minSkillValue/maxSkillValue properties. The
+     * builder still has the indexed setters - they mirror the CHPP parameter names and the search
+     * tab shares them - so the mapping from list position to slot is what can silently go wrong.
+     */
+    @Test
+    void queryFrom_mapsTheSkillsArrayOntoTheFourIndexedSlotsInOrder() {
+        final var args = JsonParser.parseString("""
+                {"ageMin":20,"ageMax":22,"skills":[
+                    {"skill":"PLAYMAKING","min":7,"max":9},
+                    {"skill":"PASSING","min":4,"max":7},
+                    {"skill":"WINGER","min":3,"max":6},
+                    {"skill":"DEFENDING","min":5,"max":8}]}""").getAsJsonObject();
+
+        final var query = TransferTools.queryFrom(args);
+
+        assertThat(query.skillType1()).isEqualTo(TransferSearchQuery.Skill.PLAYMAKING);
+        assertThat(query.minSkillValue1()).isEqualTo(7);
+        assertThat(query.maxSkillValue1()).isEqualTo(9);
+        assertThat(query.skillType2()).isEqualTo(TransferSearchQuery.Skill.PASSING);
+        assertThat(query.minSkillValue2()).isEqualTo(4);
+        assertThat(query.skillType3()).isEqualTo(TransferSearchQuery.Skill.WINGER);
+        assertThat(query.skillType4()).isEqualTo(TransferSearchQuery.Skill.DEFENDING);
+        assertThat(query.maxSkillValue4()).isEqualTo(8);
+    }
+
+    @Test
+    void queryFrom_leavesTheUnusedSkillSlotsEmpty() {
+        final var args = JsonParser.parseString("""
+                {"ageMin":20,"ageMax":22,"skills":[{"skill":"KEEPER","min":8,"max":10}]}""")
+                .getAsJsonObject();
+
+        final var query = TransferTools.queryFrom(args);
+
+        assertThat(query.skillType2()).isNull();
+        assertThat(query.skillType3()).isNull();
+        assertThat(query.skillType4()).isNull();
+    }
+
+    @Test
+    void queryFrom_rejectsAnEmptySkillsArrayAndAFifthFilter() {
+        final var none = JsonParser.parseString("""
+                {"ageMin":20,"ageMax":22,"skills":[]}""").getAsJsonObject();
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> TransferTools.queryFrom(none))
+                .withMessageContaining("1 to 4");
+
+        final var five = JsonParser.parseString("""
+                {"ageMin":20,"ageMax":22,"skills":[
+                    {"skill":"PLAYMAKING","min":7,"max":9},{"skill":"PASSING","min":4,"max":7},
+                    {"skill":"WINGER","min":3,"max":6},{"skill":"DEFENDING","min":5,"max":8},
+                    {"skill":"SCORING","min":5,"max":8}]}""").getAsJsonObject();
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> TransferTools.queryFrom(five))
+                .withMessageContaining("1 to 4");
+    }
+
+    @Test
+    void queryFrom_namesTheUnknownSkill() {
+        final var args = JsonParser.parseString("""
+                {"ageMin":20,"ageMax":22,"skills":[{"skill":"DRIBBLING","min":7,"max":9}]}""")
+                .getAsJsonObject();
+
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> TransferTools.queryFrom(args))
+                .withMessageContaining("DRIBBLING");
     }
 }

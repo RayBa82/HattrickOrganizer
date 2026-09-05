@@ -60,12 +60,10 @@ public final class TrainingTools {
                 new McpTool("get_training",
                         "The team's training: what is trained at which intensity and stamina share, "
                                 + "which coach and assistants drive it, which field positions get "
-                                + "full or partial training out of it, and per player the predicted "
-                                + "skill changes over the coming weeks together with a training "
-                                + "speed to rank them by. Read the top level status first: 'ok', "
-                                + "or 'no_future_training_plan' when HO holds no training plan to "
-                                + "predict from, which is not the same thing as nobody being "
-                                + "trained - the accompanying note says what the user has to do.",
+                                + "full or partial training, and per player the predicted skill "
+                                + "changes with a training speed to rank by. Read status first: "
+                                + "'ok', or 'no_future_training_plan' - which is not the same as "
+                                + "nobody being trained; the note says what the user has to do.",
                         McpTool.schema(McpTool.properties(
                                 "weeks", McpTool.prop("integer",
                                         "how many weeks to predict, default " + DEFAULT_WEEKS
@@ -74,21 +72,12 @@ public final class TrainingTools {
                                         "restrict the prediction to these player ids; the whole squad if omitted"))),
                         TrainingTools::training),
                 new McpTool("get_player_history",
-                        "What training has already done to a player, out of HO's own snapshot "
-                                + "history: one stored row per player per downloaded team snapshot, "
-                                + "which is a dated skill series nothing in the CHPP API can give "
-                                + "you. get_squad is the present and get_training is the forecast; "
-                                + "this is the past, and it is what answers whether a trainee's "
-                                + "growth is flattening. Per player it returns every level-up with "
-                                + "its date, a growth rate in levels per Hattrick year (16 weeks) "
-                                + "for the currently trained skill, TSI and wage drift, and - read "
-                                + "this before trusting the rate - the coverage of the series: how "
-                                + "many snapshots, over what span, and where the holes are. A hole "
-                                + "means the user did not download for a while, so a level-up "
-                                + "inside it cannot be dated. Level-ups use HO's sub-skill "
-                                + "estimates, so a rate can be fractional and does not have to "
-                                + "wait for the next whole level. Reads the local database only - "
-                                + "no CHPP request.",
+                        "What training has already done to a player, from HO's own snapshot "
+                                + "history - a dated skill series no CHPP file gives you. Per "
+                                + "player: every level-up with its date, a growth rate in levels per "
+                                + "Hattrick year, TSI and wage drift, and the series coverage. Read "
+                                + "coverage before the rate - a download gap means a level-up "
+                                + "inside it cannot be dated. Local read, no CHPP request.",
                         McpTool.schema(McpTool.properties(
                                 "playerIds", McpTool.prop("array",
                                         "the player ids to report on; the current squad if omitted. "

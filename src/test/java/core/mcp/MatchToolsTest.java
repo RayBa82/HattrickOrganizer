@@ -1,6 +1,7 @@
 package core.mcp;
 
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import core.file.xml.XMLChallengesParser;
 import core.model.enums.MatchType;
 import core.model.match.Matchdetails;
@@ -40,7 +41,7 @@ class MatchToolsTest {
     void tools_areTheMatchTools() {
         assertThat(MatchTools.tools()).extracting(McpTool::name)
                 .containsExactly("get_matches", "get_match", "get_opponent_ratings",
-                        "predict_match", "simulate_lineup",
+                        "simulate_lineup",
                         "list_challenges", "arrange_challenge", "respond_to_challenge");
     }
 
@@ -64,38 +65,43 @@ class MatchToolsTest {
         assertThat(getMatch.inputSchema().getAsJsonObject("properties").has("matchType")).isTrue();
     }
 
+    /**
+     * simulate_lineup absorbed evaluate_lineup and predict_match, whose schemas were both strict
+     * subsets of its own. Nothing is required any more: the lineup half and the opponent half are
+     * each optional, which is what makes the three old calls one tool.
+     */
     @Test
-    void predictMatch_requiresAllSevenOpponentSectors() {
-        final var predictMatch = tool("predict_match");
-
-        assertThat(predictMatch.inputSchema().getAsJsonArray("required"))
-                .extracting(element -> element.getAsString())
-                .containsExactlyInAnyOrder("opponentMidfield", "opponentDefenceLeft",
-                        "opponentDefenceCentral", "opponentDefenceRight", "opponentAttackLeft",
-                        "opponentAttackCentral", "opponentAttackRight");
-        // our own side comes from the current lineup, so nothing about it is an argument
-        final var properties = predictMatch.inputSchema().getAsJsonObject("properties");
-        assertThat(properties.has("location")).isTrue();
-        assertThat(properties.has("simulations")).isTrue();
-        assertThat(properties.has("positions")).isFalse();
-    }
-
-    @Test
-    void simulateLineup_addsAnOptionalLineupToPredictMatchsArguments() {
+    void simulateLineup_requiresNothingAndCarriesBothHalves() {
         final var simulateLineup = tool("simulate_lineup");
 
-        assertThat(simulateLineup.name()).isEqualTo("simulate_lineup");
-        // same opponent side as predict_match, and only that side is required
-        assertThat(simulateLineup.inputSchema().getAsJsonArray("required"))
-                .extracting(element -> element.getAsString())
-                .containsExactlyInAnyOrder("opponentMidfield", "opponentDefenceLeft",
-                        "opponentDefenceCentral", "opponentDefenceRight", "opponentAttackLeft",
-                        "opponentAttackCentral", "opponentAttackRight");
-        // plus an optional hypothetical lineup, the evaluate_lineup way
+        assertThat(simulateLineup.inputSchema().getAsJsonArray("required")).isEmpty();
         final var properties = simulateLineup.inputSchema().getAsJsonObject("properties");
+        // the lineup half, as evaluate_lineup took it
         assertThat(properties.has("positions")).isTrue();
         assertThat(properties.has("tactic")).isTrue();
+        assertThat(properties.has("allowUnavailable")).isTrue();
+        // the opponent half, as predict_match took it
+        assertThat(properties.keySet()).contains("opponentMidfield", "opponentDefenceLeft",
+                "opponentDefenceCentral", "opponentDefenceRight", "opponentAttackLeft",
+                "opponentAttackCentral", "opponentAttackRight");
+        assertThat(properties.has("location")).isTrue();
         assertThat(properties.has("simulations")).isTrue();
+    }
+
+    /**
+     * Six sectors out of seven is a caller who meant to simulate and dropped one. Answering that
+     * with sector ratings would look like a working call, so it has to be refused by name.
+     */
+    @Test
+    void simulateLineup_refusesAPartialOpponent() {
+        final var args = JsonParser.parseString("""
+                {"opponentMidfield":50,"opponentDefenceLeft":40,"opponentDefenceCentral":45,
+                 "opponentDefenceRight":40,"opponentAttackLeft":30,"opponentAttackCentral":35}
+                """).getAsJsonObject();
+
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> tool("simulate_lineup").handler().call(args))
+                .withMessageContaining("opponentAttackRight");
     }
 
     @Test
@@ -275,19 +281,25 @@ class MatchToolsTest {
     }
 
     /**
-     * The whole point of the tool: opponentRatings is copyable into predict_match. A rename on
-     * either side would leave a required argument missing, so assert against the live schema.
+     * The whole point of the tool: opponentRatings is copyable straight into simulate_lineup. Those
+     * seven arguments are no longer in the schema's required array - the opponent half is optional
+     * now - so assert against the properties, which is where the names actually live. A rename on
+     * either side would silently turn a simulation into a ratings-only call.
      */
     @Test
-    void opponentReport_fillsEveryArgumentPredictMatchRequires() {
+    void opponentReport_fillsEverySectorSimulateLineupTakes() {
         final var ratings = MatchTools.opponentReport(TARGET, twoMatchesOfTargetTeam())
                 .getAsJsonObject("opponentRatings");
 
-        final var required = tool("predict_match").inputSchema().getAsJsonArray("required");
-        assertThat(required).isNotEmpty();
-        for (final var name : required) {
-            assertThat(ratings.has(name.getAsString()))
-                    .as("opponentRatings is missing %s", name.getAsString()).isTrue();
+        final var sectors = tool("simulate_lineup").inputSchema()
+                .getAsJsonObject("properties").keySet().stream()
+                .filter(name -> name.startsWith("opponent")
+                        && !name.equals("opponentName")
+                        && !name.startsWith("opponentTactic"))
+                .toList();
+        assertThat(sectors).hasSize(7);
+        for (final var name : sectors) {
+            assertThat(ratings.has(name)).as("opponentRatings is missing %s", name).isTrue();
         }
     }
 }

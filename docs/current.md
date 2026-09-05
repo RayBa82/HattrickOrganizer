@@ -1937,3 +1937,163 @@ backlog over several downloads. Options → MCP → resolve cap.
 its (newest-first) ordering each run rather than rotating on last-observed. Bounded and best-effort
 by design; a column would make it fair. Worth doing if the list keeps growing.
 
+
+## The MCP tool surface, cut from 34 to 30 (2026-09-06)
+
+An audit from the peer agent that drives the server, measured against a live `tools/list`: 34 tools
+were **33,781 chars — roughly 8.4k tokens in every session's context before a single call is made**,
+split 17,424 chars of descriptions and 16,357 of schemas. Five tools were redundant or broken, one
+was missing. Descriptions are now ~7.9k chars over 30 tools.
+
+### Five tools removed
+
+- **`predict_match`** — fully subsumed. Its schema was `opponentProperties(new JsonObject())`;
+  `simulate_lineup`'s is `opponentProperties(lineupSchema().properties)` with the same `required`.
+  A strict subset, and `simulate_lineup`'s own description already said "omit positions and it falls
+  back to the current lineup, exactly like predict_match".
+- **`evaluate_lineup`** — same story on the other half: `lineupSchema()` is a strict subset of
+  `simulate_lineup`'s properties.
+- **`optimize_lineup`** — **deleted, not fixed.** `{"sectorsStrengthPriority":0}` had been returning
+  `-32603 Internal error` since 2026-08-31. Root cause is
+  `LineupAssistant.isSelectedByAssistant` (`LineupAssistant.java:441`):
+
+  ```java
+  var statusMap = Objects.requireNonNull(HOMainFrame.instance().getLineupPanel())
+          .getAssistantPositionsStatus();
+  ```
+
+  It is the one tool that reaches HO's lineup assistant, and it does so off the EDT with no null
+  guard. The note further up this file already recorded that fixing it means rewriting
+  `LineupAssistant`; nothing has changed about that, and there is no cheaper fix hiding behind it.
+  There is now **no baseline-builder tool** — a caller loops `simulate_lineup` instead.
+- **`find_comparables`** — became `estimate_market_value`'s `live: true`. Same three arguments, same
+  `comparableQuery` matching; the only difference was corpus versus a live `transfersearch`. As a
+  flag it is strictly better than the tool was: `search()` writes every hit into `TRANSFERLISTING`
+  *before* the corpus read, so one call now returns today's market **and** a median that already
+  counts it. Two tools could not do that — `find_comparables` left the estimate untouched.
+- **`get_stadium`** — it and `get_finances` shipped a byte-identical stadium block (all nine keys,
+  `recentHomeAttendance[]` included). The arena sizer is now the opt-in half of `get_finances`:
+  `sizeArena`, plus `supporters` / `capacity` as overrides, either of which implies it. Off by
+  default, because the sizer is three more objects of arithmetic nobody asked for when the question
+  was "how much cash do we have".
+
+### `simulate_lineup` is now the only lineup-scoring tool
+
+`required` is empty and both halves are optional:
+
+| positions | opponent | result |
+|---|---|---|
+| omitted | omitted | HO's current lineup, sector ratings + formation |
+| given | omitted | scratch XI, sector ratings + formation (was `evaluate_lineup`) |
+| either | all seven | adds the Monte Carlo forecast (was `predict_match` / `simulate_lineup`) |
+
+**A partial opponent is an `IllegalArgumentException` naming the missing sectors, not a silent
+fallback** — six of seven is a caller who meant to simulate and dropped one, and answering that with
+ratings would look like a working call. The check runs *before* any model access, so a malformed
+call is a `-32602` rather than "no snapshot loaded" from whichever lookup happened to run first.
+
+### `search_transfers` takes a `skills` array
+
+Twelve flat props (`skillType1..4` + `min`/`maxSkillValue1..4`, ~800 chars) collapsed into
+`skills: [{skill, min, max}]`, 1–4 entries, ~200 chars. `TransferSearchQuery` keeps its indexed
+setters — they mirror the CHPP parameter names one for one and the search tab shares them — so
+`TransferTools.applySkills` does the list-position-to-slot mapping, which is the part that can
+silently go wrong and is what the new tests pin.
+
+**Deliberately not touched: `simulate_lineup`'s seven flat opponent params.** They look like the
+same smell and are not: they mirror `get_opponent_ratings`' output keys one for one, so the ratings
+copy straight across. Nesting them would break that.
+
+### `remove_from_scout` added
+
+The gap, not a redundancy. The re-listing watch spends up to one `playerdetails` + one
+`transfersPlayer` per scout entry on **every** download for 90 days, and the documented remedy for a
+bloated list was "prune the F7 tab by hand". At ~74 entries that was a recurring per-download cost
+only a human could stop. Removing an entry loses nothing: its market observations stay in
+`TRANSFERLISTING` and keep feeding `estimate_market_value`; only the watch goes.
+
+### Descriptions are capped, and the cap is a test
+
+`McpServerToolsTest.noDescriptionGrowsBackIntoADocumentationPage` fails any description over 400
+chars. Fifteen of the old 34 were over 400 and totalled 12,744. A description now carries three
+things and no more: **what it returns, when to call it rather than its neighbour, and the one trap
+that changes the call.** The long form lives in the assistant repo's `docs/mcp-tools.md`, which is
+read on demand rather than loaded into every session — that repo's owner has taken it as the
+source of truth and knows which caveats moved there.
+
+Also dropped: `get_team`'s `economy.playersSalary`. It was a stale weekly settlement that never
+matched `get_squad`, and it carried a 200-char disclaimer saying so. Removing the field removes the
+disclaimer, and `get_squad` was already the correct source.
+
+**Verification status:** full suite green (749 tests, 0 failures). Schema-level only, as every MCP
+tool test in this repo is — the running HO still serves the old surface until it is restarted, so
+none of this has been exercised against a live client.
+
+### The character traits ARE shown in HO's UI — the deleted description was wrong
+
+The `list_scout` description used to claim the three traits "are not shown in the UI, so this is the
+only way to read them". That was false, and the trim removed it before anyone acted on it.
+
+`module.playeroverview.PlayerDetailsPanel:304` — the Player Details panel on the Players tab —
+renders all three as a prose sentence:
+
+```java
+Helper.getTranslation("ls.player_details.desc1",
+        PlayerAgreeability.toString(m_clPlayer.getGentleness()),
+        PlayerAggressiveness.toString(m_clPlayer.getAggressivity()),
+        PlayerHonesty.toString(m_clPlayer.getHonesty()));
+```
+
+`module.matches.SpielerDetailDialog` (reachable from `SpielerSternePanel`) shows them again as
+labelled fields, and `tool.export.CsvPlayerExport` exports two of the three.
+
+**But the UI is not the authority — the enums are.** `core.constants.player.PlayerHonesty:14-19` and
+`PlayerAgreeability:13-18` name all six levels as constants, so nothing has to be confirmed by
+clicking:
+
+| n | honesty | agreeability |
+|---|---|---|
+| 0 | infamous | nasty fellow |
+| 1 | dishonest | controversial person |
+| 2 | honest | pleasant guy |
+| 3 | upright | sympathetic guy |
+| 4 | righteous | popular guy |
+| 5 | saintly | beloved team member |
+
+Worth knowing while reading any of this: the legacy German column names are crossed against
+Hattrick's. `SpielerTable`'s `iCharakter` holds **agreeability** (`getGentleness()`) and `iAnsehen`
+holds **honesty** (`getHonesty()`); `SpielerDetailDialog`'s `m_jpAnsehen` / `m_jpCharakter` fields
+are swapped the same way. What the user sees is correctly labelled in both places — only the
+variable names mislead. `TransferListing:158`, `ScoutList:154` and `McpJson:136` each carry a
+"do not fix these" comment for exactly this reason.
+
+### Verified live, and the two output shapes that surprised a reader of the schema
+
+The peer agent round-tripped the surface after a restart + `/mcp`. Measured: **20,021 chars ≈ 5.0k
+tokens, down from 33,781 ≈ 8.4k**. Longest description 382 chars, so the 400 ceiling holds with
+room. All three `simulate_lineup` modes work, the five removed tools are gone, and a partial
+opponent errors as `-32602` naming every missing key. `remove_from_scout` is the one tool with no
+live call yet — it is a write, and pruning a shortlist needs a reason.
+
+Two shapes are worth writing down because the *input* schema does not imply them, and both were
+found by calling the server rather than by reading the contract:
+
+- **`get_finances`' sizer lands under its own `arenaSizer` key** (`recommendations`,
+  `soldOutGateReceipts`, `supporters`, `weeklyMaintenance`), not spread across the top level. Plain
+  and `sizeArena: true` responses differ by exactly that key.
+- **`simulate_lineup`'s two modes are not a superset of each other.** With no opponent the sector
+  ratings are top-level (`midfield`, `attack_central`, `hatStats90`, `formation`). With an opponent
+  that whole block moves inside `ourRatings`, and the top level becomes `winProbability` /
+  `drawProbability` / `lossProbability`, `goalsPerMatch`, `chancesPerMatch` and the `opponent*`
+  twins. Reading `hatStats90` off the top level of a simulation gets you nothing.
+
+**The `simulate_lineup` discontinuity is deliberate — do not "unify" it.** It is what `evaluate_lineup`
+and `predict_match` each already returned, which is why folding them together broke no consumer. It
+is also the right shape for each question: in ratings mode the ratings *are* the answer, in
+simulation mode they are one input to a match result and belong under `ourRatings` beside the
+opponent's. The alternatives are duplicating the block at both levels, or a third breaking change to
+a surface that has just been rebuilt. Neither is worth it.
+
+The `sizeArena` flag is likewise not optional-by-accident: `supporters` and `capacity` merely imply
+it, so the plain "should we expand?" question is `get_finances({sizeArena: true})`. Passing a
+`supporters` figure to switch the sizer on silently asks a what-if instead.

@@ -65,50 +65,19 @@ public final class TransferTools {
     public static List<McpTool> tools() {
         return List.of(
                 new McpTool("search_transfers",
-                        "Search the Hattrick transfer market. Age and one skill are mandatory. Skill "
-                                + "names are KEEPER, STAMINA, SETPIECES, DEFENDING, SCORING, WINGER, "
-                                + "PASSING, PLAYMAKING, LEADERSHIP, EXPERIENCE. Hattrick rejects a "
-                                + "skill window whose min and max are more than 3 levels apart, "
-                                + "set pieces / leadership / "
-                                + "experience below level 5 and keeper below level 3. An age range "
-                                + "that includes 17 or 18 may span at most one year (17-18 is fine, "
-                                + "17-19 is not); scan a wider young range in one-year windows. "
-                                + "Narrow the "
-                                + "query rather than paging: Hattrick reports no exact total once "
-                                + "more than 100 players match. Searching is capped per HO "
-                                + "session; the cap is in HO's options under MCP server. "
-                                + "Every hit is also stored permanently, with its full skill set - "
-                                + "including the skills you did not query on - and after the "
-                                + "transfer completes HO fills in what the player actually sold "
-                                + "for. So a search keeps paying off: it is what estimate_market_value "
-                                + "later reads, for these players and for others of a similar "
-                                + "profile.",
+                        "Search the Hattrick transfer market; age and at least one skill are "
+                                + "mandatory. Hattrick refuses a skill window wider than 3 levels, "
+                                + "and an age range including 17 or 18 may span at most one year. "
+                                + "Narrow rather than page - there is no exact total above 100 "
+                                + "matches. Capped per HO session. Every hit is stored and feeds "
+                                + "estimate_market_value.",
                         searchSchema(),
                         args -> search(queryFrom(args))),
-                new McpTool("find_comparables",
-                        "Find players CURRENTLY on the market comparable to one of your own, to "
-                                + "value him against live asking prices and bids. Derives the query "
-                                + "from his age, his two highest positional skills and his "
-                                + "specialty, and echoes the query it built so you can refine it. "
-                                + "This spends one of the session's transfer searches. "
-                                + "estimate_market_value does the same matching against listings HO "
-                                + "has already stored, for free and including what players actually "
-                                + "sold for - try that first, and come here when you need today's "
-                                + "live market rather than recent history, or when it reports too "
-                                + "thin a sample.",
-                        McpTool.schema(McpTool.properties(
-                                        "playerId", McpTool.prop("integer", "the player to value"),
-                                        "ageTolerance", McpTool.prop("integer", "age window in years, default 1"),
-                                        "skillTolerance", McpTool.prop("integer", "skill window in levels, default 1")),
-                                "playerId"),
-                        TransferTools::findComparables),
                 new McpTool("get_team_transfers",
-                        "The managed team's own transfer history - every player it bought or sold, "
-                                + "newest first, with price, TSI at transfer time and the mother-club "
-                                + "and previous-club fees. HO refreshes this from Hattrick on every "
-                                + "team download, so it needs no live call. Returns the most recent "
-                                + "page only (default 20); page back with offset. Optionally filter "
-                                + "by Hattrick season number and by direction (buy or sell).",
+                        "The managed team's own transfer history, newest first, with price, TSI at "
+                                + "transfer time and the mother-club and previous-club fees. A local "
+                                + "read - HO refreshes it on every team download. Returns one page "
+                                + "(default 20); page back with offset.",
                         McpTool.schema(McpTool.properties(
                                 "season", McpTool.prop("integer", "Hattrick season number; omit for the full history"),
                                 "direction", McpTool.prop("string", "buy, sell, or omit for both"),
@@ -117,11 +86,10 @@ public final class TransferTools {
                         TransferTools::teamTransfers),
                 new McpTool("place_bid",
                         "Place a transfer bid. TWO STEPS so a stray call cannot spend money: call "
-                                + "once with playerId + bidAmount to get a preview and a "
-                                + "confirmToken, then call again with the same playerId and that "
-                                + "confirmToken to actually place the bid. The second call leaves "
-                                + "the machine and commits money in Hattrick. bidAmount is in the "
-                                + "user's currency. maxBidAmount is an optional autobid ceiling.",
+                                + "with playerId + bidAmount for a preview and a confirmToken, then "
+                                + "again with the same playerId and that token to place it. The "
+                                + "second call leaves the machine and commits money in Hattrick. "
+                                + "Amounts are in the user's currency.",
                         McpTool.schema(McpTool.properties(
                                         "playerId", McpTool.prop("integer", "the player to bid on"),
                                         "bidAmount", McpTool.prop("integer",
@@ -133,42 +101,23 @@ public final class TransferTools {
                                 "playerId"),
                         TransferTools::placeBid),
                 new McpTool("get_open_bids",
-                        "Players this team has an active transfer bid on, from Hattrick's own bid "
-                                + "tracking (file=currentbids) - so it also sees bids placed on the "
-                                + "Hattrick site, not just through place_bid. By default returns "
-                                + "transfers you have bid on whose deadline has not passed, plus "
-                                + "bids you were losing for up to 24h after their deadline so a "
-                                + "recent loss still shows, each flagged with whether you are the "
-                                + "current leading bidder. "
-                                + "Pass includeAll for every tracked transfer - your listed "
-                                + "players, bookmarked players, mother-club and finished transfers "
-                                + "too - each with its raw trackingTypeId. "
-                                + "Hattrick sends only the highest bid, so HO adds what it already "
-                                + "holds: askingPrice from the stored market snapshot (absent for a "
-                                + "player never seen by search_transfers), and, once the transfer "
-                                + "finished, salePrice, outcome (won/lost) and ourBid - what you "
-                                + "bid, if it went through place_bid. A lost bid next to the price "
-                                + "it lost to is the cheapest read you get on what this market "
-                                + "actually pays.",
+                        "Transfers this team has an active bid on, from Hattrick's own tracking - "
+                                + "so it sees bids placed on the website too. Each row says whether "
+                                + "you are the leading bidder, plus what HO holds locally: "
+                                + "askingPrice, and once finished salePrice, outcome and ourBid. "
+                                + "includeAll returns every tracked transfer with its raw "
+                                + "trackingTypeId.",
                         McpTool.schema(McpTool.properties(
                                 "includeAll", McpTool.prop("boolean",
                                         "return every tracked transfer, not just your open bids; "
                                                 + "default false"))),
                         TransferTools::openBids),
                 new McpTool("add_to_scout",
-                        "Put players on HO's transfer scout list, so a shortlist survives the "
-                                + "session. This is HO's OWN local list - it is not a Hattrick "
-                                + "bookmark and the user will not see these "
-                                + "players on hattrick.org, only on HO's Transfers -> "
-                                + "TransferScout tab (get_open_bids reads Hattrick's separate "
-                                + "tracking list). Each player must have been seen by an earlier "
-                                + "search_transfers in this database - the entry is built from that "
-                                + "stored market snapshot. Adding a player already on the list "
-                                + "replaces his entry. Costs one CHPP call per player, spent on "
-                                + "the character traits that transfersearch does not carry "
-                                + "(agreeability, aggressiveness, honesty - list_scout reads them "
-                                + "back); the add still succeeds if that call fails, leaving the "
-                                + "three null.",
+                        "Put players on HO's OWN local shortlist (the Transfers -> TransferScout "
+                                + "tab) - not a Hattrick bookmark; get_open_bids reads Hattrick's "
+                                + "separate list. Each player must have been seen by an earlier "
+                                + "search_transfers. Adding one already listed replaces his entry. "
+                                + "One CHPP call per player, for the character traits.",
                         McpTool.schema(McpTool.properties(
                                         "players", McpTool.prop("array",
                                                 "the players to add, either bare player ids or "
@@ -177,67 +126,41 @@ public final class TransferTools {
                                                         + "notes column, e.g. why he is a target")),
                                 "players"),
                         TransferTools::addToScout),
+                new McpTool("remove_from_scout",
+                        "Take players off HO's local scout shortlist. This also stops the "
+                                + "re-listing watch each entry costs on every team download, which "
+                                + "is the reason to prune a list grown past what is actually being "
+                                + "tracked.",
+                        McpTool.schema(McpTool.properties(
+                                        "playerIds", McpTool.prop("array", "the player ids to remove")),
+                                "playerIds"),
+                        TransferTools::removeFromScout),
                 new McpTool("list_scout",
-                        "Read back HO's local transfer scout list - the shortlist add_to_scout "
-                                + "writes, with the market data and skills as they were when each "
-                                + "player was added. price and deadline are that snapshot, not "
-                                + "live; re-run search_transfers for the current market state. "
-                                + "price is what it would have cost to take him when he was added "
-                                + "- the higher of the seller's asking price and the highest bid, "
-                                + "so it silently becomes the bid once bidding passes the ask. "
-                                + "askingPrice and highestBid are those two kept apart, taken from "
-                                + "the newest stored observation of him rather than from the "
-                                + "moment he was added - observedAt says when that was, and may be "
-                                + "later than the deadline beside it if he was re-listed. Both are "
-                                + "missing for an entry typed into the UI by hand, and askingPrice "
-                                + "alone is missing when Hattrick sent none for that listing, in "
-                                + "which case price is the highest bid. "
-                                + "salePrice and soldAt are different: they are filled in after the "
-                                + "watched transfer completed and say what the player actually went "
-                                + "for, so a target you lost still tells you the price it took. "
-                                + "Both are null while he is still listed. "
-                                + "agreeability, aggressiveness and honesty are the character "
-                                + "traits, 0-5 low to high (agreeability 0 nasty fellow to 5 "
-                                + "beloved team member, aggressiveness 0 tranquil to 5 unstable, "
-                                + "honesty 0 infamous to 5 saintly). All three are null on an "
-                                + "entry added before HO fetched them, or whose fetch failed - "
-                                + "they are not shown in the UI, so this is the only way to read "
-                                + "them. "
-                                + "Distinct from get_open_bids, which reads Hattrick's own tracking "
-                                + "list.",
+                        "Read back HO's local scout shortlist, with the market data and skills "
+                                + "frozen as they were when each player was added. price and "
+                                + "deadline are that snapshot; askingPrice, highestBid and "
+                                + "observedAt come from the newest stored observation. salePrice and "
+                                + "soldAt fill in once the watched transfer completed. Character "
+                                + "traits are 0-5, null where never fetched.",
                         McpTool.schema(McpTool.properties()),
                         args -> listScout()),
                 new McpTool("estimate_market_value",
-                        "Evidence for valuing one of your players, from the transfer listings HO "
-                                + "has already seen - no CHPP call, no search cap. Matches him "
-                                + "against the stored corpus on the same criteria find_comparables "
-                                + "uses (age window, his two best positional skills, his specialty) "
-                                + "and returns the matching listings themselves, each with wage, "
-                                + "TSI, form, specialty, its three best positional skills "
-                                + "(topSkills), set pieces, asking price, highest bid and - once "
-                                + "his transfer completed - what he actually sold for. Set pieces "
-                                + "is NOT part of the matching, so the comparables spread across "
-                                + "it freely: use it to explain a row that priced away from the "
-                                + "rest, and note that it is null where Hattrick sent no details. "
-                                + "agreeability, aggressiveness and honesty (0-5) are the character "
-                                + "traits, and are null on most rows: transfersearch does not carry "
-                                + "them, so only a row HO observed through playerdetails has them. "
-                                + "They say nothing about the price - they are there for judging "
-                                + "whether a comparable is a player you would actually want. "
-                                + "YOU do the "
-                                + "valuation from those rows: weigh wage against skills, discount "
-                                + "stale observations, notice injuries and specialties. The "
-                                + "estimate field is only a median and is a starting anchor, not an "
-                                + "answer. basis says what it rests on: resolved_sales means real "
-                                + "sale prices, observed_listings means asking prices and bids, "
-                                + "which run high because an asking price is what a seller wants. "
-                                + "Sale prices fill in after each team download, so this improves "
-                                + "on its own. A thin sampleSize means widen the tolerances, or run "
-                                + "search_transfers over that profile to feed the corpus.",
+                        "Value one of your players against the transfer listings HO has already "
+                                + "stored - free, no CHPP call. Returns the matching listings "
+                                + "themselves; reason over those, not over the median in `estimate`. "
+                                + "basis says whether it rests on real sale prices or on asking "
+                                + "prices, which run high. "
+                                + "Pass live to search today's market first and fold the hits in "
+                                + "(spends one transfer search).",
                         McpTool.schema(McpTool.properties(
                                         "playerId", McpTool.prop("integer", "the player to value"),
                                         "ageTolerance", McpTool.prop("integer", "age window in years, default 1"),
                                         "skillTolerance", McpTool.prop("integer", "skill window in levels, default 1"),
+                                        "live", McpTool.prop("boolean",
+                                                "run the comparable query against today's market "
+                                                        + "first, store the hits, and estimate over "
+                                                        + "the refreshed corpus; spends one of the "
+                                                        + "session's transfer searches. Default false"),
                                         "observedWithinDays", McpTool.prop("integer",
                                                 "ignore listings older than this many days, default "
                                                         + DEFAULT_CORPUS_DAYS + " (one Hattrick season)")),
@@ -275,6 +198,16 @@ public final class TransferTools {
         final var days = Math.max(McpJson.optInt(args, "observedWithinDays", DEFAULT_CORPUS_DAYS), 1);
         final var since = new HODateTime(HODateTime.now().getInstant()
                 .minus(java.time.Duration.ofDays(days)));
+
+        // live: what find_comparables used to be, folded in as a flag. search() writes every hit
+        // into TRANSFERLISTING, so running it BEFORE the corpus read means the one call returns
+        // today's market and a median that already accounts for it - which is the thing two
+        // separate tools could not do. A failure here is the caller's: they asked to spend a
+        // search, so let it out rather than quietly falling back to the stale corpus.
+        JsonObject liveSearch = null;
+        if (McpJson.optBool(args, "live", false)) {
+            liveSearch = search(query);
+        }
 
         final var observations = DBManager.instance().loadComparableTransferListings(
                 query.ageMin(), query.ageMax(),
@@ -320,6 +253,11 @@ public final class TransferTools {
         json.addProperty("observedListingsAvailable", asks.size());
         json.addProperty("comparableQuery", query.toQueryString());
         json.addProperty("observedWithinDays", days);
+        if (liveSearch != null) {
+            // The raw hits beside the corpus view of them: itemCount says how much of the market
+            // matched, which the deduplicated comparables list below can no longer tell you.
+            json.add("liveSearch", liveSearch);
+        }
 
         // The evidence, not just the summary. The median below is a crude anchor: it collapses
         // wage, TSI, form, the other skills and how long ago each was seen, all of which change
@@ -572,6 +510,58 @@ public final class TransferTools {
                 out.add("notFound", notFound);
                 out.addProperty("notFoundNote", "No stored market snapshot for these players - run "
                         + "search_transfers for them first, then add them.");
+            }
+            return out;
+        });
+    }
+
+    /**
+     * The counterpart to {@link #addToScout}. Not tidiness: every entry on the list is watched for a
+     * re-listing on each team download, so a list nobody prunes is a recurring CHPP bill, and until
+     * now only a human clicking the F7 tab could stop it.
+     * <p>
+     * Removing an entry loses nothing. The market observations it was built from stay in
+     * TRANSFERLISTING and keep feeding {@code estimate_market_value}; only the watch goes.
+     */
+    private static JsonObject removeFromScout(JsonObject args) throws McpToolException {
+        final var requested = McpJson.reqArray(args, "playerIds");
+        if (requested.isEmpty()) {
+            throw new IllegalArgumentException("playerIds is empty - pass at least one player id.");
+        }
+        final var wanted = new java.util.LinkedHashSet<Integer>();
+        requested.forEach(e -> wanted.add(e.getAsInt()));
+
+        return LineupTools.onEdt(() -> {
+            final var tabOpen = ScoutList.isLive();
+            final var list = ScoutList.entries();
+            final var removed = new JsonArray();
+            // Walk the list rather than the request, so the response names who actually went and
+            // an id that was never on the list falls out as notOnList instead of a silent success.
+            list.removeIf(entry -> {
+                if (!wanted.contains(entry.getPlayerID())) {
+                    return false;
+                }
+                final var json = new JsonObject();
+                json.addProperty("playerId", entry.getPlayerID());
+                json.addProperty("name", entry.getName());
+                removed.add(json);
+                return true;
+            });
+            ScoutList.save(list);
+
+            final var out = new JsonObject();
+            out.addProperty("status", "ok");
+            out.addProperty("removedCount", removed.size());
+            out.add("removed", removed);
+            out.addProperty("scoutListSize", list.size());
+            out.addProperty("visibleInUi", tabOpen ? "yes, the TransferScout table refreshed"
+                    : "the Transfers tab is closed; the change is stored and shows when it opens");
+            final var stillWanted = new java.util.LinkedHashSet<>(wanted);
+            removed.forEach(e -> stillWanted.remove(e.getAsJsonObject().get("playerId").getAsInt()));
+            if (!stillWanted.isEmpty()) {
+                final var notOnList = new JsonArray();
+                stillWanted.forEach(notOnList::add);
+                out.add("notOnList", notOnList);
             }
             return out;
         });
@@ -898,51 +888,39 @@ public final class TransferTools {
                         + "with an empty result - split it into several searches"),
                 "ageMax", McpTool.prop("integer", "maximum age in years, see ageMin for how far it "
                         + "may sit above it"),
-                "skillType1", McpTool.prop("string", "first skill name"),
-                "minSkillValue1", McpTool.prop("integer", "minimum level of the first skill"),
-                "maxSkillValue1", McpTool.prop("integer", "maximum level of the first skill"),
-                "skillType2", McpTool.prop("string", "second skill name"),
-                "minSkillValue2", McpTool.prop("integer", "minimum level of the second skill"),
-                "maxSkillValue2", McpTool.prop("integer", "maximum level of the second skill"),
-                "skillType3", McpTool.prop("string", "third skill name"),
-                "minSkillValue3", McpTool.prop("integer", "minimum level of the third skill"),
-                "maxSkillValue3", McpTool.prop("integer", "maximum level of the third skill"),
-                "skillType4", McpTool.prop("string", "fourth skill name"),
-                "minSkillValue4", McpTool.prop("integer", "minimum level of the fourth skill"),
-                "maxSkillValue4", McpTool.prop("integer", "maximum level of the fourth skill"),
-                                        "specialty", McpTool.prop("integer",
-                                                "specialty id: 0 none, 1 technical, 2 quick, "
-                                                        + "3 powerful, 4 unpredictable, 5 head, "
-                                                        + "6 resilient (regainer), 8 support. "
-                                                        + "7 is not a specialty. Leave unset to "
-                                                        + "match any, including the two rare ones"),
+                "skills", McpTool.prop("array", "one to four skill filters, each "
+                        + "{skill, min, max}. skill is one of " + SKILL_NAMES + ". min and max are "
+                        + "levels and may be at most 3 apart. The first entry is the primary skill "
+                        + "and is mandatory; set pieces, leadership and experience have a floor of "
+                        + "level 5, keeper of level 3"),
+                "specialty", McpTool.prop("integer",
+                        "specialty id: 0 none, 1 technical, 2 quick, 3 powerful, 4 unpredictable, "
+                                + "5 head, 6 resilient (regainer), 8 support. 7 is not a specialty. "
+                                + "Leave unset to match any, including the two rare ones"),
                 "nativeCountryId", McpTool.prop("integer", "native country id"),
                 "tsiMin", McpTool.prop("integer", "minimum TSI"),
                 "tsiMax", McpTool.prop("integer", "maximum TSI"),
                 "priceMin", McpTool.prop("integer", "minimum asking price, in the user's currency"),
                 "priceMax", McpTool.prop("integer", "maximum asking price, in the user's currency"),
                 "pageSize", McpTool.prop("integer", "results per page, default and maximum 100"));
-        return McpTool.schema(properties,
-                "ageMin", "ageMax", "skillType1", "minSkillValue1", "maxSkillValue1");
+        return McpTool.schema(properties, "ageMin", "ageMax", "skills");
     }
+
+    /** The searchable skill names, for the schema - {@code Skill} is the single source. */
+    private static final String SKILL_NAMES =
+            Arrays.stream(TransferSearchQuery.Skill.values())
+                    .map(Enum::name)
+                    .collect(Collectors.joining(", "));
+
+    /** How many skill filters {@code transfersearch} accepts. */
+    private static final int MAX_SKILL_FILTERS = 4;
+
 
     /** The query the client asked for, with the page size defaulted and capped. */
     static TransferSearchQuery queryFrom(JsonObject args) {
         final var builder = TransferSearchQuery.builder()
                 .ageMin(McpJson.reqInt(args, "ageMin"))
                 .ageMax(McpJson.reqInt(args, "ageMax"))
-                .skillType1(skill(args, "skillType1"))
-                .minSkillValue1(McpJson.reqInt(args, "minSkillValue1"))
-                .maxSkillValue1(McpJson.reqInt(args, "maxSkillValue1"))
-                .skillType2(optionalSkill(args, "skillType2"))
-                .minSkillValue2(McpJson.optInteger(args, "minSkillValue2"))
-                .maxSkillValue2(McpJson.optInteger(args, "maxSkillValue2"))
-                .skillType3(optionalSkill(args, "skillType3"))
-                .minSkillValue3(McpJson.optInteger(args, "minSkillValue3"))
-                .maxSkillValue3(McpJson.optInteger(args, "maxSkillValue3"))
-                .skillType4(optionalSkill(args, "skillType4"))
-                .minSkillValue4(McpJson.optInteger(args, "minSkillValue4"))
-                .maxSkillValue4(McpJson.optInteger(args, "maxSkillValue4"))
                 .specialty(McpJson.optInteger(args, "specialty"))
                 .nativeCountryId(McpJson.optInteger(args, "nativeCountryId"))
                 .tsiMin(McpJson.optInteger(args, "tsiMin"))
@@ -953,21 +931,41 @@ public final class TransferTools {
                 // Paging is not exposed: ItemCount comes back as -1 once more than 100 players
                 // match, so a second page buys little and would eat the per session cap.
                 .pageSize(Math.min(McpJson.optInt(args, "pageSize", MAX_PAGE_SIZE), MAX_PAGE_SIZE));
+        applySkills(builder, McpJson.reqArray(args, "skills"));
         return builder.build();
     }
 
-    private static TransferSearchQuery.Skill skill(JsonObject args, String name) {
-        final var value = McpJson.optString(args, name, null);
-        if (value == null) {
-            throw new IllegalArgumentException("Missing required argument: " + name);
+    /**
+     * The {@code skills} array onto the builder's four indexed slots.
+     * <p>
+     * The wire shape is a list because that is what the query is - up to four filters, the first
+     * one primary. The builder keeps the twelve flat setters because they mirror the CHPP
+     * parameter names one for one, and {@code TransferSearchQuery} is shared with the search tab.
+     */
+    private static void applySkills(TransferSearchQuery.TransferSearchQueryBuilder builder,
+                                    JsonArray skills) {
+        if (skills.isEmpty() || skills.size() > MAX_SKILL_FILTERS) {
+            throw new IllegalArgumentException("skills takes 1 to " + MAX_SKILL_FILTERS
+                    + " filters, got " + skills.size() + ".");
         }
-        return parseSkill(value);
+        for (int i = 0; i < skills.size(); i++) {
+            if (!skills.get(i).isJsonObject()) {
+                throw new IllegalArgumentException("skills[" + i + "] must be an object of the "
+                        + "shape {skill, min, max}.");
+            }
+            final var filter = skills.get(i).getAsJsonObject();
+            final var skill = parseSkill(McpJson.reqString(filter, "skill"));
+            final var min = McpJson.reqInt(filter, "min");
+            final var max = McpJson.reqInt(filter, "max");
+            switch (i) {
+                case 0 -> builder.skillType1(skill).minSkillValue1(min).maxSkillValue1(max);
+                case 1 -> builder.skillType2(skill).minSkillValue2(min).maxSkillValue2(max);
+                case 2 -> builder.skillType3(skill).minSkillValue3(min).maxSkillValue3(max);
+                default -> builder.skillType4(skill).minSkillValue4(min).maxSkillValue4(max);
+            }
+        }
     }
 
-    private static TransferSearchQuery.Skill optionalSkill(JsonObject args, String name) {
-        final var value = McpJson.optString(args, name, null);
-        return value == null ? null : parseSkill(value);
-    }
 
     private static TransferSearchQuery.Skill parseSkill(String value) {
         try {
@@ -1055,24 +1053,6 @@ public final class TransferTools {
         json.addProperty("totalEarned", McpJson.money(DBManager.instance().getSumTransferPrices(teamId, true)));
         json.add("transfers", transfers);
         return json;
-    }
-
-    private static JsonObject findComparables(JsonObject args) throws McpToolException {
-        final var model = McpJson.model();
-        final var playerId = McpJson.reqInt(args, "playerId");
-        final var player = model.getCurrentPlayer(playerId);
-        if (player == null) {
-            throw new McpToolException("No player with id " + playerId + " is in the squad. "
-                    + "Call get_squad for the ids HO knows about.");
-        }
-
-        final var query = comparableQuery(player,
-                McpJson.optInt(args, "ageTolerance", 1),
-                McpJson.optInt(args, "skillTolerance", 1));
-
-        final var result = search(query);
-        result.addProperty("echo", query.toQueryString());
-        return result;
     }
 
     /**

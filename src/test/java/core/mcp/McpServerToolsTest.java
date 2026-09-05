@@ -16,20 +16,41 @@ class McpServerToolsTest {
                         {"jsonrpc":"2.0","id":1,"method":"tools/list"}""").getAsJsonObject())
                 .getAsJsonObject("result").getAsJsonArray("tools");
 
-        assertThat(tools).hasSize(34);
+        assertThat(tools).hasSize(30);
         assertThat(tools).extracting(t -> t.getAsJsonObject().get("name").getAsString())
                 .containsExactlyInAnyOrder("get_team", "get_squad", "get_player",
                         "get_opponent_squad",
-                        "get_upcoming_matches", "search_transfers", "find_comparables",
-                        "get_team_transfers", "place_bid", "get_open_bids", "get_lineup", "evaluate_lineup",
-                        "optimize_lineup", "apply_lineup", "set_player_group", "send_match_order",
+                        "get_upcoming_matches", "search_transfers",
+                        "get_team_transfers", "place_bid", "get_open_bids", "get_lineup",
+                        "apply_lineup", "set_player_group", "send_match_order",
                         "get_training", "get_player_history", "set_training",
                         "get_matches", "get_match",
-                        "get_opponent_ratings", "predict_match",
+                        "get_opponent_ratings",
                         "simulate_lineup", "list_challenges", "arrange_challenge",
                         "respond_to_challenge", "get_league_table", "get_finances",
-                        "add_to_scout", "list_scout", "estimate_market_value", "get_stadium",
-                        "download_team");
+                        "add_to_scout", "list_scout", "remove_from_scout",
+                        "estimate_market_value", "download_team");
+    }
+
+    /**
+     * The tool descriptions are the one part of this surface that costs tokens in every session
+     * before a single call is made, so they carry a budget: what it returns, when to call it
+     * rather than its neighbour, and the one trap that changes the call. The long form lives in
+     * the assistant repo's docs/mcp-tools.md, which is read on demand.
+     */
+    @Test
+    void noDescriptionGrowsBackIntoADocumentationPage() {
+        final var server = new McpHttpServer();
+        server.registerAllTools();
+
+        final var tools = server.handle(JsonParser.parseString("""
+                        {"jsonrpc":"2.0","id":1,"method":"tools/list"}""").getAsJsonObject())
+                .getAsJsonObject("result").getAsJsonArray("tools");
+
+        assertThat(tools).allSatisfy(t -> assertThat(
+                t.getAsJsonObject().get("description").getAsString().length())
+                .as("description of %s", t.getAsJsonObject().get("name").getAsString())
+                .isLessThanOrEqualTo(400));
     }
 
     /**
