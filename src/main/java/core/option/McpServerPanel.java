@@ -23,6 +23,7 @@ public final class McpServerPanel extends ImagePanel {
     private final JTextField searchCap = new JTextField(6);
     private final JTextField resolveCap = new JTextField(6);
     private final JTextField writeCap = new JTextField(6);
+    private final JTextField downloadCap = new JTextField(6);
     private final JLabel status = new JLabel();
     private final JTextField url = new JTextField(34);
 
@@ -52,6 +53,10 @@ public final class McpServerPanel extends ImagePanel {
                 String.valueOf(UserParameter.instance().mcpSearchesPerSession));
         addField(c, ++c.gridy, "ls.options.mcp.writecap", writeCap,
                 String.valueOf(UserParameter.instance().mcpChppWritesPerSession));
+        // addField takes no tooltip - set it here, the way the enabled checkbox does.
+        downloadCap.setToolTipText(TranslationFacility.tr("ls.options.mcp.downloadcap.tt"));
+        addField(c, ++c.gridy, "ls.options.mcp.downloadcap", downloadCap,
+                String.valueOf(UserParameter.instance().mcpDownloadsPerSession));
 
         c.gridx = 0;
         c.gridy++;
@@ -110,11 +115,13 @@ public final class McpServerPanel extends ImagePanel {
         final var portValue = parse(port, 8765);
         final var capValue = parse(searchCap, 20);
         final var writeCapValue = parse(writeCap, 20);
+        final var downloadCapValue = parse(downloadCap, 10);
         final var resolveCapValue = parse(resolveCap, 200);
         for (final var p : new UserParameter[]{UserParameter.instance(), UserParameter.temp()}) {
             p.mcpServerPort = portValue;
             p.mcpSearchesPerSession = capValue;
             p.mcpChppWritesPerSession = writeCapValue;
+            p.mcpDownloadsPerSession = downloadCapValue;
             p.mcpResolveCap = resolveCapValue;
         }
     }

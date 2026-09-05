@@ -118,6 +118,15 @@ public final class UserParameter extends Configuration {
     /** How many CHPP writes (training, match order, challenges, bids) one HO session may issue in total. */
     public int mcpChppWritesPerSession = 20;
     /**
+     * How many full team downloads one HO session may issue over MCP. Manual downloads from the
+     * Download button do not count.
+     * <p>
+     * Half the other two caps because one download is roughly a dozen CHPP requests where a search
+     * or a write is one.
+     */
+    public int mcpDownloadsPerSession = 10;
+
+    /**
      * How many expired listings the sale-price resolve pass may look up per run. 0 switches it off.
      * <p>
      * Not a CHPP quota - {@code transfersPlayer} is an ordinary read file HO already batches
@@ -461,7 +470,9 @@ public final class UserParameter extends Configuration {
         map.put("mcpServerPort", String.valueOf(mcpServerPort));
         map.put("mcpSearchesPerSession", String.valueOf(mcpSearchesPerSession));
         map.put("mcpChppWritesPerSession", String.valueOf(mcpChppWritesPerSession));
+        map.put("mcpDownloadsPerSession", String.valueOf(mcpDownloadsPerSession));
         map.put("mcpResolveCap", String.valueOf(mcpResolveCap));
+
 
         if (ReleaseChannel == null) {
             ReleaseChannel = "Stable";
@@ -713,7 +724,9 @@ public final class UserParameter extends Configuration {
         mcpServerPort = orDefault(getIntValue(values, "mcpServerPort"), 8765);
         mcpSearchesPerSession = orDefault(getIntValue(values, "mcpSearchesPerSession"), 20);
         mcpChppWritesPerSession = orDefault(getIntValue(values, "mcpChppWritesPerSession"), 20);
+        mcpDownloadsPerSession = orDefault(getIntValue(values, "mcpDownloadsPerSession"), 10);
         mcpResolveCap = orDefault(getIntValue(values, "mcpResolveCap"), 200);
+
         ReleaseChannel = getStringValue(values, "ReleaseChannel");
         fixtures = getBooleanValue(values, "fixtures");
         downloadCurrentMatchlist = getBooleanValue(values, "currentMatchlist");
