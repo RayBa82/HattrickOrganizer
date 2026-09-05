@@ -76,6 +76,34 @@ class ScoutListTest {
     }
 
     /**
+     * The crossed getters, which are the whole risk in applyCharacter: Player.getGentleness() is
+     * Agreeability and Player.getHonesty() is Honesty. Three distinct values, so a swap fails here.
+     */
+    @Test
+    void characterIsCopiedOffTheCrossedPlayerGetters() {
+        final var e = entry();
+        final var p = new core.model.player.Player();
+        p.setGentleness(3);
+        p.setAggressivity(2);
+        p.setHonesty(4);
+
+        ScoutList.applyCharacter(e, p);
+
+        assertThat(e.getAgreeability()).isEqualTo(3);
+        assertThat(e.getAggressiveness()).isEqualTo(2);
+        assertThat(e.getHonesty()).isEqualTo(4);
+    }
+
+    /** Nobody has looked yet, and 0 would be a claim rather than an absence. */
+    @Test
+    void aFreshEntryHasNoCharacterYet() {
+        final var e = entry();
+
+        assertThat(e.getAggressiveness()).isNull();
+        assertThat(e.getHonesty()).isNull();
+    }
+
+    /**
      * A re-listing whose market data came back empty must not wipe the column. A hand-added entry
      * carries a price the user typed, and "free" is never a truthful reading of a missing
      * AskingPrice - {@code xmlLongValue} defaulting to 0 is not the seller giving him away.

@@ -261,7 +261,6 @@ public class TransferSearchPanel extends ImagePanel {
                 .maxSkillValue1(maxOf(0))
                 .specialty(specialityId == PlayerSpeciality.NO_SPECIALITY ? null : specialityId)
                 .priceMax(maxPriceOrNull(maxPrice.getText()))
-                .pageSize(50)
                 .pageIndex(0);
         if (usedSkills > 1) {
             builder.skillType2(skillOf(1)).minSkillValue2(minOf(1)).maxSkillValue2(maxOf(1));

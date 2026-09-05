@@ -95,6 +95,8 @@ final class DBUpdater {
 					case 1002:
 						updateDBv1003(DBVersion);
 					case 1003:
+						updateDBv1004(DBVersion);
+					case 1004:
 				}
 
 			} catch (Exception e) {
@@ -192,6 +194,27 @@ final class DBUpdater {
 		connectionManager.executeUpdate("DELETE FROM USERCOLUMNS WHERE COLUMN_ID BETWEEN 23000 AND 23999");
 
 		updateDBVersion(dbVersion, 1003);
+	}
+
+	/**
+	 * HO 10.0.4: character, on the scout list and on the market corpus.
+	 * <p>
+	 * Nullable on purpose, in both tables - an existing row was written before anything looked, and
+	 * 0 is a real trait level ("tranquil", "infamous") rather than a stand-in for "unknown". SCOUT
+	 * already had an Agreeability column and gains the other two; TRANSFERLISTING had none.
+	 * No USERCOLUMNS reset here: these are MCP-only, deliberately not shown in either table.
+	 */
+	private void updateDBv1004(int dbVersion) throws SQLException {
+		var scoutTable = dbManager.getTable(ScoutTable.TABLENAME);
+		scoutTable.tryAddColumn("Aggressiveness", "INTEGER");
+		scoutTable.tryAddColumn("Honesty", "INTEGER");
+
+		var listingTable = dbManager.getTable(TransferListingTable.TABLENAME);
+		listingTable.tryAddColumn("AGREEABILITY", "INTEGER");
+		listingTable.tryAddColumn("AGGRESSIVENESS", "INTEGER");
+		listingTable.tryAddColumn("HONESTY", "INTEGER");
+
+		updateDBVersion(dbVersion, 1004);
 	}
 
     private void updateDBv901(int dbVersion) throws SQLException {

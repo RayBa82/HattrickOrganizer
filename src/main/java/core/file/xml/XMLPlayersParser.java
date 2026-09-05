@@ -449,9 +449,12 @@ public class XMLPlayersParser {
 //        This container and its elements is only shown if the user has supporter
 //        The languageID the player speaks in his Statement, if existing.
 
-        player.setHonesty(xmlIntValue(root, "Agreeability"));
+        // Player's field names are the legacy German ones: gentleness holds Agreeability and
+        // honesty holds Honesty, the way createPlayer/HRFStringBuilder:492-497 and every reader
+        // (CsvPlayerExport, SpielerDetailDialog) pair them. These two were transposed here.
+        player.setGentleness(xmlIntValue(root, "Agreeability"));
         player.setAggressivity(xmlIntValue(root, "Aggressiveness"));
-        player.setGentleness(xmlIntValue(root, "Honesty"));
+        player.setHonesty(xmlIntValue(root, "Honesty"));
         player.setExperience(xmlIntValue(root, "Experience"));
         player.setLoyalty(xmlIntValue(root, "Loyalty"));
         player.setHomeGrown(xmlBoolValue(root, "MotherClubBonus"));

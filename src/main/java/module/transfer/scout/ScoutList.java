@@ -125,6 +125,41 @@ public final class ScoutList {
     }
 
     /**
+     * Write a player's character onto his scout entry, if he is on the list.
+     * <p>
+     * Independent of whether he is currently listed: character sits at {@code <Player>} root in a
+     * {@code playerdetails} response, outside the {@code <PlayerSkills>} block Hattrick prunes, so
+     * every successful observation carries it. Independent of {@code isSold()} too - what a player
+     * is like does not stop being true because his transfer completed.
+     *
+     * @return whether a scout entry for that player was found and updated
+     */
+    public static boolean recordCharacter(int playerId, core.model.player.Player player) {
+        final var entries = entries();
+        for (final var entry : entries) {
+            if (entry.getPlayerID() != playerId) {
+                continue;
+            }
+            applyCharacter(entry, player);
+            save(entries);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * The three traits, written as one block so "honesty is set" means all three were observed.
+     * <p>
+     * HO's field names are the legacy German ones and do not line up with Hattrick's:
+     * {@code getGentleness()} is Agreeability, {@code getHonesty()} is Honesty. Do not "fix" these.
+     */
+    public static void applyCharacter(ScoutEintrag entry, core.model.player.Player player) {
+        entry.setAgreeability(player.getGentleness());
+        entry.setAggressiveness(player.getAggressivity());
+        entry.setHonesty(player.getHonesty());
+    }
+
+    /**
      * The fields a re-listing changes, and only those. Skills and TSI are deliberately left alone:
      * they ride on the fresh TRANSFERLISTING row, which {@code TransferTools.listScout} joins in.
      * <p>

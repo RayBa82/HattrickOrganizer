@@ -50,6 +50,11 @@ public class TransferListingTable extends AbstractTable {
                 intCol("WINGER", p -> ((TransferListing) p).getWinger(), (p, v) -> ((TransferListing) p).setWinger((Integer) v), true),
                 intCol("DEFENDER", p -> ((TransferListing) p).getDefender(), (p, v) -> ((TransferListing) p).setDefender((Integer) v), true),
                 intCol("SETPIECES", p -> ((TransferListing) p).getSetPieces(), (p, v) -> ((TransferListing) p).setSetPieces((Integer) v), true),
+                // Only a playerdetails observation carries these; a transfersearch or currentbids
+                // row leaves them null. See TransferListing's field comment.
+                intCol("AGREEABILITY", p -> ((TransferListing) p).getAgreeability(), (p, v) -> ((TransferListing) p).setAgreeability((Integer) v), true),
+                intCol("AGGRESSIVENESS", p -> ((TransferListing) p).getAggressiveness(), (p, v) -> ((TransferListing) p).setAggressiveness((Integer) v), true),
+                intCol("HONESTY", p -> ((TransferListing) p).getHonesty(), (p, v) -> ((TransferListing) p).setHonesty((Integer) v), true),
                 longCol("SALEPRICE", p -> ((TransferListing) p).getSalePrice(), (p, v) -> ((TransferListing) p).setSalePrice(v == null ? null : ((Number) v).longValue()), true),
                 timeCol("RESOLVEDAT", p -> HODateTime.toDbTimestamp(((TransferListing) p).getResolvedAt()), (p, v) -> ((TransferListing) p).setResolvedAt((HODateTime) v), true)
         )).toArray(new ColumnDescriptor[0]);

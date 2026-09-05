@@ -59,6 +59,50 @@ class McpJsonTest {
         assertThat(json.has("positionRatings")).isFalse();
     }
 
+    /**
+     * Character under Hattrick's names rather than HO's legacy German ones - getGentleness() is
+     * Agreeability, getHonesty() is Honesty. Three distinct values, so a transposition fails here.
+     */
+    @Test
+    void player_reportsTheThreeCharacterTraitsUnderHattricksNames() {
+        final var player = new Player();
+        player.setGentleness(3);
+        player.setAggressivity(2);
+        player.setHonesty(4);
+
+        final var json = McpJson.player(player);
+
+        assertThat(json.get("agreeability").getAsInt()).isEqualTo(3);
+        assertThat(json.get("aggressiveness").getAsInt()).isEqualTo(2);
+        assertThat(json.get("honesty").getAsInt()).isEqualTo(4);
+    }
+
+    /**
+     * A scout entry nobody has fetched character for reports all three as null - agreeability
+     * included, whose column is non-null and so holds a 0 that means "never looked", not "nasty
+     * fellow". Honesty is the flag: only the playerdetails fetch ever writes it.
+     */
+    @Test
+    void scoutEntry_reportsNoCharacterAtAllUntilOneHasBeenFetched() {
+        final var entry = new module.transfer.scout.ScoutEintrag();
+
+        final var unobserved = McpJson.scoutEntry(entry);
+
+        assertThat(unobserved.get("agreeability").isJsonNull()).isTrue();
+        assertThat(unobserved.get("aggressiveness").isJsonNull()).isTrue();
+        assertThat(unobserved.get("honesty").isJsonNull()).isTrue();
+
+        entry.setAgreeability(0);
+        entry.setAggressiveness(2);
+        entry.setHonesty(4);
+
+        final var observed = McpJson.scoutEntry(entry);
+
+        assertThat(observed.get("agreeability").getAsInt()).isZero();   // now a real "nasty fellow"
+        assertThat(observed.get("aggressiveness").getAsInt()).isEqualTo(2);
+        assertThat(observed.get("honesty").getAsInt()).isEqualTo(4);
+    }
+
     @Test
     void player_reportsSublevelsSoABreakpointIsVisible() {
         final var player = new Player();

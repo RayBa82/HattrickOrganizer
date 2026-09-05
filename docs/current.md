@@ -1768,3 +1768,90 @@ difference means the stored row genuinely changed. Two consequences worth knowin
   compare against", i.e. a fresh install.
 - The flag now reports what is in the database, which after a skipped swap is not what HO's window is
   showing. That is the right thing for a field whose whole subject is the *stored* lineup.
+
+## Every transfer search asks for 100 hits (2026-09-05)
+
+`pageSize` was 50 in three independent places — `TransferSearchQuery.DEFAULT_PAGE_SIZE`, a hardcoded
+`.pageSize(50)` in `TransferSearchPanel.buildQuery`, and `TransferTools.DEFAULT_PAGE_SIZE`. Nothing
+anywhere pages: the UI and the MCP tool both read page 0 and stop, so a query with 80 matches showed
+50 and silently dropped the rest. Since nobody asks for a second page, a half-size first page is just
+lost candidates.
+
+The CHPP maximum is 100, so that is now the single default in `TransferSearchQuery`; the panel no
+longer sets a page size at all, and `TransferTools` uses `MAX_PAGE_SIZE` for both its default and its
+clamp (`transfer_search`'s `pageSize` argument still overrides it downwards). Paging is still not
+built — a search that hits exactly 100 is still capped, and `resultText` shows `100 / <itemCount>` so
+it is visible when that happens.
+
+
+## Character over MCP, and the swap it uncovered (2026-09-05)
+
+Asked from the strategy repo whether HO can screen on aggressiveness, honesty and agreeability.
+It can, for the squad, and always could — nothing new had to be downloaded or migrated.
+
+CHPP `players` carries `<Agreeability>`, `<Aggressiveness>` and `<Honesty>`;
+`XMLPlayersParser.createPlayer` reads all three, `HRFStringBuilder` writes them into the HRF, and
+they land in PLAYER as `iCharakter` / `iAgressivitaet` / `iAnsehen`. One row per HRF, so there is
+history. `McpJson.player()` now reports them as `agreeability` / `aggressiveness` / `honesty`,
+0–5 each, which puts them on `get_player` and `get_squad`.
+
+**The German names are crossed and the getters are the only reliable guide.** `iCharakter` holds
+agreeability (`getGentleness()`); `iAnsehen` holds honesty (`getHonesty()`). Three independent
+readers agree — `HRFStringBuilder:492-497` pairs `gentleness` with `PlayerAgreeability`, and so do
+`CsvPlayerExport:149-151` and `SpielerDetailDialog:402-406`.
+
+`parseMarketPlayerFromString` had transposed the two: `setHonesty("Agreeability")` and
+`setGentleness("Honesty")`. Nothing consumed those fields off a `MarketPlayer` yet, so no stored
+data was wrong, but `TransferListing.fromPlayerDetails` would have inherited it the moment character
+was added to the corpus. Fixed, with a test over both fixtures (3 / 2 / 4 are distinct on purpose, so
+a swap cannot pass).
+
+Also settled while looking: **character survives the unlisted pruning.** It sits at `<Player>` root,
+outside `<PlayerSkills>`, and both live responses behind the `LISTED`/`UNLISTED` fixtures carry it.
+So §1.3's pruning applies to the seven hidden skills and `TransferDetails` only.
+
+### Character on the scout list (DB 1004)
+
+`transfersearch` genuinely does not carry character — the 1.1 `<Details>` block is age/salary/TSI/
+form/experience/leadership/specialty/cards/injury plus the eight skills, full stop. So the
+TRANSFERLISTING snapshot an entry is built from cannot supply it, and `playerdetails` is the only
+source. SCOUT gained `Aggressiveness` and `Honesty` (it has had an `Agreeability` column since
+forever, with nothing ever writing it), and `list_scout` reports all three.
+
+**Two writers, because one of them is too late on its own.** `TransferListingResolver`'s scout pass
+already calls `playerdetails` on every candidate, so character rides along free — but
+`scoutCandidates` only picks entries whose **deadline has already passed**. A freshly added,
+currently-listed entry — exactly the one a buy decision is about — is not a candidate and would wait
+out the whole listing. So `add_to_scout` fetches it itself, one call per player, best effort: the add
+succeeds either way and leaves the three null on failure. The resolver's pass is then the retroactive
+fill for entries added before this existed.
+
+**Null, not 0.** 0 is a real level in all three scales ("tranquil", "nasty fellow", "infamous"), so it
+cannot double as "nobody has looked". The two new columns are nullable; `Agreeability` is not, and
+every pre-existing row holds its 0 default. `McpJson.scoutEntry` therefore gates all three on
+`honesty != null` — honesty is written only by this fetch, so it is what distinguishes an observation
+from the old default.
+
+Not in the UI, deliberately: nothing outside `ScoutTable` reads these getters, so no scout table
+column appears and `updateDBv1004` needs no USERCOLUMNS reset (unlike 1003, which did).
+
+### Character in the valuation corpus too (DB 1004)
+
+TRANSFERLISTING gained `AGREEABILITY`, `AGGRESSIVENESS` and `HONESTY`, nullable for the same reason
+the SCOUT ones are. Only `fromPlayerDetails` can fill them: `fromHit` and `fromBidItem` build rows
+from files that carry no character at all, so those stay null, and today that is most of the corpus.
+`McpJson.listing` reports all three, which puts them on `estimate_market_value`'s evidence rows —
+`topSkillsOnly` trims positional skills, not these.
+
+They say nothing about price, and are not meant to: a comparable's character does not move what he
+sold for. They are there so a row that is also a player you are looking at answers "would I want
+him", and so the corpus can be asked later whether character moves a price at all.
+
+**`add_to_scout` now stores a corpus row from the call it was already making.** It fetches
+`playerdetails` for character; that response is also a fresh, character-bearing market observation of
+a player who is listed right now, which is exactly what `observe()` stores in the resolver. Throwing
+it away would have left the new columns almost always null. Guarded on `transferListed`, because
+`fromPlayerDetails` refuses an unlisted response (§1.3's pruning).
+
+Still not done: nothing *values* a player on character. The data is now recorded so that question can
+be asked of real history later rather than guessed at now.

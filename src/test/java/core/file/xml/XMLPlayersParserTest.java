@@ -211,6 +211,26 @@ class XMLPlayersParserTest {
     }
 
     /**
+     * The three character traits, and the one thing that can go wrong with them: Player's field
+     * names are the legacy German ones, so {@code gentleness} holds Agreeability and {@code honesty}
+     * holds Honesty. They were transposed here once. Both fixtures give the three distinct values
+     * (3 / 2 / 4) precisely so a swap cannot pass.
+     * <p>
+     * Character sits at {@code <Player>} root, outside {@code <PlayerSkills>}, and both live
+     * responses carry it - so unlike the seven hidden skills it survives the unlisted pruning.
+     */
+    @Test
+    void characterIsReadWhetherOrNotHeIsListed() {
+        for (final var xml : new String[]{LISTED, UNLISTED}) {
+            final var p = new XMLPlayersParser().parseMarketPlayerFromString(xml).player();
+
+            assertThat(p.getGentleness()).isEqualTo(3);    // <Agreeability>
+            assertThat(p.getAggressivity()).isEqualTo(2);  // <Aggressiveness>
+            assertThat(p.getHonesty()).isEqualTo(4);       // <Honesty>
+        }
+    }
+
+    /**
      * The own-team guard that makes {@code parsePlayerDetailsFromString} return null for every
      * market player is not on this path - that guard is why the skills-fill pass has never stored
      * anything (design spec §1.4).

@@ -132,6 +132,12 @@ public final class McpJson {
         json.addProperty("stamina", p.getStamina());
         json.addProperty("loyalty", p.getLoyalty());
         json.addProperty("leadership", p.getLeadership());
+        // Character, 0-5 each. HO's field names are the legacy German ones and do not line up with
+        // Hattrick's: getGentleness() is Agreeability and getHonesty() is Honesty - see
+        // HRFStringBuilder:492-497, which pairs each with its own label table. Do not "fix" these.
+        json.addProperty("agreeability", p.getGentleness());
+        json.addProperty("aggressiveness", p.getAggressivity());
+        json.addProperty("honesty", p.getHonesty());
         json.addProperty("motherclub", p.isHomeGrown());
         json.addProperty("specialty", p.getSpecialty());
         json.addProperty("specialtyName", p.getSpecialtyName());
@@ -240,6 +246,11 @@ public final class McpJson {
         json.addProperty("form", l.getForm());
         json.addProperty("experience", l.getExperience());
         json.addProperty("leadership", l.getLeadership());
+        // Character, 0-5 each. Null on a row observed through transfersearch or currentbids, which
+        // carry none - only a playerdetails observation of him fills these in.
+        json.addProperty("agreeability", l.getAgreeability());
+        json.addProperty("aggressiveness", l.getAggressiveness());
+        json.addProperty("honesty", l.getHonesty());
         json.addProperty("specialty", l.getSpecialty());
         json.addProperty("cards", l.getCards());
         json.addProperty("injuryLevel", l.getInjuryLevel());
@@ -285,6 +296,14 @@ public final class McpJson {
         json.addProperty("form", entry.getForm());
         json.addProperty("experience", entry.getErfahrung());
         json.addProperty("leadership", entry.getLeadership());
+        // Character, 0-5 each, from the playerdetails fetch add_to_scout makes. All three null when
+        // nobody has looked: the honesty column is the one that only this fetch ever writes, so it
+        // is what says whether the older, always-present agreeability column holds an observation
+        // or its 0 default - and 0 is "nasty fellow", a claim we would not be entitled to make.
+        final var observed = entry.getHonesty() != null;
+        json.addProperty("agreeability", observed ? entry.getAgreeability() : null);
+        json.addProperty("aggressiveness", entry.getAggressiveness());
+        json.addProperty("honesty", entry.getHonesty());
         json.addProperty("specialty", entry.getSpeciality());
         json.addProperty("stamina", entry.getKondition());
         json.addProperty("keeper", entry.getTorwart());

@@ -50,8 +50,12 @@ public record TransferSearchQuery(
         Integer pageIndex
 ) {
 
-    /** Sent when the caller sets no page size. Hattrick's own documented default is 25. */
-    private static final int DEFAULT_PAGE_SIZE = 50;
+    /**
+     * Sent when the caller sets no page size. Hattrick's own documented default is 25, the maximum
+     * is 100 - and a search that silently stops at the first page hides candidates, so HO always
+     * asks for the maximum.
+     */
+    private static final int DEFAULT_PAGE_SIZE = 100;
 
     /**
      * The skills the transfer market can be searched by, with the CHPP skillID numbering, which

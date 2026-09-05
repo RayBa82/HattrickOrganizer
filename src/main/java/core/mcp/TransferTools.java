@@ -8,6 +8,7 @@ import core.db.TransferListing;
 import core.file.xml.XMLCurrentBidsParser;
 import core.file.xml.XMLTransferSearchParser;
 import core.model.player.Player;
+import core.net.OnlineWorker;
 import core.net.TransferSearchQuery;
 import core.net.ChppWriteService;
 import core.net.TransferSearchService;
@@ -53,8 +54,7 @@ public final class TransferTools {
             TransferSearchQuery.Skill.WINGER,
             TransferSearchQuery.Skill.SCORING);
 
-    private static final int DEFAULT_PAGE_SIZE = 50;
-    private static final int MAX_PAGE_SIZE = 100;     // the CHPP maximum
+    private static final int MAX_PAGE_SIZE = 100;     // the CHPP maximum, and HO's default
 
     /** How long a losing bid keeps showing in the default view after its deadline. */
     private static final java.time.Duration LOSING_BID_GRACE = java.time.Duration.ofHours(24);
@@ -158,13 +158,17 @@ public final class TransferTools {
                 new McpTool("add_to_scout",
                         "Put players on HO's transfer scout list, so a shortlist survives the "
                                 + "session. This is HO's OWN local list - it is not a Hattrick "
-                                + "bookmark, costs no CHPP call, and the user will not see these "
+                                + "bookmark and the user will not see these "
                                 + "players on hattrick.org, only on HO's Transfers -> "
                                 + "TransferScout tab (get_open_bids reads Hattrick's separate "
                                 + "tracking list). Each player must have been seen by an earlier "
                                 + "search_transfers in this database - the entry is built from that "
                                 + "stored market snapshot. Adding a player already on the list "
-                                + "replaces his entry.",
+                                + "replaces his entry. Costs one CHPP call per player, spent on "
+                                + "the character traits that transfersearch does not carry "
+                                + "(agreeability, aggressiveness, honesty - list_scout reads them "
+                                + "back); the add still succeeds if that call fails, leaving the "
+                                + "three null.",
                         McpTool.schema(McpTool.properties(
                                         "players", McpTool.prop("array",
                                                 "the players to add, either bare player ids or "
@@ -192,6 +196,13 @@ public final class TransferTools {
                                 + "watched transfer completed and say what the player actually went "
                                 + "for, so a target you lost still tells you the price it took. "
                                 + "Both are null while he is still listed. "
+                                + "agreeability, aggressiveness and honesty are the character "
+                                + "traits, 0-5 low to high (agreeability 0 nasty fellow to 5 "
+                                + "beloved team member, aggressiveness 0 tranquil to 5 unstable, "
+                                + "honesty 0 infamous to 5 saintly). All three are null on an "
+                                + "entry added before HO fetched them, or whose fetch failed - "
+                                + "they are not shown in the UI, so this is the only way to read "
+                                + "them. "
                                 + "Distinct from get_open_bids, which reads Hattrick's own tracking "
                                 + "list.",
                         McpTool.schema(McpTool.properties()),
@@ -208,6 +219,11 @@ public final class TransferTools {
                                 + "is NOT part of the matching, so the comparables spread across "
                                 + "it freely: use it to explain a row that priced away from the "
                                 + "rest, and note that it is null where Hattrick sent no details. "
+                                + "agreeability, aggressiveness and honesty (0-5) are the character "
+                                + "traits, and are null on most rows: transfersearch does not carry "
+                                + "them, so only a row HO observed through playerdetails has them. "
+                                + "They say nothing about the price - they are there for judging "
+                                + "whether a comparable is a player you would actually want. "
                                 + "YOU do the "
                                 + "valuation from those rows: weigh wage against skills, discount "
                                 + "stale observations, notice injuries and specialties. The "
@@ -463,6 +479,38 @@ public final class TransferTools {
     // reaching for the panel when it is not would create and select that tab. ScoutList owns both
     // of those rules; see its javadoc. Everything here runs on the EDT because it does.
 
+    /**
+     * Look the player up on the market as he is right now, for the three character traits.
+     * {@code playerdetails} is the only file that carries them - {@code transfersearch} does not, so
+     * the TRANSFERLISTING snapshot the entry was built from cannot supply them.
+     * <p>
+     * The same call is also a fresh, character-bearing corpus observation, so it stores one rather
+     * than throwing the rest of the response away - the same sharing {@code TransferListingResolver}
+     * does. Only when he is actually listed: Hattrick prunes an unlisted player's skills down to
+     * stamina, and {@link TransferListing#fromPlayerDetails} refuses such a response for that
+     * reason.
+     * <p>
+     * One CHPP call per player added, and best effort throughout: character is a bonus on top of
+     * the add, so a failed or refused call leaves the three fields null and the entry is stored
+     * regardless. The resolve pass fills them in later anyway, but only once the watched deadline
+     * has passed - too late to inform the buy this entry was created for.
+     */
+    private static void observeForScout(ScoutEintrag entry) {
+        try {
+            final var m = OnlineWorker.downloadMarketPlayer(String.valueOf(entry.getPlayerID()));
+            if (m == null || m.player().getPlayerId() == 0) {
+                return;
+            }
+            ScoutList.applyCharacter(entry, m.player());
+            if (m.transferListed()) {
+                DBManager.instance().storeTransferListing(
+                        TransferListing.fromPlayerDetails(m, HODateTime.now()));
+            }
+        } catch (Exception e) {
+            HOLogger.instance().error(TransferTools.class, e);
+        }
+    }
+
     private static JsonObject addToScout(JsonObject args) throws McpToolException {
         final var requested = McpJson.reqArray(args, "players");
         if (requested.isEmpty()) {
@@ -489,6 +537,7 @@ public final class TransferTools {
                 continue;
             }
             final var entry = TransferSearchConverter.toScoutEintrag(listing);
+            observeForScout(entry);
             if (note != null && !note.isBlank()) {
                 entry.setInfo(truncateInfo(entry.getInfo() + note));
             }
@@ -861,13 +910,18 @@ public final class TransferTools {
                 "skillType4", McpTool.prop("string", "fourth skill name"),
                 "minSkillValue4", McpTool.prop("integer", "minimum level of the fourth skill"),
                 "maxSkillValue4", McpTool.prop("integer", "maximum level of the fourth skill"),
-                "specialty", McpTool.prop("integer", "specialty id, 0 none"),
+                                        "specialty", McpTool.prop("integer",
+                                                "specialty id: 0 none, 1 technical, 2 quick, "
+                                                        + "3 powerful, 4 unpredictable, 5 head, "
+                                                        + "6 resilient (regainer), 8 support. "
+                                                        + "7 is not a specialty. Leave unset to "
+                                                        + "match any, including the two rare ones"),
                 "nativeCountryId", McpTool.prop("integer", "native country id"),
                 "tsiMin", McpTool.prop("integer", "minimum TSI"),
                 "tsiMax", McpTool.prop("integer", "maximum TSI"),
                 "priceMin", McpTool.prop("integer", "minimum asking price, in the user's currency"),
                 "priceMax", McpTool.prop("integer", "maximum asking price, in the user's currency"),
-                "pageSize", McpTool.prop("integer", "results per page, default 50, maximum 100"));
+                "pageSize", McpTool.prop("integer", "results per page, default and maximum 100"));
         return McpTool.schema(properties,
                 "ageMin", "ageMax", "skillType1", "minSkillValue1", "maxSkillValue1");
     }
@@ -898,7 +952,7 @@ public final class TransferTools {
                 .priceMax(McpJson.swedishKrona(McpJson.optInteger(args, "priceMax")))
                 // Paging is not exposed: ItemCount comes back as -1 once more than 100 players
                 // match, so a second page buys little and would eat the per session cap.
-                .pageSize(Math.min(McpJson.optInt(args, "pageSize", DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE));
+                .pageSize(Math.min(McpJson.optInt(args, "pageSize", MAX_PAGE_SIZE), MAX_PAGE_SIZE));
         return builder.build();
     }
 
@@ -1055,7 +1109,7 @@ public final class TransferTools {
                 .minSkillValue2(minLevel(second, player, tolerance))
                 .maxSkillValue2(maxLevel(second, player, tolerance))
                 .specialty(player.getSpecialty() > 0 ? player.getSpecialty() : null)
-                .pageSize(DEFAULT_PAGE_SIZE)
+                .pageSize(MAX_PAGE_SIZE)
                 .build();
     }
 

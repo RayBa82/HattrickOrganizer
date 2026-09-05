@@ -118,6 +118,15 @@ public class ScoutEintrag extends AbstractTable.Storable {
     protected int m_iLoyalty = 0;
     protected boolean m_bHomegrown = false;
     protected int m_iAgreeability = 0;
+    /**
+     * Aggressiveness and honesty, 0-5, from the {@code playerdetails} fetch that
+     * {@code TransferTools.addToScout} and {@code TransferListingResolver} both make. Null means
+     * nobody has looked yet - 0 would read as "tranquil" / "infamous", which is a claim about the
+     * player rather than about our knowledge of him. Agreeability shares their source but predates
+     * them in a non-null column, so its own 0 still carries that ambiguity; see McpJson.scoutEntry.
+     */
+    protected Integer m_iAggressiveness = null;
+    protected Integer m_iHonesty = null;
     protected AmountOfMoney m_ibaseWage = new AmountOfMoney(2500);
     protected int m_iNationality = 0;
     protected int m_iLeadership = 0;
@@ -596,6 +605,22 @@ public class ScoutEintrag extends AbstractTable.Storable {
      */
     public final Integer getAgreeability() {
         return m_iAgreeability;
+    }
+
+    public final void setAggressiveness(Integer aggressiveness) {
+        this.m_iAggressiveness = aggressiveness;
+    }
+
+    public final Integer getAggressiveness() {
+        return m_iAggressiveness;
+    }
+
+    public final void setHonesty(Integer honesty) {
+        this.m_iHonesty = honesty;
+    }
+
+    public final Integer getHonesty() {
+        return m_iHonesty;
     }
 
     /**

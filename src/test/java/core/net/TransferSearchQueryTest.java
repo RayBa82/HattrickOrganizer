@@ -22,7 +22,7 @@ class TransferSearchQueryTest {
 
         assertThat(query.toQueryString())
                 .isEqualTo("&ageMin=20&ageMax=22&skillType1=8&minSkillValue1=7&maxSkillValue1=9"
-                        + "&pageSize=50&pageIndex=0");
+                + "&pageSize=100&pageIndex=0");
     }
 
     @Test

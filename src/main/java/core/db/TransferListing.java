@@ -44,6 +44,14 @@ public class TransferListing extends AbstractTable.Storable {
     private Integer winger;
     private Integer defender;
     private Integer setPieces;
+    /**
+     * Character, 0-5 each. Only {@link #fromPlayerDetails} can fill these in: {@code transfersearch}
+     * and {@code currentbids} carry no character at all, so rows from those two paths leave them
+     * null. Null means "this observation did not see it", never a low score - 0 is a real level.
+     */
+    private Integer agreeability;
+    private Integer aggressiveness;
+    private Integer honesty;
     /** What the player actually sold for, filled in later by the resolve pass. Null until then. */
     private Long salePrice;
     private HODateTime resolvedAt;
@@ -147,6 +155,11 @@ public class TransferListing extends AbstractTable.Storable {
         listing.winger = p.getValue4Skill(PlayerSkill.WINGER);
         listing.defender = p.getValue4Skill(PlayerSkill.DEFENDING);
         listing.setPieces = p.getValue4Skill(PlayerSkill.SETPIECES);
+        // Legacy German field names, crossed against Hattrick's: getGentleness() is Agreeability
+        // and getHonesty() is Honesty. Do not "fix" these.
+        listing.agreeability = p.getGentleness();
+        listing.aggressiveness = p.getAggressivity();
+        listing.honesty = p.getHonesty();
         listing.salary = baseWage(p, m.isAbroad());
         return listing;
     }

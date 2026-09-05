@@ -108,6 +108,10 @@ class TransferListingTableTest {
         p.setWage(new core.util.AmountOfMoney(salarySek));
         p.setValue4Skill(core.constants.player.PlayerSkill.PLAYMAKING, 13);
         p.setValue4Skill(core.constants.player.PlayerSkill.SCORING, 9);
+        // Crossed getters: gentleness is Agreeability, honesty is Honesty. Three distinct values.
+        p.setGentleness(3);
+        p.setAggressivity(2);
+        p.setHonesty(4);
         return new core.file.xml.XMLPlayersParser.MarketPlayer(
                 p, true, 555444, isAbroad, 2_850_000L,
                 HODateTime.fromHT("2026-09-05 20:08:31"), 100_000L);
@@ -130,6 +134,24 @@ class TransferListingTableTest {
         assertThat(loaded.getAskingPrice()).isEqualTo(2_850_000L);
         assertThat(loaded.getHighestBid()).isEqualTo(100_000L);
         assertThat(loaded.getDeadline()).isEqualTo(HODateTime.fromHT("2026-09-05 20:08:31"));
+        assertThat(loaded.getAgreeability()).isEqualTo(3);
+        assertThat(loaded.getAggressiveness()).isEqualTo(2);
+        assertThat(loaded.getHonesty()).isEqualTo(4);
+    }
+
+    /**
+     * A transfersearch hit carries no character at all, so the three columns stay null rather than
+     * defaulting to 0 - which is a real level ("nasty fellow", "tranquil", "infamous").
+     */
+    @Test
+    void aSearchHitLeavesTheCharacterColumnsNull() {
+        table.storeListing(TransferListing.fromHit(hit(111222444, details()), DEADLINE));
+
+        final var loaded = table.loadUnresolved(50).stream()
+                .filter(l -> l.getPlayerId() == 111222444).findFirst().orElseThrow();
+        assertThat(loaded.getAgreeability()).isNull();
+        assertThat(loaded.getAggressiveness()).isNull();
+        assertThat(loaded.getHonesty()).isNull();
     }
 
     /**

@@ -108,6 +108,11 @@ public final class TransferListingResolver {
             }
             final var observation = observe(candidate.playerId(), now);
             calls++;
+            // Free: the call has already been made, and character comes back whether or not he is
+            // listed. Fills in entries added before add_to_scout started fetching it.
+            if (observation != null) {
+                recordCharacterOnScoutList(candidate.playerId(), observation);
+            }
             final var action = scoutAction(observation != null && observation.transferListed(),
                     candidate.deadline(), now);
             // The sale question first, and before the refresh: step 3 moves the deadline forward,
@@ -375,6 +380,16 @@ public final class TransferListingResolver {
                                                    XMLPlayersParser.MarketPlayer m) {
         try {
             ScoutList.recordRelisting(playerId, m.askingPrice(), m.highestBid(), m.deadline());
+        } catch (Exception e) {
+            HOLogger.instance().error(TransferListingResolver.class, e);
+        }
+    }
+
+    /** Best effort, for the same reason the two above are: character is a bonus on the call. */
+    private static void recordCharacterOnScoutList(int playerId,
+                                                   XMLPlayersParser.MarketPlayer m) {
+        try {
+            ScoutList.recordCharacter(playerId, m.player());
         } catch (Exception e) {
             HOLogger.instance().error(TransferListingResolver.class, e);
         }

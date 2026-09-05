@@ -12,7 +12,7 @@ final class ScoutTable extends AbstractTable {
 
 	/** tablename **/
 	public static final String TABLENAME = "SCOUT";
-	
+
 	ScoutTable(ConnectionManager adapter){
 		super(TABLENAME,adapter);
 	}
@@ -41,6 +41,9 @@ final class ScoutTable extends AbstractTable {
 				ColumnDescriptor.Builder.newInstance().setColumnName("Wecker").setGetter((o) -> ((ScoutEintrag) o).isWecker()).setSetter((o, v) -> ((ScoutEintrag) o).setWecker((boolean) v)).setType(Types.BOOLEAN).isNullable(false).build(),
 				ColumnDescriptor.Builder.newInstance().setColumnName("AgeDays").setGetter((o) -> ((ScoutEintrag) o).getAgeDays()).setSetter((o, v) -> ((ScoutEintrag) o).setAgeDays((int) v)).setType(Types.INTEGER).isNullable(false).build(),
 				ColumnDescriptor.Builder.newInstance().setColumnName("Agreeability").setGetter((o) -> ((ScoutEintrag) o).getAgreeability()).setSetter((o, v) -> ((ScoutEintrag) o).setAgreeability((int) v)).setType(Types.INTEGER).isNullable(false).build(),
+				// Null until a playerdetails fetch has looked; see ScoutEintrag's field comment.
+				ColumnDescriptor.Builder.newInstance().setColumnName("Aggressiveness").setGetter((o) -> ((ScoutEintrag) o).getAggressiveness()).setSetter((o, v) -> ((ScoutEintrag) o).setAggressiveness((Integer) v)).setType(Types.INTEGER).isNullable(true).build(),
+				ColumnDescriptor.Builder.newInstance().setColumnName("Honesty").setGetter((o) -> ((ScoutEintrag) o).getHonesty()).setSetter((o, v) -> ((ScoutEintrag) o).setHonesty((Integer) v)).setType(Types.INTEGER).isNullable(true).build(),
 				ColumnDescriptor.Builder.newInstance().setColumnName("baseWage").setGetter((o) -> ((ScoutEintrag) o).getbaseWage().getSwedishKrona()).setSetter((o, v) -> ((ScoutEintrag) o).setbaseWage((AmountOfMoney) v)).setType(Types.DECIMAL).isNullable(false).build(),
 				ColumnDescriptor.Builder.newInstance().setColumnName("Nationality").setGetter((o) -> ((ScoutEintrag) o).getNationality()).setSetter((o, v) -> ((ScoutEintrag) o).setNationality((int) v)).setType(Types.INTEGER).isNullable(false).build(),
 				ColumnDescriptor.Builder.newInstance().setColumnName("Leadership").setGetter((o) -> ((ScoutEintrag) o).getLeadership()).setSetter((o, v) -> ((ScoutEintrag) o).setLeadership((int) v)).setType(Types.INTEGER).isNullable(false).build(),
@@ -81,5 +84,5 @@ final class ScoutTable extends AbstractTable {
 	List<ScoutEintrag> getScoutList() {
 		return load(ScoutEintrag.class);
 	}
-	
+
 }

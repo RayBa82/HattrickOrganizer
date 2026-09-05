@@ -469,7 +469,7 @@ class TransferToolsTest {
         assertThat(query.skillType1()).isEqualTo(TransferSearchQuery.Skill.PLAYMAKING);
         // The model asks in the user's currency, Hattrick is asked in swedish krona.
         assertThat(query.priceMax()).isEqualTo(20_000_000);
-        assertThat(query.pageSize()).isEqualTo(50);            // default
+        assertThat(query.pageSize()).isEqualTo(100);           // default
     }
 
     @Test
