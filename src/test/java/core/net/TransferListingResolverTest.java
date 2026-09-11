@@ -102,8 +102,8 @@ class TransferListingResolverTest {
     }
 
     /**
-     * Oldest first, because the watermark is a resume point: a run cut short by the cap parks it on
-     * the first candidate it could not afford, and everything before that is done.
+     * Oldest first, because the watermark is a resume point: a run cut short by the time budget parks it
+     * on the first candidate it did not reach, and everything before that is done.
      */
     @Test
     void theSalePassIsOrderedSoATruncatedRunCanResume() {
@@ -128,6 +128,22 @@ class TransferListingResolverTest {
 
         assertThat(TransferListingResolver.salesToAskAbout(
                 List.of(entry(2, "2026-09-05 10:15:00")), stoppedOn, NOW))
+                .extracting(TransferListingResolver.Candidate::playerId)
+                .containsExactly(2);
+    }
+
+    /**
+     * A transfer shows up in transfersPlayer minutes after its deadline. Asked sooner, the lookup
+     * finds no sale, the watermark moves past him and his price is lost - so he waits.
+     */
+    @Test
+    void aTransferThatHasNotSettledIsNotAskedAboutYet() {
+        final var entries = List.of(
+                entry(1, "2026-09-05 11:59:49"),      // 11 seconds ago
+                entry(2, "2026-09-05 11:30:00"));
+
+        assertThat(TransferListingResolver.salesToAskAbout(
+                entries, HODateTime.fromHT("2026-09-05 10:00:00"), NOW))
                 .extracting(TransferListingResolver.Candidate::playerId)
                 .containsExactly(2);
     }

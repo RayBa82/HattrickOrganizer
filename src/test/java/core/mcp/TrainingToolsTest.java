@@ -340,4 +340,35 @@ class TrainingToolsTest {
         // the money drift does not depend on what is being trained
         assertThat(derived.getAsJsonObject("tsi").get("change").getAsInt()).isEqualTo(4800);
     }
+
+    /**
+     * The one thing in currentWeek that is arithmetic rather than a database read, and the one
+     * that decides whether a lineup builder excludes a player: two fixtures in the same training
+     * week must not bank more than a week's worth of trained minutes.
+     */
+    @Test
+    void weekMinutes_capTrainedMinutesAtNinetyAcrossTheWeeksFixtures() {
+        final var minutes = new TrainingTools.WeekMinutes("Di Tella");
+        minutes.add(90, 0, 90, 768523823);
+        minutes.add(90, 30, 90, 771424338);
+
+        final var json = minutes.toJson(510470571);
+        assertThat(json.get("fullTrainingMinutes").getAsInt()).isEqualTo(90);
+        assertThat(json.get("partlyTrainingMinutes").getAsInt()).isEqualTo(30);
+        assertThat(json.get("maxedForWeek").getAsBoolean()).isTrue();
+        // played minutes are a match count, not a training budget, so they are not capped
+        assertThat(json.get("playedMinutes").getAsInt()).isEqualTo(180);
+        assertThat(json.getAsJsonArray("matchIds")).hasSize(2);
+    }
+
+    /** Partial minutes have to survive to the client: 60 is still worth starting, 90 is not. */
+    @Test
+    void weekMinutes_reportPartialTrainedMinutesRatherThanCollapsingToTheFlag() {
+        final var minutes = new TrainingTools.WeekMinutes("Bench Warmer");
+        minutes.add(60, 0, 60, 768523823);
+
+        final var json = minutes.toJson(1);
+        assertThat(json.get("fullTrainingMinutes").getAsInt()).isEqualTo(60);
+        assertThat(json.get("maxedForWeek").getAsBoolean()).isFalse();
+    }
 }

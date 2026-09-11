@@ -190,15 +190,14 @@ public class OnlineWorker {
 	 * The price is <b>not</b> part of the HRF. A team download brings this team's own transfers,
 	 * but a player HO merely watched on the market belongs to somebody else, so what he went for
 	 * takes a separate {@code transfersPlayer} call each. This piggybacks on the download because
-	 * that is a moment the user chose to spend CHPP traffic, not because the data arrives with it -
-	 * hence the cap ({@code mcpResolveCap}).
+	 * that is a moment the user chose to spend CHPP traffic, not because the data arrives with it.
+	 * Bounded by {@code TransferListingResolver}'s time budget only - these files have no CHPP rate limit.
 	 * <p>
 	 * A failure here must never fail the download, so it is logged and swallowed.
 	 */
 	public static void resolveTransferListings() {
 		try {
-			final var cap = UserParameter.instance().mcpResolveCap;
-			final var resolved = TransferListingResolver.resolve(cap);
+			final var resolved = TransferListingResolver.resolve();
 			if (resolved > 0) {
 				HOLogger.instance().info(OnlineWorker.class,
 						"Resolved sale price of " + resolved + " transfer listing(s)");

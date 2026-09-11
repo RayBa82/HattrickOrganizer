@@ -756,7 +756,7 @@ public final class TeamTools {
 
                 // No longer optional. The button runs it on every download, and it is what fills
                 // in the sale price of a watched market player - the scout list's half of a
-                // refresh. Bounded by mcpResolveCap and its own 60s budget, and in the steady
+                // refresh. Bounded by its own 60s budget, and in the steady
                 // state it costs nothing, because only an expired-and-unresolved entry is a
                 // candidate.
                 OnlineWorker.resolveTransferListings();

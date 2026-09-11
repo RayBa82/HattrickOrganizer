@@ -129,16 +129,6 @@ public final class UserParameter extends Configuration {
     public int mcpDownloadsPerSession = 5;
 
     /**
-     * How many expired listings the sale-price resolve pass may look up per run. 0 switches it off.
-     * <p>
-     * Not a CHPP quota - {@code transfersPlayer} is an ordinary read file HO already batches
-     * without limit elsewhere. This bounds how long a download spends on it, alongside the pass's
-     * own wall-clock budget, so a large backlog is worked off over a few downloads rather than
-     * freezing the UI on one.
-     */
-    public int mcpResolveCap = 200;
-
-    /**
      * How far the resolver's scout sale pass has got, as a CHPP-format timestamp.
      * <p>
      * A scout entry has no per-row "looked, no sale" marker the way a TRANSFERLISTING row has
@@ -483,7 +473,6 @@ public final class UserParameter extends Configuration {
         map.put("mcpSearchesPerSession", String.valueOf(mcpSearchesPerSession));
         map.put("mcpChppWritesPerSession", String.valueOf(mcpChppWritesPerSession));
         map.put("mcpDownloadsPerSession", String.valueOf(mcpDownloadsPerSession));
-        map.put("mcpResolveCap", String.valueOf(mcpResolveCap));
         map.put("mcpScoutResolvedThrough",
                 mcpScoutResolvedThrough == null ? "" : mcpScoutResolvedThrough);
 
@@ -738,7 +727,6 @@ public final class UserParameter extends Configuration {
         mcpSearchesPerSession = orDefault(getIntValue(values, "mcpSearchesPerSession"), 20);
         mcpChppWritesPerSession = orDefault(getIntValue(values, "mcpChppWritesPerSession"), 20);
         mcpDownloadsPerSession = orDefault(getIntValue(values, "mcpDownloadsPerSession"), 5);
-        mcpResolveCap = orDefault(getIntValue(values, "mcpResolveCap"), 200);
         mcpScoutResolvedThrough = getStringValue(values, "mcpScoutResolvedThrough");
         ReleaseChannel = getStringValue(values, "ReleaseChannel");
         fixtures = getBooleanValue(values, "fixtures");

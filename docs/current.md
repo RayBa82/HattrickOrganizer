@@ -2097,3 +2097,132 @@ a surface that has just been rebuilt. Neither is worth it.
 The `sizeArena` flag is likewise not optional-by-accident: `supporters` and `capacity` merely imply
 it, so the plain "should we expand?" question is `get_finances({sizeArena: true})`. Passing a
 `supporters` figure to switch the sizer on silently asks a what-if instead.
+
+## get_training: trained minutes already banked in the week in progress
+
+Shipped after a live miss — a trainee who had already taken 90 minutes in a trained slot in the
+league match was put into a trained slot again in the same week's friendly, gaining nothing and
+displacing a player who could still have banked minutes.
+
+**The gap was not "the MCP omits minutes played". It was that `get_training` asserted the opposite.**
+`FutureTrainingManager:110-119` credits a flat `addFullTrainingMinutes(90)` to every player whose
+ideal position falls in a trained sector — the priority comes from
+`Player.getFuturePlayerTrainingPriority`, which falls back to the ideal position when the user has
+set no explicit plan — whether or not he played. So `skillChanges` claims full training for exactly
+the players a lineup builder must exclude. Silent and confident, rather than obviously missing.
+(It is *not* "every player regardless of position": someone whose ideal position is untrained gets a
+null priority and no predicted gain at all. The overstatement is worth avoiding, because it is the
+version that makes the tab look more broken than it is.)
+
+**This is not confined to the MCP — HO's own Training tab renders the same wrong first row.**
+`TrainingModel.adjustFutureTrainingsVector` builds the plan starting at
+`TrainingManager.getNextWeekTraining().getTrainingDate() + 7 days`. `getNextWeekTraining()` resolves
+to `XTRADATA.TRAININGDATE - 7d`, so that first future entry lands exactly on the week in progress —
+the same week `currentWeek` reports. The tab and `skillChanges` therefore make the same
+participation assumption about the same week, which means a human cross-checking `currentWeek`
+against the Training tab gets the tab's confirmation of the wrong answer. The error is transient —
+once the update lands, the week moves into `TrainingsTable` and past-training views use real
+minutes — but it is wrong precisely during the window in which lineups are planned.
+
+HO already computes the real number; nothing in it ever ran that computation over the *current*
+week:
+
+- `MatchLineupTeam.initMinutesOfPlayersInSectors()` (`:582`) builds a per-position appearance
+  timeline from the starting eleven plus `getReplacedPositions()`/`getRedCardedPositions()`, walks
+  `getSubstitutions()` (skipping `MAN_MARKING`) and the red-card highlights, and closes each
+  appearance at the right minute. `getTrainingMinutesPlayedInSectors(playerId, sectors, walkover)`
+  reads minutes *per sector* off it, so a substitution into a trained slot at 60' banks 30.
+  Reconstructing this from `ourPlayers[].startMinute` is not equivalent.
+- `Player.calculateWeeklyTraining()` aggregates a week of those into `TrainingWeekPlayer`, whose
+  every `add*` caps at 90.
+
+### The week-boundary trap, which is the part that actually bites
+
+`TrainingsTable.loadTrainingPerWeek` reads `XTRADATA.TRAININGDATE` — the **next** update — and stores
+`trainingDate = next - 7 days`. `TrainingPerWeek.loadMatches()` then takes
+`[trainingDate - 7d, trainingDate + 23h]`. So **a `TrainingPerWeek` labelled D covers the week that
+ENDED at D**, and `HOModel.getTraining()` compounds it by passing `getTrainingDateAfterWeeks(-1)`.
+
+`get_training`'s `current.trainingDate` is therefore the week already applied, not the one being
+played. The week in progress is `xtra.getTrainingDateAfterWeeks(0)` — build a `TrainingPerWeek` on
+that date and its match window is exactly right, with unplayed fixtures contributing 0. That single
+substitution is the whole feature.
+
+`current` now also carries `weekStart`, `weekEnd` and `nextTrainingDate` so the ambiguity cannot
+recur.
+
+### The fixtures gap closed itself
+
+`get_upcoming_matches` is the league Spielplan only, by design (`TeamTools.java:84`), which is why an
+agreed friendly inside the training week was invisible. No new tool was needed:
+`MatchesKurzInfoTable.getMatchesKurzInfo(teamId, from, to, types)` filters `STATUS in (UPCOMING,
+FINISHED)`, and `MatchType.isOfficial()` covers league, cup, masters *and every friendly type*. So
+`TrainingPerWeek.getMatches()` — already loaded for the minutes — **is** the
+fixtures-in-this-training-week list, and is emitted as `currentWeek.fixtures`.
+
+### The false negative worth guarding
+
+`calculateWeeklyTraining` needs `match.getMatchdetails().getOwnTeamLineup()`; a played match whose
+lineup has not been downloaded yields null, HO logs an error, and the minutes silently read 0 — a
+maxed player looks available. That is the original bug re-entering through a stale cache, invisibly.
+Hence per-fixture `lineupAvailable`, a top-level `lineupDataComplete`, and a `note` that says
+UNDERSTATED and FALSE NEGATIVE in as many words when any played fixture is missing its lineup.
+
+Two smaller traps found while writing it, both preserved in comments:
+
+- A **walkover win** returns 90 trained minutes but *zero* played minutes
+  (`getTrainingMinutesPlayedInSectors` returns 0 early when `acceptedSectors == null`). Deciding
+  "did not appear" from played minutes alone drops walkover appearances; all three totals have to be
+  read first.
+- **MASTERS counts for experience only**, never for training — mirrored from `Player.java:1765`.
+
+`currentWeek.players` lists only players with minutes; absent means nothing banked. `startRoleIds`
+are starting positions only and are labelled as such in the note — the *minutes* are the
+substitution-accurate figure, and `fullTrainingMinutes` is emitted beside `maxedForWeek` because 60
+is still worth starting and 90 is not.
+
+`TrainingTools.WeekMinutes` is package-private so the 90-cap accumulation is unit-tested without a
+`MatchLineupTeam` fixture (`TrainingToolsTest`, 2 tests). Note the hard 400-char ceiling on tool
+descriptions enforced by `McpServerToolsTest.noDescriptionGrowsBackIntoADocumentationPage` — the
+first draft of the new `get_training` description was 680 and failed the suite.
+
+### Confirmed against real data, 2026-09-06
+
+The downstream agent verified the payload after the rebuild. Anchoring correct
+(`nextTrainingDate` == `currentWeek.weekEnd` == 2026-09-11), the agreed friendly present in
+`fixtures` alongside the league match — the gap `get_upcoming_matches` could never close — and the
+seven `maxedForWeek` players exactly the seven who held trained slots on 09-05.
+
+Two findings worth keeping:
+
+- **The substitution handling earned its keep on live data.** `currentWeek` reports Behring
+  (485877338) 53 minutes with no start role, O'shee (465315671) 40 minutes starting 103. Reading
+  `get_match`'s `ourPlayers[]` directly gives the two *transposed* — Behring at 103, O'shee at 19.
+  O'shee started, was injured around the 40th, Behring played the remaining 53. The appearance
+  timeline gets it right; the naive start-position read does not. This is the theoretical failure
+  mode from the section above, observed.
+- **A named counterexample for the `skillChanges` contradiction.** Cameron Shell (491821388) is
+  predicted PASSING +1 on 2026-09-11. He is 35, banked nothing this week, and is starting 103 — the
+  back line, not a trained slot. He will gain nothing. `currentWeek` is *silent* on him rather than
+  contradicting him, because it lists only players with minutes; absence is the signal. Use Shell
+  when the contradiction needs to be made concrete.
+
+**Changing a tool description needs a client restart downstream, not just a reconnect.** After the
+rebuild the consumer session picked up the new `currentWeek` payload on a `/mcp` reconnect but kept
+serving the *old* `get_training` description, and a second reconnect changed nothing — the schema
+cache is pinned per session independently of the connection. Confirmed the jar was correct by
+extracting `core/mcp/TrainingTools.class` and grepping it: new description present, old absent. Note
+that "new fields, old description" is the signature of a stale client rather than a bad build, and
+the description and the `currentWeek` builder are in the same class, so no compile could emit one
+without the other.
+
+Two paths remain **unexercised against real data**: the loud
+`lineupDataComplete: false` note (no played fixture has yet been missing its lineup) and cup ties in
+`fixtures` (the team is out of the cup).
+
+`players[].skillChanges` and `currentWeek` **contradict each other by construction** and nothing in
+the payload says which to trust, so the description spends its scarce characters on the precedence
+rule: where they disagree, `currentWeek` wins. An agent that reads only `skillChanges` still gets
+the old wrong answer. Fixing `FutureTrainingManager` to seed the in-progress week from real minutes
+would remove the contradiction at the source, but that changes HO's own Training tab predictions and
+was out of scope here.

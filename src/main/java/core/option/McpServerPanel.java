@@ -21,7 +21,6 @@ public final class McpServerPanel extends ImagePanel {
     private final JCheckBox enabled = new JCheckBox(TranslationFacility.tr("ls.options.mcp.enabled"));
     private final JTextField port = new JTextField(6);
     private final JTextField searchCap = new JTextField(6);
-    private final JTextField resolveCap = new JTextField(6);
     private final JTextField writeCap = new JTextField(6);
     private final JTextField downloadCap = new JTextField(6);
     private final JLabel status = new JLabel();
@@ -67,9 +66,6 @@ public final class McpServerPanel extends ImagePanel {
         resolve.setToolTipText(TranslationFacility.tr("ls.options.mcp.resolve.tt"));
         resolve.addActionListener(e -> resolveExpiredListings());
         add(resolve, c);
-        c.gridx = 1;
-        addField(c, c.gridy, "ls.options.mcp.resolve.cap", resolveCap,
-                String.valueOf(UserParameter.instance().mcpResolveCap));
 
         c.gridx = 0;
         c.gridy++;
@@ -116,13 +112,11 @@ public final class McpServerPanel extends ImagePanel {
         final var capValue = parse(searchCap, 20);
         final var writeCapValue = parse(writeCap, 20);
         final var downloadCapValue = parse(downloadCap, 10);
-        final var resolveCapValue = parse(resolveCap, 200);
         for (final var p : new UserParameter[]{UserParameter.instance(), UserParameter.temp()}) {
             p.mcpServerPort = portValue;
             p.mcpSearchesPerSession = capValue;
             p.mcpChppWritesPerSession = writeCapValue;
             p.mcpDownloadsPerSession = downloadCapValue;
-            p.mcpResolveCap = resolveCapValue;
         }
     }
 
@@ -173,7 +167,7 @@ public final class McpServerPanel extends ImagePanel {
 
     /** Resolve on demand; the same pass also runs by itself after every team download. */
     private void resolveExpiredListings() {
-        final var resolved = TransferListingResolver.resolve(parse(resolveCap, 200));
+        final var resolved = TransferListingResolver.resolve();
         status.setText(TranslationFacility.tr("ls.options.mcp.resolve.done")
                 .replace("%count%", String.valueOf(resolved)));
     }

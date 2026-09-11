@@ -5,6 +5,10 @@ import com.google.gson.JsonObject;
 import core.constants.player.PlayerSkill;
 import core.db.DBManager;
 import core.model.HOModel;
+import core.model.enums.MatchType;
+import core.model.match.MatchKurzInfo;
+import core.model.match.MatchLineupTeam;
+import core.model.match.Matchdetails;
 import core.model.player.Player;
 import core.net.ChppWriteService;
 import core.training.FutureTrainingManager;
@@ -15,7 +19,9 @@ import core.util.HODateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -58,12 +64,16 @@ public final class TrainingTools {
     public static List<McpTool> tools() {
         return List.of(
                 new McpTool("get_training",
-                        "The team's training: what is trained at which intensity and stamina share, "
-                                + "which coach and assistants drive it, which field positions get "
-                                + "full or partial training, and per player the predicted skill "
-                                + "changes with a training speed to rank by. Read status first: "
-                                + "'ok', or 'no_future_training_plan' - which is not the same as "
-                                + "nobody being trained; the note says what the user has to do.",
+                        // 400 chars is the hard ceiling McpServerToolsTest enforces. The
+                        // precedence line earns its space: skillChanges and currentWeek contradict
+                        // each other by construction, and nothing in the payload says which wins.
+                        "Training: what is trained, at which intensity and stamina share, "
+                                + "which positions get full or partial training, and predicted "
+                                + "skill changes per player. skillChanges assume 90 minutes "
+                                + "played; currentWeek has the minutes each player ALREADY banked this "
+                                + "training week, plus every fixture in it. Where they disagree "
+                                + "currentWeek wins - read it before any lineup. "
+                                + "status: 'ok'|'no_future_training_plan'.",
                         McpTool.schema(McpTool.properties(
                                 "weeks", McpTool.prop("integer",
                                         "how many weeks to predict, default " + DEFAULT_WEEKS
@@ -146,7 +156,9 @@ public final class TrainingTools {
     private static JsonObject training(JsonObject args) throws McpToolException {
         final var model = McpJson.model();
         final var json = new JsonObject();
+        final var wanted = wantedPlayerIds(args);
         json.add("current", current(model));
+        json.add("currentWeek", currentWeek(model, wanted));
 
         // The future training plan is what the Training tab edits; it is empty until the user has
         // opened that tab once, and then predictions are simply unavailable.
@@ -161,7 +173,6 @@ public final class TrainingTools {
         }
         json.addProperty("status", "ok");
 
-        final var wanted = wantedPlayerIds(args);
         final var players = new JsonArray();
         for (final var player : model.getCurrentPlayers()) {
             if (player.isCoach()) {
@@ -493,8 +504,17 @@ public final class TrainingTools {
         json.addProperty("staminaShare", training.getStaminaShare());
         json.addProperty("coachLevel", training.getCoachLevel());
         json.addProperty("assistantsLevel", training.getTrainingAssistantsLevel());
-        json.addProperty("trainingDate",
-                training.getTrainingDate() == null ? null : training.getTrainingDate().toHT());
+        // trainingDate is the update that CLOSED the week reported here - HOModel.getTraining()
+        // deliberately steps back one week. The week now in progress is under "currentWeek".
+        final var trainingDate = training.getTrainingDate();
+        json.addProperty("trainingDate", trainingDate == null ? null : trainingDate.toHT());
+        json.addProperty("weekStart",
+                trainingDate == null ? null : trainingDate.minus(7, ChronoUnit.DAYS).toHT());
+        json.addProperty("weekEnd", trainingDate == null ? null : trainingDate.toHT());
+        final var xtra = model.getXtraDaten();
+        final var nextTrainingDate = xtra == null ? null : xtra.getTrainingDateAfterWeeks(0);
+        json.addProperty("nextTrainingDate",
+                nextTrainingDate == null ? null : nextTrainingDate.toHT());
 
         final var weekly = WeeklyTrainingType.instance(training.getTrainingType());
         if (weekly != null) {
@@ -516,6 +536,168 @@ public final class TrainingTools {
             }
         }
         return array;
+    }
+
+    /**
+     * What the squad has already banked in the training week currently in progress.
+     * <p>
+     * This is the week that closes at the <em>next</em> training update, so it is not the week
+     * {@link #current} reports - that one has already been applied. HO itself never computes real
+     * minutes for the week in progress. The future plan's first entry <em>is</em> this week
+     * (TrainingModel.adjustFutureTrainingsVector starts at nextWeekTraining + 7 days), and
+     * {@code FutureTrainingManager} credits a flat 90 minutes to every player whose ideal position
+     * falls in a trained sector - see {@code Player.getFuturePlayerTrainingPriority} - whether or
+     * not he played. That is what makes {@code skillChanges} confidently wrong for a player who has
+     * already spent his trained slot, and it is not limited to the MCP: HO's own Training tab
+     * renders the same first row from the same code.
+     * <p>
+     * The minutes come from HO's own appearance timeline
+     * ({@code MatchLineupTeam.getTrainingMinutesPlayedInSectors}), so substitutions, position
+     * swaps and red cards are accounted for rather than approximated from the starting eleven.
+     */
+    private static JsonObject currentWeek(HOModel model, Set<Integer> wanted) {
+        final var json = new JsonObject();
+        final var xtra = model.getXtraDaten();
+        final var team = model.getTeam();
+        final var weekEnd = xtra == null ? null : xtra.getTrainingDateAfterWeeks(0);
+        final var weekly = team == null
+                ? null : WeeklyTrainingType.instance(team.getTrainingsArtAsInt());
+        if (weekEnd == null || weekly == null) {
+            json.addProperty("status", "no_training_settings");
+            json.addProperty("note", "No training settings in the current snapshot, so minutes "
+                    + "already played cannot be attributed to a trained sector.");
+            return json;
+        }
+
+        // TrainingPerWeek loads the matches of the week ENDING at the date it is given, which is
+        // exactly the window we want: everything between the last update and the next one.
+        final var club = model.getClub();
+        final var trainer = model.getTrainer();
+        final var week = new TrainingPerWeek(weekEnd, team.getTrainingsArtAsInt(),
+                team.getTrainingslevel(), team.getStaminaTrainingPart(),
+                club == null ? 0 : club.getCoTrainer(),
+                trainer == null ? 0 : trainer.getCoachSkill());
+        json.addProperty("status", "ok");
+        json.addProperty("weekStart", weekEnd.minus(7, ChronoUnit.DAYS).toHT());
+        json.addProperty("weekEnd", weekEnd.toHT());
+        json.add("fullTrainingRoleIds", roleIds(weekly.getTrainingSkillPositions()));
+
+        final var teamId = model.getBasics().getTeamId();
+        final var banked = new LinkedHashMap<Integer, WeekMinutes>();
+        final var fixtures = new JsonArray();
+        var missingLineups = 0;
+        for (final var match : week.getMatches()) {
+            final var played = match.getMatchStatus() == MatchKurzInfo.FINISHED;
+            final var details = played ? match.getMatchdetails() : null;
+            final var lineup = details == null ? null : details.getOwnTeamLineup();
+
+            final var fixture = new JsonObject();
+            fixture.addProperty("matchId", match.getMatchID());
+            fixture.addProperty("matchType",
+                    match.getMatchType() == null ? null : match.getMatchType().name());
+            fixture.addProperty("date",
+                    match.getMatchSchedule() == null ? null : match.getMatchSchedule().toHT());
+            fixture.addProperty("opponent", match.getOpponentTeamName());
+            fixture.addProperty("played", played);
+            fixture.addProperty("lineupAvailable", lineup != null);
+            fixtures.add(fixture);
+
+            if (lineup == null) {
+                if (played) {
+                    missingLineups++;
+                }
+                continue;
+            }
+            addMatchMinutes(model, wanted, banked, match, details, lineup, weekly, teamId);
+        }
+        json.add("fixtures", fixtures);
+
+        final var players = new JsonArray();
+        for (final var entry : banked.entrySet()) {
+            players.add(entry.getValue().toJson(entry.getKey()));
+        }
+        json.add("players", players);
+        json.addProperty("lineupDataComplete", missingLineups == 0);
+        json.addProperty("note", missingLineups == 0
+                ? "Minutes already banked in the week now in progress; a player not listed here "
+                + "has banked nothing. maxedForWeek means a full trained slot is already spent "
+                + "on him - starting him in one again trains nobody. startRoleIds are starting "
+                + "positions only; the minutes themselves account for substitutions and red cards."
+                : missingLineups + " played match(es) in this week have no downloaded lineup, so "
+                + "these minutes are UNDERSTATED and maxedForWeek is a possible FALSE NEGATIVE - "
+                + "an already maxed player will look available. Download the fixtures marked "
+                + "lineupAvailable:false before building a lineup on this.");
+        return json;
+    }
+
+    /** Adds one match's minutes to the running per-player totals. */
+    private static void addMatchMinutes(HOModel model, Set<Integer> wanted,
+            Map<Integer, WeekMinutes> banked, MatchKurzInfo match, Matchdetails details,
+            MatchLineupTeam lineup, WeeklyTrainingType weekly, int teamId) {
+        final var walkover = details.isWalkoverMatchWin(teamId);
+        // Masters counts for experience only, never for training.
+        final var trains = match.getMatchType() != MatchType.MASTERS;
+        for (final var player : model.getCurrentPlayers()) {
+            final var playerId = player.getPlayerId();
+            if (player.isCoach() || (wanted != null && !wanted.contains(playerId))) {
+                continue;
+            }
+            // A walkover win reports 90 trained minutes but no played minutes, so all three have
+            // to be read before deciding the player did not appear.
+            final var playedMinutes = lineup.getTrainingMinutesPlayedInSectors(playerId, null, walkover);
+            final var fullMinutes = !trains ? 0 : lineup.getTrainingMinutesPlayedInSectors(
+                    playerId, weekly.getFullTrainingSectors(), walkover);
+            final var partlyMinutes = !trains ? 0 : lineup.getTrainingMinutesPlayedInSectors(
+                    playerId, weekly.getPartlyTrainingSectors(), walkover);
+            if (playedMinutes <= 0 && fullMinutes <= 0 && partlyMinutes <= 0) {
+                continue;
+            }
+            final var minutes = banked.computeIfAbsent(playerId,
+                    key -> new WeekMinutes(player.getFullName()));
+            minutes.add(fullMinutes, partlyMinutes, playedMinutes, match.getMatchID());
+            final var position = lineup.getPlayerByID(playerId, true);
+            if (position != null && position.getStartPosition() >= 0) {
+                minutes.startRoleIds.add(position.getStartPosition());
+            }
+        }
+    }
+
+    /**
+     * One player's running totals over the week. Each trained total caps at 90 the way
+     * {@code TrainingWeekPlayer} does - a second full match in a trained slot banks nothing.
+     */
+    static final class WeekMinutes {
+
+        private final String name;
+        private final JsonArray matchIds = new JsonArray();
+        private final JsonArray startRoleIds = new JsonArray();
+        private int full;
+        private int partly;
+        private int played;
+
+        WeekMinutes(String name) {
+            this.name = name;
+        }
+
+        void add(int fullMinutes, int partlyMinutes, int playedMinutes, int matchId) {
+            this.full = Math.min(90, this.full + fullMinutes);
+            this.partly = Math.min(90, this.partly + partlyMinutes);
+            this.played += playedMinutes;
+            this.matchIds.add(matchId);
+        }
+
+        JsonObject toJson(int playerId) {
+            final var json = new JsonObject();
+            json.addProperty("playerId", playerId);
+            json.addProperty("name", this.name);
+            json.addProperty("fullTrainingMinutes", this.full);
+            json.addProperty("partlyTrainingMinutes", this.partly);
+            json.addProperty("playedMinutes", this.played);
+            json.addProperty("maxedForWeek", this.full >= 90);
+            json.add("matchIds", this.matchIds);
+            json.add("startRoleIds", this.startRoleIds);
+            return json;
+        }
     }
 
     /**

@@ -39,6 +39,16 @@ public final class TransferListingResolver {
     private static final java.time.Duration SALE_WINDOW = java.time.Duration.ofDays(2);
 
     /**
+     * How long after its deadline a transfer takes to show up in {@code transfersPlayer}.
+     * <p>
+     * Not instant: 93 scout sales recorded their sale up to 13 minutes after the listed deadline.
+     * Asked inside that gap, the lookup answers "no sale", the listing is marked looked-at and the
+     * watermark moves past it - the price is lost for good. So an entry is a sale candidate only
+     * once this has passed.
+     */
+    private static final java.time.Duration SALE_SETTLE = java.time.Duration.ofMinutes(20);
+
+    /**
      * How long after a deadline a {@code playerdetails} fetch still describes the player that was
      * on the market. Past that he has been at his new club long enough to have trained, so filling
      * his skills in would file today's player against a months-old listing and let him vote in a
@@ -69,50 +79,41 @@ public final class TransferListingResolver {
     private static final java.time.Duration SCOUT_WATCH_GRACE = java.time.Duration.ofDays(90);
 
     /**
-     * What the cap is actually protecting, and it is not a CHPP quota.
+     * The only bound on a run, and it is not a CHPP quota.
      * <p>
-     * {@code transfersPlayer} is an ordinary read file: HO's own Transfers module already loops it
-     * over every outdated player with no limit at all ({@code XMLParser.updateTeamTransfers},
-     * {@code TransfersPanel}), and there is no rate limiting anywhere in {@code core.net}. The
-     * limit that matters is that a download runs on the event dispatch thread, so every lookup is
-     * time the UI is frozen. A count alone cannot express that - the same 200 calls are half a
-     * minute on a fast link and five minutes on a bad one - so the run also stops on the clock.
+     * {@code transfersPlayer} and {@code playerdetails} are ordinary read files - Hattrick limits
+     * only {@code transfersearch} - and HO's own Transfers module already loops them with no limit
+     * at all ({@code XMLParser.updateTeamTransfers}, {@code TransfersPanel}). What matters is that a
+     * download runs on the event dispatch thread, so every lookup is time the UI is frozen. A call
+     * count cannot express that - the same 200 calls are half a minute on a fast link and five
+     * minutes on a bad one - and the count cap this replaced did real harm: at 20 calls it filled
+     * five scout sales per download, so the user had to press Download over and over.
      */
     private static final java.time.Duration TIME_BUDGET = java.time.Duration.ofSeconds(60);
 
     private TransferListingResolver() {
     }
 
-    /**
-     * @param cap the most CHPP calls this run may make; 0 or less does nothing
-     * @return how many listings got a sale price
-     */
-    public static int resolve(int cap) {
-        if (cap <= 0) {
-            return 0;
-        }
+    /** @return how many listings got a sale price */
+    public static int resolve() {
         final var now = HODateTime.now();
         final var deadline = System.nanoTime() + TIME_BUDGET.toNanos();
         var resolved = 0;
-        var calls = 0;
         final var seen = new HashSet<Integer>();
         final var looked = new HashSet<Integer>();   // playerdetails fetched for him this run
-
-        // Half the cap, not all of it, so a long scout list cannot starve the corpus pass below.
-        final var scoutCap = Math.max(1, cap / 2);
         final var entries = ScoutList.entries();
 
         // Pass one: the sale, for entries whose watched transfer ended since the last run.
         //
-        // Scoped by a watermark rather than by the cap, because "what did he sell for" has exactly
-        // one moment to be answered and the set that needs asking is small - the handful that
-        // expired since the last download. The earlier version walked the whole list under the cap
-        // instead, which meant it spent every download re-asking about whichever entries sat near
-        // the head and never reached the rest: a player who had sold twenty minutes before sat at
-        // position 85 of 92 and was skipped download after download, indefinitely.
-        var resolvedThrough = now;
+        // Scoped by a watermark, because "what did he sell for" has exactly one moment to be
+        // answered and the set that needs asking is small - the handful that expired since the last
+        // download. The earlier version walked the whole list under a call cap instead, which meant
+        // it spent every download re-asking about whichever entries sat near the head and never
+        // reached the rest: a player who had sold twenty minutes before sat at position 85 of 92 and
+        // was skipped download after download, indefinitely.
+        var resolvedThrough = settled(now);
         for (final var candidate : salesToAskAbout(entries, saleWatermark(now), now)) {
-            if (spent(calls, scoutCap, deadline)) {
+            if (outOfTime(deadline)) {
                 // Leave the watermark at the first candidate not reached, not at now. The window
                 // is inclusive of it, so a truncated run resumes next time. Erring towards asking
                 // twice costs a CHPP call; erring the other way loses a sale price for good.
@@ -124,7 +125,6 @@ public final class TransferListingResolver {
             // below spending a second call on the same player's TRANSFERLISTING rows.
             seen.add(candidate.playerId());
             final var observation = observe(candidate.playerId(), now);
-            calls++;
             // Free: the call has already been made, and character comes back whether or not he is
             // listed. Fills in entries added before add_to_scout started fetching it.
             if (observation != null) {
@@ -139,7 +139,6 @@ public final class TransferListingResolver {
             // transfersPlayer call - add the column and compare observation.owningTeamId() against
             // it if the scout list ever grows enough for one call per watched entry to matter.
             final var outcome = resolvePlayer(candidate.playerId(), candidate.deadline(), now);
-            calls += outcome.calls();
             if (outcome.resolved()) {
                 resolved++;
             }
@@ -155,22 +154,19 @@ public final class TransferListingResolver {
         }
         setSaleWatermark(resolvedThrough);
 
-        // Pass two: the re-listing watch, on whatever is left of the scout half.
-        //
-        // This one stays cap-bounded and rotating, because unlike the sale it has no single moment
-        // and no answer that ends it - "is he back on the market" has to be asked again and again
-        // for as long as SCOUT_WATCH_GRACE. Newest expiry first so it degrades sensibly when the
-        // budget runs out, and it asks nothing about sales: pass one has already done that, once,
-        // for every entry here.
+        // Pass two: the re-listing watch. Unlike the sale it has no single moment and no answer
+        // that ends it - "is he back on the market" is asked on every download for as long as
+        // SCOUT_WATCH_GRACE. Newest expiry first so a run cut short by the clock skips the stalest
+        // entries, and it asks nothing about sales: pass one has already done that, once, for
+        // every entry here.
         for (final var candidate : relistingsToWatch(entries, now)) {
-            if (spent(calls, scoutCap, deadline)) {
+            if (outOfTime(deadline)) {
                 break;
             }
             if (!looked.add(candidate.playerId())) {
                 continue;
             }
             final var observation = observe(candidate.playerId(), now);
-            calls++;
             if (observation == null) {
                 continue;
             }
@@ -180,28 +176,23 @@ public final class TransferListingResolver {
             }
         }
 
-        // Then the valuation corpus, with whatever is left of the budget. Rows, not players: one
-        // player repeatedly observed holds several. Over-fetch so a handful of duplicates cannot
-        // starve the run, and let the call count be what the cap bounds.
-        for (final var listing : DBManager.instance().loadUnresolvedTransferListings(cap * 5)) {
-            if (spent(calls, cap, deadline)) {
+        // Then the valuation corpus, with whatever is left of the time. Rows, not players: one
+        // player repeatedly observed holds several.
+        for (final var listing : DBManager.instance().loadUnresolvedTransferListings(Integer.MAX_VALUE)) {
+            if (outOfTime(deadline)) {
                 break;
             }
             if (!seen.add(listing.getPlayerId())) {
                 continue;                      // his sale was already asked about this run
             }
             if (looked.add(listing.getPlayerId())) {
-                calls += observeForCorpus(listing, now);
+                observeForCorpus(listing, now);
             }
-            if (spent(calls, cap, deadline)) {
-                break;
+            if (listing.getDeadline() == null
+                    || listing.getDeadline().compareTo(settled(now)) >= 0) {
+                continue;                      // not settled yet, nothing to resolve
             }
-            if (listing.getDeadline() == null || listing.getDeadline().compareTo(now) >= 0) {
-                continue;                      // not expired yet, nothing to resolve
-            }
-            final var outcome = resolvePlayer(listing.getPlayerId(), listing.getDeadline(), now);
-            calls += outcome.calls();
-            if (outcome.resolved()) {
+            if (resolvePlayer(listing.getPlayerId(), listing.getDeadline(), now).resolved()) {
                 resolved++;
             }
         }
@@ -242,9 +233,14 @@ public final class TransferListingResolver {
      */
     static List<Candidate> salesToAskAbout(List<ScoutEintrag> entries, HODateTime since,
                                            HODateTime now) {
-        final var candidates = expired(entries, since, now);
+        final var candidates = expired(entries, since, settled(now));
         candidates.sort(Comparator.comparing(Candidate::deadline));
         return candidates;
+    }
+
+    /** The latest deadline whose sale Hattrick has had time to record - see {@link #SALE_SETTLE}. */
+    private static HODateTime settled(HODateTime now) {
+        return new HODateTime(now.getInstant().minus(SALE_SETTLE));
     }
 
     /**
@@ -283,9 +279,9 @@ public final class TransferListingResolver {
     record Candidate(int playerId, HODateTime deadline) {}
 
 
-    /** Whether this run is out of budget - either bound stops it, whichever comes first. */
-    private static boolean spent(int calls, int cap, long deadlineNanos) {
-        return calls >= cap || System.nanoTime() - deadlineNanos >= 0;
+    /** Whether this run has used up {@link #TIME_BUDGET}. */
+    private static boolean outOfTime(long deadlineNanos) {
+        return System.nanoTime() - deadlineNanos >= 0;
     }
 
     /**
@@ -331,30 +327,27 @@ public final class TransferListingResolver {
      * when the player happens to be on the market again right now. The rows it was written for are
      * unlisted players by definition, and Hattrick prunes an unlisted player's skills to stamina.
      * That slice of the corpus is unfillable by any means.
-     *
-     * @return how many CHPP calls this made
      */
-    private static int observeForCorpus(TransferListing listing, HODateTime now) {
+    private static void observeForCorpus(TransferListing listing, HODateTime now) {
         if (DBManager.instance().transferListingHasSkillData(listing.getPlayerId())) {
-            return 0;
+            return;
         }
         if (listing.getDeadline() != null && listing.getDeadline().getInstant()
                 .plus(SKILL_FILL_GRACE).isBefore(now.getInstant())) {
-            return 0;                          // long sold; today's skills are not the sale's
+            return;                            // long sold; today's skills are not the sale's
         }
         observe(listing.getPlayerId(), now);
-        return 1;
     }
 
 
     /**
-     * What one player cost us, whether it produced a price, and whether the lookup answered at all.
+     * Whether one player's lookup produced a price, and whether it answered at all.
      * <p>
      * {@code failed} is not {@code !resolved}: "he did not sell" is an answer and consumes the
      * question, while "the call threw" leaves it open and must not let the sale watermark move past
      * him.
      */
-    private record Outcome(int calls, boolean resolved, boolean failed) {}
+    private record Outcome(boolean resolved, boolean failed) {}
 
     /**
      * Fill in what this player's expired listing sold for.
@@ -370,7 +363,7 @@ public final class TransferListingResolver {
         if (known != null) {
             applySale(playerId, known);
             DBManager.instance().markTransferListingResolveAttempted(playerId, now);
-            return new Outcome(0, true, false);
+            return new Outcome(true, false);
         }
 
         final List<module.transfer.PlayerTransfer> fetched;
@@ -380,7 +373,7 @@ public final class TransferListingResolver {
             // The lookup failed rather than answered - leave the rows alone so a network blip does
             // not burn their one attempt.
             HOLogger.instance().error(TransferListingResolver.class, e);
-            return new Outcome(1, false, true);
+            return new Outcome(false, true);
         }
         final var sale = saleAt(fetched, deadline);
         if (sale != null) {
@@ -389,7 +382,7 @@ public final class TransferListingResolver {
         // The call answered. Whatever it did not account for - a listing that was withdrawn, or
         // expired with no bidder - is marked looked-at so it is never asked about again.
         DBManager.instance().markTransferListingResolveAttempted(playerId, now);
-        return new Outcome(1, sale != null, false);
+        return new Outcome(sale != null, false);
     }
 
     /**

@@ -16,17 +16,22 @@ import core.model.match.Weather;
 import core.module.IModule;
 import core.module.ModuleManager;
 import core.module.config.ModuleConfig;
-import core.net.DownloadDialog;
 import core.net.Connector;
+import core.net.DownloadDialog;
 import core.net.login.ProxySettings;
 import core.option.OptionenDialog;
 import core.option.db.UserAdministrationDialog;
-import core.util.*;
+import core.util.BrowserLauncher;
+import core.util.HODateTime;
+import core.util.HOLogger;
+import core.util.Helper;
+import core.util.OSUtils;
+import core.util.StringUtils;
 import module.lineup.LineupMasterView;
 import module.lineup.LineupPanel;
 import module.matches.MatchesPanel;
-import module.playeroverview.PlayerOverviewPanel;
 import module.playeranalysis.PlayerAnalysisModulePanel;
+import module.playeroverview.PlayerOverviewPanel;
 import module.transfer.TransfersPanel;
 import tool.ToolManager;
 import tool.dbcleanup.DBCleanupTool;
@@ -40,8 +45,11 @@ import java.awt.event.WindowEvent;
 import java.io.File;
 import java.net.URI;
 import java.time.temporal.ChronoUnit;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Vector;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -126,23 +134,16 @@ public final class HOMainFrame extends JFrame implements Refreshable {
 	}
 
 	private void setFrameIconImage() {
+		// macOS takes the dock icon from the app bundle's .icns; overriding it here with the
+		// 16px logo only produces a blurry upscale once HO is running.
+		if (OSUtils.isMac()) return;
+
 		String iconName = HOIconName.LOGO16_STABLE;
 		if (!HO.isRelease()) {
 			iconName = HOIconName.LOGO16 + "_" + HO.getVersionType().toLowerCase();
 		}
 
-		final Image iconImage = ImageUtilities.iconToImage(ThemeManager.getIcon(iconName));
-
-		if (OSUtils.isMac()) {
-			try {
-				final Taskbar taskbar = Taskbar.getTaskbar();
-				taskbar.setIconImage(iconImage);
-			} catch (final UnsupportedOperationException e) {
-				HOLogger.instance().error(HOMainFrame.class, "OS doesn't support operation: " + e.getMessage());
-			}
-		} else {
-			this.setIconImage(iconImage);
-		}
+		setIconImage(ImageUtilities.iconToImage(ThemeManager.getIcon(iconName)));
 	}
 
 	public void addApplicationClosingListener(ApplicationClosingListener listener) {
