@@ -195,6 +195,12 @@ public class TransferListingTable extends AbstractTable {
      * {@code observedSince} is what stands in for pruning. Nothing deletes from this table, so a
      * listing from three seasons ago would otherwise drag an estimate towards a market that no
      * longer exists; bounding the read keeps the history for later without letting it vote now.
+     * <p>
+     * {@code specialty}: {@code null} means no filter at all (any specialty, including unknown,
+     * passes); {@code 0} means the target has none, so a comparable known to have one - Technical,
+     * Unpredictable, whatever - is excluded, but a comparable HO simply never fetched specialty for
+     * (also {@code NULL} in this column) still passes rather than being penalised for a gap in the
+     * data; a positive value requires that exact specialty, same as before.
      */
     public List<TransferListing> loadComparables(int ageMin, int ageMax,
                                                  String skill1, int min1, int max1,
@@ -205,7 +211,9 @@ public class TransferListingTable extends AbstractTable {
                 + " AND " + skillColumn(skill2) + " BETWEEN " + min2 + " AND " + max2
                 + " AND OBSERVEDAT >= '" + HODateTime.toDbTimestamp(observedSince) + "'");
         if (specialty != null) {
-            where.append(" AND SPECIALTY = ").append(specialty);
+            where.append(specialty == 0
+                    ? " AND (SPECIALTY IS NULL OR SPECIALTY = 0)"
+                    : " AND SPECIALTY = " + specialty);
         }
         return load(TransferListing.class, connectionManager.executeQuery(
                 createSelectStatement(where.toString())));

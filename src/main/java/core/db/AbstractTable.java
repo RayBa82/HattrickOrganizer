@@ -283,7 +283,7 @@ public abstract class AbstractTable {
 	private String getString(ResultSet rs, String columnName) throws SQLException {
 		var ret = rs.getString(columnName);
 		if (rs.wasNull()){
-			return "";
+			return null;
 		}
 		return ret;
 	}

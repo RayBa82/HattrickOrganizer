@@ -487,6 +487,137 @@ class TransferToolsTest {
     }
 
     @Test
+    void listingFromProfile_isNullWithoutBothPlayerIdAndSalePrice() {
+        final var noPlayerId = JsonParser.parseString(
+                """
+                {"age":24,"skills":{"playmaking":14},"salePrice":500000}""").getAsJsonObject();
+        final var noSalePrice = JsonParser.parseString(
+                """
+                {"age":24,"skills":{"playmaking":14},"playerId":424242}""").getAsJsonObject();
+
+        // player is never touched before the playerId/salePrice check, so null stands in fine.
+        assertThat(TransferTools.listingFromProfile(noPlayerId, null)).isNull();
+        assertThat(TransferTools.listingFromProfile(noSalePrice, null)).isNull();
+    }
+
+    /**
+     * The motivating case: Škerbinek et al, sold and gone from the squad, valued once through
+     * profile with his real sale price from get_team_transfers - this is what makes that call
+     * teach future valuations something instead of being spent and discarded.
+     */
+    @Test
+    void listingFromProfile_buildsARowFromTheGivenPlayerIdAndSalePrice() throws McpToolException {
+        final var profile = JsonParser.parseString(
+                """
+                {"playerId":424242,"playerName":"Škerbinek","age":24,"ageDays":40,
+                 "skills":{"playmaking":14,"passing":8},"specialty":2,"tsi":180000,
+                 "agreeability":3,"aggressiveness":2,"honesty":4,"salePrice":1250000}""")
+                .getAsJsonObject();
+        final var player = TransferTools.playerFromProfile(profile);
+
+        final var listing = TransferTools.listingFromProfile(profile, player);
+
+        assertThat(listing).isNotNull();
+        assertThat(listing.getPlayerId()).isEqualTo(424242);
+        assertThat(listing.getPlayerName()).isEqualTo("Škerbinek");
+        assertThat(listing.getAge()).isEqualTo(24);
+        assertThat(listing.getAgeDays()).isEqualTo(40);
+        assertThat(listing.getPlaymaker()).isEqualTo(14);
+        assertThat(listing.getPassing()).isEqualTo(8);
+        assertThat(listing.getSpecialty()).isEqualTo(2);
+        assertThat(listing.getTsi()).isEqualTo(180000);
+        assertThat(listing.getAgreeability()).isEqualTo(3);
+        assertThat(listing.getAggressiveness()).isEqualTo(2);
+        assertThat(listing.getHonesty()).isEqualTo(4);
+        assertThat(listing.getSalePrice()).isEqualTo(1_250_000L);
+        assertThat(listing.getObservedAt()).isNotNull();
+    }
+
+    /**
+     * No fabrication into the corpus: an omitted skill must stay null here even though
+     * playerFromProfile's own synthetic Player defaults it to 1 for the weighting math - a
+     * fabricated "1" written to this row would mislead every future query that reads it back.
+     */
+    @Test
+    void listingFromProfile_onlyWritesSkillsTheProfileActuallyGave() throws McpToolException {
+        final var profile = JsonParser.parseString(
+                """
+                {"playerId":424242,"age":24,"skills":{"playmaking":14},"salePrice":1250000}""")
+                .getAsJsonObject();
+        final var player = TransferTools.playerFromProfile(profile);
+
+        final var listing = TransferTools.listingFromProfile(profile, player);
+
+        assertThat(listing.getPlaymaker()).isEqualTo(14);
+        assertThat(listing.getScorer()).isNull();
+        assertThat(listing.getKeeper()).isNull();
+        assertThat(listing.getSpecialty()).isNull();
+        assertThat(listing.getAgreeability()).isNull();
+    }
+
+    /**
+     * Caught by the hattrick session live: a profile's salePrice arrives in the user's local
+     * currency, same as every amount this MCP surface hands the model, but TransferListing's own
+     * column holds swedish krona - storing it raw corrupted every recorded row by the league's
+     * exchange rate once the response converted it back for display (677000 in, 67700 shown).
+     */
+    @Test
+    void listingFromProfile_convertsSalePriceFromLocalCurrencyToSwedishKrona() throws McpToolException {
+        AmountOfMoney.Companion.setExchangeRate(BigDecimal.TEN);   // a euro league
+        final var profile = JsonParser.parseString(
+                """
+                {"playerId":424242,"age":24,"skills":{"playmaking":14},"salePrice":677000}""")
+                .getAsJsonObject();
+        final var player = TransferTools.playerFromProfile(profile);
+
+        final var listing = TransferTools.listingFromProfile(profile, player);
+
+        assertThat(listing.getSalePrice()).isEqualTo(6_770_000L);
+    }
+
+    /**
+     * The gap the hattrick session's re-verification surfaced: playerFromProfile collapses "never
+     * given" and "confirmed none" into the same 0 for its own weighting math, but the corpus
+     * filter must not make that same conflation - a departed player HO never profiled (specialty
+     * genuinely unknown) must not be treated as confirmed specialty-free.
+     */
+    @Test
+    void corpusSpecialtyFilter_treatsAnOmittedProfileSpecialtyAsUnknownNotZero() {
+        final var profile = JsonParser.parseString(
+                """
+                {"age":24,"skills":{"playmaking":14}}""").getAsJsonObject();
+
+        assertThat(TransferTools.corpusSpecialtyFilter(true, profile, player(24, 14))).isNull();
+    }
+
+    @Test
+    void corpusSpecialtyFilter_honorsAConfirmedZeroFromTheProfile() {
+        final var profile = JsonParser.parseString(
+                """
+                {"age":24,"skills":{"playmaking":14},"specialty":0}""").getAsJsonObject();
+
+        assertThat(TransferTools.corpusSpecialtyFilter(true, profile, player(24, 14))).isZero();
+    }
+
+    @Test
+    void corpusSpecialtyFilter_passesThroughAConfirmedSpecificSpecialty() {
+        final var profile = JsonParser.parseString(
+                """
+                {"age":24,"skills":{"playmaking":14},"specialty":4}""").getAsJsonObject();
+
+        assertThat(TransferTools.corpusSpecialtyFilter(true, profile, player(24, 14))).isEqualTo(4);
+    }
+
+    /** A squad player's specialty is always definitive, never "unknown" - read straight off Player. */
+    @Test
+    void corpusSpecialtyFilter_forAPlayerIdReadsStraightOffThePlayer() {
+        final var squadPlayer = player(24, 14);
+        squadPlayer.setSpecialty(3);
+
+        assertThat(TransferTools.corpusSpecialtyFilter(false, null, squadPlayer)).isEqualTo(3);
+    }
+
+    @Test
     void removeFromScout_requiresPlayerIdsAndRejectsAnEmptyList() {
         final var tool = TransferTools.tools().stream()
                 .filter(t -> t.name().equals("remove_from_scout")).findFirst().orElseThrow();

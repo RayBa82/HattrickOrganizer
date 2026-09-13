@@ -155,6 +155,26 @@ class TransferListingTableTest {
     }
 
     /**
+     * AbstractTable.getString's own bug, caught by a profile-based estimate_market_value write -
+     * the first writer of this table that can legitimately leave playerName unset: reading a
+     * genuinely NULL VARCHAR column back returned "" instead of null, contradicting the method's
+     * own doc and the null-means-unknown convention every other nullable column here follows.
+     */
+    @Test
+    void aNullPlayerNameRoundTripsAsNullNotEmptyString() {
+        final var listing = new TransferListing();
+        listing.setPlayerId(999888);
+        listing.setObservedAt(HODateTime.fromHT("2026-08-30 14:00:00"));
+        listing.setAge(24);
+        table.storeListing(listing);
+
+        final var loaded = table.loadUnresolved(50).stream()
+                .filter(l -> l.getPlayerId() == 999888).findFirst().orElseThrow();
+        assertThat(loaded.getPlayerName()).isNull();
+    }
+
+
+    /**
      * CHPP's Salary carries the 20% surcharge for a player abroad; the search path's Salary does
      * not. Mixing the two in one column makes wage an unusable comparable - and it reaches the
      * scout table's baseWage column, which the user reads.
@@ -289,6 +309,42 @@ class TransferListingTableTest {
         assertThat(table.loadComparables(23, 25, "PLAYMAKER", 11, 13, "DEFENDER", 5, 7,
                 d.specialty(), HODateTime.fromHT("2026-09-01 00:00:00")))
                 .noneMatch(l -> l.getPlayerId() == 1001);
+    }
+
+    /**
+     * estimate_market_value asks for this when the target has no specialty: a comparable known to
+     * carry one - Technical, Unpredictable, whatever - would otherwise sit in the same pool as a
+     * plain player despite specialties having a real, position-dependent effect on price.
+     */
+    @Test
+    void loadComparables_excludesAKnownSpecialtyWhenNoneIsRequested() {
+        final var observedAt = HODateTime.fromHT("2026-08-30 14:00:00");
+        table.storeListing(TransferListing.fromHit(hit(2001, details()), observedAt)); // specialty 2
+
+        assertThat(table.loadComparables(23, 25, "PLAYMAKER", 11, 13, "DEFENDER", 5, 7, 0,
+                HODateTime.fromHT("2026-08-01 00:00:00")))
+                .noneMatch(l -> l.getPlayerId() == 2001);
+    }
+
+    /**
+     * An observation HO never fetched specialty for is not the same claim as "confirmed none" - it
+     * stays neutral (included) rather than being read as a mismatch, the same rule
+     * comparableWeightBreakdown already applies to missing skill/character data.
+     */
+    @Test
+    void loadComparables_specialtyZeroStillIncludesAnUnknownSpecialty() {
+        final var listing = new TransferListing();
+        listing.setPlayerId(2002);
+        listing.setObservedAt(HODateTime.fromHT("2026-08-30 14:00:00"));
+        listing.setAge(24);
+        listing.setPlaymaker(12);
+        listing.setDefender(6);
+        listing.setSpecialty(null);
+        table.storeListing(listing);
+
+        assertThat(table.loadComparables(23, 25, "PLAYMAKER", 11, 13, "DEFENDER", 5, 7, 0,
+                HODateTime.fromHT("2026-08-01 00:00:00")))
+                .anyMatch(l -> l.getPlayerId() == 2002);
     }
 
     /**

@@ -2556,3 +2556,150 @@ the estimate was actually computed from) to the front, leaving the rest in their
 newest-first order. One new test pins it directly, without needing a DB fixture: two `TransferListing`
 stubs that were never part of the sample, one that was, handed in newest-first, sample-member first
 out. Full suite green (785 tests).
+
+### Specialty was an unfiltered pass-through for a no-specialty target (2026-09-13)
+
+Rainer noticed the tool never reasoned about specialty at all beyond `comparableQuery`'s own
+equality filter, and asked what happens for a target with none. Answer at the time: nothing -
+`player.getSpecialty() > 0 ? ... : null` meant a target with no specialty produced `specialty: null`
+in `comparableQuery`, and `loadComparables` treats `null` as "no filter" - so a plain player's
+comparables could include Technical/Unpredictable/etc. players with no adjustment for the premium a
+specialty typically carries.
+
+Fix scoped to the local corpus read only (`TransferListingTable.loadComparables`), not to
+`TransferSearchQuery`/`comparableQuery`/the live CHPP `search()` path - Hattrick's own transfersearch
+has no "must have none" filter, so `query.specialty()` keeps meaning what it always meant there.
+`estimateMarketValue` now passes `player.getSpecialty()` directly (always 0-8, never null) to
+`loadComparableTransferListings` instead of `query.specialty()`, and `loadComparables` gained a
+third branch: `0` means `AND (SPECIALTY IS NULL OR SPECIALTY = 0)` - excludes a comparable *known*
+to have a specialty, but still includes one HO simply never fetched specialty for (a bid-only or
+search-hit row with no Details block), the same neutral-on-missing-data rule
+`comparableWeightBreakdown` already applies to skill/character gaps. `null` still means "no filter"
+for any future caller; a positive value is still an exact match, unchanged.
+
+Still not modeled, and flagged as out of scope for now: how much a given specialty is actually
+worth *at a given position* - Technical matters more on a playmaker than a defender, Unpredictable
+can hurt more than help on some positions. `PlayerSpeciality.java` only encodes weather effects, not
+price or rating impact, and nothing else in the codebase has that table either. Asked the `hattrick`
+session (which tracks Hattrick domain knowledge outside this repo) what it knows before deciding
+whether a weighting kernel is worth building. Two new tests in `TransferListingTableTest`; full
+suite green (787 tests).
+
+## `estimate_market_value` grows the corpus it reads from (2026-09-13)
+
+Rainer's ask: the tool should feed data back, not just consume it. Two changes, both scoped to
+`estimateMarketValue` only - `search_transfers` and scout filtering are untouched (verified:
+neither references specialty at all, and `loadComparables` - the specialty exclusion from the
+previous entry - has exactly one production caller).
+
+**`live` now defaults to true.** It already stored every hit into `TRANSFERLISTING` (`search()`
+has done that since the profile design shipped) - the only thing missing was doing it by default
+instead of opt-in. The risk: `TransferSearchService`'s per-session search cap
+(`UserParameter.mcpSearchesPerSession`) is small and easily exhausted, and this tool's own
+description used to promise "free, no CHPP call" - defaulting live on could turn every call into a
+hard failure once the cap is spent. Fix: `runLiveSearch` only lets a search-cap refusal fail the
+call when `live` was passed *explicitly*; when it is only the default, the refusal is swallowed
+into a new `liveSearchSkipped` response field and the call falls back to the free, local-only read.
+Extracted out of `estimateMarketValue` (which was already over the cognitive-complexity lint
+budget before this change) into its own `LiveSearchOutcome`-returning method.
+
+**`profile` can now seed the corpus with a real, already-known data point.** `profile` gained two
+optional fields: `playerId` (the target's real Hattrick id - bookkeeping only, never used to look
+him up in the squad) and `salePrice` (a confirmed real price, e.g. from `get_team_transfers`).
+Given both, `listingFromProfile` builds a `TransferListing` and `recordProfileObservation` writes
+it, reported back as `recordedToCorpus`. This directly reverses a non-goal in the original design
+doc ("No persistence of a profile call anywhere") - deliberately, now that the motivating case is
+clearer: Škerbinek/Flikweert/Spaltenstein sold and gone from the squad, HO never tracked them as a
+listing, and a `profile` valuation of them was previously pure one-off consumption. Kept narrower
+than `playerFromProfile`'s own defaults: only fields the caller actually gave are written (an
+omitted skill stays `null`, not the `1` `playerFromProfile` defaults it to for its own weighting
+math) - a fabricated value here would corrupt every future query reading the row back, not just
+one call's own estimate. Split into a pure `listingFromProfile` (builds or returns null, no DB
+touched) plus a thin `recordProfileObservation` wrapper, so the interesting logic is unit-testable
+without a DB fixture - matching how `playerFromProfile` itself is tested.
+
+Tool description trimmed to fit the existing 400-char cap (`McpServerToolsTest`) after describing
+the new default; the fuller behavior lives in the `live`/`profile` property descriptions instead,
+which aren't capped. Three new tests in `TransferToolsTest`; full suite green (790 tests).
+
+### Unknown specialty is not confirmed-none (2026-09-13)
+
+The hattrick session re-verified the two changes above against three departed players and flagged
+a real gap: playerFromProfile defaults an omitted profile.specialty to 0 for its own weighting
+math, and that same 0 was being handed to the corpus filter too - so a departed player HO never
+profiled (specialty genuinely unknown) was being treated as confirmed specialty-free, wrongly
+excluding specialty-having comparables for him. One of the three test players (Flikweert) does
+have a confirmed 0 - relisted by his buyer, a fresh search_transfers hit showed specialty 0 - so
+for him the exclusion was correct; for the other two, unconfirmable now that they are gone, it
+was not.
+
+Fix: a new corpusSpecialtyFilter reads specialty off the profile JSON directly rather than off the
+synthetic Player - present (0 included) is confirmed and filters as before, absent passes null
+(no filter), never defaulting to 0. A squad player has no such ambiguity and keeps reading straight
+off player.getSpecialty(). Four new tests; full suite green (794 tests).
+
+### salePrice was stored in the wrong currency (2026-09-13)
+
+The hattrick session's first live write-path test found a serious one: recordedToCorpus worked,
+but every stored salePrice came back exactly one tenth of what was passed - 677000 in, 67700 shown,
+same ratio on all three test players. listingFromProfile stored profile.salePrice raw. Every
+amount this MCP surface hands the model, salePrice included, is in the user's local currency
+(McpJson.money's own doc: "a factor of ten for a euro league" - the exact ratio reported); every
+amount TransferListing's own columns hold is swedish krona. Storing the local-currency number
+raw corrupted the row, and it then got divided by the exchange rate a second time when the
+response converted it back for display, collapsing Skerbinek's ~1.22M estimate to 67,700 - the
+self-referential row this feature writes gets weight 1.0 and dominates the weighted median, so
+the corruption wasn't just wrong, it took over the whole estimate.
+
+Fix: swedishKrona(profile.salePrice), the same conversion queryFrom already applies to
+priceMin/priceMax - one line. One new test pins it under a non-1 exchange rate (the default test
+fixture runs at 1:1, which is exactly why this shipped unnoticed the first time - every existing
+test passed at the wrong ratio without knowing it). Full suite green (795 tests).
+
+Separately flagged by the same session and confirmed intentional, not a bug: a profile-recorded
+row's fields the caller never supplied (salary, form, experience, character, specialty, cards,
+injuryLevel, stamina, setPieces) come back null rather than a fabricated value - exactly
+listingFromProfile's own documented behavior.
+
+### `AbstractTable.getString` silently turned NULL into "" (2026-09-13)
+
+The playerName question above had a real answer once the session confirmed they never sent a
+playerName key at all - not omitted-as-null, not "", the key was simply absent. listingFromProfile
+already gets this right (only sets what profile.has()); the corruption was downstream, in
+AbstractTable.load()'s generic column reader. Its private getString(rs, columnName) has read
+"null if column was empty (null)" in its own javadoc since long before this session, while the
+body actually returned an empty string on rs.wasNull(). Every VARCHAR/CHAR/LONGVARCHAR column on
+every table goes through this one method, so the bug was universal - it just had nothing to bite,
+since PLAYERNAME had never legitimately been null before: a live search hit and a playerdetails
+snapshot both always carry a real name. listingFromProfile is the first writer that can leave it
+genuinely unset, and that's what surfaced it.
+
+Fixed the one line to match its own contract: return null instead of an empty string. Global
+change, so the full suite is the impact analysis here - green across all 64 suites/796 tests with
+no adjustment needed anywhere, fairly strong evidence nothing in this codebase actually depended
+on the wrong value (matching the null-means-unknown convention every other nullable column already
+claims to follow). One new test, aNullPlayerNameRoundTripsAsNullNotEmptyString, pins the fixed
+contract directly against a real HSQLDB round-trip rather than trusting the global suite alone.
+
+### All three verified live (2026-09-13)
+
+One detour along the way worth remembering: after landing the salePrice and getString fixes, a
+first "confirmed live" message to the hattrick session was wrong - it grepped TransferTools.class
+for `swedishKrona` and took its presence as proof, but that method name was already used in three
+unrelated pre-existing call sites (bid placement, search_transfers price filters), so it proved
+nothing about the new usage specifically. Lesson: a bytecode probe is only as good as its
+distinctiveness - check that the string could not already be there for an unrelated reason before
+trusting it. The actual rebuild lagged behind by one cycle (confirmed directly by Rainer), not a
+separate stale MCP process as the session's own alternate theory suggested - there is only one
+McpHttpServer, instantiated from core.HO's own startup, no separate bridge process to go stale.
+
+Re-verified after the real rebuild: all three profiles (Skerbinek, Flikweert, Spaltenstein) now
+write correct salePrice and null playerName, and a read-only re-check found no leftover corrupted
+rows sitting alongside the corrected ones - the corpus dedupe (one row per player, sale-price rows
+win) cleaned up after itself with no manual intervention needed. All three estimates converged on
+the same 764,000 despite three different actual sale prices (677k/764k/1.014M) - surprising at a
+glance, but plausible: three similarly-aged, similarly-skilled players draw from a heavily
+overlapping comparable window, and a weighted *median* (unlike a mean) is not very sensitive to
+one additional row's exact price once a dozen-plus comparables already anchor it. Not chased
+further since it wasn't reported as a problem; worth a second look only if it recurs somewhere the
+players are less similar to each other.

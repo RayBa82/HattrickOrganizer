@@ -148,13 +148,13 @@ public final class TransferTools {
                         McpTool.schema(McpTool.properties()),
                         args -> listScout()),
                 new McpTool("estimate_market_value",
-                        "Value one of your players against the transfer listings HO has already "
-                                + "stored - free, no CHPP call. Returns the matching listings "
-                                + "themselves; reason over those, not over the median in `estimate`. "
-                                + "basis says whether it rests on real sale prices or on asking "
-                                + "prices, which run high. "
-                                + "Pass live to search today's market first and fold the hits in "
-                                + "(spends one transfer search).",
+                        "Value one of your players, or via profile a player outside the squad, "
+                                + "against stored transfer listings. Returns the matching listings; "
+                                + "reason over those, not the median in `estimate`. basis says real "
+                                + "sales or asking prices, which run high. Also searches today's "
+                                + "market first and stores the hits - one of the session's capped "
+                                + "searches; pass live: false to read the stored corpus only, for "
+                                + "free.",
                         McpTool.schema(McpTool.properties(
                                         "playerId", McpTool.prop("integer",
                                                 "the player to value - a squad player id"),
@@ -165,15 +165,35 @@ public final class TransferTools {
                                                         + "level, at least one}, plus optional "
                                                         + "playerName, ageDays, specialty, tsi, "
                                                         + "agreeability, aggressiveness, honesty}. "
+                                                        + "Omitting specialty means unknown (no "
+                                                        + "specialty filter applied, not the same as "
+                                                        + "confirmed none) - pass specialty: 0 only "
+                                                        + "when you actually know the player has none. "
                                                         + "Unset skills default to level 0. Provide "
-                                                        + "playerId or profile, not both."),
+                                                        + "playerId or profile, not both. Also "
+                                                        + "optional: playerId (this player's real "
+                                                        + "Hattrick id, e.g. from get_team_transfers "
+                                                        + "or get_opponent_squad - bookkeeping only, "
+                                                        + "never used to look him up in the squad) "
+                                                        + "and salePrice - given both, this profile "
+                                                        + "is recorded into HO's local transfer-"
+                                                        + "listing corpus as a real data point, so a "
+                                                        + "player who left the squad without ever "
+                                                        + "being tracked still teaches future "
+                                                        + "valuations something."),
                                         "ageTolerance", McpTool.prop("integer", "age window in years, default 1"),
                                         "skillTolerance", McpTool.prop("integer", "skill window in levels, default 1"),
                                         "live", McpTool.prop("boolean",
                                                 "run the comparable query against today's market "
                                                         + "first, store the hits, and estimate over "
                                                         + "the refreshed corpus; spends one of the "
-                                                        + "session's transfer searches. Default false"),
+                                                        + "session's transfer searches. Default true - "
+                                                        + "pass false for a free, local-only read. When "
+                                                        + "true only by this default (not passed "
+                                                        + "explicitly) a used-up search cap is reported "
+                                                        + "as liveSearchSkipped instead of failing the "
+                                                        + "call; passed explicitly, it fails the call "
+                                                        + "as before."),
                                         "observedWithinDays", McpTool.prop("integer",
                                                 "ignore listings older than this many days, default "
                                                         + DEFAULT_CORPUS_DAYS + " (one Hattrick season)"))),
@@ -436,6 +456,11 @@ public final class TransferTools {
                         + "Call get_squad for the ids HO knows about.");
             }
         }
+        // A profile with both playerId and salePrice is a real, already-known data point (the
+        // motivating case: a player sold this season, gone from the squad, that HO never tracked
+        // as a listing) - record it once so it teaches future valuations something too, rather
+        // than being spent and discarded on this one call.
+        final var recordedToCorpus = hasProfile && recordProfileObservation(profile, player);
         final var query = comparableQuery(player,
                 McpJson.optInt(args, "ageTolerance", 1),
                 McpJson.optInt(args, "skillTolerance", 1));
@@ -443,21 +468,24 @@ public final class TransferTools {
         final var since = new HODateTime(HODateTime.now().getInstant()
                 .minus(java.time.Duration.ofDays(days)));
 
-        // live: what find_comparables used to be, folded in as a flag. search() writes every hit
-        // into TRANSFERLISTING, so running it BEFORE the corpus read means the one call returns
-        // today's market and a median that already accounts for it - which is the thing two
-        // separate tools could not do. A failure here is the caller's: they asked to spend a
-        // search, so let it out rather than quietly falling back to the stale corpus.
-        JsonObject liveSearch = null;
-        if (McpJson.optBool(args, "live", false)) {
-            liveSearch = search(query);
-        }
+        final var live = runLiveSearch(args, query);
+        final var liveSearch = live.hits();
+        final var liveSearchSkipped = live.skippedNote();
 
+        // corpusSpecialtyFilter, not player.getSpecialty(): a squad player's specialty is always
+        // definitively known, but a profile that never mentions specialty could mean either "HO
+        // never got a reading for him" (a departed player, most of the time) or "confirmed none" -
+        // conflating those two into player's own 0 default would wrongly exclude specialty-having
+        // comparables for a player whose specialty is simply unknown, not none. The live CHPP
+        // search above still asks for "any specialty" either way (query.specialty() is null there -
+        // Hattrick's API has no "must have none" filter), but the local corpus read below can and
+        // should be fairer about it - see loadComparables's doc for the null/0/positive distinction.
         final var observations = DBManager.instance().loadComparableTransferListings(
                 query.ageMin(), query.ageMax(),
                 column(query.skillType1()), query.minSkillValue1(), query.maxSkillValue1(),
                 column(query.skillType2()), query.minSkillValue2(), query.maxSkillValue2(),
-                query.specialty(), since);
+                corpusSpecialtyFilter(hasProfile, profile, player), since);
+
 
         // One vote per player. The corpus appends on every observation, so a player who turned up
         // in four searches is four rows: without this he moves the median four times and
@@ -519,6 +547,12 @@ public final class TransferTools {
         json.add("player", hasProfile
                 ? profilePlayerJson(profile)
                 : topSkillsOnly(McpJson.player(player), playerLevels));
+        if (hasProfile) {
+            // True only when profile carried both playerId and salePrice - see
+            // recordProfileObservation's doc for why the other cases stay false rather than
+            // erroring, and for what "recorded" actually writes.
+            json.addProperty("recordedToCorpus", recordedToCorpus);
+        }
         json.addProperty("basis", useSales ? "resolved_sales" : "observed_listings");
         json.addProperty("sampleSize", sample.size());
         json.addProperty("resolvedSalesAvailable", salesPriced.size());
@@ -529,6 +563,10 @@ public final class TransferTools {
             // The raw hits beside the corpus view of them: itemCount says how much of the market
             // matched, which the deduplicated comparables list below can no longer tell you.
             json.add("liveSearch", liveSearch);
+        }
+        if (liveSearchSkipped != null) {
+            // Only ever set when live was defaulted, not asked for - see the comment above.
+            json.addProperty("liveSearchSkipped", liveSearchSkipped);
         }
 
         // The evidence, not just the summary. The median below is a crude anchor: it collapses
@@ -607,6 +645,50 @@ public final class TransferTools {
                     + "estimate as approximate.");
         }
         return json;
+    }
+
+    /**
+     * The specialty argument for {@link DBManager#loadComparableTransferListings} - see the caller's
+     * comment for why this can't just be {@code player.getSpecialty()} in profile mode. A squad
+     * player's specialty is read off {@code player} (always definitive - HO knows it or it is
+     * genuinely none). A profile's is read off {@code profile} directly, not off the synthetic
+     * {@code player} {@link #playerFromProfile} built (which already collapsed "never given" into
+     * a 0 default for its own weighting math): present (0 included) is confirmed, absent is
+     * unknown and passes {@code null} - no filter, same as the corpus has always done for data it
+     * does not have an opinion on.
+     */
+    static Integer corpusSpecialtyFilter(boolean hasProfile, JsonObject profile, Player player) {
+        if (!hasProfile) {
+            return player.getSpecialty();
+        }
+        return profile.has("specialty") ? profile.get("specialty").getAsInt() : null;
+    }
+
+    /** {@link #search}'s hits (or null), and null unless a search-cap refusal was swallowed. */
+    private record LiveSearchOutcome(JsonObject hits, String skippedNote) {}
+
+    /**
+     * The live comparable search {@code estimateMarketValue} folds in before reading the local
+     * corpus - honouring "live"'s default-true/explicit-true distinction (see the tool's own
+     * schema doc): an explicit {@code live: true} lets a search-cap refusal fail the call, since
+     * the caller knowingly spent it; defaulted-on swallows that same refusal into
+     * {@code skippedNote} instead, since a caller who never asked for it should still get their
+     * free, local-only estimate rather than a hard failure.
+     */
+    private static LiveSearchOutcome runLiveSearch(JsonObject args, TransferSearchQuery query)
+            throws McpToolException {
+        if (!McpJson.optBool(args, "live", true)) {
+            return new LiveSearchOutcome(null, null);
+        }
+        final var explicit = args.has("live") && !args.get("live").isJsonNull();
+        if (explicit) {
+            return new LiveSearchOutcome(search(query), null);
+        }
+        try {
+            return new LiveSearchOutcome(search(query), null);
+        } catch (McpToolException e) {
+            return new LiveSearchOutcome(null, e.getMessage());
+        }
     }
 
     /**
@@ -691,6 +773,90 @@ public final class TransferTools {
             json.addProperty("honesty", profile.get("honesty").getAsInt());
         }
         return json;
+    }
+
+    /**
+     * {@code profile} as a corpus row, but only when it carries both {@code playerId} (this
+     * player's real Hattrick id - never used to look him up in the squad, only to identify the
+     * row) and {@code salePrice} (a confirmed real price, e.g. from {@code get_team_transfers}) -
+     * anything less is either unidentifiable or nothing worth recording. Missing either one is
+     * not an error: {@code profile} usually exists purely to value a hypothetical, with no player
+     * id and no known price at all - null means "nothing to write", not a failure.
+     * <p>
+     * Deliberately narrower than {@link #playerFromProfile}: only fields the caller actually gave
+     * are written - no defaulted skill level, no defaulted specialty or character. A fabricated
+     * value there only affects this one call's own weighting; written to the corpus it would
+     * corrupt every future query that reads this row back.
+     */
+    static TransferListing listingFromProfile(JsonObject profile, Player player) {
+        if (!profile.has("playerId") || !profile.has("salePrice")) {
+            return null;
+        }
+        final var listing = new TransferListing();
+        listing.setPlayerId(profile.get("playerId").getAsInt());
+        listing.setObservedAt(HODateTime.now());
+        if (profile.has("playerName")) {
+            listing.setPlayerName(profile.get("playerName").getAsString());
+        }
+        // age/ageDays from the already-built player, not profile directly: age is mandatory and
+        // ageDays' own 0 default is a real value, same as profilePlayerJson treats them.
+        listing.setAge(player.getAge());
+        listing.setAgeDays(player.getAgeDays());
+        applySkillsToListing(listing, profile.getAsJsonObject("skills"));
+        if (profile.has("specialty")) {
+            listing.setSpecialty(profile.get("specialty").getAsInt());
+        }
+        if (profile.has("tsi")) {
+            listing.setTsi(profile.get("tsi").getAsInt());
+        }
+        if (profile.has("agreeability")) {
+            listing.setAgreeability(profile.get("agreeability").getAsInt());
+        }
+        if (profile.has("aggressiveness")) {
+            listing.setAggressiveness(profile.get("aggressiveness").getAsInt());
+        }
+        if (profile.has("honesty")) {
+            listing.setHonesty(profile.get("honesty").getAsInt());
+        }
+        // salePrice arrives in the user's local currency, same as every other amount this MCP
+        // surface hands the model (get_team_transfers included) - swedishKrona converts it to
+        // what TransferListing's own column actually holds, same as queryFrom does for priceMin/
+        // priceMax. Storing the raw local-currency number here corrupted every stored row by the
+        // league's exchange rate once McpJson.money() converted it back for display.
+        listing.setSalePrice(McpJson.swedishKrona(profile.get("salePrice").getAsLong()));
+        return listing;
+    }
+
+    /**
+     * Writes {@link #listingFromProfile}'s row into HO's local transfer-listing corpus, if it
+     * built one - see that method's doc for when it does and doesn't.
+     *
+     * @return whether a row was written
+     */
+    static boolean recordProfileObservation(JsonObject profile, Player player) {
+        final var listing = listingFromProfile(profile, player);
+        if (listing == null) {
+            return false;
+        }
+        DBManager.instance().storeTransferListing(listing);
+        return true;
+    }
+
+    /** {@code skills} onto {@code listing}'s own columns, under {@link #positionalSkill}'s names. */
+    private static void applySkillsToListing(TransferListing listing, JsonObject skills) {
+        for (final var entry : skills.entrySet()) {
+            final var value = entry.getValue().getAsInt();
+            switch (positionalSkill(entry.getKey())) {
+                case KEEPER -> listing.setKeeper(value);
+                case DEFENDING -> listing.setDefender(value);
+                case PLAYMAKING -> listing.setPlaymaker(value);
+                case PASSING -> listing.setPassing(value);
+                case WINGER -> listing.setWinger(value);
+                case SCORING -> listing.setScorer(value);
+                default -> throw new IllegalStateException(
+                        "positionalSkill only ever returns the six positional skills");
+            }
+        }
     }
 
 
