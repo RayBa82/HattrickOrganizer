@@ -61,7 +61,24 @@ public class PlayerFilterForm extends JPanel {
         }
     }
 
+    /** Hattrick's transfersearch rule: a skill window may span at most this many levels. */
+    private static final int MAX_CHPP_SKILL_SPAN = 3;
+
     public PlayerFilterForm() {
+        this(false);
+    }
+
+    /**
+     * @param enforceChppSkillSpan clamp each skill row's min/max as the user edits them so the pair
+     *                             never breaks Hattrick's transfersearch rule (span of at most 4
+     *                             levels, counted inclusively). The CHPP search needs this - a
+     *                             wider pair always comes back as a CHPP error, never as an empty
+     *                             result. The local scout-list filter must not have it:
+     *                             {@link #resetToWideOpen()} deliberately spans the whole scale, and
+     *                             a local, in-memory filter is not bound by a rule that exists only
+     *                             because the CHPP file itself rejects the request.
+     */
+    public PlayerFilterForm(boolean enforceChppSkillSpan) {
         setLayout(new GridBagLayout());
         setOpaque(false);
 
@@ -81,6 +98,10 @@ public class PlayerFilterForm extends JPanel {
             Helper.setComboBoxFromID(row.min, 7);
             Helper.setComboBoxFromID(row.max, 9);
             row.setVisible(i < usedSkills);
+            if (enforceChppSkillSpan) {
+                row.min.addActionListener(e -> clampSkillSpan(row.min, row.max, true));
+                row.max.addActionListener(e -> clampSkillSpan(row.min, row.max, false));
+            }
         }
 
         layoutFields();
@@ -229,6 +250,27 @@ public class PlayerFilterForm extends JPanel {
 
     private Integer maxOf(int row) {
         return ((CBItem) skillRows[row].max.getSelectedItem()).getId();
+    }
+
+    /**
+     * Keeps one skill row's min/max pair inside Hattrick's transfersearch rule as the user edits
+     * either combo: {@code max} at most {@link #MAX_CHPP_SKILL_SPAN} levels above {@code min}, and
+     * never below it. {@code minChanged} says which combo the user just touched, so the other one is
+     * the one moved - moving the one the user is not looking at, rather than snapping back the one
+     * they just picked.
+     */
+    private static void clampSkillSpan(JComboBox<CBItem> min, JComboBox<CBItem> max, boolean minChanged) {
+        final int minId = ((CBItem) min.getSelectedItem()).getId();
+        final int maxId = ((CBItem) max.getSelectedItem()).getId();
+        if (minChanged) {
+            if (maxId < minId || maxId - minId > MAX_CHPP_SKILL_SPAN) {
+                Helper.setComboBoxFromID(max, Math.min(minId + MAX_CHPP_SKILL_SPAN, PlayerAbility.DIVINE));
+            }
+        } else {
+            if (minId > maxId || maxId - minId > MAX_CHPP_SKILL_SPAN) {
+                Helper.setComboBoxFromID(min, Math.max(maxId - MAX_CHPP_SKILL_SPAN, PlayerAbility.NON_EXISTENT));
+            }
+        }
     }
 
     /**

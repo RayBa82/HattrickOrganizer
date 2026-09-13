@@ -1,6 +1,7 @@
 package module.transfer.search;
 
 import core.constants.player.PlayerSpeciality;
+import core.gui.InfoPanel;
 import core.gui.comp.panel.ImagePanel;
 import core.gui.comp.table.FixedColumnsTable;
 import core.gui.model.UserColumnController;
@@ -34,9 +35,10 @@ public class TransferSearchPanel extends ImagePanel {
     /** Details of the selected hit, and the Add button that copies it into the scout list. */
     private final TransferEingabePanel details;
 
-    private final PlayerFilterForm form = new PlayerFilterForm();
+    private final PlayerFilterForm form = new PlayerFilterForm(true);
     private final JButton search = new JButton(TranslationFacility.tr("ls.transfersearch.search"));
     private final JLabel status = new JLabel(" ");
+    private final Color statusDefaultColor = status.getForeground();
 
     public TransferSearchPanel(TransferScoutPanel scoutPanel) {
         this.details = new TransferEingabePanel(scoutPanel);
@@ -102,6 +104,7 @@ public class TransferSearchPanel extends ImagePanel {
         final var query = buildQuery();
         final var error = query.validationErrorKey();
         if (error != null) {
+            status.setForeground(InfoPanel.FEHLERFARBE);
             status.setText(TranslationFacility.tr(error));
             return;
         }
@@ -117,6 +120,7 @@ public class TransferSearchPanel extends ImagePanel {
         }
         resultsModel.setValues(new Vector<>(results));
         resultsTable.repaint();
+        status.setForeground(statusDefaultColor);
         details.setScoutEintrag(null);
         status.setText(resultText(page.itemCount()));
     }
