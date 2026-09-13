@@ -1542,6 +1542,17 @@ public class DBManager implements PersistenceManager {
 				.markResolveAttempted(playerId, now);
 	}
 
+	public List<Integer> loadTransferListingPlayerIdsMissingCharacter(int max) {
+		return ((TransferListingTable) getTable(TransferListingTable.TABLENAME))
+				.loadPlayerIdsMissingCharacter(max);
+	}
+
+	public void storeTransferListingCharacter(int playerId, int agreeability, int aggressiveness,
+											   int honesty) {
+		((TransferListingTable) getTable(TransferListingTable.TABLENAME))
+				.storeCharacter(playerId, agreeability, aggressiveness, honesty);
+	}
+
 	public List<TransferListing> loadComparableTransferListings(int ageMin, int ageMax,
 																String skill1, int min1, int max1,
 																String skill2, int min2, int max2,

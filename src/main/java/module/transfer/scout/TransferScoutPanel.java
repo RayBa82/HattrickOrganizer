@@ -2,10 +2,14 @@ package module.transfer.scout;
 
 import core.db.DBManager;
 import core.gui.comp.panel.ImagePanel;
+import core.model.TranslationFacility;
 import java.awt.BorderLayout;
 import java.awt.Component;
+import java.awt.FlowLayout;
 
 import javax.swing.*;
+
+import module.transfer.PlayerFilterForm;
 
 /**
  * The TransferScout main Panel
@@ -17,6 +21,9 @@ public class TransferScoutPanel extends ImagePanel {
     private ScoutThread m_clScoutThread;
     private TransferEingabePanel m_jpTransferEingabePanel;
     private TransferScoutingTable m_jtTransferTable;
+    private final PlayerFilterForm filterForm = new PlayerFilterForm();
+    private final JCheckBox futureDeadlineOnly =
+            new JCheckBox(TranslationFacility.tr("ls.scout.filter.futureonly"));
 
     //~ Constructors -------------------------------------------------------------------------------
 
@@ -75,7 +82,7 @@ public class TransferScoutPanel extends ImagePanel {
         m_clScoutThread.setVector(m_jtTransferTable.getTransferTableModel().getScoutListe());
         m_jtTransferTable.refresh();
     }
-    
+
     /**
      * Removes all entries from transfer table and scout thread
      */
@@ -99,10 +106,49 @@ public class TransferScoutPanel extends ImagePanel {
                 newSelectionInform();
             }
         });
+        add(initFilterBar(), BorderLayout.NORTH);
         add(verticalSplitPane, BorderLayout.CENTER);
         verticalSplitPane.setDividerLocation(core.model.UserParameter.instance().transferScoutPanel_horizontalSplitPane);
         m_clScoutThread = ScoutThread.start(DBManager.instance().getScoutList());
     }
+
+    /**
+     * The age/skill/speciality/price criteria of {@link PlayerFilterForm}, plus a scout-only
+     * "still on the market" flag, filtering the table already loaded rather than issuing a CHPP
+     * call - see {@link ScoutFilter}. Applied live on every change, since it costs nothing beyond
+     * a CHPP search's own click-to-run form it borrows its fields from. The form starts wide open
+     * (see {@link PlayerFilterForm#resetToWideOpen()}) rather than at its CHPP-search defaults,
+     * which would otherwise hide most of the scout list the moment the tab opens.
+     */
+    private Component initFilterBar() {
+        filterForm.resetToWideOpen();
+
+        final var panel = new JPanel(new BorderLayout());
+        panel.setOpaque(false);
+        panel.add(filterForm, BorderLayout.CENTER);
+
+        final var buttonRow = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        buttonRow.setOpaque(false);
+        buttonRow.add(futureDeadlineOnly);
+        final var clearButton = new JButton(TranslationFacility.tr("ls.scout.filter.clear"));
+        clearButton.addActionListener(e -> {
+            filterForm.resetToWideOpen();
+            futureDeadlineOnly.setSelected(false);
+            m_jtTransferTable.setEntryFilter(null);
+        });
+        buttonRow.add(clearButton);
+        panel.add(buttonRow, BorderLayout.SOUTH);
+
+        filterForm.addChangeListener(this::applyFilter);
+        futureDeadlineOnly.addActionListener(e -> applyFilter());
+        return panel;
+    }
+
+    private void applyFilter() {
+        m_jtTransferTable.setEntryFilter(
+                ScoutFilter.fromCriteria(filterForm.criteria(), futureDeadlineOnly.isSelected()));
+    }
+
 
     private Component initTransferEingabePanel() {
         m_jpTransferEingabePanel = new TransferEingabePanel(this);

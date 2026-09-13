@@ -2,6 +2,7 @@ package core.db;
 
 import core.util.HODateTime;
 
+import java.sql.ResultSet;
 import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
@@ -149,6 +150,42 @@ public class TransferListingTable extends AbstractTable {
                 + " AND SALEPRICE IS NULL"
                 + " AND DEADLINE >= '" + HODateTime.toDbTimestamp(from) + "'"
                 + " AND DEADLINE <= '" + HODateTime.toDbTimestamp(to) + "'");
+    }
+
+    /**
+     * Distinct players in the corpus whose character (agreeability/aggressiveness/honesty) has
+     * never been fetched, oldest observation first.
+     * <p>
+     * Unlike skills, character survives Hattrick's unlisted pruning - a {@code playerdetails} call
+     * answers it for any player, listed or not - so this is fillable for the whole corpus, not just
+     * players currently on the market. {@code max} bounds it, since a corpus grown large would
+     * otherwise cost an unbounded number of CHPP calls to fill in one pass.
+     */
+    public List<Integer> loadPlayerIdsMissingCharacter(int max) {
+        final var ids = new ArrayList<Integer>();
+        final var sql = "SELECT PLAYERID FROM " + getTableName()
+                + " WHERE AGREEABILITY IS NULL"
+                + " GROUP BY PLAYERID"
+                + " ORDER BY MIN(OBSERVEDAT) ASC"
+                + " LIMIT " + Math.max(max, 0);
+        try (final ResultSet rs = connectionManager.executeQuery(sql)) {
+            while (rs != null && rs.next()) {
+                ids.add(rs.getInt("PLAYERID"));
+            }
+        } catch (Exception e) {
+            core.util.HOLogger.instance().log(getClass(), e);
+        }
+        return ids;
+    }
+
+    /** Fill in character on every observation of this player still missing it. */
+    public void storeCharacter(int playerId, int agreeability, int aggressiveness, int honesty) {
+        connectionManager.executeUpdate("UPDATE " + getTableName()
+                + " SET AGREEABILITY=" + agreeability
+                + ", AGGRESSIVENESS=" + aggressiveness
+                + ", HONESTY=" + honesty
+                + " WHERE PLAYERID=" + playerId
+                + " AND AGREEABILITY IS NULL");
     }
 
     /**

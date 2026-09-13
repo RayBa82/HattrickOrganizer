@@ -21,6 +21,7 @@ import java.util.stream.StreamSupport;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.within;
 
 class TransferToolsTest {
 
@@ -62,6 +63,217 @@ class TransferToolsTest {
         assertThat(TransferTools.betterObservation(newer, sold)).isSameAs(sold);
         assertThat(TransferTools.betterObservation(sold, newer)).isSameAs(sold);
     }
+
+    private static TransferListing listingWithSkillsAndCharacter(int age, int ageDays,
+            int keeper, int defending, int playmaking, int passing, int winger, int scoring,
+            Integer agreeability, Integer aggressiveness, Integer honesty) {
+        final var l = new TransferListing();
+        l.setPlayerId(2);
+        l.setAge(age);
+        l.setAgeDays(ageDays);
+        l.setKeeper(keeper);
+        l.setDefender(defending);
+        l.setPlaymaker(playmaking);
+        l.setPassing(passing);
+        l.setWinger(winger);
+        l.setScorer(scoring);
+        l.setAgreeability(agreeability);
+        l.setAggressiveness(aggressiveness);
+        l.setHonesty(honesty);
+        return l;
+    }
+
+    @Test
+    void thirdHighestOrNull_picksTheThirdHighestAndIgnoresNulls() {
+        assertThat(TransferTools.thirdHighestOrNull(List.of(10, 8, 5, 3))).isEqualTo(5);
+        assertThat(TransferTools.thirdHighestOrNull(
+                java.util.Arrays.asList(10, null, 8, null, 5))).isEqualTo(5);
+    }
+
+    /** A bid-only observation has no skill data at all, not a real, terrible third skill. */
+    @Test
+    void thirdHighestOrNull_isNullWithFewerThanThreeNonNullValues() {
+        assertThat(TransferTools.thirdHighestOrNull(
+                java.util.Arrays.asList(10, null, null))).isNull();
+        assertThat(TransferTools.thirdHighestOrNull(List.of())).isNull();
+    }
+
+    @Test
+    void ageSigmaDays_isTighterForYoungerPlayers() {
+        assertThat(TransferTools.ageSigmaDays(17)).isLessThan(TransferTools.ageSigmaDays(20));
+        assertThat(TransferTools.ageSigmaDays(20)).isLessThan(TransferTools.ageSigmaDays(30));
+    }
+
+    /**
+     * comparableWeight only reports the product - a bug swapping two kernels (age too high,
+     * skill too low) could still cancel out and pass that check alone, so the breakdown itself
+     * needs its own assertion per factor.
+     */
+    @Test
+    void comparableWeightBreakdown_reportsEachKernelSeparately() {
+        // Age matches exactly (20y0d both sides); skill is 2 levels off (third-best 10 vs 8, not
+        // so far that the product gets floor-clamped and hides the per-factor values below);
+        // character is untouched by the listing having none at all.
+        final var listing = new TransferListing();
+        listing.setAge(20);
+        listing.setAgeDays(0);
+        listing.setKeeper(1);
+        listing.setDefender(15);
+        listing.setPlaymaker(12);
+        listing.setPassing(8);
+        listing.setWinger(3);
+        listing.setScorer(2);
+
+        final var breakdown = TransferTools.comparableWeightBreakdown(listing, 2240,
+                TransferTools.ageSigmaDays(20), 10, new int[]{2, 2, 2});
+
+        assertThat(breakdown.age()).isCloseTo(1.0, within(0.001));
+        assertThat(breakdown.skill()).isLessThan(1.0);
+        assertThat(breakdown.character()).isEqualTo(1.0);   // no character data - neutral, not 0
+        assertThat(breakdown.combined())
+                .isCloseTo(breakdown.age() * breakdown.skill() * breakdown.character(), within(0.001));
+    }
+
+    @Test
+    void comparableWeight_isMaximalWhenAgeSkillAndCharacterAllMatch() {
+        // 20 years, 0 days = 2240 total days (HATTRICK_YEAR_DAYS=112); third-best skill 10; matched
+        // exactly by the listing below, so all three kernels sit at diff=0.
+        final var listing = listingWithSkillsAndCharacter(20, 0, 1, 10, 15, 8, 6, 20, 2, 2, 2);
+
+        final var weight = TransferTools.comparableWeight(listing, 2240,
+                TransferTools.ageSigmaDays(20), 10, new int[]{2, 2, 2});
+
+        assertThat(weight).isCloseTo(1.0, within(0.001));
+    }
+
+    @Test
+    void comparableWeight_decaysWithAgeGapButNeverBelowTheFloor() {
+        // Same skill/character match as above, but 10 years and 0 days older - far past any of the
+        // age kernel's sigma bands.
+        final var listing = listingWithSkillsAndCharacter(30, 0, 1, 10, 15, 8, 6, 20, 2, 2, 2);
+
+        final var weight = TransferTools.comparableWeight(listing, 2240,
+                TransferTools.ageSigmaDays(20), 10, new int[]{2, 2, 2});
+
+        assertThat(weight).isLessThan(0.5).isGreaterThanOrEqualTo(0.05);
+    }
+
+    /** A bid-only observation (no skills, no character) still gets a weight, from age alone. */
+    @Test
+    void comparableWeight_defaultsToNeutralWhenSkillOrCharacterDataIsMissing() {
+        final var listing = new TransferListing();
+        listing.setAge(20);
+        listing.setAgeDays(0);
+
+        final var weight = TransferTools.comparableWeight(listing, 2240,
+                TransferTools.ageSigmaDays(20), 10, new int[]{2, 2, 2});
+
+        assertThat(weight).isCloseTo(1.0, within(0.001));
+    }
+
+    /** A candidate whose own two best skills are exactly the target's queried pair is a match. */
+    @Test
+    void sameArchetype_isTrueWhenOwnTopTwoMatchesTheTargetPair() {
+        final var listing = listingWithSkillsAndCharacter(20, 0,
+                1, 2, 15, 3, 10, 4, null, null, null);   // playmaking 15, winger 10 are the top two
+
+        assertThat(TransferTools.sameArchetype(listing,
+                TransferSearchQuery.Skill.PLAYMAKING, TransferSearchQuery.Skill.WINGER)).isTrue();
+    }
+
+    /** The pair's order doesn't matter - only which two skills they are. */
+    @Test
+    void sameArchetype_isOrderIndependent() {
+        final var listing = listingWithSkillsAndCharacter(20, 0,
+                1, 2, 15, 3, 10, 4, null, null, null);   // same listing: playmaking 15, winger 10
+
+        assertThat(TransferTools.sameArchetype(listing,
+                TransferSearchQuery.Skill.WINGER, TransferSearchQuery.Skill.PLAYMAKING)).isTrue();
+    }
+
+    /**
+     * A scorer whose secondary skill (playmaking) happens to sit in a playmaker's queried window
+     * is not a comparable - his own top two skills are a different pair entirely.
+     */
+    @Test
+    void sameArchetype_isFalseWhenOwnTopTwoIsADifferentPair() {
+        final var listing = listingWithSkillsAndCharacter(18, 0,
+                1, 2, 7, 5, 3, 8, null, null, null);   // scoring 8, playmaking 7 are the top two
+
+        assertThat(TransferTools.sameArchetype(listing,
+                TransferSearchQuery.Skill.PLAYMAKING, TransferSearchQuery.Skill.WINGER)).isFalse();
+    }
+
+    /** A listing with no positional skill data at all can't be judged, so it passes - neutral. */
+    @Test
+    void sameArchetype_isTrueWhenTheListingHasNoSkillDataAtAll() {
+        final var listing = new TransferListing();
+
+        assertThat(TransferTools.sameArchetype(listing,
+                TransferSearchQuery.Skill.PLAYMAKING, TransferSearchQuery.Skill.WINGER)).isTrue();
+    }
+
+
+    @Test
+    void fallbackClimb_isNeutralWithoutADeadlineOrOnceItHasPassed() {
+        final var noDeadline = new TransferListing();
+        noDeadline.setObservedAt(HODateTime.fromHT("2026-09-01 00:00:00"));
+        assertThat(TransferTools.fallbackClimb(noDeadline)).isEqualTo(1.0);
+
+        final var alreadyDue = new TransferListing();
+        alreadyDue.setObservedAt(HODateTime.fromHT("2026-09-01 00:00:00"));
+        alreadyDue.setDeadline(HODateTime.fromHT("2026-08-30 00:00:00"));
+        assertThat(TransferTools.fallbackClimb(alreadyDue)).isEqualTo(1.0);
+    }
+
+    @Test
+    void fallbackClimb_climbsWithTimeLeftOnTheClockUpToACap() {
+        final var halfWindow = new TransferListing();
+        halfWindow.setObservedAt(HODateTime.fromHT("2026-09-01 00:00:00"));
+        halfWindow.setDeadline(HODateTime.fromHT("2026-09-03 12:00:00"));   // 2.5 of 5 days
+        assertThat(TransferTools.fallbackClimb(halfWindow)).isCloseTo(1.5, within(0.01));
+
+        final var beyondFullWindow = new TransferListing();
+        beyondFullWindow.setObservedAt(HODateTime.fromHT("2026-09-01 00:00:00"));
+        beyondFullWindow.setDeadline(HODateTime.fromHT("2026-09-20 00:00:00"));   // far past 5 days
+        assertThat(TransferTools.fallbackClimb(beyondFullWindow)).isEqualTo(2.0);
+    }
+
+    @Test
+    void weightedMedian_returnsTheSinglePricePresent() {
+        assertThat(TransferTools.weightedMedian(List.of(new double[]{100_000.0, 1.0})))
+                .isEqualTo(100_000L);
+    }
+
+    /** A heavily-weighted comparable pulls the result to itself, unlike a plain median. */
+    @Test
+    void weightedMedian_isPulledTowardsTheHeaviestWeightedPrice() {
+        final var pairs = List.of(
+                new double[]{100_000.0, 1.0},
+                new double[]{200_000.0, 1.0},
+                new double[]{300_000.0, 100.0});
+
+        assertThat(TransferTools.weightedMedian(pairs)).isEqualTo(300_000L);
+    }
+
+    /**
+     * A plain-median anchor let one poorly-matched comparable's wild price drag even a dominant,
+     * well-matched comparable's own price upward before weighting applied - anchoring the
+     * winsorize band on the sample's own weighted median instead keeps it centered on where the
+     * weight actually is. Numbers are a real estimate_market_value sample: the dominant
+     * comparable (weight 0.93) priced at 5,073 got clamped up to 5,313 by a plain median of just
+     * these two prices (15,939.5) before the fix.
+     */
+    @Test
+    void clampedWeightedMedian_anchorsOnTheWeightedCenterNotThePlainMedian() {
+        final var listing = new TransferListing();
+        final var sample = List.of(
+                new TransferTools.PricedComparable(listing, 5_073L, 0.93),
+                new TransferTools.PricedComparable(listing, 26_806L, 0.25));
+
+        assertThat(TransferTools.clampedWeightedMedian(sample)).isEqualTo(5_073L);
+    }
+
 
     private static McpTool bidTool() {
         return TransferTools.tools().stream()
@@ -113,7 +325,7 @@ class TransferToolsTest {
         assertThat(TransferTools.tools()).extracting(McpTool::name)
                 .containsExactly("search_transfers", "get_team_transfers",
                         "place_bid", "get_open_bids", "add_to_scout", "remove_from_scout",
-                        "list_scout", "estimate_market_value");
+                        "list_scout", "estimate_market_value", "backfill_character");
     }
 
     /**
@@ -131,10 +343,147 @@ class TransferToolsTest {
                 .filter(t -> t.name().equals("estimate_market_value")).findFirst().orElseThrow();
         final var properties = tool.inputSchema().getAsJsonObject("properties");
         assertThat(properties.keySet())
-                .contains("playerId", "ageTolerance", "skillTolerance", "live");
-        assertThat(tool.inputSchema().getAsJsonArray("required"))
-                .extracting(com.google.gson.JsonElement::getAsString)
-                .containsExactly("playerId");
+                .contains("playerId", "profile", "ageTolerance", "skillTolerance", "live");
+        // Neither is unconditionally required at the schema level - profile makes playerId
+        // optional, so the mutual-exclusion / required-field checks live in estimateMarketValue
+        // itself (see the validation tests below) rather than in the schema.
+        assertThat(tool.inputSchema().getAsJsonArray("required")).isEmpty();
+    }
+
+    @Test
+    void estimateMarketValue_requiresPlayerIdOrProfile() {
+        assertThatExceptionOfType(McpToolException.class)
+                .isThrownBy(() -> TransferTools.estimateMarketValue(new JsonObject()))
+                .withMessageContaining("playerId")
+                .withMessageContaining("profile");
+    }
+
+    @Test
+    void estimateMarketValue_rejectsPlayerIdAndProfileTogether() {
+        final var args = JsonParser.parseString(
+                """
+                {"playerId":1,"profile":{}}""").getAsJsonObject();
+
+        assertThatExceptionOfType(McpToolException.class)
+                .isThrownBy(() -> TransferTools.estimateMarketValue(args))
+                .withMessageContaining("not both");
+    }
+
+    @Test
+    void estimateMarketValue_profileRequiresAge() {
+        final var args = JsonParser.parseString(
+                """
+                {"profile":{"skills":{"playmaking":10}}}""").getAsJsonObject();
+
+        assertThatExceptionOfType(McpToolException.class)
+                .isThrownBy(() -> TransferTools.estimateMarketValue(args))
+                .withMessageContaining("age");
+    }
+
+    @Test
+    void estimateMarketValue_profileRequiresAtLeastOneSkill() {
+        final var args = JsonParser.parseString(
+                """
+                {"profile":{"age":24,"skills":{}}}""").getAsJsonObject();
+
+        assertThatExceptionOfType(McpToolException.class)
+                .isThrownBy(() -> TransferTools.estimateMarketValue(args))
+                .withMessageContaining("skills");
+    }
+
+    @Test
+    void estimateMarketValue_namesAnUnrecognizedSkillInProfile() {
+        final var args = JsonParser.parseString(
+                """
+                {"profile":{"age":24,"skills":{"tackling":10}}}""").getAsJsonObject();
+
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> TransferTools.estimateMarketValue(args))
+                .withMessageContaining("tackling");
+    }
+
+    @Test
+    void playerFromProfile_setsAgeSkillsSpecialtyAndCharacterFromTheProfile() throws McpToolException {
+        final var profile = JsonParser.parseString(
+                """
+                {"age":24,"ageDays":40,"skills":{"playmaking":14,"passing":8},"specialty":2,
+                 "agreeability":3,"aggressiveness":2,"honesty":4}""").getAsJsonObject();
+
+        final var player = TransferTools.playerFromProfile(profile);
+
+        assertThat(player.getAge()).isEqualTo(24);
+        assertThat(player.getAgeDays()).isEqualTo(40);
+        assertThat(player.getValue4Skill(PlayerSkill.PLAYMAKING)).isEqualTo(14);
+        assertThat(player.getValue4Skill(PlayerSkill.PASSING)).isEqualTo(8);
+        // unset skill -> Player's own untrained default (1 - Hattrick has no skill level 0)
+        assertThat(player.getValue4Skill(PlayerSkill.SCORING)).isEqualTo(1);
+        assertThat(player.getSpecialty()).isEqualTo(2);
+        assertThat(player.getGentleness()).isEqualTo(3);
+        assertThat(player.getAggressivity()).isEqualTo(2);
+        assertThat(player.getHonesty()).isEqualTo(4);
+    }
+
+    /**
+     * No fabricated data: a profile that never mentions specialty or character leaves the
+     * synthetic Player at whatever its own unset defaults are - it is estimateMarketValue's job
+     * (via targetChar == null, see comparableWeightBreakdown_ignoresCharacterWhenTargetCharIsNull)
+     * to keep that default out of the weighting math, not this constructor's.
+     */
+    @Test
+    void playerFromProfile_leavesCharacterAndSpecialtyAtPlayersOwnDefaultsWhenOmitted()
+            throws McpToolException {
+        final var profile = JsonParser.parseString(
+                """
+                {"age":24,"skills":{"playmaking":14}}""").getAsJsonObject();
+
+        final var player = TransferTools.playerFromProfile(profile);
+
+        assertThat(player.getSpecialty()).isZero();
+        assertThat(player.getGentleness()).isEqualTo(1);   // Player's own unset default
+        assertThat(player.getAggressivity()).isZero();     // Player's own unset default
+        assertThat(player.getHonesty()).isEqualTo(1);      // Player's own unset default
+    }
+
+    /**
+     * The fix for the gap comparableWeightBreakdown had before targetChar could be null: a
+     * candidate with genuine character data must not be penalised against a fabricated {0,0,0}
+     * target just because the profile never gave a character.
+     */
+    @Test
+    void comparableWeightBreakdown_ignoresCharacterWhenTargetCharIsNull() {
+        final var listing = listingWithSkillsAndCharacter(20, 0, 1, 15, 12, 8, 3, 2, 3, 2, 4);
+
+        final var breakdown = TransferTools.comparableWeightBreakdown(listing, 2240,
+                TransferTools.ageSigmaDays(20), 10, null);
+
+        assertThat(breakdown.character()).isEqualTo(1.0);
+    }
+
+    /**
+     * Reported against the profile feature: three basis: resolved_sales calls each came back with
+     * a 40-row comparables array where every row had sold: false - the resolved sales backing
+     * sampleSize were real, just crowded out of the array by unrelated live re-searches with a
+     * fresher observedAt. evidenceOrder is the fix: the sample surfaces within the row cap
+     * regardless of how the rest of the corpus was re-observed since, and the untouched rows keep
+     * their relative (newest-first) order around it.
+     */
+    @Test
+    void evidenceOrder_surfacesTheSampleAheadOfRowsThatWerentUsed() {
+        final var used = new TransferListing();
+        used.setPlayerId(1);
+        final var unused1 = new TransferListing();
+        unused1.setPlayerId(2);
+        final var unused2 = new TransferListing();
+        unused2.setPlayerId(3);
+
+        // Newest-first, as estimateMarketValue hands it in - the two unused rows sort ahead of
+        // the one actually backing the estimate.
+        final var comparables = List.of(unused1, unused2, used);
+        final var sample = List.of(new TransferTools.PricedComparable(used, 500_000L, 1.0));
+
+        final var ordered = TransferTools.evidenceOrder(comparables, sample);
+
+        assertThat(ordered).containsExactly(used, unused1, unused2);
     }
 
     @Test

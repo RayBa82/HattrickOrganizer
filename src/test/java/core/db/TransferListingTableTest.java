@@ -307,4 +307,32 @@ class TransferListingTableTest {
                 "DEFENDER", 0, 20, null, since))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void loadPlayerIdsMissingCharacterFindsARowWithNullCharacter() {
+        table.storeListing(TransferListing.fromHit(hit(900111222, details()), DEADLINE));
+
+        assertThat(table.loadPlayerIdsMissingCharacter(1000)).contains(900111222);
+    }
+
+    /** One playerdetails lookup fills character on every stored observation of that player. */
+    @Test
+    void storeCharacterFillsInEveryMissingObservationOfThatPlayer() {
+        table.storeListing(TransferListing.fromHit(hit(900333444, details()),
+                HODateTime.fromHT("2026-08-30 14:00:00")));
+        table.storeListing(TransferListing.fromHit(hit(900333444, details()),
+                HODateTime.fromHT("2026-08-31 09:00:00")));
+
+        table.storeCharacter(900333444, 1, 5, 0);
+
+        assertThat(table.loadPlayerIdsMissingCharacter(1000)).doesNotContain(900333444);
+        final var rows = table.loadUnresolved(1000).stream()
+                .filter(l -> l.getPlayerId() == 900333444).toList();
+        assertThat(rows).hasSize(2);
+        assertThat(rows).allSatisfy(l -> {
+            assertThat(l.getAgreeability()).isEqualTo(1);
+            assertThat(l.getAggressiveness()).isEqualTo(5);
+            assertThat(l.getHonesty()).isEqualTo(0);
+        });
+    }
 }

@@ -9,6 +9,7 @@ import core.file.xml.XMLCurrentBidsParser;
 import core.file.xml.XMLTransferSearchParser;
 import core.model.player.Player;
 import core.net.OnlineWorker;
+import core.net.TransferListingResolver;
 import core.net.TransferSearchQuery;
 import core.net.ChppWriteService;
 import core.net.TransferSearchService;
@@ -25,6 +26,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -153,7 +156,17 @@ public final class TransferTools {
                                 + "Pass live to search today's market first and fold the hits in "
                                 + "(spends one transfer search).",
                         McpTool.schema(McpTool.properties(
-                                        "playerId", McpTool.prop("integer", "the player to value"),
+                                        "playerId", McpTool.prop("integer",
+                                                "the player to value - a squad player id"),
+                                        "profile", McpTool.prop("object",
+                                                "value a hypothetical player instead of a squad "
+                                                        + "player: {age, skills: {keeper|defending|"
+                                                        + "playmaking|passing|winger|scoring -> "
+                                                        + "level, at least one}, plus optional "
+                                                        + "playerName, ageDays, specialty, tsi, "
+                                                        + "agreeability, aggressiveness, honesty}. "
+                                                        + "Unset skills default to level 0. Provide "
+                                                        + "playerId or profile, not both."),
                                         "ageTolerance", McpTool.prop("integer", "age window in years, default 1"),
                                         "skillTolerance", McpTool.prop("integer", "skill window in levels, default 1"),
                                         "live", McpTool.prop("boolean",
@@ -163,9 +176,21 @@ public final class TransferTools {
                                                         + "session's transfer searches. Default false"),
                                         "observedWithinDays", McpTool.prop("integer",
                                                 "ignore listings older than this many days, default "
-                                                        + DEFAULT_CORPUS_DAYS + " (one Hattrick season)")),
-                                "playerId"),
-                        TransferTools::estimateMarketValue)
+                                                        + DEFAULT_CORPUS_DAYS + " (one Hattrick season)"))),
+                        TransferTools::estimateMarketValue),
+                new McpTool("backfill_character",
+                        "Fetch character (agreeability/aggressiveness/honesty) for corpus players "
+                                + "estimate_market_value has never had it for, oldest observation "
+                                + "first. One CHPP call per player, capped at "
+                                + TransferListingResolver.MAX_CHARACTER_BACKFILL
+                                + " per call regardless of maxPlayers, and time-bounded - the same "
+                                + "pass also runs automatically after every team download. Call "
+                                + "again if moreLikely comes back true.",
+                        McpTool.schema(McpTool.properties(
+                                "maxPlayers", McpTool.prop("integer",
+                                        "how many players to look up this call; default and hard "
+                                                + "cap " + TransferListingResolver.MAX_CHARACTER_BACKFILL))),
+                        TransferTools::backfillCharacter)
         );
     }
 
@@ -185,12 +210,231 @@ public final class TransferTools {
     /** How many comparable rows come back as evidence. Enough to reason over, small enough to read. */
     private static final int MAX_COMPARABLES = 40;
 
-    private static JsonObject estimateMarketValue(JsonObject args) throws McpToolException {
-        final var playerId = McpJson.reqInt(args, "playerId");
-        final var player = McpJson.model().getCurrentPlayer(playerId);
-        if (player == null) {
-            throw new McpToolException("No player with id " + playerId + " is in the squad. "
-                    + "Call get_squad for the ids HO knows about.");
+    /** A Hattrick season year is 112 days (ageDays runs 0-111) - see docs/current.md. Used to turn
+     * age + ageDays into one continuous day count, so a 23y111 and a 24y0 comparable are recognised
+     * as a day apart rather than a full year. */
+    private static final int HATTRICK_YEAR_DAYS = 112;
+
+    /**
+     * Gaussian sigma (in days) for the age-similarity kernel below, banded by the target player's
+     * own age. A one-year age gap moves a trainee's value far more than a veteran's - Hattrick's own
+     * transfer-search enforces a similar shape (a 1-year window cap at 17-18, 2 years from 19) - and
+     * the peak/decline band (docs/transfer-searches.md's untrained-slot section) starts around 26-28,
+     * past which age barely matters. This only sharpens the ordering *within* the hard age filter
+     * above (comparableQuery already excludes anyone outside ageTolerance); it does not replace it.
+     * ponytail: three discrete bands, not a smooth curve fit to real outcomes - there is no resolved-
+     * sale history yet broken down by age to fit one against. Revisit once there is.
+     */
+    private static final int YOUNG_AGE_SIGMA_DAYS = 30;
+    private static final int MID_AGE_SIGMA_DAYS = 75;
+    private static final int VETERAN_AGE_SIGMA_DAYS = 150;
+    private static final int YOUNG_AGE_CUTOFF = 19;
+    private static final int VETERAN_AGE_CUTOFF = 26;
+
+    /** Gaussian sigma (in skill levels) for the third-best-skill kernel - softer than the ±1-level
+     * hard window comparableQuery already applies to the top two skills. */
+    private static final double C_SKILL_SIGMA = 1.5;
+
+    /** Gaussian sigma over the summed absolute gap across all three character traits (0-5 each).
+     * Wide: character is public on any player's page (see "Character over MCP" above) so the market
+     * could in principle price on it, but coverage is still thin, so this is deliberately a weak
+     * signal - see comparableWeight's doc. */
+    private static final double CHARACTER_SIGMA = 4.0;
+
+    /** No comparable's combined weight may fall below this. A soft heuristic across three kernels
+     * should narrow how much a row counts, never zero it out entirely - it still sold or was asked
+     * for something. */
+    private static final double WEIGHT_FLOOR = 0.05;
+
+    /** How far a price may be winsorized from the sample's own plain median before the weighted
+     * median is computed over it. The age/skill/character kernel only measures how similar a player
+     * is, not whether his price is sane - a troll ask sitting close on every one of those axes would
+     * still pass it undamped. Applied uniformly to whichever sample (sales or asks) ends up used;
+     * the untouched range and comparables evidence still show the real observed spread. */
+    private static final double WINSORIZE_BAND = 3.0;
+
+    /**
+     * How much an ask/bid snapshot is nudged up for time still left on the clock, standing in for a
+     * real sale price when {@link #MIN_RESOLVED_SAMPLE} resolved sales are not available. A snapshot
+     * taken early, with days left to bid, systematically undersells what a listing goes for.
+     * ponytail: a single linear ramp fit to four data points (Bulnys 59k->152k, Knop 100k->273k,
+     * Pritchin 204k->466k, Außerbauer 266k->396k, a 1.5x-2.7x spread) the hattrick peer session
+     * collected from its own scouting, not a real regression - revisit once enough resolved sales
+     * exist in the corpus to calibrate against actual outcomes instead of a handful of anecdotes.
+     */
+    private static final double FALLBACK_MAX_CLIMB = 1.0;
+    private static final java.time.Duration FALLBACK_FULL_WINDOW = java.time.Duration.ofDays(5);
+
+    /** exp(-diff^2 / (2*sigma^2)): 1.0 at diff=0, decaying smoothly as diff grows past sigma. */
+    private static double gaussianWeight(double diff, double sigma) {
+        return Math.exp(-(diff * diff) / (2 * sigma * sigma));
+    }
+
+    /** Two decimal places - plenty for a weight in [0,1], too fine to matter beyond that. */
+    private static double round2(double v) {
+        return Math.round(v * 100.0) / 100.0;
+    }
+
+    private static int totalAgeDays(int age, int ageDays) {
+        return age * HATTRICK_YEAR_DAYS + ageDays;
+    }
+
+    static double ageSigmaDays(int ageYears) {
+        if (ageYears < YOUNG_AGE_CUTOFF) {
+            return YOUNG_AGE_SIGMA_DAYS;
+        }
+        return ageYears < VETERAN_AGE_CUTOFF ? MID_AGE_SIGMA_DAYS : VETERAN_AGE_SIGMA_DAYS;
+    }
+
+    /** The third-highest value, or null if fewer than three non-null values are present - a listing
+     * with no skill data at all (a bid-only observation) rather than a real, low third skill. */
+    static Integer thirdHighestOrNull(java.util.Collection<Integer> levels) {
+        final var sorted = levels.stream().filter(java.util.Objects::nonNull)
+                .sorted(Comparator.reverseOrder()).toList();
+        return sorted.size() >= 3 ? sorted.get(2) : null;
+    }
+
+    /**
+     * The three independent similarity kernels {@link #comparableWeight} multiplies together, kept
+     * separate so a caller can see *why* a comparable was down-weighted rather than only by how much.
+     */
+    record WeightBreakdown(double age, double skill, double character) {
+        /** The combined weight {@link #comparableWeight} returns - floored at {@link #WEIGHT_FLOOR}. */
+        double combined() {
+            return Math.max(WEIGHT_FLOOR, age * skill * character);
+        }
+    }
+
+    /**
+     * The age/third-skill/character similarity kernels for one comparable, each defaulting to a
+     * neutral 1.0 when the listing lacks the data to judge it rather than penalising the gap - a bid-
+     * only observation has no skills at all, and most of the corpus still has no character (see the
+     * backfill_character work in docs/current.md).
+     */
+    static WeightBreakdown comparableWeightBreakdown(TransferListing listing, int targetAgeDays,
+                                            double ageSigma, Integer targetCSkill, int[] targetChar) {
+        final var listingAgeDays = totalAgeDays(listing.getAge(),
+                listing.getAgeDays() == null ? 0 : listing.getAgeDays());
+        final var ageWeight = gaussianWeight(Math.abs(listingAgeDays - targetAgeDays), ageSigma);
+
+        final var listingCSkill = thirdHighestOrNull(listingSkillLevels(listing).values());
+        final var skillWeight = listingCSkill == null || targetCSkill == null ? 1.0
+                : gaussianWeight(Math.abs(listingCSkill - targetCSkill), C_SKILL_SIGMA);
+
+        final var charWeight = listing.getAgreeability() == null || targetChar == null ? 1.0
+                : gaussianWeight(Math.abs(listing.getAgreeability() - targetChar[0])
+                        + Math.abs(listing.getAggressiveness() - targetChar[1])
+                        + Math.abs(listing.getHonesty() - targetChar[2]), CHARACTER_SIGMA);
+
+        return new WeightBreakdown(ageWeight, skillWeight, charWeight);
+    }
+
+    /** How much this comparable should count toward the weighted median - see {@link WeightBreakdown}. */
+    static double comparableWeight(TransferListing listing, int targetAgeDays,
+                                            double ageSigma, Integer targetCSkill, int[] targetChar) {
+        return comparableWeightBreakdown(listing, targetAgeDays, ageSigma, targetCSkill, targetChar)
+                .combined();
+    }
+
+    /**
+     * A snapshot ask/bid's price, nudged up for time still left on the clock - see
+     * {@link #FALLBACK_MAX_CLIMB}'s doc. 1.0 (no change) once the deadline has passed or is unknown.
+     */
+    static double fallbackClimb(TransferListing listing) {
+        if (listing.getDeadline() == null) {
+            return 1.0;
+        }
+        final var remaining = java.time.Duration.between(
+                observedAt(listing).getInstant(), listing.getDeadline().getInstant());
+        if (remaining.isNegative() || remaining.isZero()) {
+            return 1.0;
+        }
+        final var fraction = Math.min(
+                (double) remaining.toMinutes() / FALLBACK_FULL_WINDOW.toMinutes(), 1.0);
+        return 1.0 + FALLBACK_MAX_CLIMB * fraction;
+    }
+
+    /** One comparable's contribution: its (possibly fallback-adjusted) price and its weight. */
+    record PricedComparable(TransferListing listing, long price, double weight) {}
+
+    /**
+     * {@code comparables}, with the rows {@code sample} was actually computed from surfacing
+     * first - a stable sort, so each of the two groups keeps {@code comparables}' own newest-
+     * first order. Without this, a caller who trusts {@code basis}/{@code sampleSize} could find
+     * none of the resolved sales they describe within the {@link #MAX_COMPARABLES}-row window: a
+     * sale's observedAt freezes once it resolves, so live re-searches of asks that were never
+     * part of the sample keep pushing their own observedAt ahead of it.
+     */
+    static List<TransferListing> evidenceOrder(List<TransferListing> comparables,
+                                                List<PricedComparable> sample) {
+        final var sampleListings = sample.stream()
+                .map(PricedComparable::listing)
+                .collect(Collectors.toSet());
+        return comparables.stream()
+                .sorted(Comparator.comparing(l -> !sampleListings.contains(l)))
+                .toList();
+    }
+
+
+    /**
+     * The value where cumulative weight first reaches half the total - the weighted analogue of a
+     * plain median. {@code pairs} must already be sorted by price ascending.
+     */
+    static long weightedMedian(List<double[]> pairs) {
+        final var totalWeight = pairs.stream().mapToDouble(p -> p[1]).sum();
+        var cumulative = 0.0;
+        for (final var pair : pairs) {
+            cumulative += pair[1];
+            if (cumulative >= totalWeight / 2.0) {
+                return Math.round(pair[0]);
+            }
+        }
+        return Math.round(pairs.get(pairs.size() - 1)[0]);
+    }
+
+    /**
+     * The weighted median over {@code sample}, winsorized against a wild outlier first - see
+     * {@link #WINSORIZE_BAND}. The clamp band is anchored on this same weighted median, computed
+     * once unclamped, rather than the sample's plain median: a plain-median anchor lets a single
+     * poorly-matched comparable (low weight, wild price) shift the band enough to distort even a
+     * dominant, well-matched comparable's own price before weighting is ever applied. {@code
+     * sample} must already be sorted by price ascending, as {@link #weightedMedian} requires.
+     */
+    static long clampedWeightedMedian(List<PricedComparable> sample) {
+        final var rawPairs = sample.stream()
+                .map(pc -> new double[]{(double) pc.price(), pc.weight()})
+                .toList();
+        final var anchor = weightedMedian(rawPairs);
+        final var lo = anchor / WINSORIZE_BAND;
+        final var hi = anchor * WINSORIZE_BAND;
+        final var clampedPairs = sample.stream()
+                .map(pc -> new double[]{Math.max(lo, Math.min(hi, (double) pc.price())), pc.weight()})
+                .toList();
+        return weightedMedian(clampedPairs);
+    }
+
+    static JsonObject estimateMarketValue(JsonObject args) throws McpToolException {
+        final var hasPlayerId = args.has("playerId") && !args.get("playerId").isJsonNull();
+        final var hasProfile = args.has("profile") && !args.get("profile").isJsonNull();
+        if (!hasPlayerId && !hasProfile) {
+            throw new McpToolException(
+                    "Provide either playerId (a squad player) or profile (age + skills) to value.");
+        }
+        if (hasPlayerId && hasProfile) {
+            throw new McpToolException("Provide playerId or profile, not both.");
+        }
+
+        final JsonObject profile = hasProfile ? args.getAsJsonObject("profile") : null;
+        final Player player;
+        if (hasProfile) {
+            player = playerFromProfile(profile);
+        } else {
+            final var playerId = McpJson.reqInt(args, "playerId");
+            player = McpJson.model().getCurrentPlayer(playerId);
+            if (player == null) {
+                throw new McpToolException("No player with id " + playerId + " is in the squad. "
+                        + "Call get_squad for the ids HO knows about.");
+            }
         }
         final var query = comparableQuery(player,
                 McpJson.optInt(args, "ageTolerance", 1),
@@ -219,38 +463,66 @@ public final class TransferTools {
         // in four searches is four rows: without this he moves the median four times and
         // sampleSize counts rows rather than the players a caller reads it as. Keep his sale where
         // we know it, else his newest observation, and hand the list over newest-first.
+        //
+        // Then dropped unless his OWN top two skills are the same pair queried for - the DB window
+        // above matches skill1/skill2 as two independent bands, so a player of a completely
+        // different archetype (his primary at skill2's level, secondary at skill1's) can otherwise
+        // enter the pool and count at floor weight. See sameArchetype's doc.
         final var comparables = observations.stream()
                 .collect(Collectors.toMap(TransferListing::getPlayerId, l -> l,
                         TransferTools::betterObservation))
                 .values().stream()
+                .filter(l -> sameArchetype(l, query.skillType1(), query.skillType2()))
                 .sorted(Comparator.comparing(TransferTools::observedAt).reversed())
                 .toList();
 
-        final var sales = comparables.stream()
+        // The target's own features, computed once and shared by every comparable's weight below.
+        final var playerLevels = playerSkillLevels(player);
+        final var playerCSkill = thirdHighestOrNull(playerLevels.values());
+        final var playerAgeDays = totalAgeDays(player.getAge(), player.getAgeDays());
+        final var hasFullCharacter = !hasProfile
+                || (profile.has("agreeability") && profile.has("aggressiveness") && profile.has("honesty"));
+        final var playerChar = hasFullCharacter
+                ? new int[]{player.getGentleness(), player.getAggressivity(), player.getHonesty()}
+                : null;
+        final var ageSigma = ageSigmaDays(player.getAge());
+
+        final var salesPriced = comparables.stream()
                 .filter(l -> l.getSalePrice() != null)
-                .map(TransferListing::getSalePrice)
-                .sorted()
+                .map(l -> new PricedComparable(l, l.getSalePrice(),
+                        comparableWeight(l, playerAgeDays, ageSigma, playerCSkill, playerChar)))
+                .sorted(Comparator.comparingLong(PricedComparable::price))
                 .toList();
         // An expired listing keeps its last observed state, so the highest bid is the better
         // reading of what it was worth whenever bidding got past the asking price.
-        final var asks = comparables.stream()
+        final var asksPriced = comparables.stream()
                 .filter(l -> l.getSalePrice() == null)
-                .map(l -> Math.max(l.getAskingPrice(), l.getHighestBid()))
-                .filter(p -> p > 0)
-                .sorted()
+                .map(l -> new PricedComparable(l, Math.max(l.getAskingPrice(), l.getHighestBid()),
+                        comparableWeight(l, playerAgeDays, ageSigma, playerCSkill, playerChar)))
+                .filter(pc -> pc.price() > 0)
+                .sorted(Comparator.comparingLong(PricedComparable::price))
                 .toList();
 
-        final var useSales = sales.size() >= MIN_RESOLVED_SAMPLE;
-        final var sample = useSales ? sales : asks;
+        final var useSales = salesPriced.size() >= MIN_RESOLVED_SAMPLE;
+        // Only the ask/bid fallback gets the climb adjustment - a resolved sale already is what it
+        // went for, nothing to nudge.
+        final var sample = useSales ? salesPriced
+                : asksPriced.stream()
+                        .map(pc -> new PricedComparable(pc.listing(),
+                                Math.round(pc.price() * fallbackClimb(pc.listing())), pc.weight()))
+                        .sorted(Comparator.comparingLong(PricedComparable::price))
+                        .toList();
 
         final var json = new JsonObject();
         json.addProperty("currency", McpJson.currency());
         // The player being valued, so the comparison is self-contained in one call.
-        json.add("player", topSkillsOnly(McpJson.player(player), playerSkillLevels(player)));
+        json.add("player", hasProfile
+                ? profilePlayerJson(profile)
+                : topSkillsOnly(McpJson.player(player), playerLevels));
         json.addProperty("basis", useSales ? "resolved_sales" : "observed_listings");
         json.addProperty("sampleSize", sample.size());
-        json.addProperty("resolvedSalesAvailable", sales.size());
-        json.addProperty("observedListingsAvailable", asks.size());
+        json.addProperty("resolvedSalesAvailable", salesPriced.size());
+        json.addProperty("observedListingsAvailable", asksPriced.size());
         json.addProperty("comparableQuery", query.toQueryString());
         json.addProperty("observedWithinDays", days);
         if (liveSearch != null) {
@@ -262,10 +534,37 @@ public final class TransferTools {
         // The evidence, not just the summary. The median below is a crude anchor: it collapses
         // wage, TSI, form, the other skills and how long ago each was seen, all of which change
         // what a player is worth. Reason over these rows instead of trusting the number.
+        //
+        // weight is the same combined similarity weight the estimate was computed with, so a row
+        // that barely counted is visible as such rather than looking like equal evidence.
+        // weightBreakdown says *why*: which of age/skill/character similarity - each 0-1, 1 meaning
+        // no gap at all - pulled it down, rather than leaving that to be inferred from the raw
+        // numbers next to the target player's own.
+        // adjustedPrice is what this row would contribute to the estimate: the sale price unchanged,
+        // or an ask/bid nudged by fallbackClimb for time still left on the clock - so the climb
+        // documented in estimateNote/note can be checked per row instead of only taken on faith.
+        // The sample the estimate above was actually computed from surfaces first, so a caller
+        // who trusts basis/sampleSize sees those rows within the cap - see evidenceOrder's doc.
         final var evidence = new JsonArray();
-        comparables.stream()
+        evidenceOrder(comparables, sample).stream()
                 .limit(MAX_COMPARABLES)
-                .forEach(l -> evidence.add(topSkillsOnly(McpJson.listing(l), listingSkillLevels(l))));
+                .forEach(l -> {
+                    final var row = topSkillsOnly(McpJson.listing(l), listingSkillLevels(l));
+                    final var breakdown = comparableWeightBreakdown(
+                            l, playerAgeDays, ageSigma, playerCSkill, playerChar);
+                    row.addProperty("weight", round2(breakdown.combined()));
+                    final var weightBreakdown = new JsonObject();
+                    weightBreakdown.addProperty("age", round2(breakdown.age()));
+                    weightBreakdown.addProperty("skill", round2(breakdown.skill()));
+                    weightBreakdown.addProperty("character", round2(breakdown.character()));
+                    row.add("weightBreakdown", weightBreakdown);
+                    final var rawPrice = l.getSalePrice() != null ? l.getSalePrice()
+                            : Math.max(l.getAskingPrice(), l.getHighestBid());
+                    final var adjustedPrice = l.getSalePrice() != null ? rawPrice
+                            : Math.round(rawPrice * fallbackClimb(l));
+                    row.addProperty("adjustedPrice", McpJson.money(adjustedPrice));
+                    evidence.add(row);
+                });
         json.add("comparables", evidence);
         json.addProperty("comparablesReturned", evidence.size());
         json.addProperty("comparablesMatched", comparables.size());
@@ -279,23 +578,139 @@ public final class TransferTools {
                     + "returns is stored and becomes a comparable.");
             return json;
         }
-        json.addProperty("estimate", McpJson.money(median(sample)));
-        json.addProperty("estimateNote", "Median over all " + sample.size() + " comparables, as a "
-                + "starting anchor only - it ignores wage, TSI, form, specialty, set pieces and how "
-                + "stale each observation is. The comparables array carries those, and is the "
-                + "better basis for a judgement. Each row lists its three best positional skills "
+
+        // Winsorized against the sample's own weighted center before the weighted median is
+        // computed - see clampedWeightedMedian's doc. The reported range below is the real,
+        // un-clamped spread.
+        json.addProperty("estimate", McpJson.money(clampedWeightedMedian(sample)));
+        json.addProperty("estimateNote", "Weighted median over " + sample.size() + " comparables - "
+                + "weighted by closeness in age (day precision), third-best skill and character "
+                + "where known, and clamped against a wild outlier - as a starting anchor only. It "
+                + "still ignores wage, TSI, form and how stale each observation is. The comparables "
+                + "array carries those plus each row's own weight (weightBreakdown says which of "
+                + "age/skill/character pulled it down) and adjustedPrice (what it actually "
+                + "contributed, after the time-left climb below where that applies) - check the "
+                + "number instead of trusting it. Each row lists its three best positional skills "
                 + "plus set pieces; the positional skills below the top three are not returned.");
         final var range = new JsonArray();
-        range.add(McpJson.money(sample.get(0)));
-        range.add(McpJson.money(sample.get(sample.size() - 1)));
+        range.add(McpJson.money(sample.get(0).price()));
+        range.add(McpJson.money(sample.get(sample.size() - 1).price()));
         json.add("range", range);
         if (!useSales) {
-            json.addProperty("note", sales.isEmpty()
+            json.addProperty("note", salesPriced.isEmpty()
                     ? "No resolved sale prices for this profile yet, so this is what sellers asked "
-                    + "and bidders bid, not what players went for - read it as an upper bound."
-                    : sales.size() + " resolved sale(s) is too thin a sample, so asking prices and "
-                    + "bids were used instead - read the estimate as an upper bound.");
+                    + "and bidders bid, nudged up for time still left on the clock at the time each "
+                    + "was observed (a snapshot taken early in a listing's life undersells it) - "
+                    + "still an approximation, not what players went for."
+                    : salesPriced.size() + " resolved sale(s) is too thin a sample, so asking prices "
+                    + "and bids were used instead, with the same time-left adjustment - read the "
+                    + "estimate as approximate.");
         }
+        return json;
+    }
+
+    /**
+     * A synthetic {@link Player} built from a {@code profile} argument rather than the DB - the
+     * same throwaway-construction pattern {@link module.transfer.scout.PlayerConverter}'s
+     * {@code buildHTCopyButton} uses for a copy-pasted transfer listing. Not squad-backed, not
+     * persisted anywhere.
+     */
+    static Player playerFromProfile(JsonObject profile) throws McpToolException {
+        if (!profile.has("age") || profile.get("age").isJsonNull()) {
+            throw new McpToolException("profile.age is required.");
+        }
+        if (!profile.has("skills") || !profile.get("skills").isJsonObject()
+                || profile.getAsJsonObject("skills").isEmpty()) {
+            throw new McpToolException("profile.skills is required and must list at least one skill.");
+        }
+        final var player = new Player();
+        player.setAge(profile.get("age").getAsInt());
+        player.setAgeDays(McpJson.optInt(profile, "ageDays", 0));
+        for (final var entry : profile.getAsJsonObject("skills").entrySet()) {
+            player.setValue4Skill(positionalSkill(entry.getKey()).toPlayerSkill(),
+                    entry.getValue().getAsInt());
+        }
+        player.setSpecialty(McpJson.optInt(profile, "specialty", 0));
+        if (profile.has("tsi")) {
+            player.setTsi(profile.get("tsi").getAsInt());
+        }
+        if (profile.has("agreeability")) {
+            player.setGentleness(profile.get("agreeability").getAsInt());
+        }
+        if (profile.has("aggressiveness")) {
+            player.setAggressivity(profile.get("aggressiveness").getAsInt());
+        }
+        if (profile.has("honesty")) {
+            player.setHonesty(profile.get("honesty").getAsInt());
+        }
+        return player;
+    }
+
+    /**
+     * {@code "playmaking"} -> {@link TransferSearchQuery.Skill#PLAYMAKING} - one of the six
+     * positional skills {@code profile.skills} may be keyed by, the same vocabulary
+     * {@link #skillName} produces. Deliberately narrower than every {@code Skill} constant: set
+     * pieces, stamina, leadership and experience are not comparable-matching criteria (see
+     * {@link #POSITIONAL_SKILLS}) and are rejected here rather than silently accepted.
+     */
+    static TransferSearchQuery.Skill positionalSkill(String name) {
+        return POSITIONAL_SKILLS.stream()
+                .filter(s -> skillName(s).equals(name))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Unknown skill '" + name
+                        + "' in profile.skills. Use one of " + POSITIONAL_SKILLS.stream()
+                        .map(TransferTools::skillName).collect(Collectors.joining(", "))));
+    }
+
+    /**
+     * The {@code "player"} field for a {@code profile}-based valuation - built only from the
+     * fields the caller actually supplied, so nothing is echoed back with an invented value (see
+     * {@link #playerFromProfile} for the defaults used to run the actual comparable matching).
+     */
+    static JsonObject profilePlayerJson(JsonObject profile) {
+        final var json = new JsonObject();
+        if (profile.has("playerName")) {
+            json.addProperty("playerName", profile.get("playerName").getAsString());
+        }
+        json.addProperty("age", profile.get("age").getAsInt());
+        json.addProperty("ageDays", McpJson.optInt(profile, "ageDays", 0));
+        json.add("skills", profile.getAsJsonObject("skills"));
+        if (profile.has("specialty")) {
+            json.addProperty("specialty", profile.get("specialty").getAsInt());
+        }
+        if (profile.has("tsi")) {
+            json.addProperty("tsi", profile.get("tsi").getAsInt());
+        }
+        if (profile.has("agreeability")) {
+            json.addProperty("agreeability", profile.get("agreeability").getAsInt());
+        }
+        if (profile.has("aggressiveness")) {
+            json.addProperty("aggressiveness", profile.get("aggressiveness").getAsInt());
+        }
+        if (profile.has("honesty")) {
+            json.addProperty("honesty", profile.get("honesty").getAsInt());
+        }
+        return json;
+    }
+
+
+    /**
+     * Fill in character for corpus players that have never had it fetched. Thin wrapper: the actual
+     * lookup is {@link TransferListingResolver#backfillCharacter}, shared with the same pass running
+     * automatically after every team download, so both respect the same time budget rather than a
+     * tool call being able to run longer than a download-triggered one would.
+     */
+    private static JsonObject backfillCharacter(JsonObject args) {
+        final var max = Math.min(Math.max(
+                McpJson.optInt(args, "maxPlayers", TransferListingResolver.MAX_CHARACTER_BACKFILL), 0),
+                TransferListingResolver.MAX_CHARACTER_BACKFILL);
+        final var result = TransferListingResolver.backfillCharacter(max);
+        final var json = new JsonObject();
+        json.addProperty("checked", result.checked());
+        json.addProperty("updated", result.updated());
+        // A full batch means the cap or the time budget was hit, not necessarily that the corpus is
+        // exhausted - call again to keep going.
+        json.addProperty("moreLikely", result.checked() >= max);
         return json;
     }
 
@@ -369,6 +784,34 @@ public final class TransferTools {
     }
 
     /**
+     * Whether {@code listing}'s own two best positional skills are the same pair {@code skill1}
+     * and {@code skill2} - order doesn't matter, only the archetype identity. Without this, a
+     * candidate whose SECONDARY skill happens to sit in the target's PRIMARY skill's queried band
+     * still counts as a comparable even though he plays an entirely different role (a scorer with
+     * a decent secondary playmaking level matched against a playmaker's own primary/secondary
+     * window). A listing with no positional skill data at all can't be judged either way, so it
+     * passes - the same neutral default {@link #comparableWeightBreakdown} uses when data is
+     * missing, rather than penalising a thin observation for something it never recorded.
+     */
+    static boolean sameArchetype(TransferListing listing, TransferSearchQuery.Skill skill1,
+                                  TransferSearchQuery.Skill skill2) {
+        final var levels = listingSkillLevels(listing);
+        if (POSITIONAL_SKILLS.stream().allMatch(s -> levels.get(skillName(s)) == null)) {
+            return true;
+        }
+        final var ownTopTwo = POSITIONAL_SKILLS.stream()
+                .sorted(Comparator.comparingInt(
+                        (TransferSearchQuery.Skill s) -> {
+                            final var level = levels.get(skillName(s));
+                            return level == null ? -1 : level;
+                        }).reversed())
+                .limit(2)
+                .collect(Collectors.toSet());
+        return ownTopTwo.equals(Set.of(skill1, skill2));
+    }
+
+
+    /**
      * Which of two observations of the same player represents him: the one that carries what he
      * actually sold for, else the newest.
      */
@@ -387,13 +830,6 @@ public final class TransferTools {
                 ? HODateTime.fromHT("1990-01-01 00:00:00") : listing.getObservedAt();
     }
 
-    /** The middle value; for an even sample the mean of the two middle ones. */
-    private static long median(List<Long> sorted) {
-        final var middle = sorted.size() / 2;
-        return sorted.size() % 2 == 1
-                ? sorted.get(middle)
-                : (sorted.get(middle - 1) + sorted.get(middle)) / 2;
-    }
 
     /** The TRANSFERLISTING column a market search skill is stored in. */
     private static String column(TransferSearchQuery.Skill skill) {

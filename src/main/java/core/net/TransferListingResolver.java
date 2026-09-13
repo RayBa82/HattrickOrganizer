@@ -3,9 +3,11 @@ package core.net;
 import core.db.DBManager;
 import core.db.TransferListing;
 import core.file.xml.XMLPlayersParser;
+import core.gui.HOMainFrame;
 import core.model.UserParameter;
 import core.util.HODateTime;
 import core.util.HOLogger;
+import core.util.Helper;
 import module.transfer.XMLParser;
 import module.transfer.scout.ScoutEintrag;
 import module.transfer.scout.ScoutList;
@@ -103,6 +105,15 @@ public final class TransferListingResolver {
         final var looked = new HashSet<Integer>();   // playerdetails fetched for him this run
         final var entries = ScoutList.entries();
 
+        // All three work lists up front, so the status bar can count through the whole run - it can
+        // take a minute, and a bar that stands still for that long looks like HO has hung. Loading
+        // the corpus before the scout passes loses nothing: the rows they add are live listings,
+        // which the corpus pass would skip, and a player they resolve is skipped through seen.
+        final var sales = salesToAskAbout(entries, saleWatermark(now), now);
+        final var watch = relistingsToWatch(entries, now);
+        final var corpus = DBManager.instance().loadUnresolvedTransferListings(Integer.MAX_VALUE);
+        final var progress = new Progress(sales.size() + watch.size() + corpus.size());
+
         // Pass one: the sale, for entries whose watched transfer ended since the last run.
         //
         // Scoped by a watermark, because "what did he sell for" has exactly one moment to be
@@ -112,7 +123,8 @@ public final class TransferListingResolver {
         // reached the rest: a player who had sold twenty minutes before sat at position 85 of 92 and
         // was skipped download after download, indefinitely.
         var resolvedThrough = settled(now);
-        for (final var candidate : salesToAskAbout(entries, saleWatermark(now), now)) {
+        for (final var candidate : sales) {
+            progress.step();
             if (outOfTime(deadline)) {
                 // Leave the watermark at the first candidate not reached, not at now. The window
                 // is inclusive of it, so a truncated run resumes next time. Erring towards asking
@@ -159,7 +171,8 @@ public final class TransferListingResolver {
         // SCOUT_WATCH_GRACE. Newest expiry first so a run cut short by the clock skips the stalest
         // entries, and it asks nothing about sales: pass one has already done that, once, for
         // every entry here.
-        for (final var candidate : relistingsToWatch(entries, now)) {
+        for (final var candidate : watch) {
+            progress.step();
             if (outOfTime(deadline)) {
                 break;
             }
@@ -176,10 +189,13 @@ public final class TransferListingResolver {
             }
         }
 
-        // Then the valuation corpus, with whatever is left of the time. Rows, not players: one
-        // player repeatedly observed holds several.
-        for (final var listing : DBManager.instance().loadUnresolvedTransferListings(Integer.MAX_VALUE)) {
-            if (outOfTime(deadline)) {
+        // Then the valuation corpus, on its own budget rather than whatever passes one and two left
+        // of TIME_BUDGET - see CORPUS_BACKFILL_BUDGET's doc for why. Rows, not players: one player
+        // repeatedly observed holds several.
+        final var corpusDeadline = System.nanoTime() + CORPUS_BACKFILL_BUDGET.toNanos();
+        for (final var listing : corpus) {
+            progress.step();
+            if (outOfTime(corpusDeadline)) {
                 break;
             }
             if (!seen.add(listing.getPlayerId())) {
@@ -197,6 +213,79 @@ public final class TransferListingResolver {
             }
         }
         return resolved;
+    }
+
+    /**
+     * How long the general-corpus passes may run: the valuation corpus's sale-price backfill inside
+     * {@link #resolve}, and {@link #backfillCharacter}. Deliberately its own budget, smaller than
+     * and separate from {@link #TIME_BUDGET}'s 60 seconds, rather than either one sharing whatever
+     * the scout-list passes above it in {@code resolve()} leave over.
+     * <p>
+     * Scout-list entries are urgent (a sale has exactly one moment it can still be asked about) and
+     * few, so they get first claim on {@code TIME_BUDGET} and can legitimately spend the whole 60
+     * seconds on a busy run. The general corpus - which is what {@code estimate_market_value}
+     * actually reads - has no such urgency, but starving it of any budget at all just because the
+     * scout list was busy is the wrong trade: it grew by 19 rows over several downloads while
+     * character, freed of that competition by this same budget, grew by over a thousand. Neither
+     * pass needs a window that closes the way a sale price freshly past its deadline does, so a
+     * player or row this budget runs out on is simply picked up again next call.
+     */
+    private static final java.time.Duration CORPUS_BACKFILL_BUDGET = java.time.Duration.ofSeconds(20);
+
+    /**
+     * Hard cap on how many players {@link core.mcp.TransferTools}'s {@code backfill_character} tool
+     * call may look up in one call, regardless of the time budget.
+     */
+    public static final int MAX_CHARACTER_BACKFILL = 200;
+
+    /** @param checked how many players were actually looked up before time or the cap ran out
+     *  @param updated how many of those got character filled in */
+    public record CharacterBackfillResult(int checked, int updated) {
+    }
+
+    /**
+     * Fill in character (agreeability/aggressiveness/honesty) for corpus players that have never
+     * had it fetched, oldest observation first. One {@code playerdetails} call per player.
+     * <p>
+     * Character survives Hattrick's unlisted-player pruning - unlike the seven hidden skills, a
+     * {@code playerdetails} call answers it for any player, listed or not - so unlike the skills-fill
+     * pass in {@link #observe} this is not limited to players back on the market right now; it can
+     * work through the whole corpus.
+     * <p>
+     * Time-bounded for the reason documented on {@link #TIME_BUDGET}: a fixed call count is half a
+     * minute on a fast link and much longer on a slow one, and this runs on the caller's thread -
+     * the download's event-dispatch thread when called from {@link OnlineWorker#resolveTransferListings},
+     * or an MCP request thread when called from the tool. Best effort per player: a failed lookup is
+     * logged and skipped, not retried within this run.
+     * <p>
+     * Delegates the actual lookup to {@link #observe}, the same method {@link #resolve}'s three
+     * passes use - not a separate {@code playerdetails} call of its own. {@code resolve()} runs
+     * first in {@link OnlineWorker#resolveTransferListings}, and {@code observe()} persists
+     * character unconditionally, so a player any of its passes already looked up this download is
+     * no longer missing character by the time this pass queries the corpus - it is never asked
+     * about twice in the same run.
+     *
+     * @param max upper bound on players looked up, independent of the time budget
+     */
+    public static CharacterBackfillResult backfillCharacter(int max) {
+        final var deadline = System.nanoTime() + CORPUS_BACKFILL_BUDGET.toNanos();
+        final var now = HODateTime.now();
+        final var playerIds = DBManager.instance().loadTransferListingPlayerIdsMissingCharacter(max);
+        var checked = 0;
+        var updated = 0;
+        for (final var playerId : playerIds) {
+            if (outOfTime(deadline)) {
+                break;
+            }
+            checked++;
+            // observe() itself persists character (and, if he is listed again, a fresh snapshot
+            // row) - reused rather than duplicated so this pass and resolve()'s three passes never
+            // each spend their own playerdetails call on the same player.
+            if (observe(playerId, now) != null) {
+                updated++;
+            }
+        }
+        return new CharacterBackfillResult(checked, updated);
     }
 
     /**
@@ -279,6 +368,31 @@ public final class TransferListingResolver {
     record Candidate(int playerId, HODateTime deadline) {}
 
 
+    /**
+     * Counts the run through HO's status bar. Repainted only when the percentage moves, so a long
+     * corpus list costs at most a hundred repaints.
+     */
+    private static final class Progress {
+        private final int total;
+        private int done;
+        private int shown = -1;
+
+        Progress(int total) {
+            this.total = total;
+        }
+
+        void step() {
+            final var percent = ++done * 100 / total;   // total > 0: step() only runs inside a loop
+            if (percent == shown) {
+                return;
+            }
+            shown = percent;
+            HOMainFrame.instance().setInformation(Helper.getTranslation(
+                    "ls.update_status.transfer_prices") + " " + done + " / " + total);
+            HOMainFrame.instance().updateProgress(percent);
+        }
+    }
+
     /** Whether this run has used up {@link #TIME_BUDGET}. */
     private static boolean outOfTime(long deadlineNanos) {
         return System.nanoTime() - deadlineNanos >= 0;
@@ -286,9 +400,15 @@ public final class TransferListingResolver {
 
     /**
      * Look at one player on the market and, if he is actually listed, snapshot him into the corpus.
+     * Either way, backfill his character onto every row the corpus already holds for him.
      * <p>
      * The skills-fill pass and the re-listing watch are the same operation - "call playerdetails,
-     * and if he is listed store a full row" - so they share one call rather than spending two.
+     * and if he is listed store a full row" - so they share one call rather than spending two. The
+     * character backfill piggybacks on that same call for the same reason: {@code playerdetails}
+     * answers it whether or not he is listed (unlike the seven hidden skills, character survives
+     * Hattrick's unlisted pruning), so every call this method ever makes, from any of its three call
+     * sites, is a free chance to close the gap {@code backfill_character}'s own pass would otherwise
+     * have to spend a second, separate {@code playerdetails} call on for the very same player.
      * <p>
      * Deliberately unguarded. The corpus pass's two short-circuits live at its own call site (see
      * {@link #observeForCorpus}) and must not move in here: a scout entry normally <em>does</em>
@@ -307,6 +427,8 @@ public final class TransferListingResolver {
                 DBManager.instance().storeTransferListing(
                         TransferListing.fromPlayerDetails(m, now));
             }
+            DBManager.instance().storeTransferListingCharacter(playerId,
+                    m.player().getGentleness(), m.player().getAggressivity(), m.player().getHonesty());
             return m;
         } catch (Exception e) {
             HOLogger.instance().error(TransferListingResolver.class, e);

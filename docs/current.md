@@ -2226,3 +2226,333 @@ rule: where they disagree, `currentWeek` wins. An agent that reads only `skillCh
 the old wrong answer. Fixing `FutureTrainingManager` to seed the in-progress week from real minutes
 would remove the contradiction at the source, but that changes HO's own Training tab predictions and
 was out of scope here.
+
+## Scout list filter, reusing the transfer-search criteria (2026-09-12)
+
+The transfer scout tab (`TransferScout`) gained a filter bar built from the same age/skill/
+speciality/max-price fields as the `Transfer search` tab, plus a scout-only "future deadline"
+checkbox — filtering the scout list already in memory rather than issuing a CHPP call.
+
+- **`module.transfer.PlayerFilterForm`** (new) — the age spinners, up to four skill rows (`+`/`-`
+  reveal/hide, same as before) with a min/max `PlayerAbility` combo each, speciality combo and max
+  price field, extracted verbatim out of `TransferSearchPanel` into a standalone `JPanel`. Exposes
+  a `Criteria` record (age range, `List<SkillRange>`, speciality id, max price in swedish krona) and
+  keeps `maxPriceOrNull` as the one static helper worth unit testing on its own
+  (`PlayerFilterFormTest`, replacing `TransferSearchPanelTest`). `TransferSearchPanel` now embeds it
+  and builds its `TransferSearchQuery` off `form.criteria()`; behaviour is unchanged.
+- **`module.transfer.scout.ScoutFilter`** (new, pure, no Swing) — `fromCriteria(Criteria,
+  futureDeadlineOnly)` returns a `Predicate<ScoutEintrag>`. Each `TransferSearchQuery.Skill` maps
+  straight onto the matching `ScoutEintrag` getter (`getTorwart`, `getKondition`, `getStandards`,
+  `getVerteidigung`, `getTorschuss`, `getFluegelspiel`, `getPasspiel`, `getSpielaufbau`,
+  `getLeadership`, `getErfahrung` — all ten already existed), age against `getAlterWithAgeDays()`,
+  speciality against `getSpeciality()`, price via `AmountOfMoney.isGreaterThan`. The future-deadline
+  flag is a separate `and()`-ed predicate: `getDeadline() != null && getDeadline().after(now)` —
+  deliberately not tied to `isSold()`, since the two are not independent in practice (`ScoutFilterTest`
+  covers all five branches with hand-built `ScoutEintrag`s).
+- **`TransferScoutingTable.setEntryFilter(Predicate<ScoutEintrag>)`** (new) attaches a `RowFilter` to
+  the `TableRowSorter` that `HOTableModel.initTable` already installs on every such table — the same
+  pattern `PenaltyTakersView.setRowFilter()` already uses elsewhere in this codebase. This is a pure
+  view filter: it never touches `TransferScoutingTableModel`'s backing `Vector<ScoutEintrag>`, so
+  `ScoutList.save()` still persists every entry regardless of what is filtered out of sight — a
+  filtered-out row cannot be silently dropped from the scout list.
+- **`TransferScoutPanel`** gained a `BorderLayout.NORTH` filter bar: `PlayerFilterForm` + the
+  future-deadline checkbox + a **Clear filter** button. Filtering is live — `PlayerFilterForm.
+  addChangeListener(Runnable)` (new) hooks every control (age spinners, each skill row's
+  skill/min/max, the `+`/`-` row count, speciality, a `DocumentListener` on the price field) and the
+  checkbox's own listener, both re-applying `ScoutFilter.fromCriteria(...)` on every change - there
+  is no CHPP call behind it, so a button click would only have added friction. The form starts wide
+  open (`PlayerFilterForm.resetToWideOpen()`, new: full 17-40 age range, full 0-20 skill range, no
+  speciality, no price cap) rather than at its CHPP-search defaults (20-22, playmaking 7-9), which
+  would otherwise hide most of the scout list the moment the tab opens. **Clear filter** calls
+  `resetToWideOpen()` plus unchecks the future-deadline box, then explicitly sets a `null` row
+  filter (the live listeners it just triggered already converge on a match-everything filter, but
+  `null` is what actually removes the `RowFilter` object rather than installing an always-true one).
+  New keys `ls.scout.filter.clear`, `ls.scout.filter.futureonly` (`ls.scout.filter`, the button
+  label, was added and then removed in the same pass once the button itself was dropped).
+- **German translations added** for the `ls.transfersearch.*` block (shipped English-only per the
+  transfer-search tab work above) and the three new `ls.scout.filter*` keys. Unrelated to this
+  change but discovered on the way: `German.properties` is missing every `ls.*` key added since
+  roughly the transfer-search / MCP-server / Hall-of-Fame-experttype work (`ls.hof.experttype.*`,
+  `ls.options.mcp.*` — zero matches in German at all), not just this feature's keys. Left alone, out
+  of scope here; a maintainer pass through POEditor is the real fix.
+
+No DB migration, no CHPP change. Full suite green (758 tests, 64 suites, 0 failures).
+
+## `backfill_character`, first slice of the estimate_market_value rework (2026-09-12)
+
+Cross-session design discussion (this session + the `hattrick` peer session) on improving
+`estimate_market_value`'s comparable weighting - full plan not yet implemented, but it surfaced a
+standing gap worth fixing on its own: **most of the corpus can never get character**, because the
+only two writers (`add_to_scout`, and the resolver's scout-sale pass) both require the player to be
+on the scout list. A search hit or a bid snapshot never gets a follow-up `playerdetails` call, so
+those rows sit at `AGREEABILITY IS NULL` forever. Confirmed against the live DB: 122 of 4086
+TRANSFERLISTING rows had character, 31 with a resolved sale.
+
+**Character survives Hattrick's unlisted-player pruning** (§ "Character over MCP" above already
+established this for the XML shape) - unlike the seven hidden skills, a `playerdetails` call answers
+it for *any* player, listed or not, on any account tier. So a dedicated backfill pass doesn't need
+the "is he listed right now" guard `observeForCorpus`'s skill-fill has; it can walk the whole corpus,
+not just players currently back on the market.
+
+Added, no schema change (the three columns were already nullable):
+
+- `TransferListingTable.loadPlayerIdsMissingCharacter(max)` - distinct players with
+  `AGREEABILITY IS NULL`, oldest observation first.
+- `TransferListingTable.storeCharacter(playerId, agreeability, aggressiveness, honesty)` - one
+  `UPDATE ... WHERE AGREEABILITY IS NULL`, so one lookup fills every stored observation of that
+  player at once (same pattern as `storeSalePrice`), plus the matching `DBManager` wrappers.
+- `TransferListingResolver.backfillCharacter(max)` - the actual pass: one
+  `OnlineWorker.downloadMarketPlayer` call per missing player, best-effort per player, returns a
+  `CharacterBackfillResult(checked, updated)`. Lives in `TransferListingResolver`, not `TransferTools`,
+  so it can share `resolve()`'s time-budget discipline (see `TIME_BUDGET`'s own doc comment on why
+  this file replaced a call-count cap with wall-clock time) rather than duplicating a raw loop that
+  a slow connection could stretch to minutes. Its own `CHARACTER_BACKFILL_BUDGET` is a smaller 20s,
+  deliberately not shared with `resolve()`'s 60s: a sale price has a closing window, character does
+  not, so it must not compete with the sale pass for the same budget on every download.
+- **Runs automatically after every team download**, alongside sale-price resolution:
+  `OnlineWorker.resolveTransferListings()` now calls both `TransferListingResolver.resolve()` and
+  `.backfillCharacter(MAX_CHARACTER_BACKFILL)` as two independent try/catch blocks, so a failure or
+  timeout in either does not cost the other its turn. This was the actual ask - `backfill_character`
+  alone would only have filled character when an agent remembered to call it.
+- MCP tool `backfill_character` (`maxPlayers`, default and hard cap `MAX_CHARACTER_BACKFILL` = 200) is
+  a thin wrapper over the same resolver method, for a caller who wants to force a batch beyond
+  waiting on downloads. Reports `checked`/`updated`/`moreLikely` (true when the cap or the time
+  budget was hit, meaning call again).
+
+Also corrected mid-discussion: the `hattrick` session initially reasoned that comparables shouldn't
+be weighted on character because "bidders can't see it without scouting" - wrong per this project's
+own docs (`chpp_files.md`'s playerdetails section, and the pruning note above); character is public
+on any player's page, listed or not. The real obstacle was only ever corpus coverage, which this
+backfill addresses.
+
+Still open, not yet built: the weighted-comparable rework itself (C-skill + character + a
+continuous age-days kernel favouring trainee sensitivity below ~19, replacing the flat
+age/A-skill/B-skill hard filter's plain median) and the ask/bid fallback recalibration (`hattrick`'s
+resolved-sale data shows early snapshot bids/asks closing 1.5-2.7x higher than the raw number
+`estimate_market_value` reports today).
+
+### Closed a double-`playerdetails`-call gap between `resolve()` and `backfillCharacter()`
+
+Rainer caught it: `backfillCharacter()` had its own raw `OnlineWorker.downloadMarketPlayer` call,
+separate from `resolve()`'s three passes (sale candidates, re-listing watch, corpus skill-fill) which
+also call `playerdetails` per player via the shared `observe()` helper. `observe()` only ever
+persisted character onto a *freshly inserted* row (`TransferListing.fromPlayerDetails`, and only when
+the player happened to be listed again) - never backfilled onto the player's existing null-character
+rows. So a player `resolve()` had just fetched `playerdetails` for could still show up in
+`backfillCharacter()`'s `AGREEABILITY IS NULL` query moments later in the same
+`resolveTransferListings()` call, costing a second, redundant `playerdetails` call for data already
+in hand.
+
+Checked with `impact_analysis` before touching `observe()`, since it is shared by three call sites:
+exactly three callers, all internal to `resolve()`'s own passes, and exactly two callers of
+`backfillCharacter()` (`OnlineWorker.resolveTransferListings()` and the MCP tool) - safe to change.
+
+Root-cause fix, not a bigger merge: `observe()` now calls `storeTransferListingCharacter`
+unconditionally on every successful response, listed or not - character survives Hattrick's
+unlisted pruning, so it's always there to store, and the DB's `WHERE AGREEABILITY IS NULL` in
+`storeCharacter` makes it a safe no-op when there is nothing to fill. `backfillCharacter()` was
+rewritten to call `observe()` too, instead of duplicating the download-and-store logic - `observe()`
+is now the one place that downloads `playerdetails` and applies everything a response can produce.
+
+This closes the gap without merging `resolve()` and `backfillCharacter()` into one loop over a
+unified candidate set: `resolveTransferListings()` still runs them as two sequential top-level calls,
+but `resolve()` commits to the database immediately, and `backfillCharacter()` re-queries fresh
+afterwards - so a player either pass already looked up this download is no longer missing character
+by the time the other asks, with no in-memory state to thread between two otherwise-separate methods.
+A fuller unification (one pass, one candidate set covering sale price + character + skill-fill +
+relisting-watch together) was considered and set aside: the four passes select candidates on
+genuinely different criteria (a sale watermark, a re-listing grace window, a skill-fill grace window,
+"never fetched at all") that do not collapse into one query, and `resolve()` is already flagged at
+cognitive complexity 33 against a 15 budget - folding a fifth concern in would make it worse for a
+gap the sequencing fix above already closes. Full suite green (760 tests, 64 suites, 0 failures).
+
+### The general corpus's sale-price pass was starved by the scout-list passes sharing its budget
+
+Rainer restarted HO, ran several downloads, and asked why sale price (1705 -> 1724, +19 rows) grew so
+much slower than character (122 -> 1333, +1211 rows) after the fixes above. The two passes are not
+actually different in shape - `resolve()`'s corpus pass (pass three: unresolved rows, oldest
+observation first, time-bounded) is structurally the same walk as `backfillCharacter()` - but they
+were not on equal footing for time. `resolve()`'s three passes (sale candidates, re-listing watch,
+corpus) all shared one `TIME_BUDGET` (60s), consumed in that order, and the corpus pass's own comment
+said it as much: "with whatever is left of the time." Passes one and two are scout-list housekeeping
+and can legitimately spend the whole 60 seconds on a run with many newly-expired entries, since a
+sale has exactly one moment it can still be asked about - which regularly left pass three, the one
+`estimate_market_value` actually reads, with nothing.
+
+Fix: pass three now runs on its own budget, `CORPUS_BACKFILL_BUDGET` (20s) - the same constant
+`backfillCharacter()` uses (renamed from `CHARACTER_BACKFILL_BUDGET`, since both are now instances of
+the same policy: a lower-priority, general-corpus concern gets a guaranteed slice of its own instead
+of only ever getting what scout-list housekeeping did not spend). Worst case per download is now up
+to TIME_BUDGET + CORPUS_BACKFILL_BUDGET (resolve()) + CORPUS_BACKFILL_BUDGET (backfillCharacter, its
+own top-level call) = 100s, versus 80s before - accepted, since the alternative is a corpus pass that
+can go arbitrarily long without making progress on a busy scout list. Full suite green (760 tests).
+
+### Baseline for the next test, live DB as of 2026-09-12 18:32:41
+
+Recorded before the `CORPUS_BACKFILL_BUDGET` fix above has run against a real download - this build
+was not yet rebuilt/restarted when these downloads happened, so it's the "before" number to compare
+the fix against, not a result of it:
+
+| Metric | Value |
+|---|---|
+| Total TRANSFERLISTING rows | 4170 |
+| Rows with character | 1919 |
+| Distinct players with character | 913 |
+| Rows with resolved sale price | 1725 |
+| Rows marked resolve-attempted | 3261 |
+| Newest observation | 2026-09-12 18:32:41 |
+
+Sale price barely moved against the prior checkpoint (1724 -> 1725) while character kept climbing
+(1333 -> 1919) - consistent with the starvation bug above still being live in the running jar.
+Expectation once rebuilt (`./gradlew createVersion createDistribution`) and re-run: sale price should
+start climbing at a comparable rate to character, since pass three no longer waits on scout-list
+leftovers.
+
+### A modal CHPP error dialog per player could freeze a download (2026-09-12)
+
+Rainer hit it live: `HO_error.png` showed "CHPP Fehler - 56 - Additional Info: null" on
+`playerdetails?...&includeMatchInfo=true&playerID=512663039`, mid-download, with his working theory
+being a currently-running match on that player's team.
+
+Root cause, independent of what error 56 specifically means (no confirmed mapping for it in this
+project's docs - `Connector`/`XMLCHPPPreParser` just relay whatever `<ErrorCode>` Hattrick sends):
+`OnlineWorker.downloadMarketPlayer` - the single method behind both `TransferListingResolver.observe`
+(the sale/character/skill-fill passes, and now `backfillCharacter`) and `TransferTools.observeForScout`
+(`add_to_scout`) - never set `Connector`'s `silentDownload` flag. Any CHPP error on that call reaches
+`Connector.getCHPPWebFile`'s catch block, which pops a `JOptionPane.showMessageDialog` whenever
+`!silentDownload` - and that call **blocks** until the dialog is dismissed. `add_to_scout` only ever
+spent one such call per player, so this was rare enough not to be noticed; `backfill_character` can
+look up dozens of players per call (within its 20s `CORPUS_BACKFILL_BUDGET`), so a single unlucky
+player mid-match now had the potential to freeze the whole download waiting for someone at the
+keyboard - once for every such player it happened to hit.
+
+Fix: `downloadMarketPlayer` now wraps its call in `Connector.instance().setSilentDownload(true)` /
+restore, the same save-and-restore pattern `downloadYouthPlayers`'s unlock-skills fallback already
+uses elsewhere in this file. Both callers already treat a failed lookup as best-effort - logged via
+`HOLogger` and skipped, never surfaced - so the modal was always redundant with that handling, just
+also actively harmful at the new call volume. Full suite green (760 tests).
+
+### estimate_market_value: weighted comparables, outlier winsorizing, fallback recalibration (2026-09-12)
+
+Implemented the design from the earlier cross-session discussion with the `hattrick` peer session
+(character-weighting correction included). All in `TransferTools.java`, no schema change, no new
+tool - `estimate_market_value`'s existing hard filter (age/A-skill/B-skill/specialty, unchanged) still
+bounds `comparableQuery`; everything below is a re-ranking of what it already returns.
+
+**Weighted median, not a plain one.** Each comparable gets a weight = product of three independent
+Gaussian similarity kernels against the target player, each defaulting to a neutral 1.0 - not a
+penalty - when the listing lacks the data to judge it (a bid-only observation has no skills at all;
+most of the corpus still has no character):
+- **Age**, on `age*112+ageDays` (a Hattrick season year is 112 days) rather than year-only, so a
+  23y111/24y0 pair one day apart no longer reads as a full year gap. Sigma is banded by the target's
+  own age (`ageSigmaDays`: tight below 19, loosest from 26 on) - sharper trainee sensitivity, matching
+  both Hattrick's own search-window shape (1-year cap at 17-18, 2 years from 19) and the peak/decline
+  band `docs/transfer-searches.md` already documents starting around 26-28.
+- **Third-best positional skill** (`thirdHighestOrNull`), softer than the ±1-level hard window on the
+  top two skills.
+- **Character**, summed absolute gap across all three traits, wide sigma (weak signal by design,
+  given current coverage - see the `backfill_character` work above).
+
+Floored at 0.05 (`WEIGHT_FLOOR`) - a soft heuristic should narrow a row's influence, never zero it
+out. `weightedMedian` walks the price-ascending list accumulating weight until it crosses half the
+total, the weighted analogue of the existing plain `median`. Each evidence row in `comparables` now
+also carries its own `weight`, so a row that barely counted is visible as such rather than reading
+like equal evidence.
+
+**Outlier winsorizing.** The kernel above only measures how similar a player is, not whether his
+price is sane - a troll ask sitting close on every one of those axes (the hattrick session's example:
+a mid-skill teenager asking EUR6.75M next to EUR150-400k comparables) would pass it undamped. Each
+price is clamped to within `WINSORIZE_BAND` (3x) of the sample's own plain median before the weighted
+median is computed over it. The reported `range` and the `comparables` evidence stay un-clamped, so
+the outlier is still visible, just no longer able to become the estimate itself.
+
+**Ask/bid fallback recalibration.** When too few resolved sales exist and the tool falls back to
+asking/bid snapshots, each price is now nudged up by `fallbackClimb`: a linear ramp from 1.0x (at or
+past the deadline) to 2.0x (a full `FALLBACK_FULL_WINDOW` of 5 days still left) based on how much time
+remained when the snapshot was taken. `ponytail`: fit to four data points the hattrick session
+collected from its own scouting (Bulnys 59k->152k, Knop 100k->273k, Pritchin 204k->466k, Außerbauer
+266k->396k - a 1.5x-2.7x spread), not a real regression - revisit once enough resolved sales exist in
+the corpus to calibrate against actual outcomes instead of a handful of anecdotes.
+
+**Tests**: 10 new pure-function tests in `TransferToolsTest` (`thirdHighestOrNull`, `ageSigmaDays`,
+`comparableWeight`, `fallbackClimb`, `weightedMedian`) - `estimateMarketValue` itself still has no
+direct test, same as before this change, since it needs a loaded `HOVerwaltung` model; the pure
+helpers underneath it are where the new logic actually lives. Full suite green (770 tests).
+
+Still open from the original design discussion: nothing else - this was the last piece. Future work
+would be calibrating the sigma bands and the fallback climb against real resolved-sale history once
+there is enough of it, per the `ponytail:` comments left in the code.
+
+### Per-row transparency: weightBreakdown and adjustedPrice on each comparable (2026-09-12)
+
+Rainer, reasoning about the tool as its own LLM consumer: `weight` alone says how much a comparable
+counted, not why, and the fallback-climb note above is a paragraph-level claim with no per-row number
+to check it against - either meant recomputing the math by hand to verify it instead of the tool
+having already done that.
+
+Refactored `comparableWeight` into `comparableWeightBreakdown`, returning a `WeightBreakdown(age,
+skill, character)` record (each kernel's own value, 0-1) with a `combined()` method doing the same
+floor-then-product `comparableWeight` always did - `comparableWeight` is now a one-line wrapper over
+it, so every existing call site and test keeps working unchanged. Each `comparables` evidence row now
+adds:
+- `weightBreakdown`: `{age, skill, character}`, so a row down-weighted for age versus one
+  down-weighted for character no longer look the same at a glance.
+- `adjustedPrice`: the sale price unchanged, or an ask/bid run through `fallbackClimb` - the actual
+  number that row would contribute to the estimate, checkable per row instead of only described in
+  `estimateNote`/`note`.
+
+One new test, `comparableWeightBreakdown_reportsEachKernelSeparately`, specifically checking the
+three factors independently - `comparableWeight`'s existing tests only ever checked the *product*,
+which a bug swapping two kernels (one too high, one too low) could still pass by cancelling out.
+Full suite green (771 tests).
+
+## `estimate_market_value` for a player outside the squad (2026-09-13)
+
+Design in `docs/superpowers/specs/2026-09-13-estimate-market-value-raw-profile-design.md`. The tool
+required `playerId` to resolve against the current squad, so a departed player (sold this season,
+visible only through `get_team_transfers` + `get_player_history`), a prospective buy, or an
+opponent's player could never be valued. `profile` is now a sibling argument: `{age, skills: {one
+of the six positional skills -> level, at least one}, plus optional playerName, ageDays, specialty,
+tsi, agreeability, aggressiveness, honesty}`. Exactly one of `playerId`/`profile` per call.
+
+`playerFromProfile` builds a throwaway `Player` (`new Player()` plus setters - the same pattern
+`PlayerConverter.buildHTCopyButton` already uses for a copy-pasted transfer listing, never persisted)
+and feeds it through the identical `comparableQuery`/`comparableWeightBreakdown`/`sameArchetype` code
+every squad player already goes through. Two things the design doc got wrong or underspecified, both
+caught before or via the tests:
+
+- **Skill-name validation is narrower than `TransferSearchQuery.Skill`.** That enum has 10 constants
+  (adds `STAMINA`, `SETPIECES`, `LEADERSHIP`, `EXPERIENCE` on top of the six `POSITIONAL_SKILLS`), but
+  `profile.skills` must reject anything outside the six - a new `positionalSkill()` helper, not a
+  reuse of `parseSkill`'s full-enum `valueOf`.
+- **Omitted skills default to 1, not 0.** The design doc said 0; Hattrick has no skill level 0 (1-20
+  is the real range), and `Player`'s own fields already default to 1 for exactly that reason. Caught
+  by a failing test rather than by re-reading the doc closely enough the first time - the code (just
+  leaving an unset skill at `Player`'s own default) was already right, the test's expectation wasn't.
+
+`comparableWeightBreakdown`'s `targetChar` (`int[]`) is now nullable: a `profile` missing any of
+`agreeability`/`aggressiveness`/`honesty` passes `null` rather than a fabricated `{0,0,0}`, so a
+candidate with real character data isn't penalised against a target that never had one. The
+`profile`-path response is built field-by-field from what the caller actually supplied (no wage/
+contract/team fields a bare profile never had), unlike the `playerId` path's `topSkillsOnly`, which
+is untouched. 8 new tests; full suite green (784 tests).
+
+### The `basis`/evidence mismatch survived the profile work too (2026-09-13)
+
+Flagged by another session testing the new `profile` path against three real sold players: all three
+calls came back `basis: "resolved_sales"`, `sampleSize: 11`, but every one of the 40 `comparables`
+rows had `sold: false`. Not a regression from the profile change - the same shape as an earlier,
+already-documented caveat (see "What the corpus actually holds" above: 11 players with a resolved
+sale exist in the whole corpus). Root cause: the `comparables` evidence array was built straight from
+the newest-observed-first list regardless of which rows the estimate actually used. A resolved sale's
+`observedAt` freezes the moment it resolves; every live re-search of the *same* age/skill window
+keeps bumping unrelated, never-resolved asks to the front with a fresher timestamp, so once the
+corpus for a window holds more than `MAX_COMPARABLES` (40) rows, the resolved sales backing
+`sampleSize` can be pushed out of the array entirely - the tool ends up citing evidence it isn't
+showing.
+
+Fix: `evidenceOrder(comparables, sample)` - a stable sort that moves `sample`'s own rows (the ones
+the estimate was actually computed from) to the front, leaving the rest in their existing
+newest-first order. One new test pins it directly, without needing a DB fixture: two `TransferListing`
+stubs that were never part of the sample, one that was, handed in newest-first, sample-member first
+out. Full suite green (785 tests).

@@ -185,13 +185,16 @@ public class OnlineWorker {
 	}
 
 	/**
-	 * Fill the real sale price into expired transfer listings and scout entries.
+	 * Fill the real sale price into expired transfer listings and scout entries, then fill in
+	 * character for corpus players that have never had it fetched.
 	 * <p>
-	 * The price is <b>not</b> part of the HRF. A team download brings this team's own transfers,
-	 * but a player HO merely watched on the market belongs to somebody else, so what he went for
-	 * takes a separate {@code transfersPlayer} call each. This piggybacks on the download because
-	 * that is a moment the user chose to spend CHPP traffic, not because the data arrives with it.
-	 * Bounded by {@code TransferListingResolver}'s time budget only - these files have no CHPP rate limit.
+	 * Neither is part of the HRF. A team download brings this team's own transfers, but a player HO
+	 * merely watched on the market belongs to somebody else, so what he went for - and his character
+	 * - takes a separate CHPP call each. This piggybacks on the download because that is a moment
+	 * the user chose to spend CHPP traffic, not because the data arrives with it. Each pass has its
+	 * own time budget in {@code TransferListingResolver} - these files have no CHPP rate limit - and
+	 * runs as an independent attempt, so a failure or timeout in one does not cost the other its
+	 * turn.
 	 * <p>
 	 * A failure here must never fail the download, so it is logged and swallowed.
 	 */
@@ -201,6 +204,16 @@ public class OnlineWorker {
 			if (resolved > 0) {
 				HOLogger.instance().info(OnlineWorker.class,
 						"Resolved sale price of " + resolved + " transfer listing(s)");
+			}
+		} catch (Exception e) {
+			HOLogger.instance().error(OnlineWorker.class, e);
+		}
+		try {
+			final var filled = TransferListingResolver.backfillCharacter(
+					TransferListingResolver.MAX_CHARACTER_BACKFILL);
+			if (filled.updated() > 0) {
+				HOLogger.instance().info(OnlineWorker.class,
+						"Filled in character for " + filled.updated() + " transfer listing player(s)");
 			}
 		} catch (Exception e) {
 			HOLogger.instance().error(OnlineWorker.class, e);
@@ -1507,10 +1520,25 @@ public class OnlineWorker {
 	/**
 	 * A player-details download read as market data, so it works for somebody else's player.
 	 * {@link #downloadPlayerDetails} returns null for those.
+	 * <p>
+	 * Silent: both callers ({@code TransferListingResolver.observe}, backing the sale/character/
+	 * skill-fill passes and {@code backfill_character}; {@code TransferTools.observeForScout},
+	 * backing {@code add_to_scout}) already treat a failed lookup as best-effort - logged and
+	 * skipped, never surfaced. Without this, any CHPP error on this file - reproduced as error 56,
+	 * plausibly Hattrick refusing to answer for a player mid-match, though this project has no
+	 * confirmed mapping for that code - pops a blocking modal dialog for every failure. Harmless for
+	 * the single call {@code add_to_scout} makes per player; not for {@code backfill_character},
+	 * which can look up dozens of players in one call and would freeze on each one in turn, waiting
+	 * for someone at the keyboard to click through it.
 	 */
 	public static XMLPlayersParser.MarketPlayer downloadMarketPlayer(String playerID) {
-		var xml = Connector.instance().downloadPlayerDetails(playerID);
-		return new XMLPlayersParser().parseMarketPlayerFromString(xml);
+		var silent = Connector.instance().setSilentDownload(true);
+		try {
+			var xml = Connector.instance().downloadPlayerDetails(playerID);
+			return new XMLPlayersParser().parseMarketPlayerFromString(xml);
+		} finally {
+			Connector.instance().setSilentDownload(silent);
+		}
 	}
 
 	public static void downloadTeamLogo(Map<String, String> team) {
