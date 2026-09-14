@@ -76,6 +76,21 @@ public final class TransferTools {
                                 + "estimate_market_value.",
                         searchSchema(),
                         args -> search(queryFrom(args))),
+                new McpTool("search_transfers_batch",
+                        "Run several search_transfers queries in one call - for sweeping "
+                                + "specialty x age-window combos Hattrick's own span limits force "
+                                + "apart. Same CHPP calls and per-session cap as calling "
+                                + "separately; only saves round trips. Each result echoes its "
+                                + "query; a failed one (cap exhausted, invalid range) reports its "
+                                + "own error without stopping the rest.",
+                        McpTool.schema(McpTool.properties(
+                                        "queries", McpTool.prop("array", "the searches to run, "
+                                                + "each shaped exactly like search_transfers's own "
+                                                + "arguments (ageMin, ageMax, skills required; "
+                                                + "specialty, nativeCountryId, tsiMin, tsiMax, "
+                                                + "priceMin, priceMax, pageSize optional)")),
+                                "queries"),
+                        TransferTools::searchBatch),
                 new McpTool("get_team_transfers",
                         "The managed team's own transfer history, newest first, with price, TSI at "
                                 + "transfer time and the mother-club and previous-club fees. A local "
@@ -120,7 +135,8 @@ public final class TransferTools {
                                 + "tab) - not a Hattrick bookmark; get_open_bids reads Hattrick's "
                                 + "separate list. Each player must have been seen by an earlier "
                                 + "search_transfers. Adding one already listed replaces his entry. "
-                                + "One CHPP call per player, for the character traits.",
+                                + "One CHPP call per player for character traits, echoed back per "
+                                + "player (same shape as list_scout) - no read-back call needed.",
                         McpTool.schema(McpTool.properties(
                                         "players", McpTool.prop("array",
                                                 "the players to add, either bare player ids or "
@@ -1094,12 +1110,12 @@ public final class TransferTools {
             // The panel only persists at shutdown; save now so the shortlist survives a crash.
             ScoutList.save(list);
 
+            // Full entry, not just the id: observeForScout already paid for the character fields
+            // (and everything else scoutEntry reads off entry), so echo them back instead of
+            // making the caller round-trip through list_scout to read what add_to_scout just fetched.
             final var added = new JsonArray();
             for (final var entry : entries.values()) {
-                final var json = new JsonObject();
-                json.addProperty("playerId", entry.getPlayerID());
-                json.addProperty("name", entry.getName());
-                added.add(json);
+                added.add(McpJson.scoutEntry(entry));
             }
             final var out = new JsonObject();
             out.addProperty("status", "ok");
@@ -1606,6 +1622,43 @@ public final class TransferTools {
         json.addProperty("itemCount", page.itemCount());
         json.addProperty("pageSize", page.pageSize());
         json.add("hits", hits);
+        return json;
+    }
+
+    /**
+     * A sweep of {@link #search} calls in one round trip. Each query is independent: one hitting
+     * the per-session cap or an invalid range reports its own {@code error} rather than losing the
+     * queries already answered, since discarding those would cost the caller exactly the round
+     * trips this tool exists to save.
+     */
+    private static JsonObject searchBatch(JsonObject args) {
+        final var queries = McpJson.reqArray(args, "queries");
+        if (queries.isEmpty()) {
+            throw new IllegalArgumentException("queries is empty - pass at least one search.");
+        }
+        final var results = new JsonArray();
+        for (final var element : queries) {
+            final var item = new JsonObject();
+            item.add("query", element.deepCopy());
+            try {
+                if (!element.isJsonObject()) {
+                    throw new IllegalArgumentException(
+                            "Each entry in queries must be an object, got: " + element);
+                }
+                final var result = search(queryFrom(element.getAsJsonObject()));
+                for (final var entry : result.entrySet()) {
+                    if (!entry.getKey().equals("currency")) {
+                        item.add(entry.getKey(), entry.getValue());
+                    }
+                }
+            } catch (IllegalArgumentException | McpToolException e) {
+                item.addProperty("error", e.getMessage());
+            }
+            results.add(item);
+        }
+        final var json = new JsonObject();
+        json.addProperty("currency", McpJson.currency());
+        json.add("results", results);
         return json;
     }
 

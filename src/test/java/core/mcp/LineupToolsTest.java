@@ -18,6 +18,16 @@ class LineupToolsTest {
     }
 
     @Test
+    void setPlayerGroup_acceptsEitherOneGroupOrMixedAssignments() {
+        final var setPlayerGroup = LineupTools.tools().stream()
+                .filter(t -> t.name().equals("set_player_group")).findFirst().orElseThrow();
+
+        assertThat(setPlayerGroup.inputSchema().getAsJsonArray("required")).isEmpty();
+        final var properties = setPlayerGroup.inputSchema().getAsJsonObject("properties");
+        assertThat(properties.keySet()).contains("playerIds", "group", "assignments");
+    }
+
+    @Test
     void sendMatchOrder_rejectsAnUnknownMatchType() {
         final var sendTool = LineupTools.tools().stream()
                 .filter(t -> t.name().equals("send_match_order")).findFirst().orElseThrow();

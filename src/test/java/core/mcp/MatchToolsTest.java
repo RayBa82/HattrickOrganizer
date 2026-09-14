@@ -241,15 +241,17 @@ class MatchToolsTest {
         assertThat(report.get("teamName").getAsString()).isEqualTo("Target FC");
         assertThat(report.get("matchesUsed").getAsInt()).isEqualTo(2);
 
+        // Raw match-report ints (12, 10, 8, ...), decoded to RatingPredictionModel's own scale
+        // via (raw - 1) / 4.0 + 1 before averaging - see MatchTools.sectorRating.
         final var ratings = report.getAsJsonObject("opponentRatings");
         assertThat(ratings.get("opponentName").getAsString()).isEqualTo("Target FC");
-        assertThat(ratings.get("opponentMidfield").getAsDouble()).isEqualTo(10.0);
-        assertThat(ratings.get("opponentDefenceLeft").getAsDouble()).isEqualTo(8.0);
-        assertThat(ratings.get("opponentDefenceCentral").getAsDouble()).isEqualTo(8.0);
-        assertThat(ratings.get("opponentDefenceRight").getAsDouble()).isEqualTo(8.0);
-        assertThat(ratings.get("opponentAttackLeft").getAsDouble()).isEqualTo(6.0);
-        assertThat(ratings.get("opponentAttackCentral").getAsDouble()).isEqualTo(6.0);
-        assertThat(ratings.get("opponentAttackRight").getAsDouble()).isEqualTo(6.0);
+        assertThat(ratings.get("opponentMidfield").getAsDouble()).isEqualTo(3.25);
+        assertThat(ratings.get("opponentDefenceLeft").getAsDouble()).isEqualTo(2.75);
+        assertThat(ratings.get("opponentDefenceCentral").getAsDouble()).isEqualTo(2.75);
+        assertThat(ratings.get("opponentDefenceRight").getAsDouble()).isEqualTo(2.75);
+        assertThat(ratings.get("opponentAttackLeft").getAsDouble()).isEqualTo(2.25);
+        assertThat(ratings.get("opponentAttackCentral").getAsDouble()).isEqualTo(2.25);
+        assertThat(ratings.get("opponentAttackRight").getAsDouble()).isEqualTo(2.25);
     }
 
     @Test
@@ -271,13 +273,15 @@ class MatchToolsTest {
         assertThat(newest.get("location").getAsString()).isEqualTo("home");
         assertThat(newest.get("opponentTeamId").getAsInt()).isEqualTo(200);
         assertThat(newest.get("matchType").getAsString()).isEqualTo("LEAGUE");
-        assertThat(newest.get("midfield").getAsInt()).isEqualTo(12);
+        // Decoded from the raw 12, see MatchTools.sectorRating.
+        assertThat(newest.get("midfield").getAsDouble()).isEqualTo(3.75);
 
         final var older = matches.get(1).getAsJsonObject();
         assertThat(older.get("location").getAsString()).isEqualTo("away");
         assertThat(older.get("opponentTeamId").getAsInt()).isEqualTo(300);
         assertThat(older.get("opponentTeamName").getAsString()).isEqualTo("Someone Else");
-        assertThat(older.get("midfield").getAsInt()).isEqualTo(8);
+        // Decoded from the raw 8, see MatchTools.sectorRating.
+        assertThat(older.get("midfield").getAsDouble()).isEqualTo(2.75);
     }
 
     /**

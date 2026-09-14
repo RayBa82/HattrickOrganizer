@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import core.gui.HOMainFrame;
 import core.gui.theme.GroupTeamFactory;
+import core.model.HOModel;
 import core.model.player.IMatchRoleID;
 import core.model.player.Player;
 import core.net.ChppWriteService;
@@ -56,14 +57,19 @@ public final class LineupTools {
                 new McpTool("set_player_group",
                         "File players under a squad group - the A/B/C team markers HO shows beside "
                                 + "them and the lineup assistant selects on. An empty group clears "
-                                + "it. Only the listed players change, so moving a squad means one "
-                                + "call per group; get_squad reports each player's current group.",
+                                + "it. Only the listed players change. Pass playerIds+group for one "
+                                + "group, or assignments ({playerId, group} pairs) to file several "
+                                + "groups in one call; get_squad reports each player's current group.",
                         McpTool.schema(McpTool.properties(
-                                        "playerIds", McpTool.prop("array", "player ids to file"),
-                                        "group", McpTool.prop("string",
-                                                "one of: " + String.join(", ", GroupTeamFactory.TEAMS_GROUPS)
-                                                        + " (the empty one clears the group)")),
-                                "playerIds", "group"),
+                                "playerIds", McpTool.prop("array",
+                                        "player ids to file under group; omit if using assignments"),
+                                "group", McpTool.prop("string",
+                                        "one of: " + String.join(", ", GroupTeamFactory.TEAMS_GROUPS)
+                                                + " (the empty one clears the group); omit if using "
+                                                + "assignments"),
+                                "assignments", McpTool.prop("array",
+                                        "{playerId, group} pairs, instead of playerIds+group, for "
+                                                + "filing players under different groups in one call"))),
                         LineupTools::setPlayerGroup),
                 new McpTool("send_match_order",
                         "Send THE LINEUP CURRENTLY SET IN HO to Hattrick as the match order. This "
@@ -293,30 +299,41 @@ public final class LineupTools {
         return slots;
     }
 
+    private record GroupAssignment(Player player, String group) {
+    }
+
     private static JsonObject setPlayerGroup(JsonObject args) throws McpToolException {
         final var model = McpJson.model();
-        final var group = group(McpJson.reqString(args, "group"));
 
         // Resolve everyone up front: a bad id must not leave half the squad refiled.
-        final var players = new ArrayList<Player>();
-        for (final var id : McpJson.reqArray(args, "playerIds")) {
-            final var player = model.getCurrentPlayer(id.getAsInt());
-            if (player == null) {
-                throw new McpToolException("No player with id " + id.getAsInt() + " is in the squad. "
-                        + "Call get_squad for the ids HO knows about.");
+        final var assignments = new ArrayList<GroupAssignment>();
+        if (args.has("assignments")) {
+            for (final var element : args.getAsJsonArray("assignments")) {
+                final var entry = element.getAsJsonObject();
+                final var playerId = McpJson.reqInt(entry, "playerId");
+                assignments.add(new GroupAssignment(requirePlayer(model, playerId),
+                        group(McpJson.reqString(entry, "group"))));
             }
-            players.add(player);
+        } else {
+            final var group = group(McpJson.reqString(args, "group"));
+            for (final var id : McpJson.reqArray(args, "playerIds")) {
+                assignments.add(new GroupAssignment(requirePlayer(model, id.getAsInt()), group));
+            }
+        }
+        if (assignments.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Nothing to file - pass playerIds + group, or assignments.");
         }
 
         return onEdt(() -> {
             final var changed = new JsonArray();
-            for (final var player : players) {
+            for (final var assignment : assignments) {
                 // The setter persists to SPIELERNOTIZEN itself - there is nothing else to store.
-                player.setTeamInfoSmilie(group);
+                assignment.player().setTeamInfoSmilie(assignment.group());
                 final var json = new JsonObject();
-                json.addProperty("playerId", player.getPlayerId());
-                json.addProperty("name", player.getFullName());
-                json.addProperty("group", player.getTeamGroup());
+                json.addProperty("playerId", assignment.player().getPlayerId());
+                json.addProperty("name", assignment.player().getFullName());
+                json.addProperty("group", assignment.player().getTeamGroup());
                 changed.add(json);
             }
             // What HO's own group buttons do afterwards - the tables render the group icons.
@@ -328,6 +345,15 @@ public final class LineupTools {
             result.add("players", changed);
             return result;
         });
+    }
+
+    private static Player requirePlayer(HOModel model, int playerId) throws McpToolException {
+        final var player = model.getCurrentPlayer(playerId);
+        if (player == null) {
+            throw new McpToolException("No player with id " + playerId + " is in the squad. "
+                    + "Call get_squad for the ids HO knows about.");
+        }
+        return player;
     }
 
     private static String group(String group) throws McpToolException {

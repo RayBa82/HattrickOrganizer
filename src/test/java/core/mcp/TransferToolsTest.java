@@ -323,9 +323,69 @@ class TransferToolsTest {
     @Test
     void tools_areTheTransferTools() {
         assertThat(TransferTools.tools()).extracting(McpTool::name)
-                .containsExactly("search_transfers", "get_team_transfers",
+                .containsExactly("search_transfers", "search_transfers_batch", "get_team_transfers",
                         "place_bid", "get_open_bids", "add_to_scout", "remove_from_scout",
                         "list_scout", "estimate_market_value", "backfill_character");
+    }
+
+    private static McpTool tool(String name) {
+        return TransferTools.tools().stream().filter(t -> t.name().equals(name)).findFirst()
+                .orElseThrow();
+    }
+
+    @Test
+    void searchBatch_rejectsEmptyQueries() {
+        final var args = new JsonObject();
+        args.add("queries", new JsonArray());
+
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> tool("search_transfers_batch").handler().call(args));
+    }
+
+    /**
+     * One bad query must not cost the queries around it their own round trip - the whole point of
+     * batching is not re-paying for the ones that already succeeded.
+     */
+    @Test
+    void searchBatch_isolatesAFailingQueryInsteadOfThrowing() throws Exception {
+        final var badQuery = new JsonObject();
+        badQuery.addProperty("ageMin", 20);   // ageMax missing - queryFrom() rejects this
+        final var queries = new JsonArray();
+        queries.add(badQuery);
+        final var args = new JsonObject();
+        args.add("queries", queries);
+
+        final var result = tool("search_transfers_batch").handler().call(args);
+
+        final var results = result.getAsJsonArray("results");
+        assertThat(results).hasSize(1);
+        final var item = results.get(0).getAsJsonObject();
+        assertThat(item.getAsJsonObject("query")).isEqualTo(badQuery);
+        assertThat(item.get("error").getAsString()).contains("ageMax");
+        assertThat(item.has("hits")).isFalse();
+    }
+
+    /**
+     * A non-object entry (a stray string, number or null from a malformed call) must not throw
+     * Gson's IllegalStateException past the per-item try/catch - that would discard every query
+     * already answered earlier in the array, exactly the round trip this tool exists to save.
+     */
+    @Test
+    void searchBatch_isolatesANonObjectEntryInsteadOfDiscardingEarlierResults() throws Exception {
+        final var badQuery = new JsonObject();
+        badQuery.addProperty("ageMin", 20);   // ageMax missing - queryFrom() rejects this too,
+        final var queries = new JsonArray();  // but it must be reached: it comes first in the array
+        queries.add(badQuery);
+        queries.add("oops");   // not a {ageMin, ageMax, skills} object
+        final var args = new JsonObject();
+        args.add("queries", queries);
+
+        final var result = tool("search_transfers_batch").handler().call(args);
+
+        final var results = result.getAsJsonArray("results");
+        assertThat(results).hasSize(2);
+        assertThat(results.get(0).getAsJsonObject().get("error").getAsString()).contains("ageMax");
+        assertThat(results.get(1).getAsJsonObject().get("error").getAsString()).contains("object");
     }
 
     /**

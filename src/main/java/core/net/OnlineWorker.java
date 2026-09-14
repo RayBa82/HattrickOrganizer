@@ -991,7 +991,7 @@ public class OnlineWorker {
 			Helper.showMessage(HOMainFrame.instance(), msg, getLangString("Fehler"),
 					JOptionPane.ERROR_MESSAGE);
 		} finally {
-			HOMainFrame.instance().setWaitInformation();
+			HOMainFrame.instance().setInformationCompleted();
 		}
 		return null;
 	}

@@ -309,7 +309,7 @@ public final class MatchTools {
      * get_opponent_ratings: what a team - any team, not just one we have played - earned in its
      * recent matches, averaged into the arguments simulate_lineup asks for.
      */
-    private static JsonObject opponentRatings(JsonObject args) throws McpToolException {
+    static JsonObject opponentRatings(JsonObject args) throws McpToolException {
         final var teamId = McpJson.reqInt(args, "teamId");
         final var count = Math.max(1, McpJson.optInt(args, "count", DEFAULT_OPPONENT_MATCHES));
         final var days = Math.max(1, McpJson.optInt(args, "days", DEFAULT_OPPONENT_DAYS));
@@ -433,18 +433,32 @@ public final class MatchTools {
         json.addProperty("teamName", home ? details.getHomeTeamName() : details.getGuestTeamName());
         json.addProperty("goals", home ? details.getHomeGoals() : details.getGuestGoals());
         json.addProperty("hatStats", home ? details.getHomeHatStats() : details.getAwayHatStats());
-        json.addProperty("midfield", home ? details.getHomeMidfield() : details.getGuestMidfield());
-        json.addProperty("defenceLeft", home ? details.getHomeLeftDef() : details.getGuestLeftDef());
-        json.addProperty("defenceCentral", home ? details.getHomeMidDef() : details.getGuestMidDef());
-        json.addProperty("defenceRight", home ? details.getHomeRightDef() : details.getGuestRightDef());
-        json.addProperty("attackLeft", home ? details.getHomeLeftAtt() : details.getGuestLeftAtt());
-        json.addProperty("attackCentral", home ? details.getHomeMidAtt() : details.getGuestMidAtt());
-        json.addProperty("attackRight", home ? details.getHomeRightAtt() : details.getGuestRightAtt());
+        json.addProperty("midfield", sectorRating(home ? details.getHomeMidfield() : details.getGuestMidfield()));
+        json.addProperty("defenceLeft", sectorRating(home ? details.getHomeLeftDef() : details.getGuestLeftDef()));
+        json.addProperty("defenceCentral", sectorRating(home ? details.getHomeMidDef() : details.getGuestMidDef()));
+        json.addProperty("defenceRight", sectorRating(home ? details.getHomeRightDef() : details.getGuestRightDef()));
+        json.addProperty("attackLeft", sectorRating(home ? details.getHomeLeftAtt() : details.getGuestLeftAtt()));
+        json.addProperty("attackCentral", sectorRating(home ? details.getHomeMidAtt() : details.getGuestMidAtt()));
+        json.addProperty("attackRight", sectorRating(home ? details.getHomeRightAtt() : details.getGuestRightAtt()));
         json.addProperty("tacticType", home ? details.getHomeTacticType() : details.getGuestTacticType());
         json.addProperty("tacticSkill", home ? details.getHomeTacticSkill() : details.getGuestTacticSkill());
         json.addProperty("attitude", home ? details.getHomeEinstellung() : details.getGuestEinstellung());
         json.addProperty("formation", details.getFormation(home));
         return json;
+    }
+
+    /**
+     * Hattrick's matchdetails file reports sector ratings on its own raw quarter-point integer
+     * scale (0..~80) - {@code module.teamanalyzer.ui.RatingUtil} and
+     * {@code module.statistics.MatchesStatisticsPanel} already decode it the same way before
+     * showing these numbers to a user. {@link core.rating.RatingPredictionModel#getAverageRating}
+     * - what builds "ourRatings" for simulate_lineup's own Monte Carlo - is on that decoded scale,
+     * not the raw one, so skipping this here left get_opponent_ratings's numbers roughly 4x hotter
+     * than the ones they were compared against. Not a rounding difference: it once turned a
+     * lineup that had just won 4-0 into a "99.7% chance to lose" forecast against the same team.
+     */
+    private static double sectorRating(int raw) {
+        return (raw - 1) / 4.0 + 1;
     }
 
     /** Our own players' match ratings, which is what makes predicted versus actual checkable. */

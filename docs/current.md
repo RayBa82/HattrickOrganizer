@@ -998,6 +998,101 @@ corpus — how many observations get a real sale price attached — not the fiel
 No `remove_from_scout`: deprioritised by the requester, and the user can prune in the UI.
 No schema change, so no `DBVersion` bump.
 
+## `add_to_scout` echoes the full entry back (2026-09-13)
+
+Requested by the team-assistant session: `add_to_scout` already pays for the character fetch
+(`observeForScout` → `ScoutList.applyCharacter`) but the response only carried `playerId`/`name`,
+so reading agreeability/aggressiveness/honesty back meant an immediate `list_scout` call — which
+returns the *entire* list (no filter), forcing a save-to-file/parse step for data the first call
+already had in hand.
+
+Fix is a reuse, not new code: the `entries` map inside `addToScout` already holds the same
+`ScoutEintrag` objects `McpJson.scoutEntry` serializes for `list_scout`, fully populated (character
+included) by the time the response is built. Swapped the hand-built `{playerId, name}` object for
+`McpJson.scoutEntry(entry)` in the `added` array. No new fields on `ScoutEintrag`, no schema change,
+no test broke — nothing asserted the old shape.
+
+Not done: a `list_scout` filter param (by playerId list / changed-since). Flagged as the rarer case
+by the requester and no current caller needs it; add when a read-back-of-existing-entries use case
+shows up.
+
+## `search_transfers_batch` (2026-09-13)
+
+Same request, second pain point: Hattrick's own `transfersearch` caps age spans (≤1yr through 18,
+≤2 after) and skill spans (≤3 levels), so a specialty x age-window sweep is one `search_transfers`
+call per combo - 6 calls, 6 large JSON dumps in context, for a 3-specialty x 2-window sweep. The CHPP
+call count is an external constraint and cannot change; the *conversational* round trips can.
+
+`searchBatch` takes a `queries` array shaped exactly like `search_transfers`'s own arguments and
+loops the existing private `search(TransferSearchQuery)` per entry, merging into one
+`{currency, results: [...]}` response. No new search logic, no new validation: `queryFrom` and the
+session cap in `TransferSearchService` are unchanged and still apply per query.
+
+**Each query is isolated, not all-or-nothing.** A batch is exactly the case where losing already-
+answered queries to one bad one (an invalid range, or the session cap running out mid-batch) would
+cost the caller precisely the round trips this tool exists to save. Each item catches its own
+`IllegalArgumentException`/`McpToolException`, records `error` instead of `hits`, and the loop moves
+on - so a 6-query sweep that exhausts the cap on query 5 still returns 4 clean results instead of
+throwing all of them away.
+
+## Lineup-setting friction pass (2026-09-13)
+
+Second round of requests from the team-assistant session, this time about the set-lineup skill.
+Four were raised; two shipped here, one needs a live repro before touching shared code, one was a
+correctness bug that got fixed regardless of round-trip count.
+
+### `get_opponent_ratings` was handing `simulate_lineup` numbers on the wrong scale
+
+A real bug, not a round-trip complaint: copying `get_opponent_ratings`' sector numbers straight into
+`simulate_lineup` - exactly what both tools' descriptions tell a caller to do - once produced a
+99.7%-chance-to-lose forecast against a team just beaten 4-0.
+
+`MatchTools.side()` was passing `Matchdetails.getHomeMidfield()` and its six siblings straight
+through. Those fields are Hattrick's own raw quarter-point integer encoding (0..~80) - the same one
+`module.teamanalyzer.ui.RatingUtil.getDoubleValue4Rating` and
+`module.statistics.MatchesStatisticsPanel` already decode (`(raw - 1) / 4.0 + 1`) before showing
+these numbers to a user. `simulate_lineup`'s own "ourRatings" - built by
+`RatingPredictionModel.getAverageRating`, which the class docs call the transform from "skill scale"
+to "rating sector scale" - is already on that decoded scale. Skipping the decode in `side()` left
+the opponent roughly 4x hotter than the ratings it was compared against in the Monte Carlo.
+
+Fix is the same one-line decode, added once in `side()` (`MatchTools.sectorRating`), which both
+`get_match` and `get_opponent_ratings` read through - so both are corrected together, and the
+averaging in `opponentReport` needed no change (the decode is affine, so averaging decoded values
+equals decoding the average of raw ones). `MatchToolsTest`'s hand-built-match tests now assert the
+decoded numbers instead of the raw ones.
+
+### `scout_opponent` (get_opponent_ratings + get_opponent_squad, one call)
+
+Same pattern as `add_to_scout`/`search_transfers_batch`: these two are always called together for
+pre-match scouting, each its own CHPP round trip. New tool in `TeamTools` merges them under
+`{ratings, squad}` - `MatchTools.opponentRatings` went from `private` to package-private so
+`TeamTools.scoutOpponent` can call it directly. Same two CHPP requests, one round trip; a failure in
+either fails the whole call (unlike the N-query search batch, two calls that only make sense
+together don't want partial-result isolation).
+
+### `set_player_group` takes `assignments` for mixed-group batches
+
+Previously one call per group (`playerIds` + one `group`). After building both weekly lineups the
+caller usually knows every player's target group across A/B/C/D-Team at once, so `set_player_group`
+now also accepts `assignments`: `{playerId, group}` pairs, resolved and validated up front the same
+way the existing `playerIds`+`group` path is (a bad id fails before anything is written). The old
+shape still works unchanged; `assignments` is a second, optional way in, not a replacement.
+
+### `apply_lineup` bench mirroring - could not reproduce, left as a doc downgrade
+
+Reported as "writing bench roleId 205 (winger) also silently writes into 202 (wing back)", but only
+survived as a paraphrase in the requester's own doc, not a preserved request/response. Two
+independent checks found nothing: reading `LineupTools.applySpec` and `Lineup.setSpielerAtPosition`
+turned up no aliasing between the two roleIds (`IMatchRoleID` defines them as fully distinct - 202
+`substWB1`, 205 `substWI1` - and `setSpielerAtPosition`'s bench branch only ever touches the single
+`MatchRoleID` object for the slot being written), and a live repro against the running server
+(`apply_lineup({positions: [], bench: [{roleId: 205, playerId: <not previously benched>}]})`,
+against a real squad with 202 and 205 both already occupied by different players) came back with
+202 untouched. Not chasing further without a fresh, exact repro - a guessed fix in `Lineup`'s write
+path risks the live Swing Lineup tab on a bug that no longer shows itself. Doc warning downgraded
+rather than removed outright, in case it was conditional on something neither check hit.
+
 ## Market value: real sale prices, and `estimate_market_value` (2026-09-05)
 
 The corpus existed but held nothing to value against — 200 observations, **zero** resolved sale

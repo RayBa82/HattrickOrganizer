@@ -81,6 +81,27 @@ public final class TeamTools {
                                                         + "get_upcoming_matches")),
                                 "teamId"),
                         TeamTools::opponentSquad),
+                new McpTool("scout_opponent",
+                        "get_opponent_ratings and get_opponent_squad in one call - the pre-match "
+                                + "scouting pair almost always wanted together. Returns ratings and "
+                                + "squad under those keys; same two CHPP requests as calling both "
+                                + "separately, one round trip. Optional args are get_opponent_ratings' "
+                                + "own (count, competitiveOnly, days); get_opponent_squad takes none.",
+                        McpTool.schema(McpTool.properties(
+                                        "teamId", McpTool.prop("integer",
+                                                "the Hattrick team id, e.g. an opponent id from "
+                                                        + "get_upcoming_matches"),
+                                        "count", McpTool.prop("integer",
+                                                "how many recent matches to average for ratings; "
+                                                        + "same default as get_opponent_ratings"),
+                                        "competitiveOnly", McpTool.prop("boolean",
+                                                "official matches only for ratings; same default as "
+                                                        + "get_opponent_ratings"),
+                                        "days", McpTool.prop("integer",
+                                                "how far back to search for ratings, in days; same "
+                                                        + "default as get_opponent_ratings")),
+                                "teamId"),
+                        TeamTools::scoutOpponent),
                 new McpTool("get_upcoming_matches",
                         "The fixture list of the current series.",
                         McpTool.schema(new JsonObject()),
@@ -339,6 +360,14 @@ public final class TeamTools {
                 + "stamina, specialty and the position the player last played (estimatedForRoleId) "
                 + "- a guess, and absent entirely for a player whose last position is unknown. The "
                 + "players sharing the highest lastMatch.matchId were that match's eleven.");
+        return json;
+    }
+
+    /** scout_opponent: get_opponent_ratings and get_opponent_squad, one round trip. */
+    private static JsonObject scoutOpponent(JsonObject args) throws McpToolException {
+        final var json = new JsonObject();
+        json.add("ratings", MatchTools.opponentRatings(args));
+        json.add("squad", opponentSquad(args));
         return json;
     }
 

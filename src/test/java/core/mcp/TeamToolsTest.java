@@ -22,10 +22,10 @@ import static org.assertj.core.api.Assertions.assertThatNoException;
 class TeamToolsTest {
 
     @Test
-    void tools_areTheSevenReadToolsPlusTheDownload() {
+    void tools_areTheEightReadToolsPlusTheDownload() {
         assertThat(TeamTools.tools()).extracting(McpTool::name)
                 .containsExactly("get_team", "get_squad", "get_player", "get_opponent_squad",
-                        "get_upcoming_matches", "get_league_table", "get_finances",
+                        "scout_opponent", "get_upcoming_matches", "get_league_table", "get_finances",
                         "download_team");
     }
 
