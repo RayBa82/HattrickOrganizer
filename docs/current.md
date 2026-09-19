@@ -2798,3 +2798,41 @@ overlapping comparable window, and a weighted *median* (unlike a mean) is not ve
 one additional row's exact price once a dozen-plus comparables already anchor it. Not chased
 further since it wasn't reported as a problem; worth a second look only if it recurs somewhere the
 players are less similar to each other.
+
+### Sale-time corpus seeding, automated (2026-09-14)
+
+The hattrick session's follow-up ask: instead of relying on a manual `profile`+`playerId`+
+`salePrice` call after every sale, seed TRANSFERLISTING automatically from `downloadMissingTransfers`
+itself, since the departed player's specialty/skills/TSI/character are still sitting locally in his
+last SPIELER row and don't need a live CHPP call to recover.
+
+Added `TransferListing.fromLocalSale(Player, HODateTime saleDate, long salePriceSek)` - the same
+field population as `fromPlayerDetails`, minus the market-observation fields (`deadline`/
+`askingPrice`/`highestBid`/`bidderName`) since he was never actually listed. Wired into
+`PlayerTransfer.downloadMissingTransfers`'s existing transfer loop: when a *freshly discovered*
+transfer (`inDB == null`) has us as the seller, `recordLocalSaleObservation` looks up
+`DBManager.loadLatestPlayerInfo(playerId)` - the same all-history, no-squad-filter read
+`get_player_history` already relies on for departed players - and writes the row. Best-effort
+(try/catch around the lookup and write): a failure here must never break the transfer download
+itself, same convention `TransferListingResolver`'s scout-list side-writes already follow.
+
+Currency: no `swedishKrona()` conversion needed here, unlike the `profile` path. `PlayerTransfer`
+already holds `price` as an `AmountOfMoney`, which stores swedish krona internally by construction
+(`core.util.AmountOfMoney`'s own doc) - `transfer.getPrice().getSwedishKrona().longValue()` is the
+same idiom `TransferListingResolver.applySale` already uses for the same conversion, not a new one.
+This sidesteps the exact local-currency bug the manual `profile` path hit on 2026-09-13 entirely,
+since there is no caller-supplied local-currency number in this path to convert wrong.
+
+Deliberately did not set `salary`: `fromPlayerDetails`'s `baseWage` divides out a 20%-abroad
+surcharge that only applies to a live CHPP wage observation, and it's not obvious that same
+adjustment is correct for a locally-stored squad wage - left null rather than risk a wrong number,
+consistent with `listingFromProfile`'s own "no fabricated data" rule.
+
+Unit-tested the same way `listingFromProfile` is: two pure tests in the new
+`src/test/java/core/db/TransferListingTest.java` (no DB fixture) - one full field-population check,
+one confirming the market-observation fields stay unset. `downloadMissingTransfers`'s own call site
+isn't separately tested - no DB/model fixture exists for that method today, same gap
+`estimateMarketValue`'s `profile` path already had at first. Full suite green (805 tests).
+
+Does not help Škerbinek/Spaltenstein retroactively - their data is already gone, per the earlier
+entries. Closes the gap for every sale from here on.

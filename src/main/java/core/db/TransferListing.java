@@ -165,6 +165,45 @@ public class TransferListing extends AbstractTable.Storable {
     }
 
     /**
+     * A snapshot built from HO's own last-known squad data for a player who has just been sold
+     * and was never observed as a transfer-market listing at all - the gap that left
+     * Škerbinek/Flikweert/Spaltenstein's real skills and specialty unrecoverable once they left
+     * the squad (see docs/current.md, 2026-09-13). {@code p} is the last SPIELER row downloaded
+     * for him, from before departure ({@link SpielerTable#loadLatestPlayerInfo}) - no live CHPP
+     * call, this is local data HO already has. Unlike {@link #fromHit}/{@link #fromPlayerDetails},
+     * {@code deadline}/{@code askingPrice}/{@code highestBid} are left at their defaults: he was
+     * never actually listed on the market.
+     */
+    public static TransferListing fromLocalSale(Player p, HODateTime saleDate, long salePriceSek) {
+        final var listing = new TransferListing();
+        listing.playerId = p.getPlayerId();
+        listing.observedAt = saleDate;
+        listing.playerName = p.getFullName();
+        listing.age = p.getAge();
+        listing.ageDays = p.getAgeDays();
+        listing.tsi = p.getTsi();
+        listing.specialty = p.getSpecialty();
+        listing.form = p.getValue4Skill(PlayerSkill.FORM);
+        listing.experience = p.getValue4Skill(PlayerSkill.EXPERIENCE);
+        listing.leadership = p.getValue4Skill(PlayerSkill.LEADERSHIP);
+        listing.cards = p.getTotalCards();
+        listing.injuryLevel = p.getInjuryWeeks();
+        listing.stamina = p.getValue4Skill(PlayerSkill.STAMINA);
+        listing.keeper = p.getValue4Skill(PlayerSkill.KEEPER);
+        listing.playmaker = p.getValue4Skill(PlayerSkill.PLAYMAKING);
+        listing.scorer = p.getValue4Skill(PlayerSkill.SCORING);
+        listing.passing = p.getValue4Skill(PlayerSkill.PASSING);
+        listing.winger = p.getValue4Skill(PlayerSkill.WINGER);
+        listing.defender = p.getValue4Skill(PlayerSkill.DEFENDING);
+        listing.setPieces = p.getValue4Skill(PlayerSkill.SETPIECES);
+        listing.agreeability = p.getGentleness();
+        listing.aggressiveness = p.getAggressivity();
+        listing.honesty = p.getHonesty();
+        listing.salePrice = salePriceSek;
+        return listing;
+    }
+
+    /**
      * CHPP's {@code Salary} includes the 20% surcharge a club pays for a player abroad;
      * {@code transfersearch}'s does not. {@link #fromHit} stores the base wage, so this one has to
      * as well or the column mixes two quantities and stops being a comparable.

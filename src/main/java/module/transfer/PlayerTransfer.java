@@ -2,6 +2,7 @@ package module.transfer;
 
 import core.db.AbstractTable;
 import core.db.DBManager;
+import core.db.TransferListing;
 import core.gui.HOMainFrame;
 import core.model.HOVerwaltung;
 import core.model.player.Player;
@@ -79,7 +80,7 @@ public class PlayerTransfer extends AbstractTable.Storable {
 
     /** TSI value of the player at transfer date */
     private int tsi = 0;
-    
+
     private AmountOfMoney motherClubFee;
     private AmountOfMoney previousClubFee;
 
@@ -135,6 +136,7 @@ public class PlayerTransfer extends AbstractTable.Storable {
                     if (inDB != null) priceCorrection.subtract(inDB.getPrice());
                     if (transfer.buyerid == teamId) bought.add(priceCorrection);
                     else sold.add(priceCorrection);
+                    if (inDB == null && transfer.buyerid != teamId) recordLocalSaleObservation(transfer);
                 }
             }
         } while (!sold.equals(PlayerTransfer.totalSumOfSales) || !bought.equals(PlayerTransfer.totalSumOfBuys));
@@ -148,6 +150,28 @@ public class PlayerTransfer extends AbstractTable.Storable {
      */
     private static void updatePlayerTransfer(PlayerTransfer transfer) {
         DBManager.instance().storePlayerTransfer(transfer);
+    }
+
+    /**
+     * Seed the transfer-listing corpus with a departed player's own last-known skills, since HO
+     * never watched him as a live listing and his specialty/TSI/character are otherwise gone the
+     * moment he leaves the squad (see docs/current.md, 2026-09-13). No live CHPP call: {@code p}
+     * comes from the SPIELER row HO already downloaded for him before the sale.
+     * <p>
+     * Best effort - never lets a lookup or write failure break the transfer download itself.
+     */
+    private static void recordLocalSaleObservation(PlayerTransfer transfer) {
+        try {
+            var p = DBManager.instance().loadLatestPlayerInfo(transfer.getPlayerId());
+            if (p == null) {
+                return;
+            }
+            var salePriceSek = transfer.getPrice().getSwedishKrona().longValue();
+            DBManager.instance().storeTransferListing(
+                    TransferListing.fromLocalSale(p, transfer.getDate(), salePriceSek));
+        } catch (Exception e) {
+            HOLogger.instance().error(PlayerTransfer.class, e);
+        }
     }
 
     /**
