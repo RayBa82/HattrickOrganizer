@@ -290,6 +290,21 @@ class TransferListingTableTest {
         assertThat(table.loadUnresolved(50)).anyMatch(l -> l.getPlayerId() == 434343);
     }
 
+    /** A null second skill (keepers) means no second window, not an error. */
+    @Test
+    void loadsComparablesWithoutASecondSkillWindow() {
+        table.storeListing(TransferListing.fromHit(hit(1002, details()),
+                HODateTime.fromHT("2026-08-30 14:00:00")));
+
+        // defender 6 is outside 0-2, so a second window would drop him; without one he matches.
+        assertThat(table.loadComparables(23, 25, "PLAYMAKER", 11, 13, "DEFENDER", 0, 2, null,
+                HODateTime.fromHT("2026-08-01 00:00:00")))
+                .noneMatch(l -> l.getPlayerId() == 1002);
+        assertThat(table.loadComparables(23, 25, "PLAYMAKER", 11, 13, null, 0, 0, null,
+                HODateTime.fromHT("2026-08-01 00:00:00")))
+                .anyMatch(l -> l.getPlayerId() == 1002);
+    }
+
     @Test
     void loadsComparablesInsideTheAgeSkillAndRecencyWindow() {
         final var observedAt = HODateTime.fromHT("2026-08-30 14:00:00");

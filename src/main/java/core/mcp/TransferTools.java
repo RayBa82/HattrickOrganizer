@@ -499,7 +499,9 @@ public final class TransferTools {
         final var observations = DBManager.instance().loadComparableTransferListings(
                 query.ageMin(), query.ageMax(),
                 column(query.skillType1()), query.minSkillValue1(), query.maxSkillValue1(),
-                column(query.skillType2()), query.minSkillValue2(), query.maxSkillValue2(),
+                query.skillType2() == null ? null : column(query.skillType2()),
+                query.skillType2() == null ? 0 : query.minSkillValue2(),
+                query.skillType2() == null ? 0 : query.maxSkillValue2(),
                 corpusSpecialtyFilter(hasProfile, profile, player), since);
 
 
@@ -989,7 +991,8 @@ public final class TransferTools {
                         }).reversed())
                 .limit(2)
                 .collect(Collectors.toSet());
-        return ownTopTwo.equals(Set.of(skill1, skill2));
+        // skill2 null = one-skill archetype (keeper): only his primary skill has to match.
+        return skill2 == null ? ownTopTwo.contains(skill1) : ownTopTwo.equals(Set.of(skill1, skill2));
     }
 
 
@@ -1724,7 +1727,10 @@ public final class TransferTools {
                         (TransferSearchQuery.Skill s) -> player.getValue4Skill(s.toPlayerSkill())).reversed())
                 .toList();
         final var first = ranked.get(0);
-        final var second = ranked.get(1);
+        // A keeper's outfield skills are noise - a keeper 13 has 0-4 in everything else, so a
+        // second window (which for an all-zero profile is an arbitrary skill at 0-2) only drops
+        // real keepers from the pool. Keeper is his whole archetype.
+        final var second = first == TransferSearchQuery.Skill.KEEPER ? null : ranked.get(1);
 
         // maxLevel() clamps the window to the 3 levels Hattrick accepts, so a wide tolerance
         // only widens it downwards.
@@ -1741,8 +1747,8 @@ public final class TransferTools {
                 .minSkillValue1(minLevel(first, player, tolerance))
                 .maxSkillValue1(maxLevel(first, player, tolerance))
                 .skillType2(second)
-                .minSkillValue2(minLevel(second, player, tolerance))
-                .maxSkillValue2(maxLevel(second, player, tolerance))
+                .minSkillValue2(second == null ? null : minLevel(second, player, tolerance))
+                .maxSkillValue2(second == null ? null : maxLevel(second, player, tolerance))
                 .specialty(player.getSpecialty() > 0 ? player.getSpecialty() : null)
                 .pageSize(MAX_PAGE_SIZE)
                 .build();

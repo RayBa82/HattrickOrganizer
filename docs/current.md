@@ -2836,3 +2836,27 @@ isn't separately tested - no DB/model fixture exists for that method today, same
 
 Does not help Škerbinek/Spaltenstein retroactively - their data is already gone, per the earlier
 entries. Closes the gap for every sale from here on.
+
+## `RATING_CALIBRATION` and `get_rating_calibration` - rating model vs Hattrick (2026-09-19)
+
+Measurement only: nothing in the model or its parameters changed, nothing is fitted.
+
+- `RatingCalibration.calibrate` rates the **starting eleven** of one of our matches (`StartPosition` /
+  `StartBehaviour` from `MATCHLINEUPPLAYER` - the stored roles are the final-whistle ones) from the
+  last HRF downloaded before the match (players, spirit, confidence), with that match's weather,
+  location, tactic, attitude and style, and stores predicted, real and residual (real - predicted)
+  for all seven sectors in `RATING_CALIBRATION` (DB 1005), plus the snapshot's age in days.
+- Fills itself: `OnlineWorker.downloadMatchData` calls it right after `storeMatch`.
+  `get_rating_calibration(backfill=true[, recompute=true])` rates everything stored.
+- `confounded` rows: a starter moved/replaced, a substitute on the field, a man-marking order, or an
+  injury / red-card event for one of our players. Never in any statistic.
+- **HRF snapshots do not cover every match.** This DB's first HRF is 2026-04-11; 128 of 161 finished
+  matches predate it and get no row. Between 2026-04-18 and 2026-08-22 there is no HRF at all, so
+  26 of the 33 rows use a snapshot 3-126 days old. Skills drift over that gap and the residual grows
+  with it (midfield ~0 at age < 3 d, ~+1.2 at 100 d), so an unfiltered mean is mostly staleness.
+  `maxSnapshotAgeDays` on the tool is the guard; use it before reading anything into a residual.
+- Not verified: whether `MatchSubstitution` holds orders that never fired (the flag is state-based
+  and does not depend on it), and whether an INJURY event always takes the player off (bruises are
+  not flagged).
+- Ran against a copy of today's DB backup, not the live DB: HO.app was running and holds the lock,
+  and it is the old build without this table. It gets the table on its next start after a rebuild.

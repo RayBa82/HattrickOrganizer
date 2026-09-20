@@ -17,6 +17,7 @@ import core.model.match.*;
 import core.model.misc.Regiondetails;
 import core.model.player.Player;
 import core.module.ModuleManager;
+import core.rating.RatingCalibration;
 import core.util.HODateTime;
 import core.model.UserParameter;
 import core.util.HOLogger;
@@ -652,7 +653,10 @@ public class OnlineWorker {
 					info.setGuestTeamName(lineup.getGuestTeamName());
 					info.setHomeTeamID(lineup.getHomeTeamId());
 					info.setHomeTeamName(lineup.getHomeTeamName());
-					success = DBManager.instance().storeMatch(info, details, lineup);
+						success = DBManager.instance().storeMatch(info, details, lineup);
+						if (success) {
+							RatingCalibration.calibrateAndStore(info.getMatchID(), info.getMatchType());
+						}
 				} else {
 					// Update arena and region ids
 					var matches = new ArrayList<MatchKurzInfo>();

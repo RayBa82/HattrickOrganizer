@@ -208,8 +208,10 @@ public class TransferListingTable extends AbstractTable {
                                                  Integer specialty, HODateTime observedSince) {
         final var where = new StringBuilder("WHERE AGE BETWEEN " + ageMin + " AND " + ageMax
                 + " AND " + skillColumn(skill1) + " BETWEEN " + min1 + " AND " + max1
-                + " AND " + skillColumn(skill2) + " BETWEEN " + min2 + " AND " + max2
                 + " AND OBSERVEDAT >= '" + HODateTime.toDbTimestamp(observedSince) + "'");
+        if (skill2 != null) {   // null: a one-skill archetype (keeper) has no second window
+            where.append(" AND " + skillColumn(skill2) + " BETWEEN " + min2 + " AND " + max2);
+        }
         if (specialty != null) {
             where.append(specialty == 0
                     ? " AND (SPECIALTY IS NULL OR SPECIALTY = 0)"

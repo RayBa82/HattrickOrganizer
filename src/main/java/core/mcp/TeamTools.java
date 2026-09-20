@@ -623,6 +623,8 @@ public final class TeamTools {
             entry.addProperty("date",
                     info.getMatchSchedule() == null ? null : info.getMatchSchedule().toHT());
             entry.addProperty("attendance", details.getZuschauer());
+            entry.addProperty("weatherId", details.getWetterId());
+            MatchTools.addSoldByStand(entry, details);
             attendances.add(entry);
             sum += details.getZuschauer();
         }

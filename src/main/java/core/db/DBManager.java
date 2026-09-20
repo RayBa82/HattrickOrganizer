@@ -60,12 +60,12 @@ import java.util.stream.Collectors;
 public class DBManager implements PersistenceManager {
 
 	/** database versions */
-	private static final int DBVersion = 1004; // HO 10.0 version
+	private static final int DBVersion = 1005; // HO 10.0 version
 	/**
 	 * Previous db version is used by development versions to ensure that db upgrade will rerun on each
 	 * new installed preliminary version
 	 */
-	private static final int previousDBVersion = 1003;
+	private static final int previousDBVersion = 1004;
 	private static final double DBConfigVersion = 10d; // HO 10.0 version
 
 	/** 2004-06-14 11:00:00.0 */
@@ -283,6 +283,7 @@ public class DBManager implements PersistenceManager {
         tables.put(HallOfFamePlayersTable.TABLENAME, new HallOfFamePlayersTable(connectionManager));
 		tables.put(TransferListingTable.TABLENAME, new TransferListingTable(connectionManager));
 		tables.put(TransferBidTable.TABLENAME, new TransferBidTable(connectionManager));
+		tables.put(RatingCalibrationTable.TABLENAME, new RatingCalibrationTable(connectionManager));
 	}
 
 	/**
@@ -2304,6 +2305,19 @@ public class DBManager implements PersistenceManager {
 		((MatchDetailsTable)getTable(MatchDetailsTable.TABLENAME)).storeMatchDetails(details);
 		//Store Match Events
 		((MatchHighlightsTable)getTable(MatchHighlightsTable.TABLENAME)).storeMatchHighlights(details);
+	}
+
+	public void storeRatingCalibration(RatingCalibrationRow row) {
+		((RatingCalibrationTable) getTable(RatingCalibrationTable.TABLENAME)).storeRow(row);
+	}
+
+	public boolean hasRatingCalibration(int matchId, int matchType) {
+		return ((RatingCalibrationTable) getTable(RatingCalibrationTable.TABLENAME)).hasRow(matchId, matchType);
+	}
+
+	/** Every calibration row, oldest match first. */
+	public List<RatingCalibrationRow> loadRatingCalibrations() {
+		return ((RatingCalibrationTable) getTable(RatingCalibrationTable.TABLENAME)).loadAll();
 	}
 
 	/**

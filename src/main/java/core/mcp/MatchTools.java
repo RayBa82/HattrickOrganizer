@@ -11,6 +11,7 @@ import core.net.Connector;
 import core.model.match.MatchKurzInfo;
 import core.model.match.Matchdetails;
 import core.prediction.engine.MatchPredictionManager;
+import core.rating.RatingCalibration;
 import core.rating.RatingPredictionModel.RatingSector;
 import core.util.HODateTime;
 import module.lineup.Lineup;
@@ -95,6 +96,24 @@ public final class MatchTools {
                                                         + DEFAULT_OPPONENT_DAYS)),
                                 "teamId"),
                         MatchTools::opponentRatings),
+                new McpTool("get_rating_calibration",
+                        "Rating model vs Hattrick on our own matches: each starting eleven is rated "
+                                + "from the pre-match HRF snapshot and compared with the real sector "
+                                + "ratings. Residual (real minus predicted, positive = model too low) mean "
+                                + "and sd per sector, overall and by formation and home/away; matches with "
+                                + "mid-match lineup changes are excluded. Measurement only. backfill rates "
+                                + "stored matches lacking a row.",
+                        McpTool.schema(McpTool.properties(
+                                "backfill", McpTool.prop("boolean",
+                                        "first rate every stored match of ours that has no row yet; "
+                                                + "default false"),
+                                "recompute", McpTool.prop("boolean",
+                                        "with backfill: redo the rows that exist too, needed after "
+                                                + "a change to the rating model; default false"),
+                                "maxSnapshotAgeDays", McpTool.prop("number",
+                                        "leave out rows whose HRF snapshot is older than this many "
+                                                + "days before the match; default keep all"))),
+                        MatchTools::ratingCalibration),
                 new McpTool("simulate_lineup",
                         "Score a lineup. Omit positions to score the one HO currently holds. Supply "
                                 + "all seven opponent sector ratings (copy them from "
@@ -286,6 +305,7 @@ public final class MatchTools {
         json.addProperty("status", "ok");
         json.addProperty("attendance", details.getZuschauer());
         json.addProperty("weatherId", details.getWetterId());
+        addSoldByStand(json, details);
         json.addProperty("arena", details.getArenaName());
         json.add("home", side(details, true));
         json.add("away", side(details, false));
@@ -304,6 +324,27 @@ public final class MatchTools {
         final var details = DBManager.instance().loadMatchDetails(matchType.getId(), matchId);
         return details != null && details.getMatchID() == matchId ? details : null;
     }
+
+
+    /**
+     * Adds {@code soldByStand} (terraces / basic / underRoof / vip) when HO stored the split. The
+     * fields are 0 for away matches and -1 when never downloaded, so a split that sums to nothing is
+     * left out. HO keeps no per-match capacity or prices.
+     */
+    static void addSoldByStand(JsonObject json, Matchdetails details) {
+        final var sold = new int[] {details.getSoldTerraces(), details.getSoldBasic(),
+                details.getSoldRoof(), details.getSoldVIP()};
+        if (java.util.Arrays.stream(sold).filter(s -> s > 0).sum() <= 0) {
+            return;
+        }
+        final var stands = new JsonObject();
+        stands.addProperty("terraces", sold[0]);
+        stands.addProperty("basic", sold[1]);
+        stands.addProperty("underRoof", sold[2]);
+        stands.addProperty("vip", sold[3]);
+        json.add("soldByStand", stands);
+    }
+
 
     /**
      * get_opponent_ratings: what a team - any team, not just one we have played - earned in its
@@ -490,6 +531,28 @@ public final class MatchTools {
      * of seven is a caller who meant to simulate and dropped one, and answering that with ratings
      * would look like a working call.
      */
+    private static JsonObject ratingCalibration(JsonObject args) throws McpToolException {
+        McpJson.model();
+        JsonObject backfill = null;
+        if (McpJson.optBool(args, "backfill", false)) {
+            final var result = RatingCalibration.backfill(McpJson.optBool(args, "recompute", false));
+            backfill = new JsonObject();
+            backfill.addProperty("matchesExamined", result.matches());
+            backfill.addProperty("rowsWritten", result.stored());
+            backfill.addProperty("writtenButConfounded", result.confounded());
+            final var skipped = new JsonObject();
+            result.skipped().forEach(skipped::addProperty);
+            backfill.add("notWritten", skipped);
+        }
+        final var maxAge = args.has("maxSnapshotAgeDays") && !args.get("maxSnapshotAgeDays").isJsonNull()
+                ? args.get("maxSnapshotAgeDays").getAsDouble() : null;
+        final var json = CalibrationSummary.summarize(DBManager.instance().loadRatingCalibrations(), maxAge);
+        if (backfill != null) {
+            json.add("backfill", backfill);
+        }
+        return json;
+    }
+
     private static JsonObject simulateLineup(JsonObject args) throws McpToolException {
         // Argument shape before any model access, so a malformed call is a -32602 rather than
         // "no snapshot loaded" from whichever lookup happened to run first.

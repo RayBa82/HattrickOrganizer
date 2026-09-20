@@ -97,6 +97,8 @@ final class DBUpdater {
 					case 1003:
 						updateDBv1004(DBVersion);
 					case 1004:
+						updateDBv1005(DBVersion);
+					case 1005:
 				}
 
 			} catch (Exception e) {
@@ -215,6 +217,16 @@ final class DBUpdater {
 		listingTable.tryAddColumn("HONESTY", "INTEGER");
 
 		updateDBVersion(dbVersion, 1004);
+	}
+
+	/**
+	 * HO 10.0.5: predicted versus real sector ratings of our own matches. Empty until the first
+	 * match download or the get_rating_calibration backfill fills it.
+	 */
+	private void updateDBv1005(int dbVersion) throws SQLException {
+		dbManager.getTable(RatingCalibrationTable.TABLENAME).createTable();
+
+		updateDBVersion(dbVersion, 1005);
 	}
 
     private void updateDBv901(int dbVersion) throws SQLException {
