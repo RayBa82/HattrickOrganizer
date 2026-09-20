@@ -47,6 +47,8 @@ open class FixedColumnsTable @JvmOverloads constructor(
      */
     private var fixed: JTable? = null
 
+    private var splitPane: JSplitPane? = null
+
     /**
      * Container component for split pane of fixed and scrollable tables
      */
@@ -150,6 +152,7 @@ open class FixedColumnsTable @JvmOverloads constructor(
             rightVerticalScrollBar.addAdjustmentListener(verticalAdjustmentListener)
             rightScrollPane.verticalScrollBar.model = fixedScrollPane.verticalScrollBar.model
             val splitPane = JSplitPane(JSplitPane.HORIZONTAL_SPLIT, fixedScrollPane, rightScrollPane)
+            this.splitPane = splitPane
             splitPane.dividerSize = 2
             if (width == 0) width = 60
             this.dividerLocation = HOConfigurationIntParameter("TableDividerLocation_" + tableModel.id, width)
@@ -171,6 +174,37 @@ open class FixedColumnsTable @JvmOverloads constructor(
             containerComponent = JPanel()
             containerComponent.setLayout(BorderLayout())
             containerComponent.add(JScrollPane(this))
+        }
+    }
+
+    /**
+     * Size every column to fit its header and widest cell, and the divider to fit the fixed columns.
+     * Overrides widths restored from the user settings.
+     */
+    fun fitColumnWidths() {
+        fixed?.let { fitColumnWidths(it) }
+        fitColumnWidths(this)
+        fixed?.let { f ->
+            val width = f.columnModel.columns.toList().sumOf { it.width }
+            splitPane?.dividerLocation = width + 4
+        }
+    }
+
+    private fun fitColumnWidths(table: JTable) {
+        val headerRenderer = table.tableHeader.defaultRenderer
+        for (c in 0 until table.columnCount) {
+            val column = table.columnModel.getColumn(c)
+            if (column.maxWidth == 0 || (column.minWidth == 0 && column.preferredWidth == 0)) continue // hidden
+            var width = headerRenderer.getTableCellRendererComponent(
+                table, column.headerValue, false, false, -1, c
+            ).preferredSize.width
+            for (r in 0 until table.rowCount) {
+                width = maxOf(width, table.prepareRenderer(table.getCellRenderer(r, c), r, c).preferredSize.width)
+            }
+            width += table.intercellSpacing.width + 8 // padding, header sort arrow
+            column.minWidth = minOf(column.minWidth, width)
+            column.preferredWidth = width
+            column.width = width
         }
     }
 

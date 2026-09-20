@@ -23,7 +23,8 @@ public class DoubleLabelEntries extends AbstractHOTableEntry {
     private IHOTableCellEntry m_clLinks;
     private IHOTableCellEntry m_clRechts;
 
-    private LayoutManager layout;
+    // Default: width is the sum of both labels (GridLayout would give both the width of the wider one)
+    private LayoutManager layout = new GridBagLayout();
 
     private static final Color DIFF_COLOR = ThemeManager.getColor(HOColorName.FG_INJURED);
 
@@ -145,6 +146,6 @@ public class DoubleLabelEntries extends AbstractHOTableEntry {
     }
 
     public void setLayoutManager(LayoutManager layout) {
-        this.layout = layout;
+        if (layout != null) this.layout = layout;
     }
 }

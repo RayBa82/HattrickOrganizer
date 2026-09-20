@@ -38,8 +38,7 @@ class PlayerOverviewTableModel(id: UserColumnController.ColumnModelId, name: Str
             val names = UserColumnFactory.createPlayerSplitNameArray()
             listOf(
                 names[0], names[1],
-                additionalArray!![0], // shirt number
-                additionalArray[1], // nationality
+                additionalArray!![1], // nationality
                 additionalArray[2], // age
                 additionalArray[5], // group
                 additionalArray[6], // status

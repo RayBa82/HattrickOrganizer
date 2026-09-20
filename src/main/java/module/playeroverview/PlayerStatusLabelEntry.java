@@ -37,6 +37,9 @@ public class PlayerStatusLabelEntry extends DoubleLabelEntries {
         ColorLabelEntry warnings = new ColorLabelEntry("", ColorLabelEntry.FG_STANDARD,
                 colorBG,
                 SwingConstants.LEFT);
+        // icon-only labels: the default text padding would only waste column width
+        warnings.setBorderWidth(2);
+        jlInjury.setBorderWidth(2);
         this.setLabels(warnings, jlInjury);
     }
 

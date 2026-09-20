@@ -68,7 +68,8 @@ public class PlayerOverviewPanel extends ImagePanel implements Refreshable {
 	 */
 	public final void refresh() {
 		playerOverviewTable.refresh();
-		playerDetailsPanel.refresh();
+			playerOverviewTable.fitColumnWidths();
+			playerDetailsPanel.refresh();
 	}
 
 	/**
@@ -172,6 +173,7 @@ public class PlayerOverviewPanel extends ImagePanel implements Refreshable {
 		overviewPanel.add(scrollPane, BorderLayout.SOUTH);
 
 		playerOverviewTableModel.initData();
+		playerOverviewTable.fitColumnWidths();
 		return overviewPanel;
 	}
 

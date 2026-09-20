@@ -33,7 +33,12 @@ public class SmilieEntry extends DoubleLabelEntries {
      */
     public SmilieEntry() {
         super();
+        // icon-only labels: the default text padding would only waste column width
+        team.setBorderWidth(2);
+        manuell.setBorderWidth(2);
         this.setLabels(team, manuell);
+        // group icon and smiley sit next to each other, centered in the column
+        this.setLayoutManager(new java.awt.FlowLayout(java.awt.FlowLayout.CENTER, 0, 0));
     }
 
    public final void setPlayer(Player player) {
