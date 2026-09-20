@@ -159,7 +159,7 @@ public class PlayerOverviewPanel extends ImagePanel implements Refreshable {
 
 		// table with the player's details
 		var playerOverviewTableModel = UserColumnController.instance().getPlayerOverviewModel();
-		playerOverviewTable = new PlayersTable(playerOverviewTableModel, 1);
+		playerOverviewTable = new PlayersTable(playerOverviewTableModel, playerOverviewTableModel.getFixedColumnsCount());
 		overviewPanel.add(playerOverviewTable.getContainerComponent(), BorderLayout.CENTER);
 		TeamSummaryModel teamSummaryModel = new TeamSummaryModel();
 		teamSummaryModel.setPlayers(HOVerwaltung.instance().getModel().getCurrentPlayers());

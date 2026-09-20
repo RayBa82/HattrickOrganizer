@@ -97,8 +97,10 @@ final class DBUpdater {
 					case 1003:
 						updateDBv1004(DBVersion);
 					case 1004:
-						updateDBv1005(DBVersion);
-					case 1005:
+							updateDBv1005(DBVersion);
+						case 1005:
+							updateDBv1006(DBVersion);
+						case 1006:
 				}
 
 			} catch (Exception e) {
@@ -219,15 +221,25 @@ final class DBUpdater {
 		updateDBVersion(dbVersion, 1004);
 	}
 
-	/**
-	 * HO 10.0.5: predicted versus real sector ratings of our own matches. Empty until the first
-	 * match download or the get_rating_calibration backfill fills it.
-	 */
-	private void updateDBv1005(int dbVersion) throws SQLException {
-		dbManager.getTable(RatingCalibrationTable.TABLENAME).createTable();
+		/**
+		 * HO 10.0.5: predicted versus real sector ratings of our own matches. Empty until the first
+		 * match download or the get_rating_calibration backfill fills it.
+		 */
+		private void updateDBv1005(int dbVersion) throws SQLException {
+			dbManager.getTable(RatingCalibrationTable.TABLENAME).createTable();
 
-		updateDBVersion(dbVersion, 1005);
-	}
+			updateDBVersion(dbVersion, 1005);
+		}
+
+		/**
+		 * HO 10.0.6: the squad overview table (model 2) got separate first name / last name columns.
+		 * User columns are stored by position in the model, so its saved layout is reset.
+		 */
+		private void updateDBv1006(int dbVersion) throws SQLException {
+			connectionManager.executeUpdate("DELETE FROM USERCOLUMNS WHERE COLUMN_ID BETWEEN 2000 AND 2999");
+
+			updateDBVersion(dbVersion, 1006);
+		}
 
     private void updateDBv901(int dbVersion) throws SQLException {
 

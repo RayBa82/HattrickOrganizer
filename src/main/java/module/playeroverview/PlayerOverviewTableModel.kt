@@ -22,38 +22,64 @@ class PlayerOverviewTableModel(id: UserColumnController.ColumnModelId, name: Str
      */
     internal constructor(id: UserColumnController.ColumnModelId) : this(id, "Spieleruebersicht")
 
+    /** The squad overview splits the name into first/last name columns; the lineup keeps the single name column. */
+    private val splitName = id == UserColumnController.ColumnModelId.PLAYEROVERVIEW
+
+    /** Leading columns that end up in the frozen left table. */
+    private val frozenColumns = if (splitName) 8 else 1
+
     init {
         val basic: Array<out PlayerColumn>? = UserColumnFactory.createPlayerBasicArray() // 2
         val skills: Array<out PlayerSkillColumn>? = UserColumnFactory.createPlayerSkillArray() // 12
         val positions: Array<out PlayerPositionColumn>? = UserColumnFactory.createPlayerPositionArray() // 19
         val goals: Array<out PlayerColumn>? = UserColumnFactory.createGoalsColumnsArray() // 7
         val additionalArray: Array<out PlayerColumn>? = UserColumnFactory.createPlayerAdditionalArray() // 32
-        val size = basic!!.size + skills!!.size + positions!!.size + goals!!.size + additionalArray!!.size + 1
-        val columns: Array<UserColumn?> = arrayOfNulls(size) // 72
+        val head: List<PlayerColumn> = if (splitName) {
+            val names = UserColumnFactory.createPlayerSplitNameArray()
+            listOf(
+                names[0], names[1],
+                additionalArray!![0], // shirt number
+                additionalArray[1], // nationality
+                additionalArray[2], // age
+                additionalArray[5], // group
+                additionalArray[6], // status
+                additionalArray[12], // Mother club
+                additionalArray[4], // lineup
+                additionalArray[8] // tsi
+            )
+        } else {
+            listOf(
+                basic!![0],
+                additionalArray!![0],
+                additionalArray[1],
+                additionalArray[12], // Mother club
+                additionalArray[2],
+                additionalArray[4],
+                additionalArray[5],
+                additionalArray[6],
+                additionalArray[8] // tsi
+            )
+        }
+        val size = basic!!.size + skills!!.size + positions!!.size + goals!!.size + additionalArray!!.size + 1 +
+                (if (splitName) 1 else 0)
+        val columns: Array<UserColumn?> = arrayOfNulls(size)
 
-        columns[0] = basic[0]
-        columns[1] = additionalArray[0]
-        columns[2] = additionalArray[1]
-        columns[3] = additionalArray[12] // Mother club
-        columns[4] = additionalArray[2]
-        columns[5] = additionalArray[4]
-        columns[6] = additionalArray[5]
-        columns[7] = additionalArray[6]
-        columns[8] = additionalArray[8] // tsi
+        var index = 0
+        for (column in head) columns[index++] = column
 
-        val skillIndex = 9 // - 20
-        System.arraycopy(skills, 0, columns, skillIndex, skills.size)
+        System.arraycopy(skills, 0, columns, index, skills.size)
+        index += skills.size
 
-        columns[21] = additionalArray[3] // best position
-        columns[22] = additionalArray[9] // lastmatch
+        columns[index++] = additionalArray[3] // best position
+        columns[index++] = additionalArray[9] // lastmatch
 
-        val positionIndex = 23 // - 41
-        System.arraycopy(positions, 0, columns, positionIndex, positions.size)
+        System.arraycopy(positions, 0, columns, index, positions.size)
+        index += positions.size
 
-        val goalsIndex = 42 // -46 (the last 2 goal columns are appended at the end)
-        System.arraycopy(goals, 0, columns, goalsIndex, goals.size - 2)
+        // the last 2 goal columns are appended at the end
+        System.arraycopy(goals, 0, columns, index, goals.size - 2)
+        index += goals.size - 2
 
-        var index = 47
         columns[index++] = additionalArray[11]
         columns[index++] = basic[1]
         columns[index++] = additionalArray[10]
@@ -83,6 +109,10 @@ class PlayerOverviewTableModel(id: UserColumnController.ColumnModelId, name: Str
         this.columns = columns.filterNotNull().toTypedArray()
         assert(this.columns.size == columns.size)
     }
+
+    /** Number of currently displayed columns among the frozen ones (users may hide some of them). */
+    val fixedColumnsCount: Int
+        get() = columns.take(frozenColumns).count { it.isDisplay }
 
     val selectedPlayer: Player?
         get() {

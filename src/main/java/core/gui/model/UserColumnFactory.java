@@ -300,6 +300,38 @@ public final class UserColumnFactory {
     }
 
     /**
+     * Separate first name(s) and last name columns, so the table can be sorted by either.
+     *
+     * @return PlayerColumn [] {first name, last name}
+     */
+    public static PlayerColumn[] createPlayerSplitNameArray() {
+        return new PlayerColumn[]{
+                new SplitNameColumn(2, "ls.player.firstname", 90, Player::getFirstName),
+                new SplitNameColumn(3, "ls.player.lastname", 100, Player::getLastName)
+        };
+    }
+
+    private static final class SplitNameColumn extends PlayerColumn {
+        private final java.util.function.Function<Player, String> name;
+
+        SplitNameColumn(int id, String header, int width, java.util.function.Function<Player, String> name) {
+            super(id, header, width);
+            this.name = name;
+        }
+
+        @Override
+        public IHOTableCellEntry getTableEntry(Player player, Player playerCompare) {
+            return new ColorLabelEntry(name.apply(player), ColorLabelEntry.FG_STANDARD,
+                    ColorLabelEntry.BG_STANDARD, SwingConstants.LEFT);
+        }
+
+        @Override
+        public boolean canBeDisabled() {
+            return false;
+        }
+    }
+
+    /**
      * @return PlayerPositionColumn[]
      */
     public static PlayerPositionColumn[] createPlayerPositionArray() {
