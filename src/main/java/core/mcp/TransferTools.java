@@ -226,8 +226,8 @@ public final class TransferTools {
                                                         + "positionGroupDerived. Each specialty is scored "
                                                         + "0-1 for the position (e.g. inner_mid: Unpredictable "
                                                         + "1.0, Head 0.9, Powerful 0.7, Technical 0.6, Quick "
-                                                        + "0.4, none 0.2; winger Head/Quick/Unpredictable; "
-                                                        + "forward Head/Quick/Technical; back_line "
+                                                        + "0.4, none 0.2; winger Unpredictable/Head/Quick; "
+                                                        + "forward Unpredictable/Head/Quick/Technical; back_line "
                                                         + "Powerful/Technical/Quick; Head and Unpredictable "
                                                         + "at the back are liabilities) and a comparable's "
                                                         + "weight falls with the score gap to the target's "
@@ -379,9 +379,9 @@ public final class TransferTools {
      */
     private static final Map<String, Map<Integer, Double>> POSITION_SCORE = Map.of(
             "back_line", specialtyScores(0.3, 0.8, 0.6, 1.0, 0.2, 0.25, 0.4, 0.1),
-            "winger", specialtyScores(0.2, 0.4, 0.9, 0.4, 0.7, 1.0, 0.4, 0.1),
+            "winger", specialtyScores(0.2, 0.4, 0.8, 0.4, 1.0, 0.9, 0.4, 0.1),
             "inner_mid", specialtyScores(0.2, 0.6, 0.4, 0.7, 1.0, 0.9, 0.4, 0.1),
-            "forward", specialtyScores(0.2, 0.7, 0.95, 0.6, 0.7, 1.0, 0.4, 0.1),
+            "forward", specialtyScores(0.2, 0.7, 0.85, 0.6, 1.0, 0.95, 0.4, 0.1),
             "keeper", specialtyScores(0.5, 0.4, 0.6, 0.4, 0.3, 0.1, 0.4, 0.1));
 
     private static Map<Integer, Double> specialtyScores(double none, double technical, double quick,

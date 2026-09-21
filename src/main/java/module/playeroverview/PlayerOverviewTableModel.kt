@@ -26,7 +26,7 @@ class PlayerOverviewTableModel(id: UserColumnController.ColumnModelId, name: Str
     private val splitName = id == UserColumnController.ColumnModelId.PLAYEROVERVIEW
 
     /** Leading columns that end up in the frozen left table. */
-    private val frozenColumns = if (splitName) 8 else 1
+    private val frozenColumns = if (splitName) 9 else 1
 
     init {
         val basic: Array<out PlayerColumn>? = UserColumnFactory.createPlayerBasicArray() // 2
@@ -44,6 +44,7 @@ class PlayerOverviewTableModel(id: UserColumnController.ColumnModelId, name: Str
                 additionalArray[6], // status
                 additionalArray[12], // Mother club
                 additionalArray[4], // lineup
+                UserColumnFactory.createPlayerSpecialtyColumn(), // last frozen column
                 additionalArray[8] // tsi
             )
         } else {
@@ -60,7 +61,7 @@ class PlayerOverviewTableModel(id: UserColumnController.ColumnModelId, name: Str
             )
         }
         val size = basic!!.size + skills!!.size + positions!!.size + goals!!.size + additionalArray!!.size + 1 +
-                (if (splitName) 1 else 0)
+                (if (splitName) 2 else 0)
         val columns: Array<UserColumn?> = arrayOfNulls(size)
 
         var index = 0

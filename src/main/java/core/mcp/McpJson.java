@@ -316,13 +316,25 @@ public final class McpJson {
         return json;
     }
 
-    /** The seven sector ratings over 90 minutes, plus the derived formation. */
+    /** The tactic level as the Lineup tab shows it: the raw rating, rounded the way HO rounds it. */
+    public static int tacticLevel(double tacticRating) {
+        return (int) (tacticRating > 0 ? tacticRating + 1 : tacticRating);
+    }
+
+    /** The seven sector ratings over 90 minutes, plus the derived formation and tactic strength. */
     public static JsonObject ratings(RatingPredictionModel ratingModel, Lineup lineup) {
         final var json = new JsonObject();
         for (final var sector : RatingPredictionModel.RatingSector.values()) {
             json.addProperty(sector.name().toLowerCase(java.util.Locale.ENGLISH),
                     ratingModel.getAverageRating(lineup, sector, 90));
         }
+        // tacticRating is the raw tactic strength (Play Creatively: sum over field players of
+        // 4 x passing + experience, doubled for Unpredictable, / 50 - see calcCreative); tacticLevel
+        // is what the Lineup tab shows. Minute 0 = the starting eleven, as simulate_lineup uses.
+        final var tacticRating = ratingModel.getTacticRating(lineup, 0);
+        json.addProperty("tacticType", lineup.getTacticType());
+        json.addProperty("tacticRating", tacticRating);
+        json.addProperty("tacticLevel", tacticLevel(tacticRating));
         json.addProperty("hatStats90", ratingModel.getAverage90HatStats(lineup));
         json.addProperty("formation", lineup.getCurrentTeamFormationString());
         json.add("assumptions", assumptions(lineup));

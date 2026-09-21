@@ -546,6 +546,24 @@ public final class UserColumnFactory {
     }
 
     /**
+     * The player's speciality as an icon; sorts by speciality id. Kept out of the additional array
+     * so the models that do not show it (lineup) keep their column layout.
+     */
+    public static PlayerColumn createPlayerSpecialtyColumn() {
+        return new PlayerColumn(75, " ", "ls.player.speciality", 25) {
+            @Override
+            public IHOTableCellEntry getTableEntry(Player player, Player playerCompare) {
+                final int specialty = player.getSpecialty();
+                final var names = core.gui.theme.HOIconName.SPECIALTIES;
+                final var icon = specialty >= 0 && specialty < names.length
+                        ? ImageUtilities.getSmallPlayerSpecialtyIcon(names[specialty]) : null;
+                return new ColorLabelEntry(icon, specialty, ColorLabelEntry.FG_STANDARD,
+                        ColorLabelEntry.BG_STANDARD, SwingConstants.CENTER);
+            }
+        };
+    }
+
+    /**
      * creates an array of various player columns
      *
      * @return PlayerColumn[]

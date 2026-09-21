@@ -592,7 +592,7 @@ public final class MatchTools {
                 ratingModel.getAverageRating(lineup, RatingSector.ATTACK_CENTRAL, 90),
                 ratingModel.getAverageRating(lineup, RatingSector.ATTACK_RIGHT, 90));
         final var ourTeam = manager.generateTeamData(model.getBasics().getTeamName(), ourRatings,
-                lineup.getTacticType(), tacticLevel(ratingModel.getTacticRating(lineup, 0)));
+                lineup.getTacticType(), McpJson.tacticLevel(ratingModel.getTacticRating(lineup, 0)));
 
         final var theirRatings = manager.generateTeamRatings(
                 McpJson.reqDouble(args, "opponentMidfield"),
@@ -659,8 +659,4 @@ public final class MatchTools {
         return properties;
     }
 
-    /** The tactic level as the Lineup tab shows it: the raw rating, rounded the way HO rounds it. */
-    private static int tacticLevel(double tacticRating) {
-        return (int) (tacticRating > 0 ? tacticRating + 1 : tacticRating);
-    }
 }
