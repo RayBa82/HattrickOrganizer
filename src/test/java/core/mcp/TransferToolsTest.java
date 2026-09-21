@@ -171,6 +171,71 @@ class TransferToolsTest {
         assertThat(weight).isCloseTo(1.0, within(0.001));
     }
 
+    @Test
+    void specialtyWeight_sameOrUnknownIsNeutralDifferentIsSoft() {
+        assertThat(TransferTools.specialtyWeight(4, 4, null)).isEqualTo(1.0);
+        assertThat(TransferTools.specialtyWeight(null, 4, null)).isEqualTo(1.0);
+        assertThat(TransferTools.specialtyWeight(4, null, null)).isEqualTo(1.0);
+        assertThat(TransferTools.specialtyWeight(0, 4, null)).isEqualTo(TransferTools.SPECIALTY_MISMATCH);
+        assertThat(TransferTools.specialtyWeight(2, 4, null)).isEqualTo(TransferTools.SPECIALTY_MISMATCH);
+    }
+
+    @Test
+    void specialtyWeight_withPositionGroupFallsWithTheScoreGap() {
+        // inner_mid scores: Unpredictable 1.0, Head 0.9, Quick 0.4, none 0.2
+        assertThat(TransferTools.specialtyWeight(0, 4, "inner_mid")).isCloseTo(0.44, within(0.001));
+        assertThat(TransferTools.specialtyWeight(5, 2, "inner_mid")).isCloseTo(0.65, within(0.001));
+        assertThat(TransferTools.specialtyWeight(5, 4, "inner_mid")).isCloseTo(0.93, within(0.001));
+        assertThat(TransferTools.specialtyWeight(0, 2, "inner_mid")).isCloseTo(0.86, within(0.001));
+        assertThat(TransferTools.specialtyWeight(4, 4, "inner_mid")).isEqualTo(1.0);
+        // back_line: Powerful 1.0 vs Head 0.25 (a liability there) - same pair reversed is symmetric
+        assertThat(TransferTools.specialtyWeight(5, 3, "back_line")).isCloseTo(0.475, within(0.001));
+        assertThat(TransferTools.specialtyWeight(3, 5, "back_line")).isCloseTo(0.475, within(0.001));
+        // the same pair is nearly interchangeable at a position that values both
+        assertThat(TransferTools.specialtyWeight(5, 2, "winger")).isCloseTo(0.93, within(0.001));
+    }
+
+    @Test
+    void comparableWeightBreakdown_reportsSpecialtyKernelAndFoldsItIntoCombined() {
+        final var listing = new TransferListing();
+        listing.setAge(20);
+        listing.setAgeDays(0);
+        listing.setSpecialty(0);
+
+        final var breakdown = TransferTools.comparableWeightBreakdown(listing, 2240,
+                TransferTools.ageSigmaDays(20), null, null, 4, null);
+
+        assertThat(breakdown.specialty()).isEqualTo(TransferTools.SPECIALTY_MISMATCH);
+        assertThat(breakdown.combined()).isCloseTo(TransferTools.SPECIALTY_MISMATCH, within(0.001));
+    }
+
+    @Test
+    void derivePositionGroup_readsTheTopSkillAndTiesGoToInnerMid() {
+        final var pm = new java.util.LinkedHashMap<String, Integer>();
+        pm.put("keeper", 1); pm.put("defending", 3); pm.put("playmaking", 7);
+        pm.put("passing", 6); pm.put("winger", 5); pm.put("scoring", 2);
+        assertThat(TransferTools.derivePositionGroup(pm)).isEqualTo("inner_mid");
+
+        pm.put("winger", 7);   // PM 7 = winger 7: playmaking comes first in skill order
+        assertThat(TransferTools.derivePositionGroup(pm)).isEqualTo("inner_mid");
+        pm.put("winger", 8);
+        assertThat(TransferTools.derivePositionGroup(pm)).isEqualTo("winger");
+        pm.put("scoring", 9);
+        assertThat(TransferTools.derivePositionGroup(pm)).isEqualTo("forward");
+        pm.put("defending", 10);
+        assertThat(TransferTools.derivePositionGroup(pm)).isEqualTo("back_line");
+        pm.put("keeper", 11);
+        assertThat(TransferTools.derivePositionGroup(pm)).isEqualTo("keeper");
+    }
+
+    @Test
+    void positionGroupOrNull_rejectsUnknownGroup() {
+        final var args = new com.google.gson.JsonObject();
+        args.addProperty("positionGroup", "striker");
+        org.junit.jupiter.api.Assertions.assertThrows(McpToolException.class,
+                () -> TransferTools.positionGroupOrNull(args));
+    }
+
     /** A candidate whose own two best skills are exactly the target's queried pair is a match. */
     @Test
     void sameArchetype_isTrueWhenOwnTopTwoMatchesTheTargetPair() {

@@ -2,6 +2,7 @@ package core.mcp;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import core.constants.player.PlayerSpeciality;
 import core.db.DBManager;
 import core.db.TransferBid;
 import core.db.TransferListing;
@@ -210,6 +211,28 @@ public final class TransferTools {
                                                         + "as liveSearchSkipped instead of failing the "
                                                         + "call; passed explicitly, it fails the call "
                                                         + "as before."),
+                                        "specialtyFilter", McpTool.prop("boolean",
+                                                "hard-filter the corpus to the target's exact specialty "
+                                                        + "(the old behaviour; thin cells). Default false: "
+                                                        + "all specialties are pooled and a comparable with "
+                                                        + "a different or no specialty is down-weighted "
+                                                        + "softly (weightBreakdown.specialty), same "
+                                                        + "specialty weighs 1.0. An unknown specialty on "
+                                                        + "either side is neutral."),
+                                        "positionGroup", McpTool.prop("string",
+                                                "optional override: keeper, back_line, winger, inner_mid or "
+                                                        + "forward. Default: derived from the player's top "
+                                                        + "positional skill and echoed as positionGroup / "
+                                                        + "positionGroupDerived. Each specialty is scored "
+                                                        + "0-1 for the position (e.g. inner_mid: Unpredictable "
+                                                        + "1.0, Head 0.9, Powerful 0.7, Technical 0.6, Quick "
+                                                        + "0.4, none 0.2; winger Head/Quick/Unpredictable; "
+                                                        + "forward Head/Quick/Technical; back_line "
+                                                        + "Powerful/Technical/Quick; Head and Unpredictable "
+                                                        + "at the back are liabilities) and a comparable's "
+                                                        + "weight falls with the score gap to the target's "
+                                                        + "specialty (1 - 0.7 x gap, floor 0.3). Scores are "
+                                                        + "ordinal placeholders; weather is not modelled."),
                                         "observedWithinDays", McpTool.prop("integer",
                                                 "ignore listings older than this many days, default "
                                                         + DEFAULT_CORPUS_DAYS + " (one Hattrick season)"))),
@@ -331,24 +354,117 @@ public final class TransferTools {
     }
 
     /**
-     * The three independent similarity kernels {@link #comparableWeight} multiplies together, kept
+     * The independent similarity kernels {@link #comparableWeight} multiplies together, kept
      * separate so a caller can see *why* a comparable was down-weighted rather than only by how much.
      */
-    record WeightBreakdown(double age, double skill, double character) {
+    record WeightBreakdown(double age, double skill, double character, double specialty) {
         /** The combined weight {@link #comparableWeight} returns - floored at {@link #WEIGHT_FLOOR}. */
         double combined() {
-            return Math.max(WEIGHT_FLOOR, age * skill * character);
+            return Math.max(WEIGHT_FLOOR, age * skill * character * specialty);
         }
     }
 
+    /** Weight of a comparable whose specialty differs from the target's when no position is known - soft, not a filter. */
+    static final double SPECIALTY_MISMATCH = 0.6;
+    /** With a position: weight lost per 1.0 of score gap between the two specialties. */
+    static final double SPECIALTY_SCORE_SLOPE = 0.7;
+    static final double SPECIALTY_FLOOR = 0.3;
+    private static final double UNKNOWN_SPECIALTY_SCORE = 0.3;
+
     /**
-     * The age/third-skill/character similarity kernels for one comparable, each defaulting to a
+     * How good each specialty is for a position, 0 (liability) - 1 (perfect). The ORDER comes from the
+     * team's buy tables and the wiki; the spacing is an ordinal placeholder, not fitted to prices - tune
+     * against resolved sales. Args are in specialty-id order: none, Technical, Quick, Powerful,
+     * Unpredictable, Head, Resilient (6), Support (8).
+     */
+    private static final Map<String, Map<Integer, Double>> POSITION_SCORE = Map.of(
+            "back_line", specialtyScores(0.3, 0.8, 0.6, 1.0, 0.2, 0.25, 0.4, 0.1),
+            "winger", specialtyScores(0.2, 0.4, 0.9, 0.4, 0.7, 1.0, 0.4, 0.1),
+            "inner_mid", specialtyScores(0.2, 0.6, 0.4, 0.7, 1.0, 0.9, 0.4, 0.1),
+            "forward", specialtyScores(0.2, 0.7, 0.95, 0.6, 0.7, 1.0, 0.4, 0.1),
+            "keeper", specialtyScores(0.5, 0.4, 0.6, 0.4, 0.3, 0.1, 0.4, 0.1));
+
+    private static Map<Integer, Double> specialtyScores(double none, double technical, double quick,
+                                                        double powerful, double unpredictable, double head,
+                                                        double resilient, double support) {
+        return Map.of(PlayerSpeciality.NO_SPECIALITY, none, PlayerSpeciality.TECHNICAL, technical,
+                PlayerSpeciality.QUICK, quick, PlayerSpeciality.POWERFUL, powerful,
+                PlayerSpeciality.UNPREDICTABLE, unpredictable, PlayerSpeciality.HEAD, head,
+                PlayerSpeciality.REGAINER, resilient, PlayerSpeciality.SUPPORT, support);
+    }
+
+    /**
+     * The position a player is valued as when the caller gave no positionGroup: his top positional
+     * skill decides (keeper -> keeper, defending -> back_line, scoring -> forward, winger -> winger,
+     * playmaking or passing -> inner_mid). {@code levels} iterates in POSITIONAL_SKILLS order and the
+     * first maximum wins, so a playmaking/winger tie goes to inner_mid - the trained slot.
+     * ponytail: top-skill heuristic; a mixed profile (PM 6, winger 6) is a coin flip, callers override.
+     */
+    static String derivePositionGroup(Map<String, Integer> levels) {
+        String top = "playmaking";
+        int best = -1;
+        for (final var e : levels.entrySet()) {
+            if (e.getValue() > best) {
+                best = e.getValue();
+                top = e.getKey();
+            }
+        }
+        return switch (top) {
+            case "keeper" -> "keeper";
+            case "defending" -> "back_line";
+            case "scoring" -> "forward";
+            case "winger" -> "winger";
+            default -> "inner_mid";
+        };
+    }
+
+    /** Validates a caller's positionGroup (null passes through) and returns it. */
+    static String positionGroupOrNull(JsonObject args) throws McpToolException {
+        if (!args.has("positionGroup") || args.get("positionGroup").isJsonNull()) {
+            return null;
+        }
+        final var group = args.get("positionGroup").getAsString();
+        if (!POSITION_SCORE.containsKey(group)) {
+            throw new McpToolException("positionGroup must be one of " + new java.util.TreeSet<>(POSITION_SCORE.keySet())
+                    + ", got '" + group + "'.");
+        }
+        return group;
+    }
+
+    /**
+     * 1.0 for the same specialty, or when either is unknown (null - a bid-only observation, or a
+     * profile that never gave one). Otherwise {@link #SPECIALTY_MISMATCH} without a positionGroup; with
+     * one, the gap between how good each specialty is for that position ({@link #POSITION_SCORE})
+     * sets the weight: 1 - {@link #SPECIALTY_SCORE_SLOPE} x gap, never below {@link #SPECIALTY_FLOOR}.
+     * Weather is deliberately not modelled - the hattrick session's rules treat it as a +-5% tiebreak.
+     */
+    static double specialtyWeight(Integer listingSpecialty, Integer targetSpecialty, String positionGroup) {
+        if (listingSpecialty == null || targetSpecialty == null || listingSpecialty.equals(targetSpecialty)) {
+            return 1.0;
+        }
+        if (positionGroup == null) {
+            return SPECIALTY_MISMATCH;
+        }
+        final var scores = POSITION_SCORE.get(positionGroup);
+        final var gap = Math.abs(scores.getOrDefault(listingSpecialty, UNKNOWN_SPECIALTY_SCORE)
+                - scores.getOrDefault(targetSpecialty, UNKNOWN_SPECIALTY_SCORE));
+        return Math.max(SPECIALTY_FLOOR, 1.0 - SPECIALTY_SCORE_SLOPE * gap);
+    }
+
+    /**
+     * The age/third-skill/character/specialty similarity kernels for one comparable, each defaulting to a
      * neutral 1.0 when the listing lacks the data to judge it rather than penalising the gap - a bid-
      * only observation has no skills at all, and most of the corpus still has no character (see the
      * backfill_character work in docs/current.md).
      */
     static WeightBreakdown comparableWeightBreakdown(TransferListing listing, int targetAgeDays,
                                             double ageSigma, Integer targetCSkill, int[] targetChar) {
+        return comparableWeightBreakdown(listing, targetAgeDays, ageSigma, targetCSkill, targetChar, null, null);
+    }
+
+    static WeightBreakdown comparableWeightBreakdown(TransferListing listing, int targetAgeDays,
+                                            double ageSigma, Integer targetCSkill, int[] targetChar,
+                                            Integer targetSpecialty, String positionGroup) {
         final var listingAgeDays = totalAgeDays(listing.getAge(),
                 listing.getAgeDays() == null ? 0 : listing.getAgeDays());
         final var ageWeight = gaussianWeight(Math.abs(listingAgeDays - targetAgeDays), ageSigma);
@@ -362,14 +478,14 @@ public final class TransferTools {
                         + Math.abs(listing.getAggressiveness() - targetChar[1])
                         + Math.abs(listing.getHonesty() - targetChar[2]), CHARACTER_SIGMA);
 
-        return new WeightBreakdown(ageWeight, skillWeight, charWeight);
+        return new WeightBreakdown(ageWeight, skillWeight, charWeight,
+                specialtyWeight(listing.getSpecialty(), targetSpecialty, positionGroup));
     }
 
     /** How much this comparable should count toward the weighted median - see {@link WeightBreakdown}. */
     static double comparableWeight(TransferListing listing, int targetAgeDays,
                                             double ageSigma, Integer targetCSkill, int[] targetChar) {
-        return comparableWeightBreakdown(listing, targetAgeDays, ageSigma, targetCSkill, targetChar)
-                .combined();
+        return comparableWeightBreakdown(listing, targetAgeDays, ageSigma, targetCSkill, targetChar).combined();
     }
 
     /**
@@ -477,6 +593,9 @@ public final class TransferTools {
         // as a listing) - record it once so it teaches future valuations something too, rather
         // than being spent and discarded on this one call.
         final var recordedToCorpus = hasProfile && recordProfileObservation(profile, player);
+        final var requestedGroup = positionGroupOrNull(args);
+        final var hardSpecialtyFilter = args.has("specialtyFilter") && args.get("specialtyFilter").getAsBoolean();
+        final var targetSpecialty = corpusSpecialtyFilter(hasProfile, profile, player);
         final var query = comparableQuery(player,
                 McpJson.optInt(args, "ageTolerance", 1),
                 McpJson.optInt(args, "skillTolerance", 1));
@@ -488,7 +607,8 @@ public final class TransferTools {
         final var liveSearch = live.hits();
         final var liveSearchSkipped = live.skippedNote();
 
-        // corpusSpecialtyFilter, not player.getSpecialty(): a squad player's specialty is always
+        // Specialty is a soft weight by default (see specialtyWeight); the corpus is only hard-filtered
+        // to it when the caller passes specialtyFilter: true. corpusSpecialtyFilter, not player.getSpecialty():
         // definitively known, but a profile that never mentions specialty could mean either "HO
         // never got a reading for him" (a departed player, most of the time) or "confirmed none" -
         // conflating those two into player's own 0 default would wrongly exclude specialty-having
@@ -502,7 +622,7 @@ public final class TransferTools {
                 query.skillType2() == null ? null : column(query.skillType2()),
                 query.skillType2() == null ? 0 : query.minSkillValue2(),
                 query.skillType2() == null ? 0 : query.maxSkillValue2(),
-                corpusSpecialtyFilter(hasProfile, profile, player), since);
+                hardSpecialtyFilter ? targetSpecialty : null, since);
 
 
         // One vote per player. The corpus appends on every observation, so a player who turned up
@@ -525,6 +645,7 @@ public final class TransferTools {
         // The target's own features, computed once and shared by every comparable's weight below.
         final var playerLevels = playerSkillLevels(player);
         final var playerCSkill = thirdHighestOrNull(playerLevels.values());
+        final var positionGroup = requestedGroup != null ? requestedGroup : derivePositionGroup(playerLevels);
         final var playerAgeDays = totalAgeDays(player.getAge(), player.getAgeDays());
         final var hasFullCharacter = !hasProfile
                 || (profile.has("agreeability") && profile.has("aggressiveness") && profile.has("honesty"));
@@ -536,7 +657,8 @@ public final class TransferTools {
         final var salesPriced = comparables.stream()
                 .filter(l -> l.getSalePrice() != null)
                 .map(l -> new PricedComparable(l, l.getSalePrice(),
-                        comparableWeight(l, playerAgeDays, ageSigma, playerCSkill, playerChar)))
+                        comparableWeightBreakdown(l, playerAgeDays, ageSigma, playerCSkill, playerChar,
+                                targetSpecialty, positionGroup).combined()))
                 .sorted(Comparator.comparingLong(PricedComparable::price))
                 .toList();
         // An expired listing keeps its last observed state, so the highest bid is the better
@@ -544,7 +666,8 @@ public final class TransferTools {
         final var asksPriced = comparables.stream()
                 .filter(l -> l.getSalePrice() == null)
                 .map(l -> new PricedComparable(l, Math.max(l.getAskingPrice(), l.getHighestBid()),
-                        comparableWeight(l, playerAgeDays, ageSigma, playerCSkill, playerChar)))
+                        comparableWeightBreakdown(l, playerAgeDays, ageSigma, playerCSkill, playerChar,
+                                targetSpecialty, positionGroup).combined()))
                 .filter(pc -> pc.price() > 0)
                 .sorted(Comparator.comparingLong(PricedComparable::price))
                 .toList();
@@ -576,6 +699,10 @@ public final class TransferTools {
         json.addProperty("resolvedSalesAvailable", salesPriced.size());
         json.addProperty("observedListingsAvailable", asksPriced.size());
         json.addProperty("comparableQuery", query.toQueryString());
+        // Which position the specialty fit was judged for, and whether the caller said so or it was
+        // read off the player's top skill - see derivePositionGroup.
+        json.addProperty("positionGroup", positionGroup);
+        json.addProperty("positionGroupDerived", requestedGroup == null);
         json.addProperty("observedWithinDays", days);
         if (liveSearch != null) {
             // The raw hits beside the corpus view of them: itemCount says how much of the market
@@ -607,12 +734,13 @@ public final class TransferTools {
                 .forEach(l -> {
                     final var row = topSkillsOnly(McpJson.listing(l), listingSkillLevels(l));
                     final var breakdown = comparableWeightBreakdown(
-                            l, playerAgeDays, ageSigma, playerCSkill, playerChar);
+                            l, playerAgeDays, ageSigma, playerCSkill, playerChar, targetSpecialty, positionGroup);
                     row.addProperty("weight", round2(breakdown.combined()));
                     final var weightBreakdown = new JsonObject();
                     weightBreakdown.addProperty("age", round2(breakdown.age()));
                     weightBreakdown.addProperty("skill", round2(breakdown.skill()));
                     weightBreakdown.addProperty("character", round2(breakdown.character()));
+                    weightBreakdown.addProperty("specialty", round2(breakdown.specialty()));
                     row.add("weightBreakdown", weightBreakdown);
                     final var rawPrice = l.getSalePrice() != null ? l.getSalePrice()
                             : Math.max(l.getAskingPrice(), l.getHighestBid());
@@ -640,11 +768,12 @@ public final class TransferTools {
         // un-clamped spread.
         json.addProperty("estimate", McpJson.money(clampedWeightedMedian(sample)));
         json.addProperty("estimateNote", "Weighted median over " + sample.size() + " comparables - "
-                + "weighted by closeness in age (day precision), third-best skill and character "
-                + "where known, and clamped against a wild outlier - as a starting anchor only. It "
+                + "weighted by closeness in age (day precision), third-best skill, character "
+                + "and specialty where known (a different specialty is down-weighted, not "
+                + "excluded - see specialtyFilter/positionGroup), and clamped against a wild outlier - as a starting anchor only. It "
                 + "still ignores wage, TSI, form and how stale each observation is. The comparables "
                 + "array carries those plus each row's own weight (weightBreakdown says which of "
-                + "age/skill/character pulled it down) and adjustedPrice (what it actually "
+                + "age/skill/character/specialty pulled it down) and adjustedPrice (what it actually "
                 + "contributed, after the time-left climb below where that applies) - check the "
                 + "number instead of trusting it. Each row lists its three best positional skills "
                 + "plus set pieces; the positional skills below the top three are not returned.");
