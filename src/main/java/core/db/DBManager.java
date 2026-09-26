@@ -575,6 +575,7 @@ public class DBManager implements PersistenceManager {
 	 * @param saison die Saison
 	 * @return the spielplan
 	 */
+	@Override
 	public MatchFixtures getSpielplan(int ligaId, int saison) {
 		var ret = ((SpielplanTable) getTable(SpielplanTable.TABLENAME)).getSpielplan(ligaId, saison);
 		if ( ret != null ){

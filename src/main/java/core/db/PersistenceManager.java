@@ -149,6 +149,13 @@ public interface PersistenceManager {
      */
     MatchFixtures getLatestSpielplan();
 
+    /**
+     * Returns the game schedule of one series in one season.
+     *
+     * @return the schedule with its fixtures, <code>null</code> if none is stored.
+     */
+    MatchFixtures getSpielplan(int ligaId, int saison);
+
 
     // Staff
 

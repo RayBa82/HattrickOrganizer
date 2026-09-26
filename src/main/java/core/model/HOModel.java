@@ -125,8 +125,8 @@ public class HOModel {
         setEconomy(dbManager.getEconomy(id));
         setLeague(dbManager.getLiga(id));
         setStadium(dbManager.getStadion(id));
-        setFixtures(dbManager.getLatestSpielplan());
         setXtraDaten(dbManager.getXtraDaten(id));
+        setFixtures(loadCurrentFixtures());
         setStaff(dbManager.getStaffByHrfId(id));
     }
 
@@ -403,9 +403,22 @@ public class HOModel {
      */
     public final MatchFixtures getFixtures() {
         if (spielplan == null) {
-            spielplan = getPersistenceManager().getLatestSpielplan(); // valid only for the current Model
+            spielplan = loadCurrentFixtures(); // valid only for the current Model
         }
         return spielplan;
+    }
+
+    /**
+     * This season's schedule of our own series. Not {@code getLatestSpielplan()}: that is the plan
+     * with the newest FetchDate, which can be another season's series.
+     */
+    private MatchFixtures loadCurrentFixtures() {
+        final var xtra = getXtraDaten();
+        final var seasonBasics = getBasics();
+        if (xtra == null || seasonBasics == null) {
+            return getPersistenceManager().getLatestSpielplan();
+        }
+        return getPersistenceManager().getSpielplan(xtra.getLeagueLevelUnitID(), seasonBasics.getSeason());
     }
 
     /**

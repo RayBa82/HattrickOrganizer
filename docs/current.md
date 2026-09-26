@@ -2971,3 +2971,35 @@ lineup was scored under that one fixture's weather.
   change the live lineup's weather, as the Lineup tab's weather box does.
 
 Untested against live CHPP.
+
+## MCP trim: 40 tools down to 30 (2026-09-26)
+
+Asked by the hattrick repo's consumer session and approved by the user. Every read stayed a read and
+every write kept its own tool; no field was dropped.
+
+| Removed | Now |
+|---|---|
+| `get_opponent_ratings`, `get_opponent_squad` | `scout_opponent(include=[ratings,squad])`, default both |
+| `search_transfers_batch` | `search_transfers(queries[])`; without `queries` the single-search shape is unchanged |
+| `get_match_events` | `get_match(includeEvents)` → `events` |
+| `get_player` | `get_squad(playerIds[], includeTransfers)`; an id not in the squad is an error |
+| `get_training_events` | `get_player_history(includeEvents)` → per player `trainingEvents`, at most `MAX_EVENT_PLAYERS` = 5 ids |
+| `check_challengeable` | `list_challenges(checkTeamIds[1-20])` → `challengeable` |
+| `get_upcoming_matches`, `get_league_table` | `get_series`: `matches`, `otherUpcoming`, `nextCupMatch`, `seriesName`, `leagueLevelUnitId`, `season`, `table` (null + `tableNote` when the series is not downloaded) |
+| `backfill_character` | gone; the same pass still runs after every team download |
+| `get_rating_calibration` | unregistered; `CalibrationSummary` and the `RATING_CALIBRATION` rows stay, re-register in `MatchTools` to use it |
+
+`place_bid` stays even though it is Supporter-only (CHPP `playerdetails` placeBid); `send_match_order`
+is not Supporter-gated at all, it needs only the `set_matchorder` scope.
+
+Follow-ups from the live test:
+
+- `get_series.matches` showed a 2024 series before a fresh download. It (and `get_upcoming_matches`
+  before it) read `HOModel.getFixtures()` = `SpielplanTable.getLatestSpielplan()`, which is
+  `ORDER BY FetchDate DESC LIMIT 1` - the plan fetched last, not the current one. `get_series` now
+  takes table and fixtures from `getSpielplan(leagueLevelUnitId, season)`. `HOModel.getFixtures()`
+  now does the same (`loadCurrentFixtures`, falling back to the fetched-last plan only without
+  XtraData/Basics), which fixes `OnlineWorker`'s played-since-last-download diff, and the Series
+  tab's season box defaults to that plan instead of whichever series sorts first in the season.
+- `list_scout` returned ~260k chars for 455 entries. It now pages (`limit` 50 / max 200, `offset`),
+  filters (`onlyOpen`), and returns compact market rows unless `full`.

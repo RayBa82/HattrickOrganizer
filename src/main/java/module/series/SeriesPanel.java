@@ -106,7 +106,16 @@ public class SeriesPanel extends LazyImagePanel {
 		seasonComboBox.setSelectedItem(markierterPlan);
 
 		if ((seasonComboBox.getSelectedIndex() < 0) && (seasonComboBox.getItemCount() > 0)) {
+			// Our own series this season; the newest entry can be another series of the same season.
+			final var current = core.model.HOVerwaltung.instance().getModel().getFixtures();
 			seasonComboBox.setSelectedIndex(0);
+			for (int i = 0; current != null && i < seasonComboBox.getItemCount(); i++) {
+				final var plan = seasonComboBox.getItemAt(i);
+				if (plan.getLigaId() == current.getLigaId() && plan.getSaison() == current.getSaison()) {
+					seasonComboBox.setSelectedIndex(i);
+					break;
+				}
+			}
 		}
 
 		// Aktuellen Spielplan bestimmen
