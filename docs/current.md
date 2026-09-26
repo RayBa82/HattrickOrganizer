@@ -2860,3 +2860,23 @@ Measurement only: nothing in the model or its parameters changed, nothing is fit
   not flagged).
 - Ran against a copy of today's DB backup, not the live DB: HO.app was running and holds the lock,
   and it is the old build without this table. It gets the table on its next start after a rebuild.
+
+## CHPP docs re-checked, and no friendly pool (2026-09-26)
+
+Docs only, no code. `docs/chpp_files.md` was re-synced from the live CHPP docs
+(`/Community/CHPP/NewDocs/`, login-only: it is 403 without a browser session, read through Chrome).
+All 57 file pages plus the data types are now captured in `docs/raw/chpp/` (see its README). Look
+there before guessing a CHPP parameter or element name.
+
+- **No friendly-pool action exists in CHPP.** `challenges` 1.6 has `view`, `challengeable`,
+  `challenge`, `accept`, `decline`, `withdraw`, and no other file touches the pool. The docs index
+  forbids CHPP products from using undocumented site interfaces, so joining the pool stays manual.
+- `challengeable` (`suggestedTeamIds`, comma-separated) is unused by HO. It is the cheap next MCP
+  tool, to screen opponents in bulk before `arrange_challenge`. Not built.
+- **Gender (February 2026).** Hattrick added `GenderID` and `LeagueSystemID` (1 male / 2 female) to
+  players 2.8, playerdetails 3.2, teamdetails 3.8/3.9, worlddetails 2.0, the youth files and
+  managercompendium. HO requests older versions and parses neither field, so a women's team looks
+  like a men's one. Picking this up means version bumps plus parser, model and DB changes. Not started.
+- The full CHPP error-code table and the `overrideIsSupporter=-1..3` test switch are now in
+  `docs/chpp_files.md`. HO detects `ErrorCode` (`XMLCHPPPreParser`) but has no code-to-text table; mapping them to text for the
+  MCP write tools (70 challenge failed, 71 bid failed, 92 transfer market down, ...) is a follow-up.
