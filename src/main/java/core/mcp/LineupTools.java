@@ -208,6 +208,11 @@ public final class LineupTools {
         }
         if (match != null) {
             lineup.setUpcomingMatch(match);
+        } else if (weatherId != null) {
+            // A fresh Lineup loads HO's next match lazily - on the first getLocation(), which the
+            // rating model calls mid-evaluation - and that load overwrites the weather with the
+            // match's forecast. Trigger it now so the weather set below is the one that stays.
+            lineup.getLocation();
         }
         if (weatherId != null) {
             lineup.setWeather(Weather.getById(weatherId));
