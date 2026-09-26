@@ -263,7 +263,7 @@ public final class TransferTools {
     /** How many comparable rows come back as evidence. Enough to reason over, small enough to read. */
     private static final int MAX_COMPARABLES = 40;
 
-    /** A Hattrick season year is 112 days (ageDays runs 0-111) - see docs/current.md. Used to turn
+    /** A Hattrick season year is 112 days (ageDays runs 0-111) - see docs/current.md @ f5c51d0d. Used to turn
      * age + ageDays into one continuous day count, so a 23y111 and a 24y0 comparable are recognised
      * as a day apart rather than a full year. */
     private static final int HATTRICK_YEAR_DAYS = 112;
@@ -476,7 +476,7 @@ public final class TransferTools {
      * The age/third-skill/character/specialty similarity kernels for one comparable, each defaulting to a
      * neutral 1.0 when the listing lacks the data to judge it rather than penalising the gap - a bid-
      * only observation has no skills at all, and most of the corpus still has no character (see the
-     * backfill_character work in docs/current.md).
+     * backfill_character work in git show f5c51d0d:docs/current.md).
      */
     static WeightBreakdown comparableWeightBreakdown(TransferListing listing, int targetAgeDays,
                                             double ageSigma, Integer targetCSkill, int[] targetChar) {
@@ -1762,7 +1762,7 @@ public final class TransferTools {
     private static JsonObject previewBid(JsonObject args, int playerId) throws McpToolException {
         // The model bids in the user's currency; placeBid is sent in swedish krona - the CHPP-wide
         // money unit HO already converts transfersearch priceMin/priceMax to. Not confirmed against
-        // a captured placeBid request (docs/current.md); adjust if a real response says otherwise.
+        // a captured placeBid request (docs/current.md @ f5c51d0d); adjust if a real response says otherwise.
         final var bidAmountLocal = McpJson.reqLong(args, "bidAmount");
         final Long maxBidAmountLocal = McpJson.optLong(args, "maxBidAmount");
         final var bidAmountSek = McpJson.swedishKrona(bidAmountLocal);

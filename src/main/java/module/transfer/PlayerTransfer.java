@@ -155,7 +155,7 @@ public class PlayerTransfer extends AbstractTable.Storable {
     /**
      * Seed the transfer-listing corpus with a departed player's own last-known skills, since HO
      * never watched him as a live listing and his specialty/TSI/character are otherwise gone the
-     * moment he leaves the squad (see docs/current.md, 2026-09-13). No live CHPP call: {@code p}
+     * moment he leaves the squad (see docs/current.md @ f5c51d0d, 2026-09-13). No live CHPP call: {@code p}
      * comes from the SPIELER row HO already downloaded for him before the sale.
      * <p>
      * Best effort - never lets a lookup or write failure break the transfer download itself.

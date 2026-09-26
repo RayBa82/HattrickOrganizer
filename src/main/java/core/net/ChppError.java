@@ -99,7 +99,7 @@ public record ChppError(int code, Reason reason, String text, String additionalI
 
     /**
      * Error 70 covers both sides' slot; only Hattrick's text tells them apart. Both texts were seen
-     * live (one came back in German, one in English), see docs/current.md.
+     * live (one came back in German, one in English), see git show f5c51d0d:docs/current.md.
      */
     private static Reason challengeReason(String words) {
         if (words.contains("your team already")) {

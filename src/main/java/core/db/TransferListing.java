@@ -168,7 +168,7 @@ public class TransferListing extends AbstractTable.Storable {
      * A snapshot built from HO's own last-known squad data for a player who has just been sold
      * and was never observed as a transfer-market listing at all - the gap that left
      * Škerbinek/Flikweert/Spaltenstein's real skills and specialty unrecoverable once they left
-     * the squad (see docs/current.md, 2026-09-13). {@code p} is the last SPIELER row downloaded
+     * the squad (see docs/current.md @ f5c51d0d, 2026-09-13). {@code p} is the last SPIELER row downloaded
      * for him, from before departure ({@link SpielerTable#loadLatestPlayerInfo}) - no live CHPP
      * call, this is local data HO already has. Unlike {@link #fromHit}/{@link #fromPlayerDetails},
      * {@code deadline}/{@code askingPrice}/{@code highestBid} are left at their defaults: he was
