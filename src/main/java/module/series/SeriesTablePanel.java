@@ -28,7 +28,7 @@ import java.util.Vector;
  */
 class SeriesTablePanel extends ImagePanel {
 
-	public static final EmptyBorder EMPTY_BORDER = new EmptyBorder(5, 5, 5, 5);
+	private static final EmptyBorder EMPTY_BORDER = new EmptyBorder(0, 6, 0, 6);
 	private final Color TITLE_BACKGROUND = ThemeManager.getColor(HOColorName.LEAGUE_TITLE_BG);
 	private final Color TABLE_FOREGROUND = ThemeManager.getColor(HOColorName.LEAGUE_FG);
 
@@ -36,7 +36,7 @@ class SeriesTablePanel extends ImagePanel {
 	private final Color TABLE_ODD_ROW = ThemeManager.getColor(HOColorName.TABLE_LEAGUE_ODD);
 
 	private final String[] COLUMNNAMES = {
-			"",
+			"#",
 			"",
 			Helper.getTranslation("Punkte_kurz"),
 			Helper.getTranslation("Spiele_kurz"),
@@ -144,6 +144,19 @@ class SeriesTablePanel extends ImagePanel {
 		columnModel.getColumn(13).setPreferredWidth(Helper.calcCellWidth(50));
 		columnModel.getColumn(14).setPreferredWidth(Helper.calcCellWidth(50));
 		columnModel.getColumn(15).setPreferredWidth(Helper.calcCellWidth(50));
+
+		// never narrower than the header text or the widest cell, so nothing gets cut off
+		final TableCellRenderer headerRenderer = seriesTable.getTableHeader().getDefaultRenderer();
+		for (int i = 0; i < columnModel.getColumnCount(); i++) {
+			final TableColumn column = columnModel.getColumn(i);
+			int width = headerRenderer.getTableCellRendererComponent(seriesTable, column.getHeaderValue(),
+					false, false, -1, i).getPreferredSize().width + 12;
+			for (int row = 0; row < seriesTable.getRowCount(); row++) {
+				width = Math.max(width, seriesTable.prepareRenderer(seriesTable.getCellRenderer(row, i), row, i)
+						.getPreferredSize().width + 4);
+			}
+			column.setPreferredWidth(Math.max(column.getPreferredWidth(), width));
+		}
 	}
 
 	private void initComponents() {
@@ -165,13 +178,21 @@ class SeriesTablePanel extends ImagePanel {
 		layout.setConstraints(m_jcbStatsAggType, constraints);
 		panel.add(m_jcbStatsAggType);
 
-		// serie Table
+		// serie Table - real header instead of a fake first row, flat rows without grid lines
 		constraints.gridy = 1;
 		constraints.insets = new Insets(0, 4, 4, 4);
 		seriesTable.setDefaultRenderer(Object.class, new HODefaultTableCellRenderer());
-		seriesTable.setRowHeight(2 * fontSize);
-		layout.setConstraints(seriesTable, constraints);
-		panel.add(seriesTable);
+		seriesTable.setRowHeight((int) (2.2 * fontSize));
+		seriesTable.setShowGrid(false);
+		seriesTable.setIntercellSpacing(new Dimension(0, 0));
+		final JTableHeader header = seriesTable.getTableHeader();
+		header.setReorderingAllowed(false);
+		header.setFont(header.getFont().deriveFont(Font.BOLD));
+		final JPanel tableWrapper = new JPanel(new BorderLayout());
+		tableWrapper.add(header, BorderLayout.NORTH);
+		tableWrapper.add(seriesTable, BorderLayout.CENTER);
+		layout.setConstraints(tableWrapper, constraints);
+		panel.add(tableWrapper);
 
 		setLayout(new BorderLayout());
 		add(panel);
@@ -190,14 +211,9 @@ class SeriesTablePanel extends ImagePanel {
 
 	private void initTable() {
 
-		tableValues = new Object[9][COLUMNNAMES.length];
+		tableValues = new Object[8][COLUMNNAMES.length];
 
-		// Column Headers
-		for (int i = 0; i < COLUMNNAMES.length; i++) {
-			tableValues[0][i] = new ColorLabelEntry(COLUMNNAMES[i], ColorLabelEntry.FG_STANDARD, TITLE_BACKGROUND, SwingConstants.CENTER);
-		}
-
-		for (int i = 1; i < 9; i++) {
+		for (int i = 0; i < 8; i++) {
 			final Color bg_Color = getColor4Row(i);
 
 			final ColorLabelEntry clPositionLeft = new ColorLabelEntry("", ColorLabelEntry.FG_STANDARD, bg_Color, SwingConstants.RIGHT);
@@ -207,23 +223,12 @@ class SeriesTablePanel extends ImagePanel {
 
 			tableValues[i][0] = new DoubleLabelEntries(clPositionLeft, clPositionRight);
 			tableValues[i][1] = new ColorLabelEntry("", ColorLabelEntry.FG_STANDARD, bg_Color, SwingConstants.LEFT);
-			tableValues[i][2] = new ColorLabelEntry("", ColorLabelEntry.FG_STANDARD, bg_Color, SwingConstants.CENTER);
-			tableValues[i][3] = new ColorLabelEntry("", ColorLabelEntry.FG_STANDARD, bg_Color, SwingConstants.CENTER);
-			tableValues[i][4] = new ColorLabelEntry("", ColorLabelEntry.FG_STANDARD, bg_Color, SwingConstants.CENTER);
-			tableValues[i][5] = new ColorLabelEntry("", ColorLabelEntry.FG_STANDARD, bg_Color, SwingConstants.CENTER);
-			tableValues[i][6] = new ColorLabelEntry("", ColorLabelEntry.FG_STANDARD, bg_Color, SwingConstants.CENTER);
-			tableValues[i][7] = new ColorLabelEntry("", ColorLabelEntry.FG_STANDARD, bg_Color, SwingConstants.CENTER);
-			tableValues[i][8] = new ColorLabelEntry("", ColorLabelEntry.FG_STANDARD, bg_Color, SwingConstants.CENTER);
-			tableValues[i][9] = new ColorLabelEntry("", ColorLabelEntry.FG_STANDARD, bg_Color, SwingConstants.CENTER);
-			tableValues[i][10] = new ColorLabelEntry("", ColorLabelEntry.FG_STANDARD, bg_Color, SwingConstants.LEFT);
-			tableValues[i][11] = new ColorLabelEntry("", ColorLabelEntry.FG_STANDARD, bg_Color, SwingConstants.CENTER);
-			tableValues[i][12] = new ColorLabelEntry("", ColorLabelEntry.FG_STANDARD, bg_Color, SwingConstants.CENTER);
-			tableValues[i][13] = new ColorLabelEntry("", ColorLabelEntry.FG_STANDARD, bg_Color, SwingConstants.CENTER);
-			tableValues[i][14] = new ColorLabelEntry("", ColorLabelEntry.FG_STANDARD, bg_Color, SwingConstants.CENTER);
-			tableValues[i][15] = new ColorLabelEntry("", ColorLabelEntry.FG_STANDARD, bg_Color, SwingConstants.CENTER);
-
-			for (int j = 2 ; j < 9 ; j++) {
-				((JLabel)tableValues[i][j]).setBorder(EMPTY_BORDER);
+			for (int j = 2; j < COLUMNNAMES.length; j++) {
+				final int align = (j == 10) ? SwingConstants.LEFT : SwingConstants.CENTER;
+				tableValues[i][j] = new ColorLabelEntry("", ColorLabelEntry.FG_STANDARD, bg_Color, align);
+			}
+			for (int j = 1; j < COLUMNNAMES.length; j++) {
+				((JLabel) tableValues[i][j]).setBorder(EMPTY_BORDER);
 			}
 		}
 
@@ -242,7 +247,7 @@ class SeriesTablePanel extends ImagePanel {
 					final SerieTableEntry entry = tableEntries.get(i);
 
 					if (entry.getPoints() > -1) {
-						j = i + 1;
+						j = i;
 
 						// Column position  ========================================
 						((DoubleLabelEntries) tableValues[j][0]).getLeft().setText("");
@@ -278,7 +283,7 @@ class SeriesTablePanel extends ImagePanel {
 						((ColorLabelEntry) tableValues[j][7]).setText(entry.getGoalsFor() + "");
 						((ColorLabelEntry) tableValues[j][8]).setText(entry.getGoalsAgainst() + "");
 						((ColorLabelEntry) tableValues[j][9]).setSpecialNumber(entry.getGoalsDiff(), false);
-						
+
 						FormLabel formLabel = new FormLabel(entry.getSerie());
 						formLabel.setBgColor(getColor4Row(j));
 						tableValues[j][10] = formLabel;
@@ -339,7 +344,7 @@ class SeriesTablePanel extends ImagePanel {
 					final SerieTableEntry entry = tableEntries.get(i);
 
 					if (entry.getPoints() > -1) {
-						populateSerieTableStatistics(entry, i + 1);
+						populateSerieTableStatistics(entry, i);
 					}
 				}
 
