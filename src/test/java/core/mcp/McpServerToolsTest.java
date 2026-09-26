@@ -16,15 +16,15 @@ class McpServerToolsTest {
                         {"jsonrpc":"2.0","id":1,"method":"tools/list"}""").getAsJsonObject())
                 .getAsJsonObject("result").getAsJsonArray("tools");
 
-        assertThat(tools).hasSize(36);
+        assertThat(tools).hasSize(39);
         assertThat(tools).extracting(t -> t.getAsJsonObject().get("name").getAsString())
                 .containsExactlyInAnyOrder("get_team", "get_squad", "get_player",
                         "get_opponent_squad", "scout_opponent",
                         "get_upcoming_matches", "search_transfers", "search_transfers_batch",
-                        "get_team_transfers", "place_bid", "get_open_bids", "get_lineup",
+                        "get_team_transfers", "get_player_transfer_history", "place_bid", "get_open_bids", "get_lineup",
                         "apply_lineup", "set_player_group", "send_match_order",
                         "get_training", "get_player_history", "get_training_events", "set_training",
-                        "get_matches", "get_match",
+                        "get_matches", "get_match", "get_match_events", "get_bookmarks",
                         "get_opponent_ratings", "get_rating_calibration",
                         "simulate_lineup", "list_challenges", "check_challengeable", "arrange_challenge",
                         "respond_to_challenge", "get_league_table", "get_finances",

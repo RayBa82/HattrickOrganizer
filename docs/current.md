@@ -2914,3 +2914,19 @@ there before guessing a CHPP parameter or element name.
 
 None of this has been exercised against live CHPP yet; the unit tests use XML shaped from the
 captured docs.
+
+## Second batch from the hattrick session (2026-09-26)
+
+- **`get_match_events`** (MatchTools): the stored highlights of one match (`Matchdetails.getHighlights`,
+  no CHPP call). Per team goals (event ids 100-199), missed chances (200-299), chances = both,
+  and special events (`MatchEventID` name starts with `SE_`), then every event. Needs the match
+  details downloaded, like `get_match`.
+- **Staff:** not built - `get_team` already returns `staff` (name, type, level, cost) from the
+  `stafflist` HO downloads, plus the head coach.
+- **`get_player_transfer_history`** (TransferTools): live `transfersPlayer` for any player.
+  `module.transfer.XMLParser.parsePlayerTransfers` was split out of `getAllPlayerTransfers` so the
+  fetch goes through `ChppWriteService` (silent download, readable error).
+- **`get_bookmarks`** (TeamTools): live `bookmarks` 1.0, read-only, via `XMLBookmarksParser`.
+  Type ids 1-11 mapped to names; Text / ObjectID meanings per type are in `docs/raw/chpp/bookmarks.md`.
+
+Also untested against live CHPP.

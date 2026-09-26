@@ -8,6 +8,7 @@ import core.file.xml.XMLMatchdetailsParser;
 import core.model.enums.MatchType;
 import core.net.ChppWriteService;
 import core.net.Connector;
+import core.model.match.MatchEvent;
 import core.model.match.MatchKurzInfo;
 import core.model.match.Matchdetails;
 import core.prediction.engine.MatchPredictionManager;
@@ -73,6 +74,17 @@ public final class MatchTools {
                                                         + "ambiguous across source systems")),
                                 "matchId"),
                         MatchTools::match),
+                new McpTool("get_match_events",
+                        "The event list of one played match, from the stored match details: per "
+                                + "team goals, chances, missed chances and special events, then every "
+                                + "event (minute, event name, team, player, goal/miss, specialEvent). "
+                                + "Same matchId / matchType as get_match. Local, no CHPP request.",
+                        McpTool.schema(McpTool.properties(
+                                        "matchId", McpTool.prop("integer", "the Hattrick match id"),
+                                        "matchType", McpTool.prop("integer",
+                                                "the match type id from get_matches")),
+                                "matchId"),
+                        MatchTools::matchEvents),
                 new McpTool("get_opponent_ratings",
                         "The sector ratings another team earned in its recent matches, averaged and "
                                 + "named exactly as simulate_lineup wants them. HO stores only "
@@ -381,16 +393,8 @@ public final class MatchTools {
 
     private static JsonObject match(JsonObject args) throws McpToolException {
         final var teamId = McpJson.model().getBasics().getTeamId();
-        final var matchId = McpJson.reqInt(args, "matchId");
-        final var requestedType = McpJson.optInteger(args, "matchType");
-        // A null matchType makes the lookup fall back to matching on the id alone, which is all a
-        // caller holding a bare id can do.
-        final var info = DBManager.instance().getMatchesKurzInfoByMatchID(matchId,
-                requestedType == null ? null : MatchType.getById(requestedType));
-        if (info == null) {
-            throw new McpToolException("HO holds no match with id " + matchId
-                    + ". Call get_matches for the ids it has downloaded.");
-        }
+        final var info = storedMatch(args);
+        final var matchId = info.getMatchID();
 
         final var json = summary(info, teamId);
         final var details = storedDetails(info.getMatchType(), matchId);
@@ -424,6 +428,80 @@ public final class MatchTools {
     static Matchdetails storedDetails(MatchType matchType, int matchId) {
         final var details = DBManager.instance().loadMatchDetails(matchType.getId(), matchId);
         return details != null && details.getMatchID() == matchId ? details : null;
+    }
+
+    /** The stored row of the match {@code args} names by matchId (+ optional matchType). */
+    private static MatchKurzInfo storedMatch(JsonObject args) throws McpToolException {
+        final var matchId = McpJson.reqInt(args, "matchId");
+        final var requestedType = McpJson.optInteger(args, "matchType");
+        // A null matchType makes the lookup fall back to matching on the id alone, which is all a
+        // caller holding a bare id can do.
+        final var info = DBManager.instance().getMatchesKurzInfoByMatchID(matchId,
+                requestedType == null ? null : MatchType.getById(requestedType));
+        if (info == null) {
+            throw new McpToolException("HO holds no match with id " + matchId
+                    + ". Call get_matches for the ids it has downloaded.");
+        }
+        return info;
+    }
+
+    private static JsonObject matchEvents(JsonObject args) throws McpToolException {
+        final var info = storedMatch(args);
+        final var details = storedDetails(info.getMatchType(), info.getMatchID());
+        if (details == null) {
+            throw new McpToolException("HO stored the result of match " + info.getMatchID()
+                    + " but not its details, so it has no events. Download the match details first.");
+        }
+        final var events = details.getHighlights();
+        return matchEventsJson(info.getHomeTeamID(), info.getGuestTeamID(),
+                events == null ? List.of() : events);
+    }
+
+    /**
+     * Per-team goals / missed chances / special events, then every event in match order.
+     * Event ids 100-199 are goals and 200-299 missed chances (Hattrick's own ranges).
+     */
+    static JsonObject matchEventsJson(int homeTeamId, int awayTeamId, List<MatchEvent> events) {
+        final var json = new JsonObject();
+        json.add("home", eventCounts(homeTeamId, events));
+        json.add("away", eventCounts(awayTeamId, events));
+        final var rows = new JsonArray();
+        for (final var e : events) {
+            final var row = new JsonObject();
+            row.addProperty("minute", e.getMinute());
+            row.addProperty("eventId", e.getiMatchEventID());
+            row.addProperty("event", e.getMatchEventID() == null ? null : e.getMatchEventID().name());
+            row.addProperty("teamId", e.getTeamID());
+            row.addProperty("playerId", e.getPlayerId());
+            row.addProperty("playerName", e.getPlayerName());
+            row.addProperty("assistingPlayerId", e.getAssistingPlayerId());
+            if (e.isGoalEvent() || e.isNonGoalEvent()) {
+                row.addProperty("outcome", e.isGoalEvent() ? "goal" : "miss");
+            }
+            row.addProperty("specialEvent", e.getMatchEventID() != null && e.isSE());
+            rows.add(row);
+        }
+        json.add("events", rows);
+        return json;
+    }
+
+    private static JsonObject eventCounts(int teamId, List<MatchEvent> events) {
+        int goals = 0;
+        int misses = 0;
+        int specials = 0;
+        for (final var e : events) {
+            if (e.getTeamID() != teamId) continue;
+            if (e.isGoalEvent()) goals++;
+            if (e.isNonGoalEvent()) misses++;
+            if (e.getMatchEventID() != null && e.isSE()) specials++;
+        }
+        final var json = new JsonObject();
+        json.addProperty("teamId", teamId);
+        json.addProperty("goals", goals);
+        json.addProperty("chances", goals + misses);
+        json.addProperty("missedChances", misses);
+        json.addProperty("specialEvents", specials);
+        return json;
     }
 
 

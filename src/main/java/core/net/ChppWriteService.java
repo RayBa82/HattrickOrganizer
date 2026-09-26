@@ -12,6 +12,7 @@ import core.util.HOLogger;
 import org.w3c.dom.Element;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -305,6 +306,44 @@ public class ChppWriteService {
         final var was = Connector.instance().setSilentDownload(true);
         try {
             return Connector.instance().getTrainingEvents(playerId);
+        } finally {
+            Connector.instance().setSilentDownload(was);
+        }
+    }
+
+    // ===================== bookmarks / player transfers =====================
+
+    /** A read, like {@link #trainingEventsForAgent}. */
+    public List<core.file.xml.XMLBookmarksParser.Bookmark> bookmarksForAgent() throws ChppWriteException {
+        final var xml = fetchBookmarks();
+        if (xml == null || xml.isBlank()) {
+            throw new ChppWriteException(null, "Hattrick rejected the bookmarks: " + reason());
+        }
+        return core.file.xml.XMLBookmarksParser.parse(xml);
+    }
+
+    protected String fetchBookmarks() {
+        final var was = Connector.instance().setSilentDownload(true);
+        try {
+            return Connector.instance().getBookmarks();
+        } finally {
+            Connector.instance().setSilentDownload(was);
+        }
+    }
+
+    /** A read, like {@link #trainingEventsForAgent}. */
+    public List<module.transfer.PlayerTransfer> playerTransfersForAgent(int playerId) throws ChppWriteException {
+        final var xml = fetchPlayerTransfers(playerId);
+        if (xml == null || xml.isBlank()) {
+            throw new ChppWriteException(null, "Hattrick rejected the player's transfers: " + reason());
+        }
+        return module.transfer.XMLParser.parsePlayerTransfers(xml);
+    }
+
+    protected String fetchPlayerTransfers(int playerId) {
+        final var was = Connector.instance().setSilentDownload(true);
+        try {
+            return Connector.instance().getTransfersForPlayer(playerId);
         } finally {
             Connector.instance().setSilentDownload(was);
         }

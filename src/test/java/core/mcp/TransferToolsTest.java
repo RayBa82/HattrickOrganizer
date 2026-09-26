@@ -389,8 +389,29 @@ class TransferToolsTest {
     void tools_areTheTransferTools() {
         assertThat(TransferTools.tools()).extracting(McpTool::name)
                 .containsExactly("search_transfers", "search_transfers_batch", "get_team_transfers",
-                        "place_bid", "get_open_bids", "add_to_scout", "remove_from_scout",
-                        "list_scout", "estimate_market_value", "backfill_character");
+                        "get_player_transfer_history", "place_bid", "get_open_bids", "add_to_scout",
+                        "remove_from_scout", "list_scout", "estimate_market_value", "backfill_character");
+    }
+
+    @Test
+    void playerTransferHistory_newestFirstWithBothClubs() {
+        final var older = new module.transfer.PlayerTransfer(1, 7);
+        older.setDate(core.util.HODateTime.fromHT("2025-03-01 12:00:00"));
+        // setSellerid / setBuyerid read the loaded HOModel, which the unit suite has none of
+        older.setSellerName("Old Club");
+        older.setBuyerName("Mid Club");
+        older.setPlayerName("Some Player");
+        final var newer = new module.transfer.PlayerTransfer(2, 7);
+        newer.setDate(core.util.HODateTime.fromHT("2026-01-10 12:00:00"));
+        newer.setTsi(4200);
+
+        final var json = TransferTools.playerTransferHistoryJson(7, List.of(older, newer));
+        final var rows = json.getAsJsonArray("transfers");
+        assertThat(rows).hasSize(2);
+        assertThat(rows.get(0).getAsJsonObject().get("transferId").getAsInt()).isEqualTo(2);
+        assertThat(rows.get(0).getAsJsonObject().get("tsi").getAsInt()).isEqualTo(4200);
+        assertThat(rows.get(1).getAsJsonObject().get("sellerTeamName").getAsString()).isEqualTo("Old Club");
+        assertThat(rows.get(1).getAsJsonObject().get("buyerTeamName").getAsString()).isEqualTo("Mid Club");
     }
 
     private static McpTool tool(String name) {

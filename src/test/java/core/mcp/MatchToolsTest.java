@@ -40,10 +40,42 @@ class MatchToolsTest {
     @Test
     void tools_areTheMatchTools() {
         assertThat(MatchTools.tools()).extracting(McpTool::name)
-                .containsExactly("get_matches", "get_match", "get_opponent_ratings",
+                .containsExactly("get_matches", "get_match", "get_match_events", "get_opponent_ratings",
                         "get_rating_calibration", "simulate_lineup",
                         "list_challenges", "check_challengeable", "arrange_challenge",
                         "respond_to_challenge");
+    }
+
+    private static core.model.match.MatchEvent event(int minute, int eventId, int teamId) {
+        final var e = new core.model.match.MatchEvent();
+        e.setMinute(minute);
+        e.setMatchEventID(eventId);
+        e.setTeamID(teamId);
+        return e;
+    }
+
+    @Test
+    void matchEventsJson_countsGoalsChancesAndSpecialEventsPerTeam() {
+        // 105 = SE goal, 101 = normal goal, 200 = missed chance
+        final var json = MatchTools.matchEventsJson(1, 2,
+                List.of(event(12, 105, 1), event(30, 101, 2), event(55, 200, 1)));
+
+        final var home = json.getAsJsonObject("home");
+        assertThat(home.get("goals").getAsInt()).isEqualTo(1);
+        assertThat(home.get("chances").getAsInt()).isEqualTo(2);
+        assertThat(home.get("missedChances").getAsInt()).isEqualTo(1);
+        assertThat(home.get("specialEvents").getAsInt()).isEqualTo(1);
+        final var away = json.getAsJsonObject("away");
+        assertThat(away.get("goals").getAsInt()).isEqualTo(1);
+        assertThat(away.get("specialEvents").getAsInt()).isZero();
+
+        final var events = json.getAsJsonArray("events");
+        assertThat(events).hasSize(3);
+        final var se = events.get(0).getAsJsonObject();
+        assertThat(se.get("event").getAsString()).isEqualTo("SE_GOAL_UNPREDICTABLE_LONG_PASS");
+        assertThat(se.get("outcome").getAsString()).isEqualTo("goal");
+        assertThat(se.get("specialEvent").getAsBoolean()).isTrue();
+        assertThat(events.get(2).getAsJsonObject().get("outcome").getAsString()).isEqualTo("miss");
     }
 
     // ---- check_challengeable -------------------------------------------------------------------

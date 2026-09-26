@@ -46,8 +46,11 @@ public final class XMLParser {
      *
      */
     public static List<PlayerTransfer> getAllPlayerTransfers(int playerId) {
+        return parsePlayerTransfers(Connector.instance().getTransfersForPlayer(playerId));
+    }
 
-    	final String xml = Connector.instance().getTransfersForPlayer(playerId);
+    /** Parses a {@code transfersPlayer} response; empty on anything unreadable. */
+    public static List<PlayerTransfer> parsePlayerTransfers(String xml) {
         final List<PlayerTransfer> transferList = new Vector<>();
         if (StringUtils.isEmpty(xml)) {
             return transferList;
@@ -70,7 +73,7 @@ public final class XMLParser {
 
                 // Get the player info
                 final Element playerElement = (Element) container.getElementsByTagName("Player").item(0); //$NON-NLS-1$
-                playerId = XMLManager.xmlIntValue(playerElement, "PlayerID"); //$NON-NLS-1$
+                final int playerId = XMLManager.xmlIntValue(playerElement, "PlayerID"); //$NON-NLS-1$
                 final String playerName = XMLManager.xmlValue(playerElement, "PlayerName"); //$NON-NLS-1$
 
                 // Get the player transfers

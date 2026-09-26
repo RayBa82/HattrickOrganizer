@@ -116,6 +116,14 @@ public final class TeamTools {
                                 + "and goals. get_team reports only our own row.",
                         McpTool.schema(new JsonObject()),
                         args -> leagueTable()),
+                new McpTool("get_bookmarks",
+                        "The user's Hattrick bookmarks, read-only. type is team, player, match, "
+                                + "user, league, youth*, forumPost or forumThread; objectId is that "
+                                + "object's id (team: text=team name, text2=manager; player: "
+                                + "text2=transfer deadline; match: text2=match date; league: "
+                                + "objectId2=LeagueID). One CHPP request.",
+                        McpTool.schema(new JsonObject()),
+                        args -> bookmarks()),
                 new McpTool("get_finances",
                         "The full weekly financial statement with last week's copy beside it, the "
                                 + "fan club, the staff levels that drive the cost line, and the "
@@ -150,6 +158,38 @@ public final class TeamTools {
                         McpTool.schema(McpTool.properties()),
                         TeamTools::downloadTeam)
         );
+    }
+
+    /** CHPP BookmarkTypeID 1..11; index 0 unused. */
+    private static final String[] BOOKMARK_TYPES = {null, "team", "player", "match", "user",
+            "league", "youthTeam", "youthPlayer", "youthMatch", "youthLeague", "forumPost",
+            "forumThread"};
+
+    private static JsonObject bookmarks() throws McpToolException {
+        try {
+            return bookmarksJson(core.net.ChppWriteService.instance().bookmarksForAgent());
+        } catch (core.net.ChppWriteService.ChppWriteException e) {
+            throw new McpToolException(e.getMessage());
+        }
+    }
+
+    static JsonObject bookmarksJson(List<core.file.xml.XMLBookmarksParser.Bookmark> bookmarks) {
+        final var rows = new JsonArray();
+        for (final var b : bookmarks) {
+            final var json = new JsonObject();
+            json.addProperty("type", b.typeId() > 0 && b.typeId() < BOOKMARK_TYPES.length
+                    ? BOOKMARK_TYPES[b.typeId()] : "type" + b.typeId());
+            json.addProperty("text", b.text());
+            json.addProperty("text2", b.text2());
+            json.addProperty("objectId", b.objectId());
+            json.addProperty("objectId2", b.objectId2());
+            json.addProperty("objectId3", b.objectId3());
+            json.addProperty("comment", b.comment());
+            rows.add(json);
+        }
+        final var out = new JsonObject();
+        out.add("bookmarks", rows);
+        return out;
     }
 
     /**

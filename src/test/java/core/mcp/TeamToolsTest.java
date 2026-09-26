@@ -22,11 +22,33 @@ import static org.assertj.core.api.Assertions.assertThatNoException;
 class TeamToolsTest {
 
     @Test
-    void tools_areTheEightReadToolsPlusTheDownload() {
+    void tools_areTheReadToolsPlusTheDownload() {
         assertThat(TeamTools.tools()).extracting(McpTool::name)
                 .containsExactly("get_team", "get_squad", "get_player", "get_opponent_squad",
-                        "scout_opponent", "get_upcoming_matches", "get_league_table", "get_finances",
-                        "download_team");
+                        "scout_opponent", "get_upcoming_matches", "get_league_table", "get_bookmarks",
+                        "get_finances", "download_team");
+    }
+
+    @Test
+    void bookmarksJson_namesTheTypeAndKeepsTheIds() {
+        final var xml = """
+                <HattrickData><BookmarkList>
+                <Bookmark><BookmarkID>1</BookmarkID><BookmarkTypeID>1</BookmarkTypeID><Text>FC Foo</Text>
+                <Text2>bob</Text2><ObjectID>123</ObjectID><ObjectID2></ObjectID2><ObjectID3></ObjectID3>
+                <Comment>friendly partner</Comment></Bookmark>
+                <Bookmark><BookmarkID>y2</BookmarkID><BookmarkTypeID>7</BookmarkTypeID><Text>Kid</Text>
+                <Text2></Text2><ObjectID>456</ObjectID><ObjectID2></ObjectID2><ObjectID3></ObjectID3>
+                <Comment></Comment></Bookmark>
+                </BookmarkList></HattrickData>""";
+        final var rows = TeamTools.bookmarksJson(core.file.xml.XMLBookmarksParser.parse(xml))
+                .getAsJsonArray("bookmarks");
+        assertThat(rows).hasSize(2);
+        final var team = rows.get(0).getAsJsonObject();
+        assertThat(team.get("type").getAsString()).isEqualTo("team");
+        assertThat(team.get("text").getAsString()).isEqualTo("FC Foo");
+        assertThat(team.get("objectId").getAsString()).isEqualTo("123");
+        assertThat(team.get("comment").getAsString()).isEqualTo("friendly partner");
+        assertThat(rows.get(1).getAsJsonObject().get("type").getAsString()).isEqualTo("youthPlayer");
     }
 
     private static core.model.match.MatchKurzInfo upcoming(int id, core.model.enums.MatchType type,

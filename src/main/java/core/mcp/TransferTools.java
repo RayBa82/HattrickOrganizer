@@ -21,6 +21,7 @@ import module.transfer.scout.ScoutEintrag;
 import module.transfer.scout.ScoutList;
 import module.transfer.search.TransferSearchConverter;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -103,6 +104,14 @@ public final class TransferTools {
                                 "limit", McpTool.prop("integer", "how many transfers to return, newest first; default 20, max 100"),
                                 "offset", McpTool.prop("integer", "how many of the newest transfers to skip, for paging; default 0"))),
                         TransferTools::teamTransfers),
+                new McpTool("get_player_transfer_history",
+                        "Every Hattrick transfer of any player, ours or not, newest first: date, "
+                                + "price, TSI at the time, seller and buyer. One CHPP request per call. "
+                                + "An empty list means the player was never sold.",
+                        McpTool.schema(McpTool.properties(
+                                        "playerId", McpTool.prop("integer", "the Hattrick player id")),
+                                "playerId"),
+                        TransferTools::playerTransferHistory),
                 new McpTool("place_bid",
                         "Place a transfer bid. TWO STEPS so a stray call cannot spend money: call "
                                 + "with playerId + bidAmount for a preview and a confirmToken, then "
@@ -1464,6 +1473,43 @@ public final class TransferTools {
             rows.add(json);
         }
         return rows;
+    }
+
+    private static JsonObject playerTransferHistory(JsonObject args) throws McpToolException {
+        final var playerId = McpJson.reqInt(args, "playerId");
+        try {
+            return playerTransferHistoryJson(playerId,
+                    core.net.ChppWriteService.instance().playerTransfersForAgent(playerId));
+        } catch (core.net.ChppWriteService.ChppWriteException e) {
+            throw new McpToolException(e.getMessage());
+        }
+    }
+
+    /** Newest first. Seasons are local to the user's league, as HO's transfer module stores them. */
+    static JsonObject playerTransferHistoryJson(int playerId, List<module.transfer.PlayerTransfer> transfers) {
+        final var sorted = new ArrayList<>(transfers);
+        sorted.sort(Comparator.comparing(module.transfer.PlayerTransfer::getDate,
+                Comparator.nullsLast(Comparator.reverseOrder())));
+        final var rows = new JsonArray();
+        for (final var t : sorted) {
+            final var json = new JsonObject();
+            json.addProperty("transferId", t.getTransferId());
+            json.addProperty("date", t.getDate() == null ? null : t.getDate().toHT());
+            json.addProperty("season", t.getSeason());
+            json.addProperty("week", t.getWeek());
+            json.addProperty("price", McpJson.money(t.getPrice()));
+            json.addProperty("tsi", t.getTsi());
+            json.addProperty("sellerTeamId", t.getSellerid());
+            json.addProperty("sellerTeamName", t.getSellerName());
+            json.addProperty("buyerTeamId", t.getBuyerid());
+            json.addProperty("buyerTeamName", t.getBuyerName());
+            rows.add(json);
+        }
+        final var out = new JsonObject();
+        out.addProperty("playerId", playerId);
+        out.addProperty("playerName", sorted.isEmpty() ? null : sorted.get(0).getPlayerName());
+        out.add("transfers", rows);
+        return out;
     }
 
     /**
