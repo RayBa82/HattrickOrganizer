@@ -388,9 +388,17 @@ class TransferToolsTest {
     @Test
     void tools_areTheTransferTools() {
         assertThat(TransferTools.tools()).extracting(McpTool::name)
-                .containsExactly("search_transfers", "search_transfers_batch", "get_team_transfers",
+                .containsExactly("search_transfers", "get_team_transfers",
                         "get_player_transfer_history", "place_bid", "get_open_bids", "add_to_scout",
-                        "remove_from_scout", "list_scout", "estimate_market_value", "backfill_character");
+                        "remove_from_scout", "list_scout", "estimate_market_value");
+    }
+
+    @Test
+    void listScout_pagesAndFiltersWithNothingRequired() {
+        final var schema = tool("list_scout").inputSchema();
+        assertThat(schema.getAsJsonArray("required")).isEmpty();
+        assertThat(schema.getAsJsonObject("properties").keySet())
+                .containsExactlyInAnyOrder("onlyOpen", "full", "limit", "offset");
     }
 
     @Test
@@ -425,7 +433,7 @@ class TransferToolsTest {
         args.add("queries", new JsonArray());
 
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> tool("search_transfers_batch").handler().call(args));
+                .isThrownBy(() -> tool("search_transfers").handler().call(args));
     }
 
     /**
@@ -441,7 +449,7 @@ class TransferToolsTest {
         final var args = new JsonObject();
         args.add("queries", queries);
 
-        final var result = tool("search_transfers_batch").handler().call(args);
+        final var result = tool("search_transfers").handler().call(args);
 
         final var results = result.getAsJsonArray("results");
         assertThat(results).hasSize(1);
@@ -466,7 +474,7 @@ class TransferToolsTest {
         final var args = new JsonObject();
         args.add("queries", queries);
 
-        final var result = tool("search_transfers_batch").handler().call(args);
+        final var result = tool("search_transfers").handler().call(args);
 
         final var results = result.getAsJsonArray("results");
         assertThat(results).hasSize(2);

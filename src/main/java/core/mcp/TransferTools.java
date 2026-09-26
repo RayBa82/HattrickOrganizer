@@ -9,10 +9,9 @@ import core.db.TransferListing;
 import core.file.xml.XMLCurrentBidsParser;
 import core.file.xml.XMLTransferSearchParser;
 import core.model.player.Player;
-import core.net.OnlineWorker;
-import core.net.TransferListingResolver;
-import core.net.TransferSearchQuery;
 import core.net.ChppWriteService;
+import core.net.OnlineWorker;
+import core.net.TransferSearchQuery;
 import core.net.TransferSearchService;
 import core.util.HODateTime;
 import core.util.HOLogger;
@@ -29,7 +28,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -74,25 +72,10 @@ public final class TransferTools {
                                 + "mandatory. Hattrick refuses a skill window wider than 3 levels, "
                                 + "and an age range including 17 or 18 may span at most one year. "
                                 + "Narrow rather than page - there is no exact total above 100 "
-                                + "matches. Capped per HO session. Every hit is stored and feeds "
-                                + "estimate_market_value.",
+                                + "matches. queries[] runs several searches in one call. Capped per "
+                                + "HO session. Every hit is stored and feeds estimate_market_value.",
                         searchSchema(),
-                        args -> search(queryFrom(args))),
-                new McpTool("search_transfers_batch",
-                        "Run several search_transfers queries in one call - for sweeping "
-                                + "specialty x age-window combos Hattrick's own span limits force "
-                                + "apart. Same CHPP calls and per-session cap as calling "
-                                + "separately; only saves round trips. Each result echoes its "
-                                + "query; a failed one (cap exhausted, invalid range) reports its "
-                                + "own error without stopping the rest.",
-                        McpTool.schema(McpTool.properties(
-                                        "queries", McpTool.prop("array", "the searches to run, "
-                                                + "each shaped exactly like search_transfers's own "
-                                                + "arguments (ageMin, ageMax, skills required; "
-                                                + "specialty, nativeCountryId, tsiMin, tsiMax, "
-                                                + "priceMin, priceMax, pageSize optional)")),
-                                "queries"),
-                        TransferTools::searchBatch),
+                        args -> args.has("queries") ? searchBatch(args) : search(queryFrom(args))),
                 new McpTool("get_team_transfers",
                         "The managed team's own transfer history, newest first, with price, TSI at "
                                 + "transfer time and the mother-club and previous-club fees. A local "
@@ -164,14 +147,21 @@ public final class TransferTools {
                                 "playerIds"),
                         TransferTools::removeFromScout),
                 new McpTool("list_scout",
-                        "Read back HO's local scout shortlist, with the market data and skills "
-                                + "frozen as they were when each player was added. price and "
-                                + "deadline are that snapshot; askingPrice, highestBid and "
-                                + "observedAt come from the newest stored observation. salePrice and "
-                                + "soldAt fill in once the watched transfer completed. Character "
-                                + "traits are 0-5, null where never fetched.",
-                        McpTool.schema(McpTool.properties()),
-                        args -> listScout()),
+                        "Read back HO's local scout shortlist, one page (count = total). Default "
+                                + "rows: playerId, playerName, note, price and deadline (frozen when "
+                                + "added), askingPrice, highestBid, observedAt (newest observation), "
+                                + "salePrice, soldAt (once sold). full adds the frozen skills, TSI, "
+                                + "wage and character (0-5, null = never fetched).",
+                        McpTool.schema(McpTool.properties(
+                                "onlyOpen", McpTool.prop("boolean",
+                                        "leave out players whose transfer completed; default false"),
+                                "full", McpTool.prop("boolean",
+                                        "every stored field per player; default false"),
+                                "limit", McpTool.prop("integer", "page size, default "
+                                        + DEFAULT_SCOUT_PAGE + ", max " + MAX_SCOUT_PAGE),
+                                "offset", McpTool.prop("integer",
+                                        "how many entries to skip, in shortlist order; default 0"))),
+                        TransferTools::listScout),
                 new McpTool("estimate_market_value",
                         "Value one of your players, or via profile a player outside the squad, "
                                 + "against stored transfer listings. Returns the matching listings; "
@@ -198,7 +188,7 @@ public final class TransferTools {
                                                         + "playerId or profile, not both. Also "
                                                         + "optional: playerId (this player's real "
                                                         + "Hattrick id, e.g. from get_team_transfers "
-                                                        + "or get_opponent_squad - bookkeeping only, "
+                                                        + "or scout_opponent - bookkeeping only, "
                                                         + "never used to look him up in the squad) "
                                                         + "and salePrice - given both, this profile "
                                                         + "is recorded into HO's local transfer-"
@@ -244,20 +234,7 @@ public final class TransferTools {
                                         "observedWithinDays", McpTool.prop("integer",
                                                 "ignore listings older than this many days, default "
                                                         + DEFAULT_CORPUS_DAYS + " (one Hattrick season)"))),
-                        TransferTools::estimateMarketValue),
-                new McpTool("backfill_character",
-                        "Fetch character (agreeability/aggressiveness/honesty) for corpus players "
-                                + "estimate_market_value has never had it for, oldest observation "
-                                + "first. One CHPP call per player, capped at "
-                                + TransferListingResolver.MAX_CHARACTER_BACKFILL
-                                + " per call regardless of maxPlayers, and time-bounded - the same "
-                                + "pass also runs automatically after every team download. Call "
-                                + "again if moreLikely comes back true.",
-                        McpTool.schema(McpTool.properties(
-                                "maxPlayers", McpTool.prop("integer",
-                                        "how many players to look up this call; default and hard "
-                                                + "cap " + TransferListingResolver.MAX_CHARACTER_BACKFILL))),
-                        TransferTools::backfillCharacter)
+                        TransferTools::estimateMarketValue)
         );
     }
 
@@ -1016,26 +993,6 @@ public final class TransferTools {
 
 
     /**
-     * Fill in character for corpus players that have never had it fetched. Thin wrapper: the actual
-     * lookup is {@link TransferListingResolver#backfillCharacter}, shared with the same pass running
-     * automatically after every team download, so both respect the same time budget rather than a
-     * tool call being able to run longer than a download-triggered one would.
-     */
-    private static JsonObject backfillCharacter(JsonObject args) {
-        final var max = Math.min(Math.max(
-                McpJson.optInt(args, "maxPlayers", TransferListingResolver.MAX_CHARACTER_BACKFILL), 0),
-                TransferListingResolver.MAX_CHARACTER_BACKFILL);
-        final var result = TransferListingResolver.backfillCharacter(max);
-        final var json = new JsonObject();
-        json.addProperty("checked", result.checked());
-        json.addProperty("updated", result.updated());
-        // A full batch means the cap or the time budget was hit, not necessarily that the corpus is
-        // exhausted - call again to keep going.
-        json.addProperty("moreLikely", result.checked() >= max);
-        return json;
-    }
-
-    /**
      * Drops every positional skill from a serialised player or listing except his three best, which
      * move to {@code topSkills}. A valuation turns on what a player would be bought for, and seven
      * levels a row over forty rows buries that in numbers the reader has no use for - the fourth
@@ -1099,7 +1056,7 @@ public final class TransferTools {
         return levels;
     }
 
-    /** {@code SCORING} -> {@code "scoring"}: the name get_player reports the skill under. */
+    /** {@code SCORING} -> {@code "scoring"}: the name get_squad reports the skill under. */
     private static String skillName(TransferSearchQuery.Skill skill) {
         return skill.name().toLowerCase(Locale.ROOT);
     }
@@ -1325,15 +1282,22 @@ public final class TransferTools {
         });
     }
 
-    private static JsonObject listScout() throws McpToolException {
+    private static JsonObject listScout(JsonObject args) throws McpToolException {
+        final var onlyOpen = McpJson.optBool(args, "onlyOpen", false);
+        final var full = McpJson.optBool(args, "full", false);
+        final var offset = Math.max(McpJson.optInt(args, "offset", 0), 0);
+        final var limit = Math.min(Math.max(McpJson.optInt(args, "limit", DEFAULT_SCOUT_PAGE), 1), MAX_SCOUT_PAGE);
         final var out = LineupTools.onEdt(() -> {
+            final var entries = ScoutList.entries().stream()
+                    .filter(e -> !onlyOpen || !e.isSold())
+                    .toList();
             final var players = new JsonArray();
-            for (final var entry : ScoutList.entries()) {
-                players.add(McpJson.scoutEntry(entry));
-            }
+            entries.stream().skip(offset).limit(limit).forEach(e -> players.add(McpJson.scoutEntry(e)));
             final var json = new JsonObject();
             json.addProperty("currency", McpJson.currency());
-            json.addProperty("count", players.size());
+            json.addProperty("count", entries.size());
+            json.addProperty("offset", offset);
+            json.addProperty("returned", players.size());
             json.add("players", players);
             return json;
         });
@@ -1369,8 +1333,24 @@ public final class TransferTools {
             }
             player.addProperty("highestBid", McpJson.money(listing.getHighestBid()));
         }
+        if (!full) {
+            final var compact = new JsonArray();
+            for (final var element : out.getAsJsonArray("players")) {
+                final var player = element.getAsJsonObject();
+                final var row = new JsonObject();
+                COMPACT_SCOUT_KEYS.stream().filter(player::has).forEach(k -> row.add(k, player.get(k)));
+                compact.add(row);
+            }
+            out.add("players", compact);
+        }
         return out;
     }
+
+    /** list_scout's default row: the market state, not the frozen skills. */
+    private static final List<String> COMPACT_SCOUT_KEYS = List.of("playerId", "playerName", "note",
+            "price", "deadline", "askingPrice", "highestBid", "observedAt", "salePrice", "soldAt");
+    private static final int DEFAULT_SCOUT_PAGE = 50;
+    private static final int MAX_SCOUT_PAGE = 200;
 
     /** The SCOUT.Info column is VARCHAR(256); an over-long note would fail the insert. */
     private static String truncateInfo(String info) {
@@ -1668,7 +1648,7 @@ public final class TransferTools {
         out.addProperty("highestBid", McpJson.money(result.highestBid()));
         out.addProperty("deadline", result.deadline());
         out.addProperty("bidderTeamName", result.bidderTeamName());
-        out.addProperty("note", "Bid placed. Poll get_player or search_transfers for the updated "
+        out.addProperty("note", "Bid placed. Poll get_open_bids or search_transfers for the updated "
                 + "market state.");
         return out;
     }
@@ -1721,8 +1701,13 @@ public final class TransferTools {
                 "tsiMax", McpTool.prop("integer", "maximum TSI"),
                 "priceMin", McpTool.prop("integer", "minimum asking price, in the user's currency"),
                 "priceMax", McpTool.prop("integer", "maximum asking price, in the user's currency"),
-                "pageSize", McpTool.prop("integer", "results per page, default and maximum 100"));
-        return McpTool.schema(properties, "ageMin", "ageMax", "skills");
+                "pageSize", McpTool.prop("integer", "results per page, default and maximum 100"),
+                "queries", McpTool.prop("array", "several searches in one call, each shaped like "
+                        + "the single-search arguments above; replaces them. Returns results[], "
+                        + "each echoing its query; a failed one carries its own error"));
+        // No required list: a single search needs ageMin, ageMax and skills, a batch needs queries,
+        // and queryFrom rejects either one incomplete.
+        return McpTool.schema(properties);
     }
 
     /** The searchable skill names, for the schema - {@code Skill} is the single source. */

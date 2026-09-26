@@ -12,7 +12,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Residual statistics of the rating-model calibration rows, for {@code get_rating_calibration}.
+ * Residual statistics of the rating-model calibration rows, for the retired {@code get_rating_calibration} MCP tool; re-register it in MatchTools to use this again.
  * <p>
  * Pure over the rows so it can be tested without a database. Rows with a mid-match lineup change
  * never enter a statistic; they are only counted and listed.

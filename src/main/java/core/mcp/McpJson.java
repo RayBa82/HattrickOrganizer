@@ -255,7 +255,7 @@ public final class McpJson {
         json.addProperty("cards", l.getCards());
         json.addProperty("injuryLevel", l.getInjuryLevel());
         json.addProperty("stamina", l.getStamina());
-        // Under get_player's names, not the CHPP's own (playmaker / scorer / defender), so a
+        // Under get_squad's names, not the CHPP's own (playmaker / scorer / defender), so a
         // comparable and the player it is compared to can be read side by side.
         json.addProperty("keeper", l.getKeeper());
         json.addProperty("defending", l.getDefender());

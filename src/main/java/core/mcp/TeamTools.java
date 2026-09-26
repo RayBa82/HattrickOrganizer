@@ -63,60 +63,46 @@ public final class TeamTools {
                                 + "traits (0-5), plus a positionRatings map giving what he is worth "
                                 + "in each of the fourteen field slots (100 keeper through 113 left "
                                 + "forward) at normal behaviour.",
-                        McpTool.schema(new JsonObject()),
-                        args -> squad()),
-                new McpTool("get_player",
-                        "One player in full, together with his transfer history as HO recorded it.",
-                        McpTool.schema(
-                                McpTool.properties("playerId", McpTool.prop("integer", "the Hattrick player id")),
-                                "playerId"),
-                        args -> player(McpJson.reqInt(args, "playerId"))),
-                new McpTool("get_opponent_squad",
-                        "Another team's squad from Hattrick: the visible attributes, injuries, "
-                                + "cards and where each player last played - so it answers who is "
-                                + "unavailable and who their last eleven were (the players sharing "
-                                + "the highest lastMatch.matchId). Hattrick publishes no foreign "
-                                + "skills; estimatedSkills is HO's guess, not data. One CHPP request.",
                         McpTool.schema(McpTool.properties(
-                                        "teamId", McpTool.prop("integer",
-                                                "the Hattrick team id, e.g. an opponent id from "
-                                                        + "get_upcoming_matches")),
-                                "teamId"),
-                        TeamTools::opponentSquad),
+                                "playerIds", McpTool.prop("array",
+                                        "only these players; the whole squad if omitted. An id not "
+                                                + "in the squad is an error"),
+                                "includeTransfers", McpTool.prop("boolean",
+                                        "add each player's transfers as HO recorded them; default "
+                                                + "false"))),
+                        TeamTools::squad),
                 new McpTool("scout_opponent",
-                        "get_opponent_ratings and get_opponent_squad in one call - the pre-match "
-                                + "scouting pair almost always wanted together. Returns ratings and "
-                                + "squad under those keys; same two CHPP requests as calling both "
-                                + "separately, one round trip. Optional args are get_opponent_ratings' "
-                                + "own (count, competitiveOnly, days); get_opponent_squad takes none.",
+                        "Pre-match scouting of another team. ratings: the sector ratings it earned "
+                                + "in recent matches, averaged and named as simulate_lineup wants "
+                                + "them (~1 CHPP request per match). squad: visible attributes, "
+                                + "injuries, cards, lastMatch per player (highest matchId = last "
+                                + "eleven); estimatedSkills is HO's guess (1 request).",
                         McpTool.schema(McpTool.properties(
                                         "teamId", McpTool.prop("integer",
                                                 "the Hattrick team id, e.g. an opponent id from "
-                                                        + "get_upcoming_matches"),
+                                                        + "get_series"),
+                                        "include", McpTool.prop("array",
+                                                "ratings and/or squad; default both"),
                                         "count", McpTool.prop("integer",
-                                                "how many recent matches to average for ratings; "
-                                                        + "same default as get_opponent_ratings"),
+                                                "ratings: how many recent matches to average, "
+                                                        + "default " + MatchTools.DEFAULT_OPPONENT_MATCHES + "; keep it small"),
                                         "competitiveOnly", McpTool.prop("boolean",
-                                                "official matches only for ratings; same default as "
-                                                        + "get_opponent_ratings"),
+                                                "ratings: league, cup, qualification and masters "
+                                                        + "only, leaving out friendlies and "
+                                                        + "tournaments; default true"),
                                         "days", McpTool.prop("integer",
-                                                "how far back to search for ratings, in days; same "
-                                                        + "default as get_opponent_ratings")),
+                                                "ratings: how far back to search, in days; "
+                                                        + "default " + MatchTools.DEFAULT_OPPONENT_DAYS)),
                                 "teamId"),
                         TeamTools::scoutOpponent),
-                new McpTool("get_upcoming_matches",
-                        "The fixture list of the current series (matches), plus our own upcoming cup "
-                                + "and friendly matches (otherUpcoming, soonest first) and nextCupMatch "
-                                + "(null = eliminated or not yet drawn); cup rows name the cup (cup, cupId). "
-                                + "As of HO's last download; "
-                                + "otherUpcoming's weather forecast is refreshed by get_match_weather.",
+                new McpTool("get_series",
+                        "Our series: table (all eight teams with position, record, points, goals), "
+                                + "matches (the season's fixtures), otherUpcoming (our cup and "
+                                + "friendly matches, soonest first) and nextCupMatch (null = "
+                                + "eliminated or not yet drawn); cup rows name the cup (cup, cupId). "
+                                + "As of HO's last download; get_match_weather refreshes a forecast.",
                         McpTool.schema(new JsonObject()),
-                        args -> fixtures()),
-                new McpTool("get_league_table",
-                        "The standings of our series: all eight teams with position, record, points "
-                                + "and goals. get_team reports only our own row.",
-                        McpTool.schema(new JsonObject()),
-                        args -> leagueTable()),
+                        args -> series()),
                 new McpTool("get_bookmarks",
                         "The user's Hattrick bookmarks, read-only. type is team, player, match, "
                                 + "user, league, youth*, forumPost or forumThread; objectId is that "
@@ -334,28 +320,37 @@ public final class TeamTools {
         return McpJson.money(amount);
     }
 
-    private static JsonObject squad() throws McpToolException {
+    private static JsonObject squad(JsonObject args) throws McpToolException {
         final var model = McpJson.model();
         final var ratingModel = McpJson.privateRatingModel();
+        final var withTransfers = McpJson.optBool(args, "includeTransfers", false);
+        final var wanted = new java.util.LinkedHashSet<Integer>();
+        if (args.has("playerIds") && args.get("playerIds").isJsonArray()) {
+            args.getAsJsonArray("playerIds").forEach(e -> wanted.add(e.getAsInt()));
+        }
 
         final var players = new JsonArray();
         for (final var player : model.getCurrentPlayers()) {
-            players.add(McpJson.player(player, ratingModel));
+            if (!wanted.isEmpty() && !wanted.remove(player.getPlayerId())) {
+                continue;
+            }
+            final var json = McpJson.player(player, ratingModel);
+            if (withTransfers) {
+                json.add("transfers", transfers(player.getPlayerId()));
+            }
+            players.add(json);
+        }
+        if (!wanted.isEmpty()) {
+            throw new McpToolException("Not in the squad: " + wanted + ". Call get_squad without "
+                    + "playerIds for the ids HO knows about.");
         }
         final var json = new JsonObject();
         json.add("players", players);
         return json;
     }
 
-    private static JsonObject player(int playerId) throws McpToolException {
-        final var model = McpJson.model();
-        final var player = model.getCurrentPlayer(playerId);
-        if (player == null) {
-            throw new McpToolException("No player with id " + playerId + " is in the squad. "
-                    + "Call get_squad for the ids HO knows about.");
-        }
-        final var json = McpJson.player(player, McpJson.privateRatingModel());
-
+    /** A player's transfers as HO recorded them locally. */
+    private static JsonArray transfers(int playerId) {
         final var transfers = new JsonArray();
         for (final var transfer : DBManager.instance().getTransfers(playerId, true)) {
             final var transferJson = new JsonObject();
@@ -367,12 +362,11 @@ public final class TeamTools {
             transferJson.addProperty("sellerTeamName", transfer.getSellerName());
             transfers.add(transferJson);
         }
-        json.add("transfers", transfers);
-        return json;
+        return transfers;
     }
 
     /**
-     * get_opponent_squad: the players file for a team that is not ours.
+     * scout_opponent's squad half: the players file for a team that is not ours.
      * <p>
      * Routed through {@link HattrickManager#downloadPlayers} rather than {@code Connector} directly
      * because that is the one call in the codebase that knows what the players file yields for a
@@ -389,7 +383,7 @@ public final class TeamTools {
         final var players = HattrickManager.downloadPlayers(teamId);
         if (players == null || players.isEmpty()) {
             throw new McpToolException("Hattrick returned no squad for team " + teamId
-                    + ". Check the team id - get_upcoming_matches lists the ones in our series.");
+                    + ". Check the team id - get_series lists the ones in our series.");
         }
 
         final var estimator = new OppPlayerSkillEstimator();
@@ -411,13 +405,28 @@ public final class TeamTools {
         return json;
     }
 
-    /** scout_opponent: get_opponent_ratings and get_opponent_squad, one round trip. */
+    /** scout_opponent: ratings and/or squad (default both), one round trip. */
     private static JsonObject scoutOpponent(JsonObject args) throws McpToolException {
+        final var include = new java.util.HashSet<String>();
+        if (args.has("include") && args.get("include").isJsonArray()) {
+            args.getAsJsonArray("include").forEach(e -> include.add(e.getAsString()));
+        }
+        if (include.isEmpty()) {
+            include.addAll(SCOUT_PARTS);
+        } else if (!SCOUT_PARTS.containsAll(include)) {
+            throw new IllegalArgumentException("include takes ratings and/or squad, had " + include);
+        }
         final var json = new JsonObject();
-        json.add("ratings", MatchTools.opponentRatings(args));
-        json.add("squad", opponentSquad(args));
+        if (include.contains("ratings")) {
+            json.add("ratings", MatchTools.opponentRatings(args));
+        }
+        if (include.contains("squad")) {
+            json.add("squad", opponentSquad(args));
+        }
         return json;
     }
+
+    private static final java.util.Set<String> SCOUT_PARTS = java.util.Set.of("ratings", "squad");
 
     static JsonObject opponentPlayer(PlayerInfo info, OppPlayerSkillEstimator estimator) {
         final var json = new JsonObject();
@@ -482,12 +491,25 @@ public final class TeamTools {
         };
     }
 
-    private static JsonObject fixtures() throws McpToolException {
+    /**
+     * get_series. Table and fixtures come from the one stored plan keyed on our league level unit
+     * and the current season - not {@code HOModel.getFixtures()}, which is whichever plan was
+     * fetched last and can be an old season's series until the next team download.
+     */
+    private static JsonObject series() throws McpToolException {
         final var model = McpJson.model();
+        final var xtra = model.getXtraDaten();
+        // The league LEVEL UNIT id, not Basics.getLiga() - that one is the league, not the series.
+        final var plan = xtra == null ? null
+                : DBManager.instance().getSpielplan(xtra.getLeagueLevelUnitID(), model.getBasics().getSeason());
+
+        final var json = new JsonObject();
         final var matches = new JsonArray();
-        final var fixtures = model.getFixtures();
-        if (fixtures != null) {
-            for (final var pairing : fixtures.getMatches()) {
+        if (plan != null) {
+            json.addProperty("seriesName", plan.getLigaName());
+            json.addProperty("leagueLevelUnitId", plan.getLigaId());
+            json.addProperty("season", plan.getSaison());
+            for (final var pairing : plan.getMatches()) {
                 final var matchJson = new JsonObject();
                 matchJson.addProperty("matchId", pairing.getMatchId());
                 matchJson.addProperty("matchDay", pairing.getSpieltag());
@@ -499,8 +521,15 @@ public final class TeamTools {
                 matches.add(matchJson);
             }
         }
-        final var json = new JsonObject();
         json.add("matches", matches);
+        if (plan == null || plan.getTable() == null) {
+            json.add("table", JsonNull.INSTANCE);
+            json.addProperty("tableNote", "HO has not stored this season's series yet - "
+                    + "download_team fetches it.");
+        } else {
+            json.add("table", tableRows(plan));
+        }
+
         final var teamId = model.getBasics().getTeamId();
         final var others = ownNonLeagueUpcoming(
                 DBManager.instance().getMatchesKurzInfoUpComing(teamId), teamId);
@@ -546,26 +575,9 @@ public final class TeamTools {
         return row;
     }
 
-    private static JsonObject leagueTable() throws McpToolException {
-        final var model = McpJson.model();
-        final var xtra = model.getXtraDaten();
-        if (xtra == null) {
-            throw new McpToolException("HO holds no series data yet. Download the team first.");
-        }
-        // The league LEVEL UNIT id, not Basics.getLiga() - that one is the league, not the series.
-        final var fixtures = DBManager.instance()
-                .getSpielplan(xtra.getLeagueLevelUnitID(), model.getBasics().getSeason());
-        if (fixtures == null || fixtures.getTable() == null) {
-            throw new McpToolException("HO has not downloaded this season's series yet.");
-        }
-
-        final var json = new JsonObject();
-        json.addProperty("seriesName", fixtures.getLigaName());
-        json.addProperty("leagueLevelUnitId", fixtures.getLigaId());
-        json.addProperty("season", fixtures.getSaison());
-
+    private static JsonArray tableRows(module.series.MatchFixtures plan) {
         final var rows = new JsonArray();
-        for (final var entry : fixtures.getTable().getEntries()) {
+        for (final var entry : plan.getTable().getEntries()) {
             final var row = new JsonObject();
             row.addProperty("position", entry.getPosition());
             row.addProperty("previousPosition", entry.getPreviousPosition());
@@ -581,8 +593,7 @@ public final class TeamTools {
             row.addProperty("goalDifference", entry.getGoalsDiff());
             rows.add(row);
         }
-        json.add("table", rows);
-        return json;
+        return rows;
     }
 
     private static JsonObject finances(JsonObject args) throws McpToolException {

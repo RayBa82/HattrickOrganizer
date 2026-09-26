@@ -13,7 +13,7 @@ import java.util.function.UnaryOperator;
  * Predicted versus real sector ratings of our own played matches, one row per match.
  * <p>
  * Filled when a match's details are downloaded and by {@code DBManager#backfillRatingCalibration};
- * read by the {@code get_rating_calibration} MCP tool.
+ * summarised by {@code core.mcp.CalibrationSummary}.
  */
 final class RatingCalibrationTable extends AbstractTable {
 

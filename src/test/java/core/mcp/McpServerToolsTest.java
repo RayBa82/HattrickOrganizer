@@ -16,20 +16,18 @@ class McpServerToolsTest {
                         {"jsonrpc":"2.0","id":1,"method":"tools/list"}""").getAsJsonObject())
                 .getAsJsonObject("result").getAsJsonArray("tools");
 
-        assertThat(tools).hasSize(40);
+        assertThat(tools).hasSize(30);
         assertThat(tools).extracting(t -> t.getAsJsonObject().get("name").getAsString())
-                .containsExactlyInAnyOrder("get_team", "get_squad", "get_player",
-                        "get_opponent_squad", "scout_opponent",
-                        "get_upcoming_matches", "search_transfers", "search_transfers_batch",
+                .containsExactlyInAnyOrder("get_team", "get_squad", "scout_opponent", "get_series",
+                        "search_transfers",
                         "get_team_transfers", "get_player_transfer_history", "place_bid", "get_open_bids", "get_lineup",
                         "apply_lineup", "set_player_group", "send_match_order",
-                        "get_training", "get_player_history", "get_training_events", "set_training",
-                        "get_matches", "get_match", "get_match_events", "get_match_weather", "get_bookmarks",
-                        "get_opponent_ratings", "get_rating_calibration",
-                        "simulate_lineup", "list_challenges", "check_challengeable", "arrange_challenge",
-                        "respond_to_challenge", "get_league_table", "get_finances",
+                        "get_training", "get_player_history", "set_training",
+                        "get_matches", "get_match", "get_match_weather", "get_bookmarks",
+                        "simulate_lineup", "list_challenges", "arrange_challenge",
+                        "respond_to_challenge", "get_finances",
                         "add_to_scout", "list_scout", "remove_from_scout",
-                        "estimate_market_value", "backfill_character", "download_team");
+                        "estimate_market_value", "download_team");
     }
 
     /**

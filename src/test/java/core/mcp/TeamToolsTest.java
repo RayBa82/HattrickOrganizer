@@ -24,9 +24,8 @@ class TeamToolsTest {
     @Test
     void tools_areTheReadToolsPlusTheDownload() {
         assertThat(TeamTools.tools()).extracting(McpTool::name)
-                .containsExactly("get_team", "get_squad", "get_player", "get_opponent_squad",
-                        "scout_opponent", "get_upcoming_matches", "get_league_table", "get_bookmarks",
-                        "get_finances", "download_team");
+                .containsExactly("get_team", "get_squad", "scout_opponent", "get_series",
+                        "get_bookmarks", "get_finances", "download_team");
     }
 
     @Test
@@ -101,7 +100,7 @@ class TeamToolsTest {
     @Test
     void theStandingsAndTheStatementTakeNoRequiredArguments() {
         final var byName = TeamTools.tools().stream()
-                .filter(t -> t.name().equals("get_league_table") || t.name().equals("get_finances"))
+                .filter(t -> t.name().equals("get_series") || t.name().equals("get_finances"))
                 .toList();
 
         assertThat(byName).hasSize(2);
@@ -113,24 +112,29 @@ class TeamToolsTest {
     }
 
     @Test
-    void getPlayer_requiresAPlayerId() {
-        final var getPlayer = TeamTools.tools().stream()
-                .filter(t -> t.name().equals("get_player")).findFirst().orElseThrow();
+    void getSquad_filtersAndAddsTransfersOnRequest_scoutOpponentStillNeedsATeamId() {
+        final var squad = TeamTools.tools().stream()
+                .filter(t -> t.name().equals("get_squad")).findFirst().orElseThrow();
+        assertThat(squad.inputSchema().getAsJsonArray("required")).isEmpty();
+        assertThat(squad.inputSchema().getAsJsonObject("properties").keySet())
+                .containsExactlyInAnyOrder("playerIds", "includeTransfers");
 
-        assertThat(getPlayer.inputSchema().getAsJsonArray("required")).hasSize(1);
-        assertThat(getPlayer.inputSchema().getAsJsonArray("required").get(0).getAsString())
-                .isEqualTo("playerId");
-        assertThat(getPlayer.inputSchema().getAsJsonObject("properties").has("playerId")).isTrue();
+        final var scout = TeamTools.tools().stream()
+                .filter(t -> t.name().equals("scout_opponent")).findFirst().orElseThrow();
+        assertThat(scout.inputSchema().getAsJsonArray("required"))
+                .extracting(element -> element.getAsString())
+                .containsExactly("teamId");
+        assertThat(scout.inputSchema().getAsJsonObject("properties").has("include")).isTrue();
     }
 
     @Test
-    void getOpponentSquad_requiresATeamId() {
-        final var tool = TeamTools.tools().stream()
-                .filter(t -> t.name().equals("get_opponent_squad")).findFirst().orElseThrow();
-
-        assertThat(tool.inputSchema().getAsJsonArray("required"))
-                .extracting(element -> element.getAsString())
-                .containsExactly("teamId");
+    void scoutOpponent_rejectsAnUnknownIncludeBeforeAnyRequest() {
+        final var scout = TeamTools.tools().stream()
+                .filter(t -> t.name().equals("scout_opponent")).findFirst().orElseThrow();
+        final var args = com.google.gson.JsonParser.parseString(
+                "{\"teamId\":1,\"include\":[\"lineup\"]}").getAsJsonObject();
+        org.assertj.core.api.Assertions.assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scout.handler().call(args));
     }
 
     @Test

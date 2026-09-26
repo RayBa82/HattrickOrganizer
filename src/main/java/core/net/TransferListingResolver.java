@@ -233,8 +233,8 @@ public final class TransferListingResolver {
     private static final java.time.Duration CORPUS_BACKFILL_BUDGET = java.time.Duration.ofSeconds(20);
 
     /**
-     * Hard cap on how many players {@link core.mcp.TransferTools}'s {@code backfill_character} tool
-     * call may look up in one call, regardless of the time budget.
+     * Hard cap on how many players the character backfill pass after a team download may look up
+     * in one call, regardless of the time budget.
      */
     public static final int MAX_CHARACTER_BACKFILL = 200;
 

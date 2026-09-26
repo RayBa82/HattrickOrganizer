@@ -199,7 +199,7 @@ public final class LineupTools {
                 : DBManager.instance().getMatchesKurzInfoByMatchID(matchId, null);
         if (matchId != null && match == null) {
             throw new McpToolException("HO holds no match with id " + matchId
-                    + ". Take the id from get_upcoming_matches.");
+                    + ". Take the id from get_series.");
         }
         final var weatherId = McpJson.optInteger(spec, "weather");
         if (weatherId != null && (weatherId < 0 || weatherId > 3)) {

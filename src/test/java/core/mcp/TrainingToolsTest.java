@@ -55,8 +55,7 @@ class TrainingToolsTest {
     @Test
     void tools_areTheTrainingTools() {
         assertThat(TrainingTools.tools()).extracting(McpTool::name)
-                .containsExactly("get_training", "get_player_history", "get_training_events",
-                        "set_training");
+                .containsExactly("get_training", "get_player_history", "set_training");
     }
 
     private static final core.file.xml.XMLTrainingEventsParser.TrainingEvents TWO_EVENTS =

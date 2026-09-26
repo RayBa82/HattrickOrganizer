@@ -16,7 +16,6 @@ import core.model.match.MatchEvent;
 import core.model.match.MatchKurzInfo;
 import core.model.match.Matchdetails;
 import core.prediction.engine.MatchPredictionManager;
-import core.rating.RatingCalibration;
 import core.rating.RatingPredictionModel.RatingSector;
 import core.util.HODateTime;
 import module.lineup.Lineup;
@@ -40,8 +39,8 @@ public final class MatchTools {
 
     private static final int DEFAULT_COUNT = 10;
     private static final int DEFAULT_SIMULATIONS = 1000;
-    private static final int DEFAULT_OPPONENT_MATCHES = 5;
-    private static final int DEFAULT_OPPONENT_DAYS = 120;
+    static final int DEFAULT_OPPONENT_MATCHES = 5;
+    static final int DEFAULT_OPPONENT_DAYS = 120;
 
     private static final String[] OPPONENT_SECTORS = {
             "opponentMidfield", "opponentDefenceLeft", "opponentDefenceCentral",
@@ -72,29 +71,23 @@ public final class MatchTools {
                         MatchTools::matches),
                 new McpTool("get_match",
                         "One played match in full: both sides' sector ratings, HatStats, tactic, "
-                                + "formation, attendance, and our own players' match ratings. Read "
-                                + "the top level status: 'ok', or 'no_match_details' when HO has the "
-                                + "result but never downloaded the details.",
+                                + "formation, attendance, and our own players' match ratings; "
+                                + "includeEvents adds the event list. Read the top level status: "
+                                + "'ok', or 'no_match_details' when HO has the result but never "
+                                + "downloaded the details.",
                         McpTool.schema(McpTool.properties(
                                         "matchId", McpTool.prop("integer", "the Hattrick match id"),
                                         "matchType", McpTool.prop("integer",
                                                 "the match type id from get_matches; without it the "
                                                         + "id is looked up on its own, which is "
-                                                        + "ambiguous across source systems")),
+                                                        + "ambiguous across source systems"),
+                                        "includeEvents", McpTool.prop("boolean",
+                                                "add events: per team goals, chances and special "
+                                                        + "events, then every event (minute, name, "
+                                                        + "team, player, objectPlayerId, goal/miss, "
+                                                        + "specialEvent); default false")),
                                 "matchId"),
                         MatchTools::match),
-                new McpTool("get_match_events",
-                        "The event list of one played match, from the stored match details: per "
-                                + "team goals, chances, missed chances and special events, then every "
-                                + "event (minute, event name, team, player, objectPlayerId = other "
-                                + "player involved, may be the opponent, goal/miss, specialEvent). "
-                                + "Same matchId / matchType as get_match. Local, no CHPP request.",
-                        McpTool.schema(McpTool.properties(
-                                        "matchId", McpTool.prop("integer", "the Hattrick match id"),
-                                        "matchType", McpTool.prop("integer",
-                                                "the match type id from get_matches")),
-                                "matchId"),
-                        MatchTools::matchEvents),
                 new McpTool("get_match_weather",
                         "Weather of one of our fixtures, from the home team's region. forecast: "
                                 + "HAPPENED (played), TODAY (reliable), TOMORROW (may change) or UNSURE "
@@ -108,51 +101,10 @@ public final class MatchTools {
                                                 "the match type id; optional")),
                                 "matchId"),
                         MatchTools::matchWeather),
-                new McpTool("get_opponent_ratings",
-                        "The sector ratings another team earned in its recent matches, averaged and "
-                                + "named exactly as simulate_lineup wants them. HO stores only "
-                                + "matches involving us, so for a team we have not played this is "
-                                + "the only source. Roughly one CHPP request per match, so keep "
-                                + "count small.",
-                        McpTool.schema(McpTool.properties(
-                                        "teamId", McpTool.prop("integer",
-                                                "the Hattrick team id, e.g. an opponent id from "
-                                                        + "get_upcoming_matches"),
-                                        "count", McpTool.prop("integer",
-                                                "how many recent matches to average, default "
-                                                        + DEFAULT_OPPONENT_MATCHES),
-                                        "competitiveOnly", McpTool.prop("boolean",
-                                                "league, cup, qualification and masters only, "
-                                                        + "leaving out the friendlies and "
-                                                        + "tournaments teams field reserves in; "
-                                                        + "default true"),
-                                        "days", McpTool.prop("integer",
-                                                "how far back to search, in days; default "
-                                                        + DEFAULT_OPPONENT_DAYS)),
-                                "teamId"),
-                        MatchTools::opponentRatings),
-                new McpTool("get_rating_calibration",
-                        "Rating model vs Hattrick on our own matches: each starting eleven is rated "
-                                + "from the pre-match HRF snapshot and compared with the real sector "
-                                + "ratings. Residual (real minus predicted, positive = model too low) mean "
-                                + "and sd per sector, overall and by formation and home/away; matches with "
-                                + "mid-match lineup changes are excluded. Measurement only. backfill rates "
-                                + "stored matches lacking a row.",
-                        McpTool.schema(McpTool.properties(
-                                "backfill", McpTool.prop("boolean",
-                                        "first rate every stored match of ours that has no row yet; "
-                                                + "default false"),
-                                "recompute", McpTool.prop("boolean",
-                                        "with backfill: redo the rows that exist too, needed after "
-                                                + "a change to the rating model; default false"),
-                                "maxSnapshotAgeDays", McpTool.prop("number",
-                                        "leave out rows whose HRF snapshot is older than this many "
-                                                + "days before the match; default keep all"))),
-                        MatchTools::ratingCalibration),
                 new McpTool("simulate_lineup",
                         "Score a lineup. Omit positions to score the one HO currently holds. Supply "
                                 + "all seven opponent sector ratings (copy them from "
-                                + "get_opponent_ratings) for a Monte Carlo win/draw/loss forecast; "
+                                + "scout_opponent's ratings) for a Monte Carlo win/draw/loss forecast; "
                                 + "omit them for sector ratings alone. Weather is the next match's "
                                 + "stored forecast unless matchId or weather says otherwise (both need "
                                 + "positions). Nothing in HO changes, so call it in a loop.",
@@ -162,23 +114,17 @@ public final class MatchTools {
                 new McpTool("list_challenges",
                         "Friendly challenges this team has sent (outgoing) and been sent "
                                 + "(incoming). accept / decline / withdraw need a trainingMatchId "
-                                + "that only this list provides. A read - does not spend the write "
-                                + "cap.",
+                                + "that only this list provides. checkTeamIds screens up to 20 teams "
+                                + "before arrange_challenge (challengeable: whether we may challenge "
+                                + "each now, manager login, supporter, bot; best first). A read - "
+                                + "does not spend the write cap.",
                         McpTool.schema(McpTool.properties(
                                 "weekend", McpTool.prop("boolean",
-                                        "list weekend friendly challenges instead of midweek; default false"))),
+                                        "weekend friendlies instead of midweek; default false"),
+                                CHECK_TEAM_IDS, McpTool.prop("array",
+                                        "team ids to screen, 1-" + MAX_CHALLENGEABLE_TEAMS
+                                                + "; omit to skip the check"))),
                         MatchTools::listChallenges),
-                new McpTool("check_challengeable",
-                        "Screen up to 20 teams before arrange_challenge: whether Hattrick lets us "
-                                + "challenge each one now, plus the manager's last login, supporter and "
-                                + "bot status. Challengeable teams first, most recently active first. "
-                                + "A read - does not spend the write cap.",
-                        McpTool.schema(McpTool.properties(
-                                        "teamIds", McpTool.prop("array", "team ids to check, 1-20"),
-                                        "weekend", McpTool.prop("boolean",
-                                                "check for a weekend friendly; default false")),
-                                "teamIds"),
-                        MatchTools::checkChallengeable),
                 new McpTool("arrange_challenge",
                         "Send a friendly challenge to another team. Leaves the machine. Poll "
                                 + "list_challenges afterwards for whether the opponent agreed.",
@@ -209,6 +155,7 @@ public final class MatchTools {
 
     private static JsonObject listChallenges(JsonObject args) throws McpToolException {
         final var weekend = McpJson.optBool(args, "weekend", false);
+        final var checkIds = checkTeamIds(args);
         final core.file.xml.XMLChallengesParser.ChallengeLists lists;
         try {
             lists = ChppWriteService.instance().listChallengesForAgent(weekend);
@@ -218,6 +165,9 @@ public final class MatchTools {
         final var out = new JsonObject();
         out.add("outgoing", challengeArray(lists.outgoing()));
         out.add("incoming", challengeArray(lists.incoming()));
+        if (!checkIds.isEmpty()) {
+            out.add("challengeable", challengeable(checkIds, weekend));
+        }
         return out;
     }
 
@@ -244,16 +194,25 @@ public final class MatchTools {
 
     static final int MAX_CHALLENGEABLE_TEAMS = 20;
 
-    private static JsonObject checkChallengeable(JsonObject args) throws McpToolException {
+    private static final String CHECK_TEAM_IDS = "checkTeamIds";
+
+    /** list_challenges' checkTeamIds: empty when absent, else 1-20 ids - checked before any CHPP call. */
+    private static List<Integer> checkTeamIds(JsonObject args) {
+        if (!args.has(CHECK_TEAM_IDS) || args.get(CHECK_TEAM_IDS).isJsonNull()) {
+            return List.of();
+        }
         final var ids = new java.util.ArrayList<Integer>();
-        if (args.has("teamIds") && args.get("teamIds").isJsonArray()) {
-            args.getAsJsonArray("teamIds").forEach(e -> ids.add(e.getAsInt()));
+        if (args.get(CHECK_TEAM_IDS).isJsonArray()) {
+            args.getAsJsonArray(CHECK_TEAM_IDS).forEach(e -> ids.add(e.getAsInt()));
         }
         if (ids.isEmpty() || ids.size() > MAX_CHALLENGEABLE_TEAMS) {
             throw new IllegalArgumentException(
-                    "teamIds must hold 1-" + MAX_CHALLENGEABLE_TEAMS + " team ids, had " + ids.size());
+                    CHECK_TEAM_IDS + " must hold 1-" + MAX_CHALLENGEABLE_TEAMS + " team ids, had " + ids.size());
         }
-        final var weekend = McpJson.optBool(args, "weekend", false);
+        return ids;
+    }
+
+    private static JsonArray challengeable(List<Integer> ids, boolean weekend) throws McpToolException {
         final java.util.List<core.file.xml.XMLChallengesParser.Challengeable> answer;
         try {
             answer = ChppWriteService.instance().checkChallengeableForAgent(ids, weekend);
@@ -273,9 +232,7 @@ public final class MatchTools {
         rows.sort(CHALLENGEABLE_ORDER);
         final var teams = new JsonArray();
         rows.forEach(teams::add);
-        final var out = new JsonObject();
-        out.add("teams", teams);
-        return out;
+        return teams;
     }
 
     /** Challengeable first, then the most recent login first; unknown logins last. */
@@ -522,6 +479,11 @@ public final class MatchTools {
         json.add("home", side(details, true));
         json.add("away", side(details, false));
         json.add("ourPlayers", playerRatings(matchId, info.getMatchType(), teamId));
+        if (McpJson.optBool(args, "includeEvents", false)) {
+            final var events = details.getHighlights();
+            json.add("events", matchEventsJson(info.getHomeTeamID(), info.getGuestTeamID(),
+                    events == null ? List.of() : events));
+        }
         return json;
     }
 
@@ -581,17 +543,6 @@ public final class MatchTools {
         return json;
     }
 
-    private static JsonObject matchEvents(JsonObject args) throws McpToolException {
-        final var info = storedMatch(args);
-        final var details = storedDetails(info.getMatchType(), info.getMatchID());
-        if (details == null) {
-            throw new McpToolException("HO stored the result of match " + info.getMatchID()
-                    + " but not its details, so it has no events. Download the match details first.");
-        }
-        final var events = details.getHighlights();
-        return matchEventsJson(info.getHomeTeamID(), info.getGuestTeamID(),
-                events == null ? List.of() : events);
-    }
 
     /**
      * Per-team goals / missed chances / special events, then every event in match order.
@@ -682,7 +633,7 @@ public final class MatchTools {
 
 
     /**
-     * get_opponent_ratings: what a team - any team, not just one we have played - earned in its
+     * scout_opponent's ratings half: what a team - any team, not just one we have played - earned in its
      * recent matches, averaged into the arguments simulate_lineup asks for.
      */
     static JsonObject opponentRatings(JsonObject args) throws McpToolException {
@@ -866,27 +817,6 @@ public final class MatchTools {
      * of seven is a caller who meant to simulate and dropped one, and answering that with ratings
      * would look like a working call.
      */
-    private static JsonObject ratingCalibration(JsonObject args) throws McpToolException {
-        McpJson.model();
-        JsonObject backfill = null;
-        if (McpJson.optBool(args, "backfill", false)) {
-            final var result = RatingCalibration.backfill(McpJson.optBool(args, "recompute", false));
-            backfill = new JsonObject();
-            backfill.addProperty("matchesExamined", result.matches());
-            backfill.addProperty("rowsWritten", result.stored());
-            backfill.addProperty("writtenButConfounded", result.confounded());
-            final var skipped = new JsonObject();
-            result.skipped().forEach(skipped::addProperty);
-            backfill.add("notWritten", skipped);
-        }
-        final var maxAge = args.has("maxSnapshotAgeDays") && !args.get("maxSnapshotAgeDays").isJsonNull()
-                ? args.get("maxSnapshotAgeDays").getAsDouble() : null;
-        final var json = CalibrationSummary.summarize(DBManager.instance().loadRatingCalibrations(), maxAge);
-        if (backfill != null) {
-            json.add("backfill", backfill);
-        }
-        return json;
-    }
 
     private static JsonObject simulateLineup(JsonObject args) throws McpToolException {
         // Argument shape before any model access, so a malformed call is a -32602 rather than
@@ -897,7 +827,7 @@ public final class MatchTools {
         if (!missing.isEmpty() && missing.size() < OPPONENT_SECTORS.length) {
             throw new IllegalArgumentException("All seven opponent sector ratings are needed to "
                     + "simulate, or none of them to score the lineup on its own. Missing: "
-                    + String.join(", ", missing) + ". get_opponent_ratings returns all seven under "
+                    + String.join(", ", missing) + ". scout_opponent's ratings holds all seven under "
                     + "exactly these names.");
         }
 

@@ -36,6 +36,7 @@ public final class TrainingTools {
 
     /** How far back {@code get_player_history} looks when the caller does not say. */
     private static final int DEFAULT_HISTORY_WEEKS = 26;
+    static final int MAX_EVENT_PLAYERS = 5;
 
     /** A Hattrick year, which is what a growth rate is quoted per. */
     private static final int HT_WEEKS_PER_YEAR = 16;
@@ -61,8 +62,7 @@ public final class TrainingTools {
     private TrainingTools() {
     }
 
-    private static JsonObject trainingEvents(JsonObject args) throws McpToolException {
-        final var playerId = McpJson.reqInt(args, "playerId");
+    private static JsonObject trainingEvents(int playerId) throws McpToolException {
         final core.file.xml.XMLTrainingEventsParser.TrainingEvents events;
         try {
             events = ChppWriteService.instance().trainingEventsForAgent(playerId);
@@ -152,7 +152,7 @@ public final class TrainingTools {
                                 + "player: every level-up with its date, a growth rate in levels per "
                                 + "Hattrick year, TSI and wage drift, and the series coverage. Read "
                                 + "coverage before the rate - a download gap means a level-up "
-                                + "inside it cannot be dated. Local read, no CHPP request.",
+                                + "inside it cannot be dated. Local unless includeEvents.",
                         McpTool.schema(McpTool.properties(
                                 "playerIds", McpTool.prop("array",
                                         "the player ids to report on; the current squad if omitted. "
@@ -161,22 +161,19 @@ public final class TrainingTools {
                                 "weeks", McpTool.prop("integer",
                                         "how far back to look, in weeks; default "
                                                 + DEFAULT_HISTORY_WEEKS),
+                                "includeEvents", McpTool.prop("boolean",
+                                        "add trainingEvents per player: Hattrick's own skill changes "
+                                                + "(skill, old -> new level, season / matchRound / "
+                                                + "dayNumber, weekStart), which date level-ups a "
+                                                + "download gap hides. One CHPP request per player, "
+                                                + "at most " + MAX_EVENT_PLAYERS + " playerIds; "
+                                                + "empty while the player is in a match. Default false"),
                                 "includeSnapshots", McpTool.prop("boolean",
                                         "add the raw dated series per player; default false, "
                                                 + "because levelUps, derived and coverage answer "
                                                 + "the growth question on their own and the series "
                                                 + "is a wall of numbers"))),
                         TrainingTools::playerHistory),
-                new McpTool("get_training_events",
-                        "Hattrick's own record of a player's skill changes: skill, old -> new level, "
-                                + "season / matchRound / dayNumber, newest first, plus weekStart (the "
-                                + "date that week began, exact for players in our league). Dates "
-                                + "level-ups that get_player_history cannot. One CHPP read per call; "
-                                + "empty while the player is in a match.",
-                        McpTool.schema(McpTool.properties(
-                                        "playerId", McpTool.prop("integer", "the player to report on")),
-                                "playerId"),
-                        TrainingTools::trainingEvents),
                 new McpTool("set_training",
                         "Set the senior team's training. Call get_training first for the current "
                                 + "values and for what each trainingType id trains. This leaves the "
@@ -293,8 +290,18 @@ public final class TrainingTools {
                 ? null : String.valueOf(weekly.getSecondaryTrainingSkill()));
 
         final var players = new JsonArray();
-        for (final var playerId : historyPlayerIds(args, model)) {
-            players.add(history(playerId, since, trained, includeSnapshots));
+        final var ids = historyPlayerIds(args, model);
+        final var includeEvents = McpJson.optBool(args, "includeEvents", false);
+        if (includeEvents && ids.size() > MAX_EVENT_PLAYERS) {
+            throw new IllegalArgumentException("includeEvents costs one CHPP request per player, so "
+                    + "it takes at most " + MAX_EVENT_PLAYERS + " playerIds, had " + ids.size() + ".");
+        }
+        for (final var playerId : ids) {
+            final var row = history(playerId, since, trained, includeSnapshots);
+            if (includeEvents) {
+                row.add("trainingEvents", trainingEvents(playerId));
+            }
+            players.add(row);
         }
         json.add("players", players);
         json.addProperty("note", "levelsPerHtYear is the trained skill's sub-skill-inclusive gain "

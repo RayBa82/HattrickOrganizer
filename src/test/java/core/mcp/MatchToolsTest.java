@@ -63,10 +63,8 @@ class MatchToolsTest {
     @Test
     void tools_areTheMatchTools() {
         assertThat(MatchTools.tools()).extracting(McpTool::name)
-                .containsExactly("get_matches", "get_match", "get_match_events", "get_match_weather",
-                        "get_opponent_ratings",
-                        "get_rating_calibration", "simulate_lineup",
-                        "list_challenges", "check_challengeable", "arrange_challenge",
+                .containsExactly("get_matches", "get_match", "get_match_weather",
+                        "simulate_lineup", "list_challenges", "arrange_challenge",
                         "respond_to_challenge");
     }
 
@@ -132,7 +130,7 @@ class MatchToolsTest {
         assertThat(scorer.get("objectPlayerId").isJsonNull()).isTrue();
     }
 
-    // ---- check_challengeable -------------------------------------------------------------------
+    // ---- list_challenges checkTeamIds ----------------------------------------------------------
 
     private static final java.time.LocalDate TODAY = java.time.LocalDate.of(2026, 9, 26);
 
@@ -175,8 +173,13 @@ class MatchToolsTest {
     }
 
     @Test
-    void checkChallengeable_putsChallengeableAndRecentlyActiveTeamsFirst() throws Exception {
+    void listChallenges_checkTeamIdsPutsChallengeableAndRecentlyActiveTeamsFirst() throws Exception {
         install(new ChppWriteService() {
+            @Override
+            public XMLChallengesParser.ChallengeLists listChallengesForAgent(boolean weekend) {
+                return new XMLChallengesParser.ChallengeLists(List.of(), List.of());
+            }
+
             @Override
             public List<XMLChallengesParser.Challengeable> checkChallengeableForAgent(
                     List<Integer> ids, boolean weekend) {
@@ -191,24 +194,24 @@ class MatchToolsTest {
                         teamId == 2 ? "2020-01-01 00:00:00" : "2099-01-01 00:00:00");
             }
         });
-        final var args = JsonParser.parseString("{\"teamIds\":[1,2,3]}").getAsJsonObject();
-        final var teams = tool("check_challengeable").handler().call(args).getAsJsonArray("teams");
+        final var args = JsonParser.parseString("{\"checkTeamIds\":[1,2,3]}").getAsJsonObject();
+        final var teams = tool("list_challenges").handler().call(args).getAsJsonArray("challengeable");
         assertThat(teams).extracting(t -> t.getAsJsonObject().get("teamId").getAsInt())
                 .containsExactly(3, 2, 1);
     }
 
     @Test
-    void checkChallengeable_rejectsAnEmptyOrOversizedList() {
-        final var none = JsonParser.parseString("{\"teamIds\":[]}").getAsJsonObject();
+    void listChallenges_rejectsAnEmptyOrOversizedCheckList() {
+        final var none = JsonParser.parseString("{\"checkTeamIds\":[]}").getAsJsonObject();
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> tool("check_challengeable").handler().call(none));
+                .isThrownBy(() -> tool("list_challenges").handler().call(none));
 
         final var many = new com.google.gson.JsonArray();
         for (int i = 1; i <= MatchTools.MAX_CHALLENGEABLE_TEAMS + 1; i++) many.add(i);
         final var tooMany = new JsonObject();
-        tooMany.add("teamIds", many);
+        tooMany.add("checkTeamIds", many);
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> tool("check_challengeable").handler().call(tooMany));
+                .isThrownBy(() -> tool("list_challenges").handler().call(tooMany));
     }
 
     @Test
