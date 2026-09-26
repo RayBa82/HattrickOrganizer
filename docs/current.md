@@ -3010,3 +3010,23 @@ Follow-ups from the live test:
 - `list_scout.onlyOpen` means still on the market (no sale recorded and deadline not passed), not
   just "no sale recorded". `add_to_scout` writes the character it fetches onto the player's
   TRANSFERLISTING rows too (`storeTransferListingCharacter`), no extra CHPP call.
+- `estimate_market_value`:
+  - The live search no longer filters on the target's specialty (`comparableQuery`). It used to,
+    so every call stored only same-specialty listings and skewed the corpus. The soft specialty
+    weight stays.
+  - Resolved sales are never blended with asks. With 3 or more sales, `basis: "sales"` and
+    `estimate` works as before.
+  - Below 3 sales, `estimate` is null, `resolvedSales` lists each sale, and the ask/bid figure
+    moves to a labelled `listingsEstimate`. `basis` is `thin_sales_plus_listings`, or `listings`
+    with no sales at all.
+  - `fallbackClimb` is capped at 1.5x.
+  - Set pieces still doesn't change the number; the user's view is one specialist taker per team.
+    `setPiecesNote` warns when the target's SP is 12 or more, or when comparables sit 4+ levels
+    away. Both thresholds are placeholders. A profile may pass `setPieces`.
+- `apply_lineup` / `simulate_lineup` reject a `setPiecesTakerId` who plays roleId 100
+  (`LineupTools.rejectKeeperAsSetPiecesTaker`, called before the live lineup is touched).
+- Who takes over from a departed set-pieces taker, first or second on the penalty list? The DB
+  can't tell. Event 81 (NEW_SET_PIECES_TAKER) is stored with the old taker in SPIELERID and the
+  new one in GEHILFEID. HO never stores the penalty-taker order for a played match, though:
+  MATCHLINEUPPLAYER has no roleId 22-32 rows at all, and the HRF table keeps only an id and a date.
+  To settle it, snapshot the match orders (roleIds 22-32) before each match.

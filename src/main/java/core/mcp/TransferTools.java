@@ -174,8 +174,8 @@ public final class TransferTools {
                 new McpTool("estimate_market_value",
                         "Value one of your players, or via profile a player outside the squad, "
                                 + "against stored transfer listings. Returns the matching listings; "
-                                + "reason over those, not the median in `estimate`. basis says real "
-                                + "sales or asking prices, which run high. Also searches today's "
+                                + "reason over those, not the median in `estimate`. Below 3 sales, "
+                                + "see resolvedSales + listingsEstimate. Also searches today's "
                                 + "market first and stores the hits - one of the session's capped "
                                 + "searches; pass live: false to read the stored corpus only, for "
                                 + "free.",
@@ -187,7 +187,7 @@ public final class TransferTools {
                                                         + "player: {age, skills: {keeper|defending|"
                                                         + "playmaking|passing|winger|scoring -> "
                                                         + "level, at least one}, plus optional "
-                                                        + "playerName, ageDays, specialty, tsi, "
+                                                        + "playerName, ageDays, specialty, setPieces, tsi, "
                                                         + "agreeability, aggressiveness, honesty}. "
                                                         + "Omitting specialty means unknown (no "
                                                         + "specialty filter applied, not the same as "
@@ -255,8 +255,8 @@ public final class TransferTools {
     /**
      * Below this many resolved sales the observed listings are the better estimate, thin as they
      * are: one real sale is a single draw, twenty asking prices at least bracket the market.
-     * ponytail: a flat threshold, not a weighting. Blend the two if the corpus ever gets big
-     * enough for the difference to matter.
+     * Never blended: resolved sales are the truth, so below this they are listed on their own and
+     * the listings figure stands apart - see {@link #basis}.
      */
     private static final int MIN_RESOLVED_SAMPLE = 3;
 
@@ -314,8 +314,10 @@ public final class TransferTools {
      * Pritchin 204k->466k, Außerbauer 266k->396k, a 1.5x-2.7x spread) the hattrick peer session
      * collected from its own scouting, not a real regression - revisit once enough resolved sales
      * exist in the corpus to calibrate against actual outcomes instead of a handful of anecdotes.
+     * Capped at 1.5x (the anecdotes spread to 2.7x) until then, so an uncalibrated guess cannot
+     * double a price.
      */
-    private static final double FALLBACK_MAX_CLIMB = 1.0;
+    private static final double FALLBACK_MAX_CLIMB = 0.5;
     private static final java.time.Duration FALLBACK_FULL_WINDOW = java.time.Duration.ofDays(5);
 
     /** exp(-diff^2 / (2*sigma^2)): 1.0 at diff=0, decaying smoothly as diff grows past sigma. */
@@ -559,6 +561,55 @@ public final class TransferTools {
         return weightedMedian(clampedPairs);
     }
 
+
+    /**
+     * "sales" at {@link #MIN_RESOLVED_SAMPLE} or more resolved sales (they alone make the estimate),
+     * "thin_sales_plus_listings" below it (sales listed apart, a separate listings figure), or
+     * "listings" with none at all. Never a blend: a resolved sale is the truth, an ask is not.
+     */
+    static String basis(int resolvedSales) {
+        if (resolvedSales >= MIN_RESOLVED_SAMPLE) {
+            return "sales";
+        }
+        return resolvedSales == 0 ? "listings" : "thin_sales_plus_listings";
+    }
+
+    /** ponytail: placeholder thresholds, not fitted to prices - tune against resolved sales. */
+    static final int SET_PIECES_GAP_NOTE = 4;
+    static final int SET_PIECES_HIGH_NOTE = 12;
+
+    /**
+     * A warning, never an adjustment: set pieces is kept out of the estimate (one specialist taker
+     * per team is what it is worth to us), but the market does pay for a high-SP player, so the
+     * median can be off when the target is one or the comparables sit far from him. Null when
+     * neither applies or the target's SP is unknown; comparables without SP are skipped.
+     */
+    static String setPiecesNote(Integer targetSetPieces, List<Integer> comparableSetPieces) {
+        if (targetSetPieces == null) {
+            return null;
+        }
+        final var known = comparableSetPieces.stream().filter(java.util.Objects::nonNull).toList();
+        final var farOff = known.stream()
+                .filter(sp -> Math.abs(sp - targetSetPieces) >= SET_PIECES_GAP_NOTE).count();
+        final var high = targetSetPieces >= SET_PIECES_HIGH_NOTE;
+        if (!high && farOff == 0) {
+            return null;
+        }
+        return "Set pieces is not part of the estimate. Target SP " + targetSetPieces
+                + (high ? " - a set-pieces specialist, which the market pays a premium for" : "")
+                + "; " + farOff + " of " + known.size() + " comparables with known SP are "
+                + SET_PIECES_GAP_NOTE + "+ levels away. The number may be off - check their setPieces.";
+    }
+
+    /** The target's set pieces: a squad player's own, a profile's only when it gives setPieces. */
+    static Integer targetSetPieces(boolean hasProfile, JsonObject profile, Player player) {
+        if (!hasProfile) {
+            return player.getValue4Skill(core.constants.player.PlayerSkill.SETPIECES);
+        }
+        return profile.has("setPieces") && !profile.get("setPieces").isJsonNull()
+                ? profile.get("setPieces").getAsInt() : null;
+    }
+
     static JsonObject estimateMarketValue(JsonObject args) throws McpToolException {
         final var hasPlayerId = args.has("playerId") && !args.get("playerId").isJsonNull();
         final var hasProfile = args.has("profile") && !args.get("profile").isJsonNull();
@@ -607,9 +658,9 @@ public final class TransferTools {
         // never got a reading for him" (a departed player, most of the time) or "confirmed none" -
         // conflating those two into player's own 0 default would wrongly exclude specialty-having
         // comparables for a player whose specialty is simply unknown, not none. The live CHPP
-        // search above still asks for "any specialty" either way (query.specialty() is null there -
-        // Hattrick's API has no "must have none" filter), but the local corpus read below can and
-        // should be fairer about it - see loadComparables's doc for the null/0/positive distinction.
+        // search above asks for any specialty (comparableQuery sets none - see its doc), so it
+        // cannot skew the corpus toward the target's own; only this local read can filter, and only
+        // on request - see loadComparables's doc for the null/0/positive distinction.
         final var observations = DBManager.instance().loadComparableTransferListings(
                 query.ageMin(), query.ageMax(),
                 column(query.skillType1()), query.minSkillValue1(), query.maxSkillValue1(),
@@ -688,7 +739,7 @@ public final class TransferTools {
             // erroring, and for what "recorded" actually writes.
             json.addProperty("recordedToCorpus", recordedToCorpus);
         }
-        json.addProperty("basis", useSales ? "resolved_sales" : "observed_listings");
+        json.addProperty("basis", basis(salesPriced.size()));
         json.addProperty("sampleSize", sample.size());
         json.addProperty("resolvedSalesAvailable", salesPriced.size());
         json.addProperty("observedListingsAvailable", asksPriced.size());
@@ -749,41 +800,63 @@ public final class TransferTools {
         // How many rows those distinct players were collapsed from, so the gap is visible.
         json.addProperty("observationsMatched", observations.size());
 
+        if (!useSales) {
+            // Resolved sales are the truth: below MIN_RESOLVED_SAMPLE they are neither blended with
+            // asks nor dropped, but listed one by one beside the listings figure.
+            final var sales = new JsonArray();
+            salesPriced.forEach(pc -> sales.add(
+                    topSkillsOnly(McpJson.listing(pc.listing()), listingSkillLevels(pc.listing()))));
+            json.add("resolvedSales", sales);
+        }
         if (sample.isEmpty()) {
             json.add("estimate", com.google.gson.JsonNull.INSTANCE);
-            json.addProperty("note", "Nothing comparable in the corpus yet. Widen ageTolerance / "
-                    + "skillTolerance, or run search_transfers over this profile - every hit it "
-                    + "returns is stored and becomes a comparable.");
+            json.addProperty("note", (salesPriced.isEmpty() ? "Nothing comparable in the corpus yet."
+                    : "Only the resolvedSales above, too few for an estimate, and no listings.")
+                    + " Widen ageTolerance / skillTolerance, or run search_transfers over this profile - "
+                    + "every hit it returns is stored and becomes a comparable.");
             return json;
         }
 
         // Winsorized against the sample's own weighted center before the weighted median is
         // computed - see clampedWeightedMedian's doc. The reported range below is the real,
         // un-clamped spread.
-        json.addProperty("estimate", McpJson.money(clampedWeightedMedian(sample)));
+        final var figure = McpJson.money(clampedWeightedMedian(sample));
+        final var range = new JsonArray();
+        range.add(McpJson.money(sample.get(0).price()));
+        range.add(McpJson.money(sample.get(sample.size() - 1).price()));
+        if (useSales) {
+            json.addProperty("estimate", figure);
+            json.add("range", range);
+        } else {
+            // Never in `estimate`: a figure built from asks and bids must not pass for a sale price.
+            json.add("estimate", com.google.gson.JsonNull.INSTANCE);
+            final var listingsEstimate = new JsonObject();
+            listingsEstimate.addProperty("value", figure);
+            listingsEstimate.add("range", range);
+            listingsEstimate.addProperty("label", "listings only, not sale prices - approximate");
+            json.add("listingsEstimate", listingsEstimate);
+            json.addProperty("note", (salesPriced.isEmpty()
+                    ? "No resolved sale prices for this profile yet."
+                    : salesPriced.size() + " resolved sale(s) is too thin for an estimate - they are "
+                    + "listed in resolvedSales, read them first.")
+                    + " listingsEstimate is what sellers asked and bidders bid, nudged up (at most "
+                    + "1.5x) for time still left on the clock when each was observed - an "
+                    + "approximation, not what players went for.");
+        }
         json.addProperty("estimateNote", "Weighted median over " + sample.size() + " comparables - "
                 + "weighted by closeness in age (day precision), third-best skill, character "
                 + "and specialty where known (a different specialty is down-weighted, not "
                 + "excluded - see specialtyFilter/positionGroup), and clamped against a wild outlier - as a starting anchor only. It "
-                + "still ignores wage, TSI, form and how stale each observation is. The comparables "
+                + "still ignores wage, TSI, form, set pieces and how stale each observation is. The comparables "
                 + "array carries those plus each row's own weight (weightBreakdown says which of "
                 + "age/skill/character/specialty pulled it down) and adjustedPrice (what it actually "
-                + "contributed, after the time-left climb below where that applies) - check the "
+                + "contributed, after the time-left climb where that applies) - check the "
                 + "number instead of trusting it. Each row lists its three best positional skills "
                 + "plus set pieces; the positional skills below the top three are not returned.");
-        final var range = new JsonArray();
-        range.add(McpJson.money(sample.get(0).price()));
-        range.add(McpJson.money(sample.get(sample.size() - 1).price()));
-        json.add("range", range);
-        if (!useSales) {
-            json.addProperty("note", salesPriced.isEmpty()
-                    ? "No resolved sale prices for this profile yet, so this is what sellers asked "
-                    + "and bidders bid, nudged up for time still left on the clock at the time each "
-                    + "was observed (a snapshot taken early in a listing's life undersells it) - "
-                    + "still an approximation, not what players went for."
-                    : salesPriced.size() + " resolved sale(s) is too thin a sample, so asking prices "
-                    + "and bids were used instead, with the same time-left adjustment - read the "
-                    + "estimate as approximate.");
+        final var spNote = setPiecesNote(targetSetPieces(hasProfile, profile, player),
+                comparables.stream().map(TransferListing::getSetPieces).toList());
+        if (spNote != null) {
+            json.addProperty("setPiecesNote", spNote);
         }
         return json;
     }
@@ -1983,8 +2056,10 @@ public final class TransferTools {
     }
 
     /**
-     * The market query that describes a player: his age window, his two highest positional skills
-     * and his specialty.
+     * The market query that describes a player: his age window and his two highest positional
+     * skills. Deliberately no specialty: every live hit is stored and becomes a comparable, so a
+     * specialty filter here would fill the corpus with the target's own specialty only, and the
+     * soft {@link #specialtyWeight} would have nothing different left to weigh.
      * <p>
      * Clamped so that Hattrick accepts it - min and max may be at most 3 levels apart, keeper /
      * set pieces carry a minimum level, and an age window reaching down to 17 or 18 may span at
@@ -2018,7 +2093,6 @@ public final class TransferTools {
                 .skillType2(second)
                 .minSkillValue2(second == null ? null : minLevel(second, player, tolerance))
                 .maxSkillValue2(second == null ? null : maxLevel(second, player, tolerance))
-                .specialty(player.getSpecialty() > 0 ? player.getSpecialty() : null)
                 .pageSize(MAX_PAGE_SIZE)
                 .build();
     }

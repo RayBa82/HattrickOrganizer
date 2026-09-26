@@ -147,6 +147,25 @@ public final class LineupTools {
     }
 
     /**
+     * Hattrick has not let the keeper take set pieces since 2008, so a lineup naming him is refused
+     * up front - before apply_lineup touches the live lineup - rather than sent and silently ignored.
+     */
+    static void rejectKeeperAsSetPiecesTaker(JsonObject spec) {
+        if (!spec.has("setPiecesTakerId") || spec.get("setPiecesTakerId").isJsonNull()) {
+            return;
+        }
+        final var takerId = spec.get("setPiecesTakerId").getAsInt();
+        for (final var element : McpJson.reqArray(spec, "positions")) {
+            final var position = element.getAsJsonObject();
+            if (McpJson.reqInt(position, "roleId") == IMatchRoleID.keeper
+                    && McpJson.reqInt(position, "playerId") == takerId) {
+                throw new IllegalArgumentException("setPiecesTakerId " + takerId + " is the keeper "
+                        + "(roleId 100) - a keeper cannot take set pieces. Name an outfield player.");
+            }
+        }
+    }
+
+    /**
      * Rejects a spec that fields an injured or suspended player, unless the caller opted out with
      * {@code allowUnavailable}. Both simulate_lineup and apply_lineup route through here, so the
      * check sits here rather than in either tool.
@@ -220,6 +239,7 @@ public final class LineupTools {
     }
 
     private static void applySpec(Lineup lineup, JsonObject spec) throws McpToolException {
+        rejectKeeperAsSetPiecesTaker(spec);
         rejectUnavailable(spec);
         applyFixture(lineup, spec);
         for (final var element : McpJson.reqArray(spec, "positions")) {

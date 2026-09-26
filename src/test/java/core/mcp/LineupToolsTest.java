@@ -40,6 +40,21 @@ class LineupToolsTest {
     }
 
     @Test
+    void applySpec_rejectsTheKeeperAsSetPiecesTaker() {
+        final var keeperTakes = JsonParser.parseString("""
+                {"positions":[{"roleId":100,"playerId":11},{"roleId":113,"playerId":22}],
+                 "setPiecesTakerId":11}""").getAsJsonObject();
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> LineupTools.scratchLineup(keeperTakes))
+                .withMessageContaining("keeper cannot take set pieces");
+
+        final var outfielderTakes = JsonParser.parseString("""
+                {"positions":[{"roleId":100,"playerId":11},{"roleId":113,"playerId":22}],
+                 "setPiecesTakerId":22}""").getAsJsonObject();
+        LineupTools.rejectKeeperAsSetPiecesTaker(outfielderTakes);   // no throw
+    }
+
+    @Test
     void scratchLineup_placesPlayersAtTheGivenRolesAndSetsTheOrders() throws McpToolException {
         final var spec = JsonParser.parseString("""
                 {"positions":[{"roleId":100,"playerId":11},{"roleId":113,"playerId":22,"behaviour":1}],

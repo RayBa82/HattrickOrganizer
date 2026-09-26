@@ -296,12 +296,32 @@ class TransferToolsTest {
         final var halfWindow = new TransferListing();
         halfWindow.setObservedAt(HODateTime.fromHT("2026-09-01 00:00:00"));
         halfWindow.setDeadline(HODateTime.fromHT("2026-09-03 12:00:00"));   // 2.5 of 5 days
-        assertThat(TransferTools.fallbackClimb(halfWindow)).isCloseTo(1.5, within(0.01));
+        assertThat(TransferTools.fallbackClimb(halfWindow)).isCloseTo(1.25, within(0.01));
 
         final var beyondFullWindow = new TransferListing();
         beyondFullWindow.setObservedAt(HODateTime.fromHT("2026-09-01 00:00:00"));
         beyondFullWindow.setDeadline(HODateTime.fromHT("2026-09-20 00:00:00"));   // far past 5 days
-        assertThat(TransferTools.fallbackClimb(beyondFullWindow)).isEqualTo(2.0);
+        assertThat(TransferTools.fallbackClimb(beyondFullWindow)).isEqualTo(1.5);
+    }
+
+    /** Resolved sales are never blended with asks: enough of them decide alone, fewer stand apart. */
+    @Test
+    void basis_isSalesOnlyFromThreeResolvedSales() {
+        assertThat(TransferTools.basis(0)).isEqualTo("listings");
+        assertThat(TransferTools.basis(1)).isEqualTo("thin_sales_plus_listings");
+        assertThat(TransferTools.basis(2)).isEqualTo("thin_sales_plus_listings");
+        assertThat(TransferTools.basis(3)).isEqualTo("sales");
+    }
+
+    @Test
+    void setPiecesNote_onlyForAHighTakerOrComparablesFarOff() {
+        final var near = java.util.Arrays.asList(5, 6, null, 8);
+        assertThat(TransferTools.setPiecesNote(null, near)).isNull();           // unknown target
+        assertThat(TransferTools.setPiecesNote(6, near)).isNull();              // all within 3
+        assertThat(TransferTools.setPiecesNote(6, java.util.Arrays.asList(5, 10, null)))
+                .contains("1 of 2 comparables");                                // 10 is 4 away
+        assertThat(TransferTools.setPiecesNote(12, List.of(11, 12)))
+                .contains("set-pieces specialist").contains("0 of 2");          // high target alone
     }
 
     @Test
@@ -1078,7 +1098,8 @@ class TransferToolsTest {
         assertThat(query.skillType2()).isEqualTo(TransferSearchQuery.Skill.PASSING);
         assertThat(query.minSkillValue2()).isEqualTo(8);
         assertThat(query.maxSkillValue2()).isEqualTo(10);
-        assertThat(query.specialty()).isEqualTo(PlayerSpeciality.QUICK);
+        // Never the player's own: every live hit becomes a comparable, so a filter would skew the corpus.
+        assertThat(query.specialty()).isNull();
         assertThat(query.validationErrorKey()).isNull();
     }
 
