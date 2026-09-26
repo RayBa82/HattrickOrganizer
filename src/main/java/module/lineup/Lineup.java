@@ -997,9 +997,10 @@ public class Lineup{
 
 	public void setPenaltyTakers(List<MatchLineupPosition> positions) {
 		this.penaltyTakers = new Vector<>(positions);
-		// chpp match order requires exactly 11 penalty takers
+		// chpp match order requires exactly 11 penalty takers. Empty slots keep their own role id:
+		// with roleId 0 they read as some other position, and 11 of them share one DB key.
 		for ( int i=this.penaltyTakers.size(); i<11; i++){
-			this.penaltyTakers.add(new MatchLineupPosition(0,0,IMatchRoleID.NORMAL));
+			this.penaltyTakers.add(new MatchLineupPosition(IMatchRoleID.penaltyTaker1 + i, 0, IMatchRoleID.NORMAL));
 		}
 	}
 
@@ -1489,6 +1490,9 @@ public class Lineup{
 		// future one that does not cannot silently send a scrambled lineup.
 		m_vFieldPositions.sort(Comparator.comparingInt(MatchLineupPosition::getRoleId));
 		m_vBenchPositions.sort(Comparator.comparingInt(MatchLineupPosition::getRoleId));
+		// CHPP wants all 11 kicker slots, id 0 where empty. setPenaltyTakers pads, but a lineup whose
+		// takers were never set would otherwise send an empty array.
+		setPenaltyTakers(penaltyTakers);
 		Gson gson = new GsonBuilder().excludeFieldsWithoutExposeAnnotation().create();
 		return gson.toJson(this);
 	}

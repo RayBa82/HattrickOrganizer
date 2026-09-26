@@ -828,6 +828,21 @@ public final class MatchTools {
      */
 
     private static JsonObject simulateLineup(JsonObject args) throws McpToolException {
+        final var result = scoreLineup(args);
+        // The spec is apply_lineup's, but penalties and team orders do not move a rating.
+        final var ignored = new JsonArray();
+        for (final var field : List.of(LineupOrders.PENALTY_TAKERS, LineupOrders.TEAM_ORDERS)) {
+            if (args.has(field)) {
+                ignored.add(field);
+            }
+        }
+        if (!ignored.isEmpty()) {
+            result.add("ignored", ignored);
+        }
+        return result;
+    }
+
+    private static JsonObject scoreLineup(JsonObject args) throws McpToolException {
         // Argument shape before any model access, so a malformed call is a -32602 rather than
         // "no snapshot loaded" from whichever lookup happened to run first.
         final List<String> missing = java.util.Arrays.stream(OPPONENT_SECTORS)

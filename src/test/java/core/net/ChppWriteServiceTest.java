@@ -257,6 +257,31 @@ class ChppWriteServiceTest {
     }
 
     @Test
+    void sendMatchOrder_withoutSupporter_isItsOwnFailure() {
+        service.matchOrderFailure = new RuntimeException("CHPP Fehler - 6 - setmatchorder is only "
+                + "available for Hattrick Supporters");
+        assertThatExceptionOfType(ChppWriteService.SupporterRequiredException.class)
+                .isThrownBy(() -> service.sendMatchOrderForAgent(
+                        1, core.model.enums.MatchType.LEAGUE, "{}"))
+                .withMessageContaining("SUPPORTER_REQUIRED");
+    }
+
+    /** Hattrick refuses an order with OrdersSet="False", not an error code - that is no "ok". */
+    @Test
+    void sendMatchOrder_ordersNotSetIsAFailure() {
+        service.matchOrderResponse = """
+                <HattrickData><MatchData OrdersSet="False">
+                  <Reason>The match has already started.</Reason>
+                </MatchData></HattrickData>
+                """;
+        assertThatExceptionOfType(ChppWriteService.ChppWriteException.class)
+                .isThrownBy(() -> service.sendMatchOrderForAgent(
+                        1, core.model.enums.MatchType.LEAGUE, "{}"))
+                .withMessageContaining("The match has already started.")
+                .isNotInstanceOf(ChppWriteService.SupporterRequiredException.class);
+    }
+
+    @Test
     void placeBid_parsesTransferDetailsAndTheBidderTeam() throws Exception {
         final var result = service.placeBidForAgent(111, 1_500_000L, null);
         assertThat(result.highestBid()).isEqualTo(1_750_000L);   // raw swedish krona, from <TransferDetails>

@@ -7,6 +7,7 @@ import core.gui.theme.HOIconName;
 import core.gui.theme.ThemeManager;
 import core.model.TranslationFacility;
 import core.model.match.MatchLineupPosition;
+import core.model.player.IMatchRoleID;
 import core.model.player.MatchRoleID;
 import core.model.player.Player;
 import core.util.GUIUtils;
@@ -21,8 +22,11 @@ import java.awt.*;
 import java.awt.event.ItemListener;
 import java.io.Serial;
 import java.text.NumberFormat;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
-import java.util.*;
 
 public class PenaltyTakersView extends JPanel {
 
@@ -41,6 +45,8 @@ public class PenaltyTakersView extends JPanel {
 	private JCheckBox showReserveCheckBox;
 	private JCheckBox showOthersCheckBox;
 	private List<PenaltyTaker> players;
+	/** True while the takers table is filled from the lineup, so that fill is not written back. */
+	private boolean loadingLineup;
 
 	public PenaltyTakersView() {
 		initComponents();
@@ -68,6 +74,15 @@ public class PenaltyTakersView extends JPanel {
 
 	public void setLineup(Lineup lineup) {
 		this.lineup = lineup;
+		loadingLineup = true;
+		try {
+			loadTakers();
+		} finally {
+			loadingLineup = false;
+		}
+	}
+
+	private void loadTakers() {
 		reset();
 		if ( lineup == null) return;
 
@@ -212,6 +227,9 @@ public class PenaltyTakersView extends JPanel {
 		this.takersTable = new JTable();
 		this.takersTable.setRowHeight(UIConstants.TABLE_ROW_HEIGHT);
 		this.takersTable.setModel(new PenaltyTakersTableModel());
+		// Every edit goes into the lineup at once: a match order sent while this tab is still open
+		// must carry the takers shown here, not the ones from before the edit.
+		this.takersTable.getModel().addTableModelListener(e -> writeTakersToLineup());
 
 		inLineupColumn = this.takersTable.getColumnModel().getColumn(0);
 		inLineupColumn.setCellRenderer(inLineupRenderer);
@@ -512,6 +530,19 @@ public class PenaltyTakersView extends JPanel {
 
 		getTakersTableModel().setPenaltyTakers(takers);
 		getPlayersTableModel().removeAll(takers);
+	}
+
+	private void writeTakersToLineup() {
+		if (loadingLineup || lineup == null) {
+			return;
+		}
+		List<PenaltyTaker> takers = getPenaltyTakers();
+		List<MatchLineupPosition> positions = new ArrayList<>(takers.size());
+		for (int i = 0; i < takers.size(); i++) {
+			positions.add(new MatchLineupPosition(IMatchRoleID.penaltyTaker1 + i,
+					takers.get(i).getPlayer().getPlayerId(), IMatchRoleID.NORMAL));
+		}
+		lineup.setPenaltyTakers(positions);
 	}
 
 	private String getLangStr(String key) {

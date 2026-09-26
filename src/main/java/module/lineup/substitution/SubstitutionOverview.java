@@ -11,6 +11,7 @@ import module.lineup.Lineup;
 import module.lineup.substitution.model.MatchOrderType;
 import module.lineup.substitution.model.Substitution;
 import module.lineup.substitution.plausibility.Error;
+import module.lineup.substitution.plausibility.OrderLimits;
 import module.lineup.substitution.plausibility.PlausibilityCheck;
 import module.lineup.substitution.plausibility.Problem;
 import module.lineup.substitution.plausibility.Uncertainty;
@@ -85,36 +86,19 @@ public class SubstitutionOverview extends JPanel {
 		SubstitutionsTableModel model = (SubstitutionsTableModel) this.substitutionTable.getModel();
 		if ( this.lineup == null) return;
 		model.setData(this.lineup.getSubstitutionList());
-
-		// Max order is 5 + the level of the tactical assistant.
-		int maxOrders = 5 + HOVerwaltung.instance().getModel().getClub().getTacticalAssistantLevels();
-		int nSubstitutions = 0;	// no limit
-		int nManMarkings = 0;	// limit 1
-		int nOther = 0;			// limit maxOrders - nSubstitutions
-
+		final var limits = new OrderLimits(HOVerwaltung.instance().getModel().getClub().getTacticalAssistantLevels());
 		for (var row : model.rows) {
-			var subs = row.getSubstitution();
-			switch (subs.getOrderType()) {
-				case SUBSTITUTION -> nSubstitutions++;
-				case MAN_MARKING -> nManMarkings++;
-				default -> nOther++;
-			}
-			row.setProblem(PlausibilityCheck.checkForProblem(this.lineup, row.getSubstitution()));
-			if ( nSubstitutions+nOther>maxOrders){
-				row.setProblem(Error.TOO_MANY_ORDERS);
-			}
-			else if ( nManMarkings > 1){
-				row.setProblem(Error.TOO_MANY_ORDERS);
-			}
+			final var tooMany = limits.add(row.getSubstitution());
+			row.setProblem(tooMany != null ? tooMany
+					: PlausibilityCheck.checkForProblem(this.lineup, row.getSubstitution()));
 		}
 		detailsView.refresh();
 		((SubstitutionsTableModel) this.substitutionTable.getModel()).sort();
 
-		boolean enableNewMatchOrders = maxOrders-nOther-nSubstitutions>0;
-		this.behaviorAction.setEnabled(enableNewMatchOrders);
-		this.positionSwapAction.setEnabled(enableNewMatchOrders);
-		this.substitutionAction.setEnabled(enableNewMatchOrders);
-		this.manMarkingAction.setEnabled(nManMarkings<1);
+		this.behaviorAction.setEnabled(limits.canAddOrder());
+		this.positionSwapAction.setEnabled(limits.canAddOrder());
+		this.substitutionAction.setEnabled(limits.canAddSubstitution());
+		this.manMarkingAction.setEnabled(limits.canAddManMarking());
 		this.moveUpAction.setEnabled(isMoveEnabled(true));
 		this.moveDownAction.setEnabled(isMoveEnabled(false));
 	}

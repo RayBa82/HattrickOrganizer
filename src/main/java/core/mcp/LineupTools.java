@@ -6,6 +6,7 @@ import core.db.DBManager;
 import core.gui.HOMainFrame;
 import core.gui.theme.GroupTeamFactory;
 import core.model.HOModel;
+import core.model.match.MatchLineupPosition;
 import core.model.match.Weather;
 import core.model.player.IMatchRoleID;
 import core.model.player.Player;
@@ -44,7 +45,8 @@ public final class LineupTools {
     public static List<McpTool> tools() {
         return List.of(
                 new McpTool("get_lineup",
-                        "The lineup currently set in HO, with its sector ratings and formation. "
+                        "The lineup currently set in HO, with its sector ratings and formation, "
+                                + "penalty takers (with strength) and team orders. "
                                 + "assumptions.weather is the weather they were scored under. "
                                 + "simulate_lineup scores a hypothetical one instead.",
                         McpTool.schema(new JsonObject()),
@@ -54,8 +56,8 @@ public final class LineupTools {
                                 + "would upload; sends nothing to Hattrick. HO can refuse a "
                                 + "position - the Lineup tab's assistant filter unfields a player it "
                                 + "hides - so the returned lineup is what HO holds afterwards, not "
-                                + "an echo. Read notApplied before reporting the lineup as set. "
-                                + "matchId / weather set its fixture and weather.",
+                                + "an echo. Read notApplied and orderWarnings before reporting it "
+                                + "as set. penaltyTakers / teamOrders replace the whole list.",
                         lineupSchema(),
                         LineupTools::apply),
                 new McpTool("set_player_group",
@@ -80,7 +82,9 @@ public final class LineupTools {
                                 + "leaves the machine and OVERWRITES the order Hattrick holds for "
                                 + "that match. Build it with apply_lineup and re-read it with "
                                 + "get_lineup first. League matches are matchType 1; take other ids "
-                                + "from get_matches.",
+                                + "from get_matches. Returns the order as sent. Without Hattrick "
+                                + "Supporter: status supporterRequired, nothing sent, wouldSend to "
+                                + "enter by hand.",
                         McpTool.schema(McpTool.properties(
                                         "matchId", McpTool.prop("integer", "the Hattrick match id"),
                                         "matchType", McpTool.prop("integer",
@@ -99,24 +103,39 @@ public final class LineupTools {
                     + "; take the matchType id from get_matches (league matches are 1).");
         }
         final var model = McpJson.model();
+        final var benchRoleIds = new ArrayList<Integer>();
         // apply_lineup mutates the live Lineup on the EDT, so serialise it there too.
         final var orderString = onEdt(() -> {
+            final var lineup = model.getCurrentLineup();
             final var wrapper = new JsonObject();
-            wrapper.addProperty("order", model.getCurrentLineup().toJson());
+            wrapper.addProperty("order", lineup.toJson());
+            // toJson sends the bench sorted by roleId; the echo names the slots in that order.
+            lineup.getAllPositions().stream().map(MatchLineupPosition::getRoleId)
+                    .filter(r -> r >= IMatchRoleID.startReserves && r <= IMatchRoleID.substXT2)
+                    .sorted().forEach(benchRoleIds::add);
             return wrapper;
         }).get("order").getAsString();
+        final var echo = LineupOrders.echo(orderString, benchRoleIds);
 
-        final String response;
+        final var out = new JsonObject();
+        out.addProperty("matchId", matchId);
         try {
-            response = ChppWriteService.instance()
-                    .sendMatchOrderForAgent(matchId, matchType, orderString);
+            ChppWriteService.instance().sendMatchOrderForAgent(matchId, matchType, orderString);
+        } catch (ChppWriteService.SupporterRequiredException e) {
+            // Not a failure to retry: the order is fine, the account cannot upload it. The echo is
+            // what the user has to enter on Hattrick by hand.
+            out.addProperty("status", "supporterRequired");
+            out.addProperty("sent", false);
+            out.addProperty("message", e.getMessage() + " Nothing was sent; wouldSend is the order "
+                    + "to enter on Hattrick by hand.");
+            out.add("wouldSend", echo);
+            return out;
         } catch (ChppWriteService.ChppWriteException e) {
             throw new McpToolException(e.getMessage());
         }
-        final var out = new JsonObject();
         out.addProperty("status", "ok");
-        out.addProperty("matchId", matchId);
-        out.addProperty("response", response);
+        out.addProperty("sent", true);
+        out.add("order", echo);
         return out;
     }
 
@@ -130,6 +149,8 @@ public final class LineupTools {
                         "allowUnavailable", McpTool.prop("boolean", "score the lineup even though it fields an injured or suspended player; rejected by default"),
                         "captainId", McpTool.prop("integer", "player id of the captain"),
                         "setPiecesTakerId", McpTool.prop("integer", "player id of the set pieces taker"),
+                        LineupOrders.PENALTY_TAKERS, McpTool.prop("array", LineupOrders.PENALTY_TAKERS_DOC),
+                        LineupOrders.TEAM_ORDERS, McpTool.prop("array", LineupOrders.TEAM_ORDERS_DOC),
                         "matchId", McpTool.prop("integer", "score for this stored fixture: its location "
                                 + "and HO's stored weather forecast (get_match_weather refreshes it); "
                                 + "default HO's next upcoming match"),
@@ -285,12 +306,25 @@ public final class LineupTools {
     private static JsonObject apply(JsonObject spec) throws McpToolException {
         final var model = McpJson.model();
         final var ratingModel = McpJson.privateRatingModel();
+        // Parsed and checked before the live lineup is touched, like the positions' own checks.
+        final var takers = LineupOrders.parsePenaltyTakers(spec, model);
+        final var orders = LineupOrders.parseTeamOrders(spec, model,
+                model.getClub() != null ? model.getClub().getTacticalAssistantLevels() : 0);
+        if (!McpJson.optBool(spec, "allowUnavailable", false)) {
+            LineupOrders.rejectUnavailable(takers, orders, model);
+        }
         return onEdt(() -> {
             // The live lineup is owned by its MatchLineupTeam - HOModel.setLineup takes a
             // MatchLineupTeam, not a Lineup - so mutate it in place and persist through the same
             // path the Lineup tab uses.
             final var team = model.getCurrentLineupTeam();
             applySpec(team.getLineup(), spec);
+            if (takers != null) {
+                team.getLineup().setPenaltyTakers(takers);
+            }
+            if (orders != null) {
+                team.getLineup().setSubstitionList(orders);
+            }
             // Give the Lineup tab its say before storing or reporting anything. Its assistant
             // filters do not merely hide a player: PlayerPositionPanel.setPlayersList clears any
             // slot whose occupant the active filter would not offer, so a player placed here can
@@ -303,6 +337,10 @@ public final class LineupTools {
             }
             model.storeLineup(team);
             final var result = describe(team.getLineup(), ratingModel);
+            final var orderWarnings = LineupOrders.warnings(team.getLineup(), model);
+            if (!orderWarnings.isEmpty()) {
+                result.add("orderWarnings", orderWarnings);
+            }
             final var refused = refusedByHo(team.getLineup(), spec);
             if (!refused.isEmpty()) {
                 result.add("notApplied", refused);
@@ -439,6 +477,11 @@ public final class LineupTools {
         final var json = new JsonObject();
         final var positions = new com.google.gson.JsonArray();
         for (final var position : lineup.getAllPositions()) {
+            // Penalty takers have their own list below; roleId 0 is an empty kicker slot's padding.
+            final var roleId = position.getRoleId();
+            if (roleId == 0 || (roleId >= IMatchRoleID.penaltyTaker1 && roleId <= IMatchRoleID.penaltyTaker11)) {
+                continue;
+            }
             final var positionJson = new JsonObject();
             positionJson.addProperty("roleId", position.getRoleId());
             positionJson.addProperty("playerId", position.getPlayerId());
@@ -450,6 +493,9 @@ public final class LineupTools {
         json.addProperty("attitude", lineup.getAttitude());
         json.addProperty("captainId", lineup.getCaptain());
         json.addProperty("setPiecesTakerId", lineup.getKicker());
+        json.add(LineupOrders.PENALTY_TAKERS, LineupOrders.penaltyTakers(lineup,
+                core.model.HOVerwaltung.instance().getModel(), ratingModel));
+        json.add(LineupOrders.TEAM_ORDERS, LineupOrders.teamOrders(lineup.getSubstitutionList()));
         // styleOfPlay is settable on Lineup but readable only from MatchLineupTeam, so it is an
         // input here and not part of the output.
         if (ratingModel != null) {

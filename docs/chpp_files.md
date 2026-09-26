@@ -264,6 +264,6 @@ HO issues these write actions on behalf of the managed team (exposed over MCP, s
 | file | version | actionType | purpose |
 |---|---|---|---|
 | `training` | 2.2 | `setTraining` | set senior training type / intensity (0-100) / stamina share (5-100); `teamId` required, needs the `set_training` scope |
-| `matchorders` | 3.0 | `setmatchorder` | upload the match order for an upcoming game (pre-existing) |
+| `matchorders` | 3.0 | `setmatchorder` | upload the match order for an upcoming game (pre-existing); carries positions, `kickers` (always 11 slots, id 0 where empty) and `substitutions`. **Needs Supporter**, although the CHPP matchorders docs do not say so: without it Hattrick answers CHPP error 6, "setmatchorder is only available for Hattrick Supporters". A refused order can also come back as `OrdersSet="False"` with a `Reason` instead of an error code |
 | `challenges` | 1.6 | `view` / `challengeable` / `challenge` / `accept` / `decline` / `withdraw` | list and manage friendly challenges; `view` and `challengeable` are reads |
 | `playerdetails` | 3.2 | `placeBid` | place a transfer bid (`bidAmount` / `maxBidAmount` are Money in SEK; needs the `place_bid` scope and Supporter) |

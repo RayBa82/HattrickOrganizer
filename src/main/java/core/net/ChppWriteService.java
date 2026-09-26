@@ -15,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * The network and parse core of the CHPP write families HO exposes over MCP: set training, match
@@ -75,6 +76,18 @@ public class ChppWriteService {
     }
 
     /** {@link Connector#lastError()}, made readable, if there is one, else a pointer to the log. */
+    private static ChppWriteException matchOrderRejected(String raw) {
+        final var error = ChppError.parse(raw);
+        var said = raw != null ? raw : "no answer, see HO's log.";
+        if (error != null) {
+            said = error.readable();
+        }
+        final var message = "Hattrick rejected the match order: " + said;
+        return error != null && error.reason() == ChppError.Reason.SUPPORTER_REQUIRED
+                ? new SupporterRequiredException(message)
+                : new ChppWriteException(null, message);
+    }
+
     private static String reason() {
         final var cause = Connector.instance().lastError();
         return cause == null ? "no answer, see HO's log." : ChppError.readable(cause);
@@ -351,6 +364,22 @@ public class ChppWriteService {
 
     // ===================== match order =====================
 
+    /**
+     * Hattrick refused a write because the account HO is logged in with has no Supporter (CHPP
+     * error 6). Nothing was changed at Hattrick. setmatchorder is one of these, although the CHPP
+     * matchorders docs do not say so.
+     */
+    public static class SupporterRequiredException extends ChppWriteException {
+        public SupporterRequiredException(String message) {
+            super(null, message);
+        }
+    }
+
+    /** setmatchorder answers a refused order with OrdersSet="False" and a Reason, not an error code. */
+    private static final Pattern ORDERS_NOT_SET =
+            Pattern.compile("OrdersSet\\s*=\\s*\"false\"", Pattern.CASE_INSENSITIVE);
+    private static final Pattern ORDERS_REASON = Pattern.compile("<Reason>(.*?)</Reason>", Pattern.DOTALL);
+
     public String sendMatchOrderForAgent(int matchId, MatchType matchType, String orderString)
             throws ChppWriteException {
         if (matchType == null) {
@@ -360,16 +389,19 @@ public class ChppWriteService {
         try {
             final var response = fetchMatchOrder(matchId, matchType, orderString);
             if (response == null || response.isBlank()) {
-                throw new ChppWriteException(null,
-                        "Hattrick rejected the match order: " + reason());
+                throw matchOrderRejected(Connector.instance().lastError());
+            }
+            if (ORDERS_NOT_SET.matcher(response).find()) {
+                final var reason = ORDERS_REASON.matcher(response);
+                throw new ChppWriteException(null, "Hattrick did not set the match order: "
+                        + (reason.find() ? reason.group(1).trim() : "it gave no reason."));
             }
             return response;
         } catch (ChppWriteException e) {
             throw e;
         } catch (Exception e) {
             HOLogger.instance().log(ChppWriteService.class, e);
-            throw new ChppWriteException(null,
-                    "Hattrick rejected the match order: " + ChppError.readable(e.getMessage()));
+            throw matchOrderRejected(e.getMessage());
         }
     }
 
