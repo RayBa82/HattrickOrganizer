@@ -202,6 +202,34 @@ hand-edit them for anything but a new key, since `poeditorPull` overwrites them 
 `createLanguageFileList` regenerates `language/ListLanguages.txt`, which is how HO discovers the
 available languages at runtime.
 
+### MCP server
+
+`core.mcp` exposes HO's data to AI agents over MCP: `McpHttpServer` serves JSON-RPC, and the
+tools live in `TeamTools`, `MatchTools`, `LineupTools`, `TrainingTools` and `TransferTools`. Each is
+an `McpTool(name, description, schema, handler)`. `McpServerToolsTest` pins the tool count and a
+400-char cap on descriptions.
+
+**Every tool must be token-efficient. This is a project-wide rule, not a per-tool preference.**
+The point of the server is that an agent can learn everything about the team, and that only
+works if no single call floods its context.
+
+- **Compact by default, detail on request.** Return what the question needs. Put bulky parts
+  behind explicit arguments (`full`, `include…`, per-id filters). Lists page with `limit`/`offset`
+  and a sane default and maximum, and report `count`/`returned`/`offset`.
+- **Budget: 10,000 characters per tool response**, measured on the serialized JSON text a tool
+  call returns (roughly 2.5k tokens). Design defaults so a normal call stays well under it.
+- **All or nothing when over budget.** A response larger than the per-call budget is never cut
+  off partway: no half lists, no clipped strings, no JSON truncated mid-structure. Either the
+  whole payload goes out, or none of it does.
+- **Over budget, return next to nothing plus a hint.** Replace the payload with a minimal
+  envelope: `truncated: true`, how big the answer would have been, and a `hint` naming the exact
+  arguments of *this* tool that get the data efficiently. Example:
+  `{"truncated": true, "wouldBeChars": 262144, "hint": "page with limit/offset (max 200) or
+  filter by skills/ageMin/ageMax/specialty/onlyOpen; pass full only for a few rows"}`.
+  A generic "too large" is not a hint.
+- **New or changed tools** ship with a test for the over-budget path: the envelope comes back,
+  nothing partial leaks through, and the hint names real arguments of that tool.
+
 ### Where user data lives
 
 `UserManager.setDBParentFolder()` picks the location, and it depends on how HO was launched.

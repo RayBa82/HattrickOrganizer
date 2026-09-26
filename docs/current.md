@@ -1,5 +1,11 @@
 # Transfer search tab — current state
 
+> **Next up (start here): enforce the MCP token budget.** The rule is in AGENTS.md, "MCP server":
+> 10,000 characters of serialized JSON per tool response, all or nothing. Over budget, return a
+> `truncated` envelope with a hint naming the tool's own paging/filter arguments. It is
+> documented but not implemented; the user asked to continue with it next session. Plan and
+> choke point are under "Open: MCP token budget" in the "MCP trim" section below.
+
 Working notes from the session that implemented `docs/superpowers/plans/2026-08-30-transfer-search-tab.md`
 on branch `macos-fixes`. Covers what shipped, what is still open, and the CHPP findings that were
 expensive to dig up.
@@ -3023,6 +3029,24 @@ Follow-ups from the live test:
   - Set pieces still doesn't change the number; the user's view is one specialist taker per team.
     `setPiecesNote` warns when the target's SP is 12 or more, or when comparables sit 4+ levels
     away. Both thresholds are placeholders. A profile may pass `setPieces`.
+- `estimate_market_value(profile)` rejects an outfield profile with fewer than three positional
+  skills (`requireThirdSkill`; an explicit 0 counts, keeper profiles are exempt). The check runs
+  before the record-a-sale path.
+  - Treated as 0, an omitted third skill floored every weight and turned the median unweighted.
+  - Treated as unknown, it let all-rounders with a strong third skill count fully. Gkatsilakis
+    went from EUR 787k with winger 6 to EUR 1.08M without it. Either way the estimate inflates.
+- Asks/bids below 10,000 SEK (~EUR 1,000, a guess) are dropped from the listings figure.
+- **Open: MCP token budget (rule in AGENTS.md, "MCP server").** Every tool response must fit a
+  per-call budget, all or nothing. Over budget, the tool returns only a `truncated` envelope with
+  a hint naming its own paging/filter arguments.
+  - Not enforced in code yet. Today only `list_scout` pages; other tools can still return
+    unbounded payloads (`list_scout` was ~260k chars before paging).
+  - The natural choke point is `McpHttpServer.toolsCall`, where every result is serialized
+    (`GSON.toJson(tool.handler().call(arguments))`). Measure there and swap in the envelope; each
+    tool supplies its own hint.
+  - Budget decided by the user: 10,000 characters of serialized JSON per response. Next, once
+    implementation is greenlit: enforce it at that choke point, then audit every tool's defaults
+    against it, starting with the list-shaped ones.
 - `apply_lineup` / `simulate_lineup` reject a `setPiecesTakerId` who plays roleId 100
   (`LineupTools.rejectKeeperAsSetPiecesTaker`, called before the live lineup is touched).
 - Who takes over from a departed set-pieces taker, first or second on the penalty list? The DB

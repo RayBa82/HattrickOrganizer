@@ -341,6 +341,31 @@ public final class TransferTools {
         return ageYears < VETERAN_AGE_CUTOFF ? MID_AGE_SIGMA_DAYS : VETERAN_AGE_SIGMA_DAYS;
     }
 
+    /** ponytail: a guessed floor (~EUR 1,000) against joke asks - an ask/bid below it is dropped from listings. */
+    static final long MIN_PLAUSIBLE_PRICE_SEK = 10_000;
+
+    /**
+     * A profile must name its third-best positional skill (an explicit 0 counts). Omitted, it is
+     * neither a real 0 nor safely "unknown": as 0 it floors every comparable's weight, as unknown
+     * it lets all-rounders with a strong third skill and far higher prices count fully - both
+     * inflate the estimate. Checked before the record-a-sale path too, so a two-skill profile never
+     * enters the corpus with fabricated zeros either. A keeper profile is exempt: his outfield
+     * skills are noise, see comparableQuery.
+     */
+    static void requireThirdSkill(JsonObject profile) throws McpToolException {
+        final var skills = profile.getAsJsonObject("skills");
+        if (skills.size() >= 3) {
+            return;
+        }
+        final var top = skills.entrySet().stream()
+                .max(Comparator.comparingInt((Map.Entry<String, com.google.gson.JsonElement> e) -> e.getValue().getAsInt()))
+                .map(Map.Entry::getKey).orElse("");
+        if (!"keeper".equals(top)) {
+            throw new McpToolException("profile.skills needs the third-best positional skill too (0 "
+                    + "counts) - without it all-rounders inflate the estimate.");
+        }
+    }
+
     /** The third-highest value, or null if fewer than three non-null values are present - a listing
      * with no skill data at all (a bid-only observation) rather than a real, low third skill. */
     static Integer thirdHighestOrNull(java.util.Collection<Integer> levels) {
@@ -625,6 +650,7 @@ public final class TransferTools {
         final Player player;
         if (hasProfile) {
             player = playerFromProfile(profile);
+            requireThirdSkill(profile);
         } else {
             final var playerId = McpJson.reqInt(args, "playerId");
             player = McpJson.model().getCurrentPlayer(playerId);
@@ -713,7 +739,7 @@ public final class TransferTools {
                 .map(l -> new PricedComparable(l, Math.max(l.getAskingPrice(), l.getHighestBid()),
                         comparableWeightBreakdown(l, playerAgeDays, ageSigma, playerCSkill, playerChar,
                                 targetSpecialty, positionGroup).combined()))
-                .filter(pc -> pc.price() > 0)
+                .filter(pc -> pc.price() >= MIN_PLAUSIBLE_PRICE_SEK)
                 .sorted(Comparator.comparingLong(PricedComparable::price))
                 .toList();
 

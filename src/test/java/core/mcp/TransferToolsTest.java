@@ -304,6 +304,21 @@ class TransferToolsTest {
         assertThat(TransferTools.fallbackClimb(beyondFullWindow)).isEqualTo(1.5);
     }
 
+    /** Omitted is neither 0 nor safely unknown - both inflate the estimate - so it is refused. */
+    @Test
+    void requireThirdSkill_rejectsAnOutfieldProfileWithFewerThanThreeSkills() throws McpToolException {
+        final var twoGiven = JsonParser.parseString("""
+                {"skills":{"playmaking":11,"passing":10}}""").getAsJsonObject();
+        assertThatExceptionOfType(McpToolException.class)
+                .isThrownBy(() -> TransferTools.requireThirdSkill(twoGiven))
+                .withMessageContaining("third-best positional skill");
+
+        TransferTools.requireThirdSkill(JsonParser.parseString("""
+                {"skills":{"playmaking":11,"passing":10,"winger":0}}""").getAsJsonObject());  // explicit 0 counts
+        TransferTools.requireThirdSkill(JsonParser.parseString("""
+                {"skills":{"keeper":13}}""").getAsJsonObject());                              // keeper exempt
+    }
+
     /** Resolved sales are never blended with asks: enough of them decide alone, fewer stand apart. */
     @Test
     void basis_isSalesOnlyFromThreeResolvedSales() {
