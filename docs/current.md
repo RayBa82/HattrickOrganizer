@@ -2930,3 +2930,25 @@ captured docs.
   Type ids 1-11 mapped to names; Text / ObjectID meanings per type are in `docs/raw/chpp/bookmarks.md`.
 
 Also untested against live CHPP.
+
+### First live test by the hattrick session (2026-09-26)
+
+Working: selling, get_match_events, get_player_transfer_history, get_bookmarks, get_training_events,
+otherUpcoming. Fixed after it:
+
+- **check_challengeable** returned `challengeable: null` for all four teams asked. Cause: the
+  same doc-vs-reality casing as currentbids' `TrackingTypeID`. `parseChallengeable` now also
+  accepts `TeamId` / `UserID`; the live retest returns real booleans.
+- Team-level events (TACTIC_TYPE_*, ORGANIZATION_BREAKS, possession, REORGANIZE, ...) carry
+  small event values (110, 88, ...) in the player fields. `get_match_events` now keeps a player id
+  only when it has a stored name. `XMLMatchdetailsParser` names an id only if it is in one of the
+  two lineups. Side effect: events at minute 0 never get names, so their player fields are null.
+- **get_match_events:** weather / venue events carry non-team data in SubjectTeamID (e.g. 72500).
+  teamId / playerId / objectPlayerId are now null unless the team is one of the two sides.
+  `assistingPlayerId` was renamed `objectPlayerId`: Hattrick's ObjectPlayerID is often the
+  other side's player, not an assist.
+- **get_team.staff:** the `NONE` entry is the head coach (`XMLStaffParser` files him as
+  StaffType 0); it is now `HEAD_COACH`. `cost` was raw SEK. It is now `weeklyCost` in the
+  user's currency (CHPP Cost is per week).
+- **selling missing two listed players:** the parser drops no BidItem, so the missing players are
+  absent from Hattrick's own answer. Not a code issue unless the listing is confirmed.

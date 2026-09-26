@@ -78,6 +78,36 @@ class MatchToolsTest {
         assertThat(events.get(2).getAsJsonObject().get("outcome").getAsString()).isEqualTo("miss");
     }
 
+    @Test
+    void matchEventsJson_nullsTeamAndPlayersOnEventsOfNeitherSide() {
+        final var venue = event(0, 30, 72500);   // weather/venue event, SubjectTeamID is not a team
+        venue.setPlayerId(99);
+        venue.setAssistingPlayerId(98);
+        final var row = MatchTools.matchEventsJson(1, 2, List.of(venue))
+                .getAsJsonArray("events").get(0).getAsJsonObject();
+        assertThat(row.get("teamId").isJsonNull()).isTrue();
+        assertThat(row.get("playerId").isJsonNull()).isTrue();
+        assertThat(row.get("objectPlayerId").isJsonNull()).isTrue();
+    }
+
+    @Test
+    void matchEventsJson_keepsOnlyPlayerIdsHoMatchedToALineup() {
+        final var tactic = event(10, 331, 1);   // team-level: 110 is event data, HO found no name
+        tactic.setPlayerId(110);
+        tactic.setPlayerName("");
+        final var goal = event(20, 101, 1);
+        goal.setPlayerId(515791597);
+        goal.setPlayerName("Delura");
+        goal.setAssistingPlayerId(88);
+
+        final var events = MatchTools.matchEventsJson(1, 2, List.of(tactic, goal)).getAsJsonArray("events");
+        assertThat(events.get(0).getAsJsonObject().get("playerId").isJsonNull()).isTrue();
+        final var scorer = events.get(1).getAsJsonObject();
+        assertThat(scorer.get("playerId").getAsInt()).isEqualTo(515791597);
+        assertThat(scorer.get("playerName").getAsString()).isEqualTo("Delura");
+        assertThat(scorer.get("objectPlayerId").isJsonNull()).isTrue();
+    }
+
     // ---- check_challengeable -------------------------------------------------------------------
 
     private static final java.time.LocalDate TODAY = java.time.LocalDate.of(2026, 9, 26);

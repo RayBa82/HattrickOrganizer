@@ -60,16 +60,23 @@ public class XMLChallengesParser {
         for (int i = 0; i < items.getLength(); i++) {
             try {
                 final var o = (Element) items.item(i);
+                // Tolerant of casing: real CHPP responses do not always match the docs
+                // (currentbids writes TrackingTypeID where the docs say TrackingTypeId).
                 result.add(new Challengeable(
-                        parseInt(XMLManager.xmlValue(o, "TeamID")),
+                        parseInt(anyCase(o, "TeamID", "TeamId")),
                         XMLManager.xmlValue(o, "TeamName"),
-                        parseInt(XMLManager.xmlValue(o, "UserId")),
-                        "true".equalsIgnoreCase(XMLManager.xmlValue(o, "IsChallengeable"))));
+                        parseInt(anyCase(o, "UserId", "UserID")),
+                        "true".equalsIgnoreCase(anyCase(o, "IsChallengeable", "IsChallengable"))));
             } catch (RuntimeException e) {
                 HOLogger.instance().log(XMLChallengesParser.class, e);
             }
         }
         return result;
+    }
+
+    private static String anyCase(Element e, String name, String alt) {
+        final var v = XMLManager.xmlValue(e, name);
+        return v == null || v.isBlank() ? XMLManager.xmlValue(e, alt) : v;
     }
 
     private static List<Challenge> parseList(Element root, String containerTag, String itemTag) {

@@ -77,7 +77,8 @@ public final class MatchTools {
                 new McpTool("get_match_events",
                         "The event list of one played match, from the stored match details: per "
                                 + "team goals, chances, missed chances and special events, then every "
-                                + "event (minute, event name, team, player, goal/miss, specialEvent). "
+                                + "event (minute, event name, team, player, objectPlayerId = other "
+                                + "player involved, may be the opponent, goal/miss, specialEvent). "
                                 + "Same matchId / matchType as get_match. Local, no CHPP request.",
                         McpTool.schema(McpTool.properties(
                                         "matchId", McpTool.prop("integer", "the Hattrick match id"),
@@ -467,22 +468,42 @@ public final class MatchTools {
         json.add("away", eventCounts(awayTeamId, events));
         final var rows = new JsonArray();
         for (final var e : events) {
-            final var row = new JsonObject();
-            row.addProperty("minute", e.getMinute());
-            row.addProperty("eventId", e.getiMatchEventID());
-            row.addProperty("event", e.getMatchEventID() == null ? null : e.getMatchEventID().name());
-            row.addProperty("teamId", e.getTeamID());
-            row.addProperty("playerId", e.getPlayerId());
-            row.addProperty("playerName", e.getPlayerName());
-            row.addProperty("assistingPlayerId", e.getAssistingPlayerId());
-            if (e.isGoalEvent() || e.isNonGoalEvent()) {
-                row.addProperty("outcome", e.isGoalEvent() ? "goal" : "miss");
-            }
-            row.addProperty("specialEvent", e.getMatchEventID() != null && e.isSE());
-            rows.add(row);
+            rows.add(eventRow(e, e.getTeamID() == homeTeamId || e.getTeamID() == awayTeamId));
         }
         json.add("events", rows);
         return json;
+    }
+
+    /**
+     * {@code side}: the event's team is one of the two. Weather / venue events reuse SubjectTeamID
+     * for other data, so the team and player fields only count when it is.
+     */
+    private static JsonObject eventRow(MatchEvent e, boolean side) {
+        final var row = new JsonObject();
+        row.addProperty("minute", e.getMinute());
+        row.addProperty("eventId", e.getiMatchEventID());
+        row.addProperty("event", e.getMatchEventID() == null ? null : e.getMatchEventID().name());
+        // Team-level events (tactics, possession, ...) carry event values in the player fields.
+        // XMLMatchdetailsParser names an id only when it is in one of the two lineups, so a
+        // stored name is what tells a real player from such a value.
+        final var player = side && isPlayer(e.getPlayerId(), e.getPlayerName());
+        row.addProperty("teamId", side ? e.getTeamID() : null);
+        row.addProperty("playerId", player ? e.getPlayerId() : null);
+        row.addProperty("playerName", player ? e.getPlayerName() : null);
+        // Hattrick's ObjectPlayerID: the other player involved - the passer on some goals, but
+        // often a player of the other side (the defender beaten, the keeper). Not an assist.
+        final var object = side && isPlayer(e.getAssistingPlayerId(), e.getAssistingPlayerName());
+        row.addProperty("objectPlayerId", object ? e.getAssistingPlayerId() : null);
+        row.addProperty("objectPlayerName", object ? e.getAssistingPlayerName() : null);
+        if (e.isGoalEvent() || e.isNonGoalEvent()) {
+            row.addProperty("outcome", e.isGoalEvent() ? "goal" : "miss");
+        }
+        row.addProperty("specialEvent", e.getMatchEventID() != null && e.isSE());
+        return row;
+    }
+
+    private static boolean isPlayer(int id, String name) {
+        return id > 0 && name != null && !name.isBlank();
     }
 
     private static JsonObject eventCounts(int teamId, List<MatchEvent> events) {

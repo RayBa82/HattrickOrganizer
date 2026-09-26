@@ -122,6 +122,17 @@ class XMLChallengesParserTest {
     }
 
     @Test
+    void parseChallengeable_toleratesTeamIdAndUserIdCasing() {
+        final var xml = """
+                <HattrickData><ChallengeableResult><Opponent>
+                <IsChallengeable>True</IsChallengeable><UserID>42</UserID>
+                <TeamId>1877</TeamId><TeamName>Rivals FC</TeamName>
+                </Opponent></ChallengeableResult></HattrickData>""";
+        assertThat(XMLChallengesParser.parseChallengeable(xml))
+                .containsExactly(new XMLChallengesParser.Challengeable(1877, "Rivals FC", 42, true));
+    }
+
+    @Test
     void parse_garbageIsTwoEmptyLists() {
         final var lists = XMLChallengesParser.parse("not xml");
         assertThat(lists.outgoing()).isEmpty();

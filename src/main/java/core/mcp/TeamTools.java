@@ -316,9 +316,11 @@ public final class TeamTools {
             for (final var member : model.getStaff()) {          // core.model.StaffMember
                 final var staffJson = new JsonObject();
                 staffJson.addProperty("name", member.getName());
-                staffJson.addProperty("type", String.valueOf(member.getStaffType()));
+                // XMLStaffParser files the head coach as StaffType 0 (NONE)
+                staffJson.addProperty("type", member.getStaffType() == core.model.StaffType.NONE
+                        ? "HEAD_COACH" : String.valueOf(member.getStaffType()));
                 staffJson.addProperty("level", member.getLevel());
-                staffJson.addProperty("cost", member.getCost());
+                staffJson.addProperty("weeklyCost", McpJson.money(member.getCost()));
                 staff.add(staffJson);
             }
         }
