@@ -48,6 +48,7 @@ public class PlayerPositionPanel extends ImagePanel implements ItemListener, Foc
     private final JComboBox<PlayerCBItem> m_jcbPlayer = new JComboBox<>();
     private final JComboBox<CBItem> m_jcbTactic = new JComboBox<>();
     private final JLabel m_jlPosition = new JLabel();
+    private final JPanel m_jpBadges = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
     private final PlayerCBItem m_clSelectedPlayer = new PlayerCBItem("", 0f, null, false, true);
     private final Updatable m_clUpdater;
     private PlayerCBItem @Nullable [] m_clCBItems = new PlayerCBItem[0];
@@ -134,13 +135,20 @@ public class PlayerPositionPanel extends ImagePanel implements ItemListener, Foc
         constraints.gridy = 0;
         constraints.gridwidth = 1;
         constraints.insets = new Insets(5, 8, 0, 0);
-        jlp.add(m_jlPosition, constraints, layerIndex);
+        // position name and badges share cell 0; cell 1 of this row belongs to the swap button
+        // (or the captain / set pieces icon)
+        final JPanel header = new JPanel(new BorderLayout(4, 0));
+        header.setOpaque(false);
+        m_jpBadges.setOpaque(false);
+        header.add(m_jlPosition, BorderLayout.CENTER);
+        header.add(m_jpBadges, BorderLayout.EAST);
+        jlp.add(header, constraints, layerIndex);
 
         constraints.gridy = 1;
         constraints.gridwidth = 2;
         m_jcbPlayer.addFocusListener(this);
         m_jcbPlayer.setMaximumRowCount(10);
-        m_jcbPlayer.setRenderer(new PlayerCBItemRenderer());
+        m_jcbPlayer.setRenderer(new TileRenderer());
         m_jcbPlayer.setBackground(ThemeManager.getColor(HOColorName.BACKGROUND_CONTAINER));
 
         //Show only if more than one tactic is possible
@@ -530,6 +538,7 @@ public class PlayerPositionPanel extends ImagePanel implements ItemListener, Foc
             final MatchRoleID position = lineup.getPositionById(m_iPositionID);
 
             if (position != null) {
+                updateTile(lineup, position);
 
                 Font defaultFont = m_jlPosition.getFont();
                 int fontSize = defaultFont.getSize();
@@ -802,6 +811,120 @@ public class PlayerPositionPanel extends ImagePanel implements ItemListener, Foc
 
         jlp.add(jlSetPieces, constraints, layerIndex);
 
+    }
+
+    /**
+     * Badges next to the position name: captain and set pieces taker (the tile itself is drawn by
+     * {@link TileRenderer}, the specialty is in the dropdown list).
+     */
+    private void updateTile(Lineup lineup, MatchRoleID position) {
+        final Player player = HOVerwaltung.instance().getModel().getCurrentPlayer(position.getPlayerId());
+
+        m_jpBadges.removeAll();
+        if (player != null) {
+            if (player.getPlayerId() == lineup.getCaptain()) {
+                addBadge(ImageUtilities.getSmileyIcon("smiley-coach"), getLangStr("Spielfuehrer"));
+            }
+            if (player.getPlayerId() == lineup.getKicker()) {
+                addBadge(ImageUtilities.getSetPiecesIcon(14, 14), getLangStr("match.setpiecestaker"));
+            }
+        }
+        m_jpBadges.revalidate();
+    }
+
+    private void addBadge(@Nullable Icon icon, @Nullable String tooltip) {
+        if (icon != null) {
+            JLabel badge = new JLabel(icon);
+            badge.setToolTipText(tooltip);
+            m_jpBadges.add(badge);
+        }
+    }
+
+    /**
+     * Draws the closed player dropdown as a Hattrick-style tile: big shirt, bold surname, rating,
+     * or a faded ghost tile when the slot is empty. The open list keeps HO's usual rows, so the
+     * dropdown stays the way to pick a player.
+     */
+    private final class TileRenderer implements ListCellRenderer<PlayerCBItem> {
+        private final PlayerCBItemRenderer listRenderer = new PlayerCBItemRenderer();
+        private final JPanel tile = new JPanel(new BorderLayout(6, 0));
+        private final JLabel shirt = new JLabel();
+        private final JLabel name = new JLabel();
+        private final JLabel rating = new JLabel();
+
+        TileRenderer() {
+            JPanel text = new JPanel(new GridLayout(2, 1));
+            text.setOpaque(false);
+            text.add(name);
+            text.add(rating);
+            tile.add(shirt, BorderLayout.WEST);
+            tile.add(text, BorderLayout.CENTER);
+            tile.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
+            tile.setOpaque(true);
+        }
+
+        @Override
+        public Component getListCellRendererComponent(JList<? extends PlayerCBItem> list, PlayerCBItem value, int index,
+                                                      boolean isSelected, boolean cellHasFocus) {
+            if (index != -1) {
+                return listRenderer.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+            }
+            final Font font = list.getFont();
+            name.setFont(font.deriveFont(Font.BOLD, font.getSize2D() + 2));
+            rating.setFont(font);
+            tile.setBackground(ThemeManager.getColor(HOColorName.BACKGROUND_CONTAINER));
+
+            final Color fg = ThemeManager.getColor(HOColorName.LABEL_FG);
+            final MatchRoleID position = HOVerwaltung.instance().getModel().getCurrentLineup().getPositionById(m_iPositionID);
+            final int shirtSize = Math.round(UserParameter.instance().fontSize * 2.5f);
+            final Player player = value != null ? value.getPlayer() : null;
+            if (player != null) {
+                shirt.setIcon(jersey(position, player.getShirtNumber(), shirtSize));
+                name.setText(player.getLastName());
+                name.setForeground(fg);
+                // extra substitutes have no position to rate
+                final float stars = value.getPositionsEvaluation();
+                final String notBestPosition = value.isSetInBestPosition() ? "" : "  ⚠";
+                rating.setText(stars > 0 ? String.format("%.2f%s", stars, notBestPosition) : " ");
+                rating.setForeground(fg);
+            } else {
+                // ghost tile: the slot exists, nobody is in it
+                final Color faint = new Color(fg.getRed(), fg.getGreen(), fg.getBlue(), 100);
+                shirt.setIcon(faded(jersey(position, 0, shirtSize)));
+                name.setText("—");
+                name.setForeground(faint);
+                rating.setText(" ");
+            }
+            return tile;
+        }
+
+        private Icon jersey(@Nullable MatchRoleID position, int shirtNumber, int size) {
+            return position != null
+                    ? ImageUtilities.getJerseyIcon(position.getId(), position.getTactic(), shirtNumber, size)
+                    : ImageUtilities.getJerseyIcon(m_iPositionID, IMatchRoleID.NORMAL, shirtNumber, size);
+        }
+
+        private static Icon faded(Icon icon) {
+            return new Icon() {
+                @Override
+                public void paintIcon(Component c, Graphics g, int x, int y) {
+                    Graphics2D g2 = (Graphics2D) g.create();
+                    g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.3f));
+                    icon.paintIcon(c, g2, x, y);
+                    g2.dispose();
+                }
+
+                @Override
+                public int getIconWidth() {
+                    return icon.getIconWidth();
+                }
+
+                @Override
+                public int getIconHeight() {
+                    return icon.getIconHeight();
+                }
+            };
+        }
     }
 
     private String getLangStr(String key) {

@@ -12,6 +12,7 @@ import core.gui.theme.dark.DarculaDarkTheme;
 import core.gui.theme.dark.SolarizedDarkTheme;
 import core.gui.theme.gnome.GnomeTheme;
 import core.gui.theme.ho.HOClassicSchema;
+import core.gui.theme.light.IntelliJLightTheme;
 import core.gui.theme.light.SolarizedLightTheme;
 import core.gui.theme.nimbus.NimbusTheme;
 import core.model.HOVerwaltung;
@@ -70,6 +71,7 @@ public final class ThemeManager {
 		themes.put(DarculaDarkTheme.THEME_NAME, new DarculaDarkTheme());
 		themes.put(SolarizedDarkTheme.THEME_NAME, new SolarizedDarkTheme());
 		themes.put(SolarizedLightTheme.THEME_NAME, new SolarizedLightTheme());
+		themes.put(IntelliJLightTheme.THEME_NAME, new IntelliJLightTheme());
 
 		if (OSUtils.isLinux()) {
 			themes.put(GnomeTheme.THEME_NAME, new GnomeTheme());

@@ -1,5 +1,6 @@
 package module.lineup.lineup;
 
+import core.constants.player.PlayerAbility;
 import core.datatype.CBItem;
 import core.db.DBManager;
 import core.db.user.UserManager;
@@ -17,6 +18,7 @@ import core.net.OnlineWorker;
 import core.util.*;
 import module.lineup.Lineup;
 import module.lineup.LineupPanel;
+import module.lineup.ratings.LineupRatingPanel;
 import org.jetbrains.annotations.Nullable;
 import org.w3c.dom.Document;
 
@@ -44,6 +46,7 @@ public class MatchAndLineupSelectionPanel extends JPanel implements Refreshable 
     private JComboBox<CBItem> m_jcbTeamAttitude;
     private JComboBox<CBItem> m_jcbTactic;
     private JComboBox<CBItem> m_jcbStyleOfPlay;
+    private final JLabel m_jlFormation = new JLabel();
 
     private @Nullable MatchOrdersCBItem m_clSelectedMatch;
 
@@ -124,6 +127,15 @@ public class MatchAndLineupSelectionPanel extends JPanel implements Refreshable 
         layout.setConstraints(m_jcbTactic, gbc);
         add(m_jcbTactic);
 
+        // formation and its experience next to the tactic, as on Hattrick's match order page
+        gbc.gridx = 0;
+        gbc.gridy++;
+        addLabel(gbc, layout, Helper.getTranslation("ls.team.formation"));
+
+        gbc.gridx = 1;
+        layout.setConstraints(m_jlFormation, gbc);
+        add(m_jlFormation);
+
         gbc.gridx = 0;
         gbc.gridy++;
         addLabel(gbc, layout, Helper.getTranslation("ls.team.styleofPlay"));
@@ -185,7 +197,22 @@ public class MatchAndLineupSelectionPanel extends JPanel implements Refreshable 
         // refresh lineup settings
         Helper.setComboBoxFromID(m_jcbTactic, lineup.getTacticType());
         updateStyleOfPlayComboBox();
+        refreshFormation();
 
+    }
+
+    private void refreshFormation() {
+        Lineup lineup = HOVerwaltung.instance().getModel().getCurrentLineup();
+        String formation = lineup.getCurrentTeamFormationString();
+        int experience = lineup.getExperienceForCurrentTeamFormation();
+        if (experience == -1) {
+            m_jlFormation.setText(formation);
+            m_jlFormation.setForeground(ThemeManager.getColor(HOColorName.TABLEENTRY_DECLINE_FG));
+        } else {
+            m_jlFormation.setText(formation + " (" + PlayerAbility.toString(experience) + ")");
+            m_jlFormation.setForeground(ThemeManager.getColor(HOColorName.LABEL_FG));
+        }
+        m_jlFormation.setToolTipText(LineupRatingPanel.getFormationExperienceTooltip());
     }
 
     private void addListeners() {

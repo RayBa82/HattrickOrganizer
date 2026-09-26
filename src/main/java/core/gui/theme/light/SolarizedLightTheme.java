@@ -22,10 +22,15 @@ public class SolarizedLightTheme extends BaseTheme {
         return THEME_NAME;
     }
 
+    /** The darklaf theme this HO theme is built on; light variants override just this and the name. */
+    protected com.github.weisj.darklaf.theme.Theme createDarklafTheme() {
+        return new com.github.weisj.darklaf.theme.SolarizedLightTheme();
+    }
+
     @Override
     public boolean loadTheme() {
         try {
-            LafManager.setTheme(new com.github.weisj.darklaf.theme.SolarizedLightTheme());
+            LafManager.setTheme(createDarklafTheme());
             UIManager.setLookAndFeel(DarkLaf.class.getCanonicalName());
             UIDefaults defaults = UIManager.getLookAndFeelDefaults();
 

@@ -510,12 +510,12 @@ public final class LineupRatingPanel extends RasenPanel implements core.gui.Refr
         return m_clFormat.format(m_jpRightAttack.getRating());
     }
 
-    private String getFormationExperienceTooltip() {
+    public static String getFormationExperienceTooltip() {
         Team team = HOVerwaltung.instance().getModel().getTeam();
         StringBuilder builder = new StringBuilder();
         int exp = team.getFormationExperience550();
         builder.append("<html>");
-        builder.append("<b>").append(getLangStr("ls.team.formationexperience")).append("</b><br><br>");
+        builder.append("<b>").append(TranslationFacility.tr("ls.team.formationexperience")).append("</b><br><br>");
         builder.append("5-5-0&#160&#160&#160");
         builder.append(PlayerAbility.toString(exp)).append(" (").append(exp).append(")<br>");
         exp = team.getFormationExperience541();
