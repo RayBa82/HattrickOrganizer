@@ -64,8 +64,7 @@ class MatchToolsTest {
     void tools_areTheMatchTools() {
         assertThat(MatchTools.tools()).extracting(McpTool::name)
                 .containsExactly("get_matches", "get_match", "get_match_weather",
-                        "simulate_lineup", "list_challenges", "arrange_challenge",
-                        "respond_to_challenge");
+                        "simulate_lineup", "list_challenges", "manage_challenge");
     }
 
     private static core.model.match.MatchEvent event(int minute, int eventId, int teamId) {
@@ -285,7 +284,8 @@ class MatchToolsTest {
         final var a = new JsonObject();
         a.addProperty("opponentTeamId", 999);
         a.addProperty("location", "away");
-        tool("arrange_challenge").handler().call(a);
+        a.addProperty("action", "challenge");
+        tool("manage_challenge").handler().call(a);
         assertThat(seenMatchPlace[0]).isEqualTo(1);
     }
 
@@ -300,8 +300,9 @@ class MatchToolsTest {
         final var a = new JsonObject();
         a.addProperty("opponentTeamId", 999);
         a.addProperty("location", "neutral");
+        a.addProperty("action", "challenge");
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> tool("arrange_challenge").handler().call(a));
+                .isThrownBy(() -> tool("manage_challenge").handler().call(a));
     }
 
     @Test
@@ -316,8 +317,32 @@ class MatchToolsTest {
         a.addProperty("trainingMatchId", 733551221L);
         a.addProperty("action", "accept");
         assertThatExceptionOfType(McpToolException.class)
-                .isThrownBy(() -> tool("respond_to_challenge").handler().call(a))
+                .isThrownBy(() -> tool("manage_challenge").handler().call(a))
                 .withMessageContaining("gone");
+    }
+
+    @Test
+    void manageChallenge_checksEachActionsArgumentsBeforeWriting() {
+        install(new ChppWriteService() {
+            @Override
+            public void respondToChallengeForAgent(String verb, long id) {
+                throw new AssertionError("must not be called");
+            }
+
+            @Override
+            public void arrangeChallengeForAgent(int opp, int type, int place, Integer arena, boolean wk) {
+                throw new AssertionError("must not be called");
+            }
+        });
+        final var acceptWithoutId = JsonParser.parseString("{\"action\":\"accept\"}").getAsJsonObject();
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> tool("manage_challenge").handler().call(acceptWithoutId));
+        final var challengeWithoutTeam = JsonParser.parseString("{\"action\":\"challenge\"}").getAsJsonObject();
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> tool("manage_challenge").handler().call(challengeWithoutTeam));
+        final var unknown = JsonParser.parseString("{\"action\":\"cancel\",\"trainingMatchId\":1}").getAsJsonObject();
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> tool("manage_challenge").handler().call(unknown));
     }
 
     @Test

@@ -3003,3 +3003,10 @@ Follow-ups from the live test:
   tab's season box defaults to that plan instead of whichever series sorts first in the season.
 - `list_scout` returned ~260k chars for 455 entries. It now pages (`limit` 50 / max 200, `offset`),
   filters (`onlyOpen`), and returns compact market rows unless `full`.
+- Down to 29: `arrange_challenge` + `respond_to_challenge` became `manage_challenge(action=challenge|
+  accept|decline|withdraw)`, each action's arguments checked before the write. `list_scout` gained
+  local filters (`skills[{skill,min?,max?}]` ANDed with no span limit, `ageMin`, `ageMax`,
+  `specialty`) applied before paging; compact rows add age, specialty and every filtered skill.
+- `list_scout.onlyOpen` means still on the market (no sale recorded and deadline not passed), not
+  just "no sale recorded". `add_to_scout` writes the character it fetches onto the player's
+  TRANSFERLISTING rows too (`storeTransferListingCharacter`), no extra CHPP call.

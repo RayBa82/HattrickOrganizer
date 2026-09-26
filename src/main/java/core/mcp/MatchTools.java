@@ -115,7 +115,7 @@ public final class MatchTools {
                         "Friendly challenges this team has sent (outgoing) and been sent "
                                 + "(incoming). accept / decline / withdraw need a trainingMatchId "
                                 + "that only this list provides. checkTeamIds screens up to 20 teams "
-                                + "before arrange_challenge (challengeable: whether we may challenge "
+                                + "before manage_challenge (challengeable: whether we may challenge "
                                 + "each now, manager login, supporter, bot; best first). A read - "
                                 + "does not spend the write cap.",
                         McpTool.schema(McpTool.properties(
@@ -125,31 +125,29 @@ public final class MatchTools {
                                         "team ids to screen, 1-" + MAX_CHALLENGEABLE_TEAMS
                                                 + "; omit to skip the check"))),
                         MatchTools::listChallenges),
-                new McpTool("arrange_challenge",
-                        "Send a friendly challenge to another team. Leaves the machine. Poll "
-                                + "list_challenges afterwards for whether the opponent agreed.",
+                new McpTool("manage_challenge",
+                        "Friendly challenges, written to Hattrick - leaves the machine. "
+                                + "action=challenge sends one to opponentTeamId; accept, decline and "
+                                + "withdraw answer one by its trainingMatchId from list_challenges. "
+                                + "Poll list_challenges afterwards for whether the opponent agreed.",
                         McpTool.schema(McpTool.properties(
-                                        "opponentTeamId", McpTool.prop("integer", "the team to challenge"),
-                                        "friendlyType", McpTool.prop("integer",
-                                                "0 normal rules, 1 cup rules; default 0"),
-                                        "location", McpTool.prop("string",
-                                                "home, away or neutral; default home"),
-                                        "neutralArenaId", McpTool.prop("integer",
-                                                "arena id, required when location is neutral"),
-                                        "weekend", McpTool.prop("boolean",
-                                                "arrange it as a weekend friendly; default false")),
-                                "opponentTeamId"),
-                        MatchTools::arrangeChallenge),
-                new McpTool("respond_to_challenge",
-                        "Accept, decline or withdraw a friendly challenge by its trainingMatchId "
-                                + "(from list_challenges). Leaves the machine.",
-                        McpTool.schema(McpTool.properties(
-                                        "trainingMatchId", McpTool.prop("integer",
-                                                "the challenge id from list_challenges"),
                                         "action", McpTool.prop("string",
-                                                "accept, decline or withdraw")),
-                                "trainingMatchId", "action"),
-                        MatchTools::respondToChallenge)
+                                                "challenge, accept, decline or withdraw"),
+                                        "opponentTeamId", McpTool.prop("integer",
+                                                "challenge: the team to challenge (required)"),
+                                        "friendlyType", McpTool.prop("integer",
+                                                "challenge: 0 normal rules, 1 cup rules; default 0"),
+                                        "location", McpTool.prop("string",
+                                                "challenge: home, away or neutral; default home"),
+                                        "neutralArenaId", McpTool.prop("integer",
+                                                "challenge: arena id, required when location is neutral"),
+                                        "weekend", McpTool.prop("boolean",
+                                                "challenge: a weekend friendly; default false"),
+                                        "trainingMatchId", McpTool.prop("integer",
+                                                "accept / decline / withdraw: the challenge id from "
+                                                        + "list_challenges (required)")),
+                                "action"),
+                        MatchTools::manageChallenge)
         );
     }
 
@@ -287,6 +285,17 @@ public final class MatchTools {
         }
         row.addProperty("note", note);
         return row;
+    }
+
+    /** manage_challenge: each branch checks its own arguments before the one CHPP write. */
+    private static JsonObject manageChallenge(JsonObject args) throws McpToolException {
+        final var action = McpJson.reqString(args, "action");
+        return switch (action) {
+            case "challenge" -> arrangeChallenge(args);
+            case "accept", "decline", "withdraw" -> respondToChallenge(args);
+            default -> throw new IllegalArgumentException(
+                    "action must be challenge, accept, decline or withdraw, was " + action);
+        };
     }
 
     private static JsonObject arrangeChallenge(JsonObject args) throws McpToolException {

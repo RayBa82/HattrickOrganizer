@@ -147,20 +147,29 @@ public final class TransferTools {
                                 "playerIds"),
                         TransferTools::removeFromScout),
                 new McpTool("list_scout",
-                        "Read back HO's local scout shortlist, one page (count = total). Default "
-                                + "rows: playerId, playerName, note, price and deadline (frozen when "
-                                + "added), askingPrice, highestBid, observedAt (newest observation), "
-                                + "salePrice, soldAt (once sold). full adds the frozen skills, TSI, "
-                                + "wage and character (0-5, null = never fetched).",
+                        "Read back HO's local scout shortlist, filtered, one page (count = the "
+                                + "filtered total). Rows: playerId, playerName, note, age, specialty, "
+                                + "price and deadline (frozen when added), askingPrice, highestBid, "
+                                + "observedAt (newest observation), salePrice, soldAt, plus each skill "
+                                + "filtered on. full adds every frozen skill, TSI, wage and character.",
                         McpTool.schema(McpTool.properties(
+                                "skills", McpTool.prop("array", "skill filters, all must hold: "
+                                        + "{skill, min?, max?}, skill one of " + SKILL_NAMES
+                                        + "; levels, any span"),
+                                "ageMin", McpTool.prop("integer", "minimum age in years"),
+                                "ageMax", McpTool.prop("integer", "maximum age in years"),
+                                "specialty", McpTool.prop("integer",
+                                        "specialty id as in search_transfers (0 none)"),
                                 "onlyOpen", McpTool.prop("boolean",
-                                        "leave out players whose transfer completed; default false"),
+                                        "only players still on the market: no sale recorded and "
+                                                + "deadline not passed; default false"),
                                 "full", McpTool.prop("boolean",
                                         "every stored field per player; default false"),
                                 "limit", McpTool.prop("integer", "page size, default "
                                         + DEFAULT_SCOUT_PAGE + ", max " + MAX_SCOUT_PAGE),
                                 "offset", McpTool.prop("integer",
-                                        "how many entries to skip, in shortlist order; default 0"))),
+                                        "how many matching entries to skip, in shortlist order; "
+                                                + "default 0"))),
                         TransferTools::listScout),
                 new McpTool("estimate_market_value",
                         "Value one of your players, or via profile a player outside the squad, "
@@ -1155,6 +1164,10 @@ public final class TransferTools {
                 return;
             }
             ScoutList.applyCharacter(entry, m.player());
+            // Same fetch, onto his stored search-hit rows too, so valuation has it before the next
+            // download's backfill would get there. Legacy name: getGentleness() is Agreeability.
+            DBManager.instance().storeTransferListingCharacter(entry.getPlayerID(),
+                    m.player().getGentleness(), m.player().getAggressivity(), m.player().getHonesty());
             if (m.transferListed()) {
                 DBManager.instance().storeTransferListing(
                         TransferListing.fromPlayerDetails(m, HODateTime.now()));
@@ -1283,14 +1296,13 @@ public final class TransferTools {
     }
 
     private static JsonObject listScout(JsonObject args) throws McpToolException {
-        final var onlyOpen = McpJson.optBool(args, "onlyOpen", false);
+        final var filter = ScoutFilter.from(args);
         final var full = McpJson.optBool(args, "full", false);
         final var offset = Math.max(McpJson.optInt(args, "offset", 0), 0);
         final var limit = Math.min(Math.max(McpJson.optInt(args, "limit", DEFAULT_SCOUT_PAGE), 1), MAX_SCOUT_PAGE);
         final var out = LineupTools.onEdt(() -> {
-            final var entries = ScoutList.entries().stream()
-                    .filter(e -> !onlyOpen || !e.isSold())
-                    .toList();
+            final var now = java.time.Instant.now();
+            final var entries = ScoutList.entries().stream().filter(e -> filter.test(e, now)).toList();
             final var players = new JsonArray();
             entries.stream().skip(offset).limit(limit).forEach(e -> players.add(McpJson.scoutEntry(e)));
             final var json = new JsonObject();
@@ -1334,11 +1346,13 @@ public final class TransferTools {
             player.addProperty("highestBid", McpJson.money(listing.getHighestBid()));
         }
         if (!full) {
+            final var keys = new java.util.ArrayList<>(COMPACT_SCOUT_KEYS);
+            filter.skills().forEach(r -> keys.add(scoutSkillKey(r.skill())));
             final var compact = new JsonArray();
             for (final var element : out.getAsJsonArray("players")) {
                 final var player = element.getAsJsonObject();
                 final var row = new JsonObject();
-                COMPACT_SCOUT_KEYS.stream().filter(player::has).forEach(k -> row.add(k, player.get(k)));
+                keys.stream().filter(player::has).forEach(k -> row.add(k, player.get(k)));
                 compact.add(row);
             }
             out.add("players", compact);
@@ -1346,11 +1360,83 @@ public final class TransferTools {
         return out;
     }
 
-    /** list_scout's default row: the market state, not the frozen skills. */
+    /** list_scout's default row: the market state plus age and specialty, not the frozen skills. */
     private static final List<String> COMPACT_SCOUT_KEYS = List.of("playerId", "playerName", "note",
-            "price", "deadline", "askingPrice", "highestBid", "observedAt", "salePrice", "soldAt");
+            "age", "specialty", "price", "deadline", "askingPrice", "highestBid", "observedAt",
+            "salePrice", "soldAt");
     private static final int DEFAULT_SCOUT_PAGE = 50;
     private static final int MAX_SCOUT_PAGE = 200;
+
+    /** One list_scout skill filter; a null bound is open. */
+    record SkillRange(TransferSearchQuery.Skill skill, Integer min, Integer max) {
+        boolean test(Integer level) {
+            return level != null && (min == null || level >= min) && (max == null || level <= max);
+        }
+    }
+
+    /** list_scout's local filters, all ANDed; checked before paging so count is the filtered total. */
+    record ScoutFilter(boolean onlyOpen, Integer ageMin, Integer ageMax, Integer specialty,
+                       List<SkillRange> skills) {
+        static ScoutFilter from(JsonObject args) {
+            final var skills = new java.util.ArrayList<SkillRange>();
+            if (args.has("skills") && !args.get("skills").isJsonNull()) {
+                final var array = McpJson.reqArray(args, "skills");
+                for (int i = 0; i < array.size(); i++) {
+                    if (!array.get(i).isJsonObject()) {
+                        throw new IllegalArgumentException("skills[" + i + "] must be an object of "
+                                + "the shape {skill, min?, max?}.");
+                    }
+                    final var f = array.get(i).getAsJsonObject();
+                    skills.add(new SkillRange(parseSkill(McpJson.reqString(f, "skill")),
+                            McpJson.optInteger(f, "min"), McpJson.optInteger(f, "max")));
+                }
+            }
+            return new ScoutFilter(McpJson.optBool(args, "onlyOpen", false),
+                    McpJson.optInteger(args, "ageMin"), McpJson.optInteger(args, "ageMax"),
+                    McpJson.optInteger(args, "specialty"), List.copyOf(skills));
+        }
+
+        /** onlyOpen = still on the market: no sale recorded and the deadline not yet passed. */
+        boolean test(module.transfer.scout.ScoutEintrag e, java.time.Instant now) {
+            return (!onlyOpen || (!e.isSold()
+                            && (e.getDeadline() == null || e.getDeadline().toInstant().isAfter(now))))
+                    && (ageMin == null || e.getAlter() >= ageMin)
+                    && (ageMax == null || e.getAlter() <= ageMax)
+                    && (specialty == null || e.getSpeciality() == specialty)
+                    && skills.stream().allMatch(r -> r.test(scoutSkill(e, r.skill())));
+        }
+    }
+
+    static Integer scoutSkill(module.transfer.scout.ScoutEintrag e, TransferSearchQuery.Skill skill) {
+        return switch (skill) {
+            case KEEPER -> e.getTorwart();
+            case DEFENDING -> e.getVerteidigung();
+            case PLAYMAKING -> e.getSpielaufbau();
+            case WINGER -> e.getFluegelspiel();
+            case PASSING -> e.getPasspiel();
+            case SCORING -> e.getTorschuss();
+            case SETPIECES -> e.getStandards();
+            case STAMINA -> e.getKondition();
+            case EXPERIENCE -> e.getErfahrung();
+            case LEADERSHIP -> e.getLeadership();
+        };
+    }
+
+    /** The key {@link McpJson#scoutEntry} writes that skill under. */
+    private static String scoutSkillKey(TransferSearchQuery.Skill skill) {
+        return switch (skill) {
+            case KEEPER -> "keeper";
+            case DEFENDING -> "defender";
+            case PLAYMAKING -> "playmaker";
+            case WINGER -> "winger";
+            case PASSING -> "passing";
+            case SCORING -> "scorer";
+            case SETPIECES -> "setPieces";
+            case STAMINA -> "stamina";
+            case EXPERIENCE -> "experience";
+            case LEADERSHIP -> "leadership";
+        };
+    }
 
     /** The SCOUT.Info column is VARCHAR(256); an over-long note would fail the insert. */
     private static String truncateInfo(String info) {

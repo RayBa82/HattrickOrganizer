@@ -398,7 +398,44 @@ class TransferToolsTest {
         final var schema = tool("list_scout").inputSchema();
         assertThat(schema.getAsJsonArray("required")).isEmpty();
         assertThat(schema.getAsJsonObject("properties").keySet())
-                .containsExactlyInAnyOrder("onlyOpen", "full", "limit", "offset");
+                .containsExactlyInAnyOrder("skills", "ageMin", "ageMax", "specialty", "onlyOpen",
+                        "full", "limit", "offset");
+    }
+
+    @Test
+    void scoutFilter_andsAgeSpecialtyAndOpenEndedSkillRanges() {
+        final var keeper = new module.transfer.scout.ScoutEintrag();
+        keeper.setAlter(19);
+        keeper.setSpeciality(1);
+        keeper.setTorwart(9);
+        keeper.setVerteidigung(3);
+
+        final var filter = TransferTools.ScoutFilter.from(com.google.gson.JsonParser.parseString("""
+                {"ageMax":20,"specialty":1,"skills":[{"skill":"keeper","min":8},
+                 {"skill":"DEFENDING","max":4}]}""").getAsJsonObject());
+        assertThat(filter.test(keeper, java.time.Instant.now())).isTrue();
+
+        keeper.setTorwart(7);
+        assertThat(filter.test(keeper, java.time.Instant.now())).isFalse();
+        keeper.setTorwart(9);
+        keeper.setAlter(21);
+        assertThat(filter.test(keeper, java.time.Instant.now())).isFalse();
+    }
+
+    @Test
+    void scoutFilter_onlyOpenMeansStillOnTheMarket() {
+        final var now = java.time.Instant.parse("2026-09-26T12:00:00Z");
+        final var onlyOpen = TransferTools.ScoutFilter.from(
+                com.google.gson.JsonParser.parseString("{\"onlyOpen\":true}").getAsJsonObject());
+        final var entry = new module.transfer.scout.ScoutEintrag();
+
+        entry.setDeadline(java.sql.Timestamp.from(now.plusSeconds(3600)));
+        assertThat(onlyOpen.test(entry, now)).isTrue();
+
+        // expired weeks ago with no sale recorded: not on the market any more
+        entry.setDeadline(java.sql.Timestamp.from(now.minusSeconds(21 * 86400L)));
+        assertThat(onlyOpen.test(entry, now)).isFalse();
+        assertThat(TransferTools.ScoutFilter.from(new JsonObject()).test(entry, now)).isTrue();
     }
 
     @Test
