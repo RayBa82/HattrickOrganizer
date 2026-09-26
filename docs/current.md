@@ -2952,3 +2952,22 @@ otherUpcoming. Fixed after it:
   user's currency (CHPP Cost is per week).
 - **selling missing two listed players:** the parser drops no BidItem, so the missing players are
   absent from Hattrick's own answer. Not a code issue unless the listing is confirmed.
+
+## Match weather (2026-09-26, asked by the hattrick session)
+
+The rating engine already applies the specialty weather effect (`RatingPredictionModel`
+`weatherCache`, `PlayerSpeciality.getWeatherEffect`, ±5%). What was missing was access to the weather:
+`Lineup.getWeather()` lazily takes the stored forecast of HO's *next* upcoming match, so every
+lineup was scored under that one fixture's weather.
+
+- **`get_match_weather(matchId, matchType?)`** (MatchTools): the stored `Weather` + `Forecast`
+  (HAPPENED / TODAY / TOMORROW / UNSURE) of a `MATCHESKURZINFO` row. If the forecast is not sure
+  (TOMORROW counts as unsure), it first runs `OnlineWorker.downloadMatchData(info, true)` silently. That
+  is the existing path: matchdetails → home region → regiondetails, stored on the row.
+- **`get_upcoming_matches.otherUpcoming`** rows carry `weather` / `weatherForecast` as stored.
+- **`simulate_lineup` / `apply_lineup`** take `matchId` (→ `Lineup.setUpcomingMatch`, so location
+  and weather follow that fixture) and `weather` 0-3 (→ `Lineup.setWeather`, overrides). simulate
+  rejects both without `positions`, because scoring the live lineup must not mutate it. On apply they
+  change the live lineup's weather, as the Lineup tab's weather box does.
+
+Untested against live CHPP.

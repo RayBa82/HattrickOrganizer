@@ -8,6 +8,7 @@ import core.file.xml.XMLMatchdetailsParser;
 import core.model.enums.MatchType;
 import core.net.ChppWriteService;
 import core.net.Connector;
+import core.net.OnlineWorker;
 import core.model.match.MatchEvent;
 import core.model.match.MatchKurzInfo;
 import core.model.match.Matchdetails;
@@ -86,6 +87,19 @@ public final class MatchTools {
                                                 "the match type id from get_matches")),
                                 "matchId"),
                         MatchTools::matchEvents),
+                new McpTool("get_match_weather",
+                        "Weather of one of our fixtures, from the home team's region. forecast: "
+                                + "HAPPENED (played), TODAY (reliable), TOMORROW (may change) or UNSURE "
+                                + "(further out; only the region's tomorrow). An unsure one is refreshed "
+                                + "and stored first (a few CHPP requests), so simulate_lineup / "
+                                + "apply_lineup with this matchId use it. weatherId 0 rain, 1 overcast, "
+                                + "2 partially cloudy, 3 sunny.",
+                        McpTool.schema(McpTool.properties(
+                                        "matchId", McpTool.prop("integer", "the Hattrick match id"),
+                                        "matchType", McpTool.prop("integer",
+                                                "the match type id; optional")),
+                                "matchId"),
+                        MatchTools::matchWeather),
                 new McpTool("get_opponent_ratings",
                         "The sector ratings another team earned in its recent matches, averaged and "
                                 + "named exactly as simulate_lineup wants them. HO stores only "
@@ -131,8 +145,9 @@ public final class MatchTools {
                         "Score a lineup. Omit positions to score the one HO currently holds. Supply "
                                 + "all seven opponent sector ratings (copy them from "
                                 + "get_opponent_ratings) for a Monte Carlo win/draw/loss forecast; "
-                                + "omit them for sector ratings and formation alone. Nothing in HO "
-                                + "changes, so call it in a loop.",
+                                + "omit them for sector ratings alone. Weather is the next match's "
+                                + "stored forecast unless matchId or weather says otherwise (both need "
+                                + "positions). Nothing in HO changes, so call it in a loop.",
                         McpTool.schema(
                                 opponentProperties(LineupTools.lineupSchema().getAsJsonObject("properties"))),
                         MatchTools::simulateLineup),
@@ -444,6 +459,35 @@ public final class MatchTools {
                     + ". Call get_matches for the ids it has downloaded.");
         }
         return info;
+    }
+
+    private static JsonObject matchWeather(JsonObject args) throws McpToolException {
+        var info = storedMatch(args);
+        if (!info.getWeatherForecast().isSure()) {
+            // The match download's own path: matchdetails for the home region, then regiondetails,
+            // stored on the match row where the Lineup tab reads it too.
+            final var wasSilent = Connector.instance().setSilentDownload(true);
+            try {
+                if (!OnlineWorker.downloadMatchData(info, true)) {
+                    throw new McpToolException("Refreshing the weather of match " + info.getMatchID()
+                            + " from Hattrick failed; HO's log has the reason.");
+                }
+            } finally {
+                Connector.instance().setSilentDownload(wasSilent);
+            }
+            info = storedMatch(args);
+        }
+        final var json = new JsonObject();
+        json.addProperty("matchId", info.getMatchID());
+        json.addProperty("matchType", info.getMatchType().name());
+        json.addProperty("date", info.getMatchSchedule() == null ? null : info.getMatchSchedule().toHT());
+        json.addProperty("homeTeamName", info.getHomeTeamName());
+        json.addProperty("awayTeamName", info.getGuestTeamName());
+        json.addProperty("regionId", info.getRegionId());
+        json.addProperty("weatherId", info.getWeather().getId());
+        json.addProperty("weather", info.getWeather().name());
+        json.addProperty("forecast", info.getWeatherForecast().name());
+        return json;
     }
 
     private static JsonObject matchEvents(JsonObject args) throws McpToolException {
@@ -766,6 +810,11 @@ public final class MatchTools {
                     + "exactly these names.");
         }
 
+        if (!args.has("positions") && (args.has("weather") || args.has("matchId"))) {
+            throw new IllegalArgumentException("weather and matchId need positions: without them "
+                    + "HO's live lineup is scored, and a simulation never changes it. Copy the "
+                    + "positions from get_lineup.");
+        }
         final var lineup = args.has("positions")
                 ? LineupTools.scratchLineup(args)
                 : McpJson.model().getCurrentLineup();

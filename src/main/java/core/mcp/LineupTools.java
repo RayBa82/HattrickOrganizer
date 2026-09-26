@@ -2,9 +2,11 @@ package core.mcp;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import core.db.DBManager;
 import core.gui.HOMainFrame;
 import core.gui.theme.GroupTeamFactory;
 import core.model.HOModel;
+import core.model.match.Weather;
 import core.model.player.IMatchRoleID;
 import core.model.player.Player;
 import core.net.ChppWriteService;
@@ -43,6 +45,7 @@ public final class LineupTools {
         return List.of(
                 new McpTool("get_lineup",
                         "The lineup currently set in HO, with its sector ratings and formation. "
+                                + "assumptions.weather is the weather they were scored under. "
                                 + "simulate_lineup scores a hypothetical one instead.",
                         McpTool.schema(new JsonObject()),
                         args -> currentLineup()),
@@ -51,7 +54,8 @@ public final class LineupTools {
                                 + "would upload; sends nothing to Hattrick. HO can refuse a "
                                 + "position - the Lineup tab's assistant filter unfields a player it "
                                 + "hides - so the returned lineup is what HO holds afterwards, not "
-                                + "an echo. Read notApplied before reporting the lineup as set.",
+                                + "an echo. Read notApplied before reporting the lineup as set. "
+                                + "matchId / weather set its fixture and weather.",
                         lineupSchema(),
                         LineupTools::apply),
                 new McpTool("set_player_group",
@@ -125,7 +129,13 @@ public final class LineupTools {
                         "styleOfPlay", McpTool.prop("integer", "style of play, -10 defensive to 10 offensive"),
                         "allowUnavailable", McpTool.prop("boolean", "score the lineup even though it fields an injured or suspended player; rejected by default"),
                         "captainId", McpTool.prop("integer", "player id of the captain"),
-                        "setPiecesTakerId", McpTool.prop("integer", "player id of the set pieces taker")),
+                        "setPiecesTakerId", McpTool.prop("integer", "player id of the set pieces taker"),
+                        "matchId", McpTool.prop("integer", "score for this stored fixture: its location "
+                                + "and HO's stored weather forecast (get_match_weather refreshes it); "
+                                + "default HO's next upcoming match"),
+                        "weather", McpTool.prop("integer", "0 rain, 1 overcast, 2 partially cloudy, 3 sunny; "
+                                + "overrides the fixture's forecast. Technical/Powerful/Quick players "
+                                + "gain or lose 5% by it")),
                 "positions");
     }
 
@@ -179,8 +189,34 @@ public final class LineupTools {
         }
     }
 
+    /**
+     * The optional matchId and weather of a spec. Both are resolved before the lineup is touched,
+     * so a bad id leaves apply_lineup's live lineup alone.
+     */
+    private static void applyFixture(Lineup lineup, JsonObject spec) throws McpToolException {
+        final var matchId = McpJson.optInteger(spec, "matchId");
+        final var match = matchId == null ? null
+                : DBManager.instance().getMatchesKurzInfoByMatchID(matchId, null);
+        if (matchId != null && match == null) {
+            throw new McpToolException("HO holds no match with id " + matchId
+                    + ". Take the id from get_upcoming_matches.");
+        }
+        final var weatherId = McpJson.optInteger(spec, "weather");
+        if (weatherId != null && (weatherId < 0 || weatherId > 3)) {
+            throw new IllegalArgumentException("weather is 0 rain, 1 overcast, 2 partially cloudy "
+                    + "or 3 sunny, not " + weatherId + ".");
+        }
+        if (match != null) {
+            lineup.setUpcomingMatch(match);
+        }
+        if (weatherId != null) {
+            lineup.setWeather(Weather.getById(weatherId));
+        }
+    }
+
     private static void applySpec(Lineup lineup, JsonObject spec) throws McpToolException {
         rejectUnavailable(spec);
+        applyFixture(lineup, spec);
         for (final var element : McpJson.reqArray(spec, "positions")) {
             final var position = element.getAsJsonObject();
             final var roleId = McpJson.reqInt(position, "roleId");

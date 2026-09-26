@@ -40,7 +40,8 @@ class MatchToolsTest {
     @Test
     void tools_areTheMatchTools() {
         assertThat(MatchTools.tools()).extracting(McpTool::name)
-                .containsExactly("get_matches", "get_match", "get_match_events", "get_opponent_ratings",
+                .containsExactly("get_matches", "get_match", "get_match_events", "get_match_weather",
+                        "get_opponent_ratings",
                         "get_rating_calibration", "simulate_lineup",
                         "list_challenges", "check_challengeable", "arrange_challenge",
                         "respond_to_challenge");

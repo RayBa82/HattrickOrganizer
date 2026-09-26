@@ -56,6 +56,18 @@ class LineupToolsTest {
         assertThat(lineup.getKicker()).isEqualTo(22);
     }
 
+    @Test
+    void scratchLineup_scoresUnderTheGivenWeatherAndRejectsAnUnknownOne() throws McpToolException {
+        final var sunny = LineupTools.scratchLineup(JsonParser.parseString("""
+                {"positions":[{"roleId":100,"playerId":11}],"weather":3}""").getAsJsonObject());
+        assertThat(sunny.getWeather()).isEqualTo(core.model.match.Weather.SUNNY);
+
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> LineupTools.scratchLineup(JsonParser.parseString("""
+                        {"positions":[],"weather":4}""").getAsJsonObject()))
+                .withMessageContaining("3 sunny");
+    }
+
     /**
      * The regression guard for spec section 3: a scratch lineup and the live lineup both sit at
      * rating revision 0 in a fresh fixture, which is exactly the case where a shared
