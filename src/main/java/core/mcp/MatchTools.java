@@ -3,8 +3,11 @@ package core.mcp;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import core.db.DBManager;
+import core.file.xml.XMLManager;
 import core.file.xml.XMLMatchArchivParser;
 import core.file.xml.XMLMatchdetailsParser;
+import core.model.cup.CupLevel;
+import core.model.cup.CupLevelIndex;
 import core.model.enums.MatchType;
 import core.net.ChppWriteService;
 import core.net.Connector;
@@ -18,10 +21,14 @@ import core.rating.RatingPredictionModel.RatingSector;
 import core.util.HODateTime;
 import module.lineup.Lineup;
 
+import org.w3c.dom.Element;
+
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Played matches, and the Monte Carlo simulator on top of them.
@@ -54,7 +61,8 @@ public final class MatchTools {
                 new McpTool("get_matches",
                         "The team's played matches, most recent first: result, competition, "
                                 + "location and outcome. Use it for recent form, and for the "
-                                + "matchId / matchType pair that get_match needs.",
+                                + "matchId / matchType pair that get_match needs. CUP rows name "
+                                + "the cup (cup, cupId).",
                         McpTool.schema(McpTool.properties(
                                 "count", McpTool.prop("integer",
                                         "how many matches to return, default " + DEFAULT_COUNT),
@@ -404,7 +412,90 @@ public final class MatchTools {
         final var theirs = atHome ? info.getGuestTeamGoals() : info.getHomeTeamGoals();
         json.addProperty("location", atHome ? "home" : "away");
         json.addProperty("outcome", ours > theirs ? "win" : ours < theirs ? "loss" : "draw");
+        addCup(json, info);
         return json;
+    }
+
+    /** One cup of our league, as worlddetails lists it. */
+    record LeagueCup(String name, int leagueLevel) {
+    }
+
+    /** Our league's cups by cupId; loaded once per session, empty if worlddetails failed. */
+    private static Map<Integer, LeagueCup> leagueCups;
+
+    /**
+     * Which cup a CUP match belongs to. cupId, cupLevel and cupLevelIndex come with the stored match
+     * row (CHPP MatchContextId / CupLevel / CupLevelIndex); CHPP has no cup round on a match. Name and
+     * National vs Divisional only exist in worlddetails' Cups list for our league - a cup that has
+     * ended can drop out of it, so an old match may come without them.
+     */
+    static void addCup(JsonObject json, MatchKurzInfo info) {
+        if (info.getMatchType() != MatchType.CUP) {
+            return;
+        }
+        final var level = info.getCupLevel();
+        final var index = info.getCupLevelIndex();
+        final var cupId = info.getMatchContextId();
+        json.addProperty("cupId", cupId);
+        json.addProperty("cupLevel", level == null ? null : level.name());
+        json.addProperty("cupLevelIndex", index == null ? null : index.name());
+        final var cup = cupId > 0 ? leagueCups().get(cupId) : null;
+        if (cup != null) {
+            json.addProperty("cupName", cup.name());
+            json.addProperty("cupLeagueLevel", cup.leagueLevel());
+        }
+        json.addProperty("cup", cupLabel(level, index, cup));
+    }
+
+    /** "National", "Divisional", "Emerald Challenger", ... - null when CHPP gave no level. */
+    static String cupLabel(CupLevel level, CupLevelIndex index, LeagueCup cup) {
+        if (level == null) {
+            return null;
+        }
+        return switch (level) {
+            case NATIONALorDIVISIONAL -> {
+                if (cup == null) {
+                    yield "National/Divisional";
+                }
+                yield cup.leagueLevel() == 0 ? "National" : "Divisional";
+            }
+            case CHALLENGER -> index == null || index == CupLevelIndex.NONE ? "Challenger"
+                    : index.name().charAt(0) + index.name().substring(1).toLowerCase() + " Challenger";
+            case CONSOLATION -> "Consolation";
+            case NONE -> null;
+        };
+    }
+
+    private static synchronized Map<Integer, LeagueCup> leagueCups() {
+        if (leagueCups == null) {
+            final var wasSilent = Connector.instance().setSilentDownload(true);
+            try {
+                leagueCups = parseLeagueCups(Connector.instance()
+                        .getWorldDetails(McpJson.model().getBasics().getLiga()));
+            } catch (Exception e) {
+                // ponytail: a failed lookup stays empty for the session; the level fields still say which cup
+                leagueCups = Map.of();
+            } finally {
+                Connector.instance().setSilentDownload(wasSilent);
+            }
+        }
+        return leagueCups;
+    }
+
+    /** worlddetails (one league) -> its Cups by CupID. */
+    static Map<Integer, LeagueCup> parseLeagueCups(String xml) {
+        final var out = new HashMap<Integer, LeagueCup>();
+        final var doc = xml == null || xml.isBlank() ? null : XMLManager.parseString(xml);
+        if (doc == null) {
+            return out;
+        }
+        final var cups = doc.getElementsByTagName("Cup");
+        for (int i = 0; i < cups.getLength(); i++) {
+            final var cup = (Element) cups.item(i);
+            out.put(XMLManager.xmlIntValue(cup, "CupID"), new LeagueCup(
+                    XMLManager.xmlValue(cup, "CupName"), XMLManager.xmlIntValue(cup, "CupLeagueLevel", 0)));
+        }
+        return out;
     }
 
     private static JsonObject match(JsonObject args) throws McpToolException {

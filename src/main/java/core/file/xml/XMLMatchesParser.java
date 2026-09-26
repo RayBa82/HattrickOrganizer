@@ -73,6 +73,9 @@ public class XMLMatchesParser {
 					tmp = (Element) ele.getElementsByTagName("MatchType").item(0);
 					iMatchType = Integer.parseInt(tmp.getFirstChild().getNodeValue());
 					match.setMatchType(MatchType.getById(iMatchType));
+					// LeagueLevelUnitId, CupId or TournamentId - read for every type, not just tournaments
+					final int contextId = XMLManager.xmlIntValue(ele, "MatchContextId", 0);
+					match.setMatchContextId(contextId);
 
 					if (iMatchType == 3) {
 						tmp = (Element) ele.getElementsByTagName("CupLevel").item(0);
@@ -84,14 +87,10 @@ public class XMLMatchesParser {
 						match.setCupLevelIndex(CupLevelIndex.fromInt(iCupLevelIndex));
 					}
 					else if (iMatchType == 50) {
-						tmp = (Element) ele.getElementsByTagName("MatchContextId").item(0);
-						int tournamentId = Integer.parseInt(tmp.getFirstChild().getNodeValue());
-						match.setMatchContextId(tournamentId);
-
-						TournamentDetails oTournamentDetails = DBManager.instance().getTournamentDetailsFromDB(tournamentId);
+						TournamentDetails oTournamentDetails = DBManager.instance().getTournamentDetailsFromDB(contextId);
 						if (oTournamentDetails == null)
 						{
-							oTournamentDetails = getTournamentDetails(tournamentId); // download info about tournament from HT
+							oTournamentDetails = getTournamentDetails(contextId); // download info about tournament from HT
 							DBManager.instance().storeTournamentDetailsIntoDB(oTournamentDetails); // store tournament details into DB
 						}
 						match.setTournamentTypeID(oTournamentDetails.getTournamentType());

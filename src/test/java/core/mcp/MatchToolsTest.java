@@ -38,6 +38,29 @@ class MatchToolsTest {
     }
 
     @Test
+    void parseLeagueCups_andLabel_tellNationalFromDivisionalAndNameTheChallenger() {
+        final var cups = MatchTools.parseLeagueCups("""
+                <HattrickData><LeagueList><League><LeagueID>3</LeagueID><Cups>
+                <Cup><CupID>100</CupID><CupName>DFB-Pokal</CupName><CupLeagueLevel>0</CupLeagueLevel>
+                <CupLevel>1</CupLevel><CupLevelIndex>1</CupLevelIndex></Cup>
+                <Cup><CupID>200</CupID><CupName>Divisional 7</CupName><CupLeagueLevel>7</CupLeagueLevel>
+                <CupLevel>1</CupLevel><CupLevelIndex>1</CupLevelIndex></Cup>
+                </Cups></League></LeagueList></HattrickData>""");
+        assertThat(cups).containsKeys(100, 200);
+        assertThat(cups.get(100).name()).isEqualTo("DFB-Pokal");
+
+        final var national = core.model.cup.CupLevel.NATIONALorDIVISIONAL;
+        final var first = core.model.cup.CupLevelIndex.EMERALD;
+        assertThat(MatchTools.cupLabel(national, first, cups.get(100))).isEqualTo("National");
+        assertThat(MatchTools.cupLabel(national, first, cups.get(200))).isEqualTo("Divisional");
+        assertThat(MatchTools.cupLabel(national, first, null)).isEqualTo("National/Divisional");
+        assertThat(MatchTools.cupLabel(core.model.cup.CupLevel.CHALLENGER,
+                core.model.cup.CupLevelIndex.SAPPHIRE, null)).isEqualTo("Sapphire Challenger");
+        assertThat(MatchTools.cupLabel(core.model.cup.CupLevel.CONSOLATION, first, null))
+                .isEqualTo("Consolation");
+    }
+
+    @Test
     void tools_areTheMatchTools() {
         assertThat(MatchTools.tools()).extracting(McpTool::name)
                 .containsExactly("get_matches", "get_match", "get_match_events", "get_match_weather",

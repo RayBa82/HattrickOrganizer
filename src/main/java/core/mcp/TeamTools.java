@@ -25,7 +25,6 @@ import core.gui.HOMainFrame;
 import core.gui.RefreshManager;
 import core.model.HOVerwaltung;
 import core.model.UserParameter;
-import core.model.enums.MatchType;
 import core.model.match.MatchKurzInfo;
 import core.net.Connector;
 import core.net.OnlineWorker;
@@ -108,7 +107,8 @@ public final class TeamTools {
                 new McpTool("get_upcoming_matches",
                         "The fixture list of the current series (matches), plus our own upcoming cup "
                                 + "and friendly matches (otherUpcoming, soonest first) and nextCupMatch "
-                                + "(null = eliminated or not yet drawn). As of HO's last download; "
+                                + "(null = eliminated or not yet drawn); cup rows name the cup (cup, cupId). "
+                                + "As of HO's last download; "
                                 + "otherUpcoming's weather forecast is refreshed by get_match_weather.",
                         McpTool.schema(new JsonObject()),
                         args -> fixtures()),
@@ -542,9 +542,7 @@ public final class TeamTools {
         // As stored at the last download; get_match_weather refreshes a forecast that is not sure yet.
         row.addProperty("weather", m.getWeather().name());
         row.addProperty("weatherForecast", m.getWeatherForecast().name());
-        if (m.getMatchType() == MatchType.CUP) {
-            row.addProperty("cupLevel", m.getCupLevel() == null ? null : m.getCupLevel().name());
-        }
+        MatchTools.addCup(row, m);
         return row;
     }
 
