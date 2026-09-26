@@ -55,7 +55,37 @@ class TrainingToolsTest {
     @Test
     void tools_areTheTrainingTools() {
         assertThat(TrainingTools.tools()).extracting(McpTool::name)
-                .containsExactly("get_training", "get_player_history", "set_training");
+                .containsExactly("get_training", "get_player_history", "get_training_events",
+                        "set_training");
+    }
+
+    private static final core.file.xml.XMLTrainingEventsParser.TrainingEvents TWO_EVENTS =
+            new core.file.xml.XMLTrainingEventsParser.TrainingEvents(true, List.of(
+                    new core.file.xml.XMLTrainingEventsParser.TrainingEvent(2, 5, 6, 91, 14, 5),
+                    new core.file.xml.XMLTrainingEventsParser.TrainingEvent(8, 6, 7, 92, 5, 5)));
+
+    @Test
+    void trainingEventsJson_newestFirstWithChppSkillNames() {
+        final var events = TrainingTools.trainingEventsJson(4711, TWO_EVENTS, 0)
+                .getAsJsonArray("events");
+        final var newest = events.get(0).getAsJsonObject();
+        assertThat(newest.get("skill").getAsString()).isEqualTo("playmaking");   // CHPP 8, HO 3
+        assertThat(newest.get("oldLevel").getAsInt()).isEqualTo(6);
+        assertThat(newest.get("newLevel").getAsInt()).isEqualTo(7);
+        assertThat(events.get(1).getAsJsonObject().get("skill").getAsString()).isEqualTo("stamina");
+    }
+
+    /** Hattrick reports the local season; one season of offset is sixteen weeks of calendar. */
+    @Test
+    void trainingEventsJson_weekStartHonoursTheSeasonOffset() {
+        final var local = core.util.HODateTime.fromHT(TrainingTools.trainingEventsJson(1, TWO_EVENTS, 0)
+                .getAsJsonArray("events").get(0).getAsJsonObject().get("weekStart").getAsString());
+        final var shifted = core.util.HODateTime.fromHT(TrainingTools.trainingEventsJson(1, TWO_EVENTS, 1)
+                .getAsJsonArray("events").get(0).getAsJsonObject().get("weekStart").getAsString());
+        assertThat(java.time.Duration.between(shifted.getInstant(), local.getInstant()).toDays())
+                .isEqualTo(16 * 7);
+        assertThat(TrainingTools.trainingEventsJson(1, TWO_EVENTS, null)
+                .getAsJsonArray("events").get(0).getAsJsonObject().has("weekStart")).isFalse();
     }
 
     @Test

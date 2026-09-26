@@ -1,6 +1,7 @@
 package core.mcp;
 
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import core.constants.player.PlayerSkill;
 import core.db.DBManager;
@@ -24,6 +25,8 @@ import core.gui.HOMainFrame;
 import core.gui.RefreshManager;
 import core.model.HOVerwaltung;
 import core.model.UserParameter;
+import core.model.enums.MatchType;
+import core.model.match.MatchKurzInfo;
 import core.net.Connector;
 import core.net.OnlineWorker;
 import core.util.HODateTime;
@@ -103,7 +106,9 @@ public final class TeamTools {
                                 "teamId"),
                         TeamTools::scoutOpponent),
                 new McpTool("get_upcoming_matches",
-                        "The fixture list of the current series.",
+                        "The fixture list of the current series (matches), plus our own upcoming cup "
+                                + "and friendly matches (otherUpcoming, soonest first) and nextCupMatch "
+                                + "(null = eliminated or not yet drawn). As of HO's last download.",
                         McpTool.schema(new JsonObject()),
                         args -> fixtures()),
                 new McpTool("get_league_table",
@@ -453,7 +458,48 @@ public final class TeamTools {
         }
         final var json = new JsonObject();
         json.add("matches", matches);
+        final var teamId = model.getBasics().getTeamId();
+        final var others = ownNonLeagueUpcoming(
+                DBManager.instance().getMatchesKurzInfoUpComing(teamId), teamId);
+        json.add("otherUpcoming", others);
+        JsonElement nextCup = JsonNull.INSTANCE;
+        for (final var m : others) {
+            if ("CUP".equals(m.getAsJsonObject().get("matchType").getAsString())) {
+                nextCup = m;
+                break;
+            }
+        }
+        json.add("nextCupMatch", nextCup);
         return json;
+    }
+
+    /**
+     * Our own upcoming cup, friendly and other non-league matches, soonest first, as HO last
+     * downloaded them. No cup match here means eliminated - or a download older than the draw.
+     */
+    static JsonArray ownNonLeagueUpcoming(java.util.List<MatchKurzInfo> upcoming, int teamId) {
+        final var sorted = new java.util.ArrayList<>(upcoming);
+        sorted.sort(java.util.Comparator.comparing(MatchKurzInfo::getMatchSchedule,
+                java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())));
+        final var out = new JsonArray();
+        sorted.forEach(m -> out.add(upcomingRow(m, teamId)));
+        return out;
+    }
+
+    private static JsonObject upcomingRow(MatchKurzInfo m, int teamId) {
+        final var home = m.getHomeTeamID() == teamId;
+        final var row = new JsonObject();
+        row.addProperty("matchId", m.getMatchID());
+        row.addProperty("matchType", m.getMatchType().name());
+        row.addProperty("date", m.getMatchSchedule() == null ? null : m.getMatchSchedule().toHT());
+        final var where = home ? "home" : "away";
+        row.addProperty("location", m.isNeutral() ? "neutral" : where);
+        row.addProperty("opponentTeamId", home ? m.getGuestTeamID() : m.getHomeTeamID());
+        row.addProperty("opponentTeamName", home ? m.getGuestTeamName() : m.getHomeTeamName());
+        if (m.getMatchType() == MatchType.CUP) {
+            row.addProperty("cupLevel", m.getCupLevel() == null ? null : m.getCupLevel().name());
+        }
+        return row;
     }
 
     private static JsonObject leagueTable() throws McpToolException {

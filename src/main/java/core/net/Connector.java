@@ -368,9 +368,14 @@ public class Connector {
 		return url.toString();
 	}
 
-	/** view / challenge / accept / decline / withdraw. */
+	/** view / challengeable / challenge / accept / decline / withdraw. */
 	public String challenges(String actionType, Map<String, String> params) {
 		return getCHPPWebFile(challengesUrl(actionType, params));
+	}
+
+	/** Hattrick's own skill-change record for one player (file=trainingevents, version 1.3). */
+	public String getTrainingEvents(int playerId) {
+		return getCHPPWebFile(htUrl + "?file=trainingevents&version=1.3&playerID=" + playerId);
 	}
 
 	// ---- transfer bid (file=playerdetails, version 3.2, actionType=placeBid) ----

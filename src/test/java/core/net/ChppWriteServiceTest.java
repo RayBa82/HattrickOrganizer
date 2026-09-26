@@ -58,6 +58,7 @@ class ChppWriteServiceTest {
                 """;
         int challengeFetches;
         String lastChallengeAction;
+        java.util.Map<String, String> lastChallengeParams;
 
         @Override
         protected String fetchSetTraining(int teamId, int trainingType, int trainingLevel, int staminaLevel) {
@@ -69,6 +70,7 @@ class ChppWriteServiceTest {
         protected String fetchChallenges(String actionType, java.util.Map<String, String> params) {
             challengeFetches++;
             lastChallengeAction = actionType;
+            lastChallengeParams = params;
             return challengesResponse;
         }
 
@@ -183,6 +185,30 @@ class ChppWriteServiceTest {
         service.challengesResponse = "";
         assertThatExceptionOfType(ChppWriteService.ChppWriteException.class)
                 .isThrownBy(() -> service.listChallengesForAgent(false));
+    }
+
+    @Test
+    void checkChallengeable_isAReadThatSendsTheIdsCommaSeparated() throws Exception {
+        service.checkChallengeableForAgent(java.util.List.of(10, 11, 12), true);
+        assertThat(service.writesThisSession).isZero();
+        assertThat(service.lastChallengeAction).isEqualTo("challengeable");
+        assertThat(service.lastChallengeParams)
+                .containsEntry("suggestedTeamIds", "10,11,12")
+                .containsEntry("isWeekendFriendly", "1");
+    }
+
+    /** Error 70's two meanings reach the agent as reason tokens it can branch on. */
+    @Test
+    void arrangeChallenge_errorIsReportedWithItsReason() {
+        service.challengesResponse = """
+                <HattrickData><FileName>chpperror.xml</FileName>
+                  <ErrorCode>70</ErrorCode>
+                  <Error>Challenge failed (70) Additional Info: Your team already has booked a friendly this week</Error>
+                </HattrickData>
+                """;
+        assertThatExceptionOfType(ChppWriteService.ChppWriteException.class)
+                .isThrownBy(() -> service.arrangeChallengeForAgent(999, 0, 0, null, false))
+                .withMessageContaining("OWN_FRIENDLY_BOOKED (CHPP 70)");
     }
 
     @Test

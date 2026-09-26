@@ -829,6 +829,18 @@ class TransferToolsTest {
         }
     }
 
+    /** Our own listed players come back in their own list whatever includeAll says. */
+    @Test
+    void openBids_listsOurOwnListedPlayersUnderSelling() throws Exception {
+        installBidsService(sampleBids());
+        final var selling = openBidsTool().handler().call(new JsonObject()).getAsJsonArray("selling");
+        assertThat(playerIds(selling)).containsExactly(444);
+        final var sam = selling.get(0).getAsJsonObject();
+        assertThat(sam.get("hasBids").getAsBoolean()).isTrue();
+        assertThat(sam.get("highestBidTeamName").getAsString()).isEqualTo("Buyer FC");
+        assertThat(sam.get("deadline").getAsString()).isEqualTo("2030-01-01 20:00:00");
+    }
+
     @Test
     void openBids_includeAllReturnsEveryTrackedTransfer() throws Exception {
         installBidsService(sampleBids());

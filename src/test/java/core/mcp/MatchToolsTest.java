@@ -42,7 +42,87 @@ class MatchToolsTest {
         assertThat(MatchTools.tools()).extracting(McpTool::name)
                 .containsExactly("get_matches", "get_match", "get_opponent_ratings",
                         "get_rating_calibration", "simulate_lineup",
-                        "list_challenges", "arrange_challenge", "respond_to_challenge");
+                        "list_challenges", "check_challengeable", "arrange_challenge",
+                        "respond_to_challenge");
+    }
+
+    // ---- check_challengeable -------------------------------------------------------------------
+
+    private static final java.time.LocalDate TODAY = java.time.LocalDate.of(2026, 9, 26);
+
+    @Test
+    void challengeableRow_activeHumanManagerIsOk() {
+        final var row = MatchTools.challengeableRow(10,
+                new XMLChallengesParser.Challengeable(10, "Active FC", 77, true),
+                java.util.Map.of("LastLoginDate", "2026-09-25 21:10:00", "HasSupporter", "True",
+                        "IsBot", "False", "LeagueLevelUnitName", "V.12"),
+                TODAY);
+        assertThat(row.get("challengeable").getAsBoolean()).isTrue();
+        assertThat(row.get("daysSinceLogin").getAsInt()).isEqualTo(1);
+        assertThat(row.get("managerIsSupporter").getAsBoolean()).isTrue();
+        assertThat(row.get("isBot").getAsBoolean()).isFalse();
+        assertThat(row.get("series").getAsString()).isEqualTo("V.12");
+        assertThat(row.get("note").getAsString()).isEqualTo("ok");
+    }
+
+    @Test
+    void challengeableRow_flagsDormantAndBotTeams() {
+        final var dormant = MatchTools.challengeableRow(11,
+                new XMLChallengesParser.Challengeable(11, "Sleepy FC", 78, true),
+                java.util.Map.of("LastLoginDate", "2026-08-01 10:00:00", "IsBot", "False"), TODAY);
+        assertThat(dormant.get("note").getAsString()).contains("inactive for 56 days");
+
+        final var bot = MatchTools.challengeableRow(12,
+                new XMLChallengesParser.Challengeable(12, "Bot FC", 0, true),
+                java.util.Map.of("IsBot", "True"), TODAY);
+        assertThat(bot.get("note").getAsString()).contains("bot");
+    }
+
+    /** Hattrick leaving a team out, or teamdetails failing, is "unknown", not a crash. */
+    @Test
+    void challengeableRow_missingAnswerAndDetailsAreNulls() {
+        final var row = MatchTools.challengeableRow(13, null, java.util.Map.of(), TODAY);
+        assertThat(row.get("challengeable").isJsonNull()).isTrue();
+        assertThat(row.get("daysSinceLogin").isJsonNull()).isTrue();
+        assertThat(row.get("managerIsSupporter").isJsonNull()).isTrue();
+        assertThat(row.get("note").getAsString()).contains("did not answer");
+    }
+
+    @Test
+    void checkChallengeable_putsChallengeableAndRecentlyActiveTeamsFirst() throws Exception {
+        install(new ChppWriteService() {
+            @Override
+            public List<XMLChallengesParser.Challengeable> checkChallengeableForAgent(
+                    List<Integer> ids, boolean weekend) {
+                return List.of(new XMLChallengesParser.Challengeable(1, "No", 0, false),
+                        new XMLChallengesParser.Challengeable(2, "Old", 0, true),
+                        new XMLChallengesParser.Challengeable(3, "Fresh", 0, true));
+            }
+
+            @Override
+            public java.util.Map<String, String> teamActivityForAgent(int teamId) {
+                return java.util.Map.of("LastLoginDate",
+                        teamId == 2 ? "2020-01-01 00:00:00" : "2099-01-01 00:00:00");
+            }
+        });
+        final var args = JsonParser.parseString("{\"teamIds\":[1,2,3]}").getAsJsonObject();
+        final var teams = tool("check_challengeable").handler().call(args).getAsJsonArray("teams");
+        assertThat(teams).extracting(t -> t.getAsJsonObject().get("teamId").getAsInt())
+                .containsExactly(3, 2, 1);
+    }
+
+    @Test
+    void checkChallengeable_rejectsAnEmptyOrOversizedList() {
+        final var none = JsonParser.parseString("{\"teamIds\":[]}").getAsJsonObject();
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> tool("check_challengeable").handler().call(none));
+
+        final var many = new com.google.gson.JsonArray();
+        for (int i = 1; i <= MatchTools.MAX_CHALLENGEABLE_TEAMS + 1; i++) many.add(i);
+        final var tooMany = new JsonObject();
+        tooMany.add("teamIds", many);
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> tool("check_challengeable").handler().call(tooMany));
     }
 
     @Test

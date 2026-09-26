@@ -53,7 +53,7 @@ and the data types are captured under [`raw/chpp/`](raw/chpp/README.md), one fil
 | tournamentleaguetables | League tables for a tournament.                                                             | 1.1 (2021-06-01)         | -            |
 | tournamentlist         | Information about tournaments that the user is currently playing in.                        | 1.0 (2013-10-17)         |              |
 | training               | Training                                                                                    | 2.2 (2013-11-21)         | 2.1, 2.2     |
-| trainingevents         | Get training events for a player.                                                           | 1.3 (2013-03-04)         | -            |
+| trainingevents         | Get training events for a player.                                                           | 1.3 (2013-03-04)         | 1.3          |
 | transfersearch         | Search the transfer market.                                                                 | 1.1 (2022-03-03)         | 1.1          |
 | transfersteam          | Get the transfer history of a team                                                          | 1.2 (2011-04-13)         | 1.1          |
 | transfersplayer        | Get all transfers of a player                                                               | 1.1                      | 1.1          |
@@ -159,7 +159,7 @@ U21 Friendlies `4894807`.
 (defaults to the primary senior team) and `isWeekendFriendly`.
 
 - `challengeable` - `suggestedTeamIds`, comma-separated: checks whether each team can be
-  challenged. Not used by HO.
+  challenged. Used by the `check_challengeable` MCP tool.
 - `challenge` - `opponentTeamId` (required), `matchType` 0 normal / 1 cup rules, `matchPlace`
   0 home / 1 away / 2 neutral, `neutralArenaId` (required when `matchPlace=2`).
 - `accept` / `decline` / `withdraw` - `trainingMatchId`.
@@ -265,5 +265,5 @@ HO issues these write actions on behalf of the managed team (exposed over MCP, s
 |---|---|---|---|
 | `training` | 2.2 | `setTraining` | set senior training type / intensity (0-100) / stamina share (5-100); `teamId` required, needs the `set_training` scope |
 | `matchorders` | 3.0 | `setmatchorder` | upload the match order for an upcoming game (pre-existing) |
-| `challenges` | 1.6 | `view` / `challenge` / `accept` / `decline` / `withdraw` | list and manage friendly challenges |
+| `challenges` | 1.6 | `view` / `challengeable` / `challenge` / `accept` / `decline` / `withdraw` | list and manage friendly challenges; `view` and `challengeable` are reads |
 | `playerdetails` | 3.2 | `placeBid` | place a transfer bid (`bidAmount` / `maxBidAmount` are Money in SEK; needs the `place_bid` scope and Supporter) |

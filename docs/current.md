@@ -2880,3 +2880,37 @@ there before guessing a CHPP parameter or element name.
 - The full CHPP error-code table and the `overrideIsSupporter=-1..3` test switch are now in
   `docs/chpp_files.md`. HO detects `ErrorCode` (`XMLCHPPPreParser`) but has no code-to-text table; mapping them to text for the
   MCP write tools (70 challenge failed, 71 bid failed, 92 transfer market down, ...) is a follow-up.
+- Error 70 means two different things, told apart only by the additional-info text (seen live by
+  the hattrick session; the docs say nothing). "Hat bereits ein Freundschaftsspiel vereinbart"
+  (German, 2026-09-03) = the OPPONENT's slot is booked: try the next team. "Your team already has
+  booked a friendly this week" (2026-09-06) = OUR slot is booked: stop. One text came back in
+  German and one in English (cause unknown), so the mapping must accept both languages.
+- `send_match_order` error 6 is Hattrick saying the token's account is not a Supporter (installed
+  HO log, 2026-09-03 18:16: "Action type setmatchorder is only available for Hattrick Supporters").
+  The docs list no Supporter requirement for `setmatchorder`, but the server enforces one. This is an
+  account question, not an HO bug. Confirmed 2026-09-26: the user is not a Supporter.
+
+## Four tools from the hattrick session's wishlist (2026-09-26)
+
+- **Readable CHPP errors.** `core.net.ChppError` parses the `getError` / `lastError` string
+  ("CHPP <Fehler> - <code> - <text> (<code>) Additional Info: <detail>") into code, reason, text
+  and detail. `ChppWriteService` reports every rejection as
+  `REASON (CHPP n): what to do. Hattrick said: ...`, so an agent can branch on the token.
+  Error 70 splits into `OWN_FRIENDLY_BOOKED` / `OPPONENT_FRIENDLY_BOOKED` / `CHALLENGE_FAILED`
+  on Hattrick's text (the two texts above). A new error-70 wording falls back to
+  `CHALLENGE_FAILED` with the text attached, so extend `ChppError.challengeReason` when one shows up.
+- **`check_challengeable`** (MatchTools): `challenges` `challengeable` for up to 20 teams, plus
+  one `teamdetails` read per team for last login, supporter and bot status. Challengeable first,
+  then most recently active. All reads, no write cap. That is 1 + N CHPP calls per use.
+- **`get_upcoming_matches`** gained `otherUpcoming` (our cup and friendly matches, from
+  `MATCHESKURZINFO` via `getMatchesKurzInfoUpComing`) and `nextCupMatch`. No new CHPP call; it is
+  as fresh as the last download. No cup round: `MatchKurzInfo` does not store it.
+- **`get_open_bids`** always returns `selling`: our own listed players (currentbids tracking
+  type 1) with the highest bid. Type 1 is not Supporter-gated.
+- **`get_training_events`** (TrainingTools): `trainingevents` 1.3, newest first, CHPP SkillID
+  mapped to names (it is not HO's PlayerSkill numbering). `weekStart` = `fromHTWeek(season -
+  seasonOffset, matchRound)`, exact only for players in our league (a foreign player's season is
+  his own league's). Not verified live: whether `matchRound` always equals the HT week.
+
+None of this has been exercised against live CHPP yet; the unit tests use XML shaped from the
+captured docs.

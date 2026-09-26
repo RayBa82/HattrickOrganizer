@@ -29,6 +29,10 @@ public class XMLChallengesParser {
     public record ChallengeLists(List<Challenge> outgoing, List<Challenge> incoming) {
     }
 
+    /** One team from a {@code challengeable} answer. Hattrick gives no reason when it is false. */
+    public record Challengeable(int teamId, String teamName, int userId, boolean isChallengeable) {
+    }
+
     private XMLChallengesParser() {
     }
 
@@ -41,6 +45,31 @@ public class XMLChallengesParser {
         return new ChallengeLists(
                 parseList(root, "ChallengesByMe", "Challenge"),
                 parseList(root, "OffersByOthers", "Offer"));
+    }
+
+    /** A {@code challengeable} response: {@code ChallengeableResult/Opponent}, one per team asked. */
+    public static List<Challengeable> parseChallengeable(String xml) {
+        final var result = new ArrayList<Challengeable>();
+        final var doc = XMLManager.parseString(xml);
+        final var container = doc == null ? null
+                : (Element) doc.getDocumentElement().getElementsByTagName("ChallengeableResult").item(0);
+        if (container == null) {
+            return result;
+        }
+        final var items = container.getElementsByTagName("Opponent");
+        for (int i = 0; i < items.getLength(); i++) {
+            try {
+                final var o = (Element) items.item(i);
+                result.add(new Challengeable(
+                        parseInt(XMLManager.xmlValue(o, "TeamID")),
+                        XMLManager.xmlValue(o, "TeamName"),
+                        parseInt(XMLManager.xmlValue(o, "UserId")),
+                        "true".equalsIgnoreCase(XMLManager.xmlValue(o, "IsChallengeable"))));
+            } catch (RuntimeException e) {
+                HOLogger.instance().log(XMLChallengesParser.class, e);
+            }
+        }
+        return result;
     }
 
     private static List<Challenge> parseList(Element root, String containerTag, String itemTag) {

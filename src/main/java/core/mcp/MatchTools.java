@@ -132,6 +132,17 @@ public final class MatchTools {
                                 "weekend", McpTool.prop("boolean",
                                         "list weekend friendly challenges instead of midweek; default false"))),
                         MatchTools::listChallenges),
+                new McpTool("check_challengeable",
+                        "Screen up to 20 teams before arrange_challenge: whether Hattrick lets us "
+                                + "challenge each one now, plus the manager's last login, supporter and "
+                                + "bot status. Challengeable teams first, most recently active first. "
+                                + "A read - does not spend the write cap.",
+                        McpTool.schema(McpTool.properties(
+                                        "teamIds", McpTool.prop("array", "team ids to check, 1-20"),
+                                        "weekend", McpTool.prop("boolean",
+                                                "check for a weekend friendly; default false")),
+                                "teamIds"),
+                        MatchTools::checkChallengeable),
                 new McpTool("arrange_challenge",
                         "Send a friendly challenge to another team. Leaves the machine. Poll "
                                 + "list_challenges afterwards for whether the opponent agreed.",
@@ -193,6 +204,96 @@ public final class MatchTools {
             arr.add(j);
         }
         return arr;
+    }
+
+    static final int MAX_CHALLENGEABLE_TEAMS = 20;
+
+    private static JsonObject checkChallengeable(JsonObject args) throws McpToolException {
+        final var ids = new java.util.ArrayList<Integer>();
+        if (args.has("teamIds") && args.get("teamIds").isJsonArray()) {
+            args.getAsJsonArray("teamIds").forEach(e -> ids.add(e.getAsInt()));
+        }
+        if (ids.isEmpty() || ids.size() > MAX_CHALLENGEABLE_TEAMS) {
+            throw new IllegalArgumentException(
+                    "teamIds must hold 1-" + MAX_CHALLENGEABLE_TEAMS + " team ids, had " + ids.size());
+        }
+        final var weekend = McpJson.optBool(args, "weekend", false);
+        final java.util.List<core.file.xml.XMLChallengesParser.Challengeable> answer;
+        try {
+            answer = ChppWriteService.instance().checkChallengeableForAgent(ids, weekend);
+        } catch (ChppWriteService.ChppWriteException e) {
+            throw new McpToolException(e.getMessage());
+        }
+        final var byId = new java.util.HashMap<Integer, core.file.xml.XMLChallengesParser.Challengeable>();
+        answer.forEach(c -> byId.put(c.teamId(), c));
+
+        final var rows = new java.util.ArrayList<JsonObject>();
+        for (final var id : ids) {
+            rows.add(challengeableRow(id, byId.get(id),
+                    ChppWriteService.instance().teamActivityForAgent(id),
+                    // Hattrick's dates are Swedish time
+                    java.time.LocalDate.now(java.time.ZoneId.of("Europe/Stockholm"))));
+        }
+        rows.sort(CHALLENGEABLE_ORDER);
+        final var teams = new JsonArray();
+        rows.forEach(teams::add);
+        final var out = new JsonObject();
+        out.add("teams", teams);
+        return out;
+    }
+
+    /** Challengeable first, then the most recent login first; unknown logins last. */
+    static final java.util.Comparator<JsonObject> CHALLENGEABLE_ORDER = java.util.Comparator
+            .<JsonObject, Boolean>comparing(r -> !McpJson.optBool(r, "challengeable", false))
+            .thenComparing(r -> r.get("daysSinceLogin").isJsonNull()
+                    ? Integer.MAX_VALUE : r.get("daysSinceLogin").getAsInt());
+
+    /**
+     * One team's row. {@code answer} is null when Hattrick left the team out of its reply;
+     * {@code details} is empty when teamdetails could not be read. Neither is an error.
+     */
+    static JsonObject challengeableRow(int teamId,
+            core.file.xml.XMLChallengesParser.Challengeable answer,
+            java.util.Map<String, String> details, java.time.LocalDate today) {
+        final var row = new JsonObject();
+        row.addProperty("teamId", teamId);
+        final var name = answer != null && !answer.teamName().isBlank()
+                ? answer.teamName() : details.get("TeamName");
+        row.addProperty("teamName", name);
+        row.addProperty("challengeable", answer == null ? null : answer.isChallengeable());
+        row.addProperty("series", details.get("LeagueLevelUnitName"));
+
+        final var lastLogin = details.get("LastLoginDate");
+        Integer days = null;
+        if (lastLogin != null && lastLogin.length() >= 10) {
+            try {
+                days = (int) java.time.temporal.ChronoUnit.DAYS.between(
+                        java.time.LocalDate.parse(lastLogin.substring(0, 10)), today);
+            } catch (java.time.format.DateTimeParseException ignored) {
+                // keep days null: the date is reported raw below
+            }
+        }
+        row.addProperty("lastLoginDate", lastLogin);
+        row.addProperty("daysSinceLogin", days);
+        row.addProperty("managerIsSupporter", details.containsKey("HasSupporter")
+                ? "True".equalsIgnoreCase(details.get("HasSupporter")) : null);
+        final var isBot = "True".equalsIgnoreCase(details.get("IsBot"));
+        row.addProperty("isBot", details.containsKey("IsBot") ? isBot : null);
+
+        final String note;
+        if (answer == null) {
+            note = "Hattrick did not answer for this team";
+        } else if (!answer.isChallengeable()) {
+            note = "not challengeable now (Hattrick gives no reason)";
+        } else if (isBot) {
+            note = "bot team: will not answer a challenge";
+        } else if (days != null && days > 7) {
+            note = "manager inactive for " + days + " days: an answer is unlikely";
+        } else {
+            note = "ok";
+        }
+        row.addProperty("note", note);
+        return row;
     }
 
     private static JsonObject arrangeChallenge(JsonObject args) throws McpToolException {

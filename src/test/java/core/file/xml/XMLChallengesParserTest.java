@@ -91,6 +91,36 @@ class XMLChallengesParserTest {
         assertThat(in.isAgreed()).isTrue();
     }
 
+    /**
+     * The challengeable answer repeats the view's team block (with its own Opponent elements) and
+     * adds ChallengeableResult/Opponent, per the challenges 1.6 doc. Only the latter may be read.
+     */
+    @Test
+    void parseChallengeable_readsOnlyTheChallengeableResult() {
+        final var xml = VIEW.replace("</Team>", """
+                </Team>
+                <ChallengeableResult>
+                  <Opponent>
+                    <IsChallengeable>True</IsChallengeable>
+                    <UserId>42</UserId>
+                    <TeamID>1877</TeamID>
+                    <TeamName>Rivals FC</TeamName>
+                  </Opponent>
+                  <Opponent>
+                    <IsChallengeable>False</IsChallengeable>
+                    <UserId>43</UserId>
+                    <TeamID>1878</TeamID>
+                    <TeamName>Busy FC</TeamName>
+                  </Opponent>
+                </ChallengeableResult>""");
+        final var result = XMLChallengesParser.parseChallengeable(xml);
+        assertThat(result).containsExactly(
+                new XMLChallengesParser.Challengeable(1877, "Rivals FC", 42, true),
+                new XMLChallengesParser.Challengeable(1878, "Busy FC", 43, false));
+        assertThat(XMLChallengesParser.parseChallengeable(VIEW)).isEmpty();
+        assertThat(XMLChallengesParser.parseChallengeable("not xml")).isEmpty();
+    }
+
     @Test
     void parse_garbageIsTwoEmptyLists() {
         final var lists = XMLChallengesParser.parse("not xml");

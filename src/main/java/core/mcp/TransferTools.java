@@ -122,10 +122,9 @@ public final class TransferTools {
                 new McpTool("get_open_bids",
                         "Transfers this team has an active bid on, from Hattrick's own tracking - "
                                 + "so it sees bids placed on the website too. Each row says whether "
-                                + "you are the leading bidder, plus what HO holds locally: "
-                                + "askingPrice, and once finished salePrice, outcome and ourBid. "
-                                + "includeAll returns every tracked transfer with its raw "
-                                + "trackingTypeId.",
+                                + "you are the leading bidder, plus askingPrice and, once finished, "
+                                + "salePrice, outcome and ourBid. selling lists our own listed players "
+                                + "with their highest bid. includeAll returns every tracked transfer.",
                         McpTool.schema(McpTool.properties(
                                 "includeAll", McpTool.prop("boolean",
                                         "return every tracked transfer, not just your open bids; "
@@ -1436,11 +1435,35 @@ public final class TransferTools {
         out.addProperty("currency", McpJson.currency());
         out.addProperty("count", bids.size());
         out.add("bids", bids);
+        out.add("selling", sellingRows(current));
         if (!includeAll) {
             out.addProperty("note", "leading_bid / losing_bid are inferred from trackingTypeId "
                     + "2 / 8; pass includeAll to see every tracked transfer.");
         }
         return out;
+    }
+
+    /**
+     * Our own transfer-listed players (trackingTypeId 1, "Selling" in the CHPP data types) with the
+     * current highest bid. Not Supporter-gated, unlike the 5 / 8 / 9 / 10 categories.
+     */
+    static JsonArray sellingRows(XMLCurrentBidsParser.CurrentBids current) {
+        final var rows = new JsonArray();
+        for (final var item : current.items()) {
+            if (item.trackingTypeId() != 1) {
+                continue;
+            }
+            final var json = new JsonObject();
+            json.addProperty("playerId", item.playerId());
+            json.addProperty("playerName", item.playerName());
+            json.addProperty("deadline", item.deadline());
+            json.addProperty("hasBids", item.highestBidAmount() > 0);
+            json.addProperty("highestBid", McpJson.money(item.highestBidAmount()));
+            json.addProperty("highestBidTeamId", item.highestBidTeamId());
+            json.addProperty("highestBidTeamName", item.highestBidTeamName());
+            rows.add(json);
+        }
+        return rows;
     }
 
     /**

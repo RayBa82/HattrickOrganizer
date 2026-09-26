@@ -73,10 +73,10 @@ public class ChppWriteService {
         writesThisSession++;
     }
 
-    /** {@link Connector#lastError()} if there is one, else a pointer to the log. */
+    /** {@link Connector#lastError()}, made readable, if there is one, else a pointer to the log. */
     private static String reason() {
         final var cause = Connector.instance().lastError();
-        return cause == null ? "no answer, see HO's log." : cause;
+        return cause == null ? "no answer, see HO's log." : ChppError.readable(cause);
     }
 
     private static long parseLongOrZero(String s) {
@@ -128,7 +128,8 @@ public class ChppWriteService {
         final var error = XMLCHPPPreParser.getError(xml);
         if (!error.isEmpty()) {
             // Missing set_training scope, out-of-range value, teamId not a managed senior team.
-            throw new ChppWriteException(null, "Hattrick rejected the training change: " + error);
+            throw new ChppWriteException(null, "Hattrick rejected the training change: "
+                    + ChppError.readable(error));
         }
 
         // The setTraining response is the training "view" output: <Team> carries the current
@@ -162,17 +163,56 @@ public class ChppWriteService {
     // ===================== challenges =====================
 
     private static final Set<String> RESPONSE_VERBS = Set.of("accept", "decline", "withdraw");
+    private static final String WEEKEND_PARAM = "isWeekendFriendly";
 
     /** A read. Shares the silent-fetch handling but does not count against the write cap. */
     public XMLChallengesParser.ChallengeLists listChallengesForAgent(boolean weekend)
             throws ChppWriteException {
         final Map<String, String> params = weekend
-                ? Map.of("isWeekendFriendly", "1") : Map.of();
+                ? Map.of(WEEKEND_PARAM, "1") : Map.of();
         final var xml = fetchChallenges("view", params);
         if (xml == null || xml.isBlank()) {
             throw new ChppWriteException(null, "Hattrick rejected the challenge list: " + reason());
         }
         return XMLChallengesParser.parse(xml);
+    }
+
+    /**
+     * A read: whether each team can be challenged now. Needs the manage_challenges scope but does
+     * not count against the write cap. Teams Hattrick leaves out of its answer are absent.
+     */
+    public java.util.List<XMLChallengesParser.Challengeable> checkChallengeableForAgent(
+            java.util.List<Integer> teamIds, boolean weekend) throws ChppWriteException {
+        final var params = new LinkedHashMap<String, String>();
+        params.put("suggestedTeamIds", String.join(",", teamIds.stream().map(String::valueOf).toList()));
+        if (weekend) {
+            params.put(WEEKEND_PARAM, "1");
+        }
+        final var xml = fetchChallenges("challengeable", params);
+        if (xml == null || xml.isBlank()) {
+            throw new ChppWriteException(null, "Hattrick rejected the challengeable check: " + reason());
+        }
+        return XMLChallengesParser.parseChallengeable(xml);
+    }
+
+    /**
+     * A read: the teamdetails fields that say whether a manager is still around -
+     * LastLoginDate, HasSupporter, IsBot, TeamName, LeagueLevelUnitName. Empty if Hattrick did not
+     * answer; the caller treats that as "unknown", not as an error.
+     */
+    public Map<String, String> teamActivityForAgent(int teamId) {
+        final var xml = fetchTeamDetails(teamId);
+        return xml == null || xml.isBlank() ? Map.of()
+                : core.file.xml.XMLTeamDetailsParser.parseTeamdetailsFromString(xml, teamId);
+    }
+
+    protected String fetchTeamDetails(int teamId) {
+        final var was = Connector.instance().setSilentDownload(true);
+        try {
+            return Connector.instance().getTeamDetails(teamId);
+        } finally {
+            Connector.instance().setSilentDownload(was);
+        }
     }
 
     public void arrangeChallengeForAgent(int opponentTeamId, int friendlyType, int matchPlace,
@@ -190,7 +230,7 @@ public class ChppWriteService {
             params.put("neutralArenaId", String.valueOf(neutralArenaId));
         }
         if (weekend) {
-            params.put("isWeekendFriendly", "1");
+            params.put(WEEKEND_PARAM, "1");
         }
         requireAccepted(fetchChallenges("challenge", params), "arrange challenge");
     }
@@ -214,7 +254,8 @@ public class ChppWriteService {
         }
         final var error = XMLCHPPPreParser.getError(xml);
         if (!error.isEmpty()) {
-            throw new ChppWriteException(null, "Hattrick rejected the " + what + ": " + error);
+            throw new ChppWriteException(null, "Hattrick rejected the " + what + ": "
+                    + ChppError.readable(error));
         }
     }
 
@@ -248,6 +289,27 @@ public class ChppWriteService {
         }
     }
 
+    // ===================== training events =====================
+
+    /** A read. Shares the silent-fetch handling but does not count against the write cap. */
+    public core.file.xml.XMLTrainingEventsParser.TrainingEvents trainingEventsForAgent(int playerId)
+            throws ChppWriteException {
+        final var xml = fetchTrainingEvents(playerId);
+        if (xml == null || xml.isBlank()) {
+            throw new ChppWriteException(null, "Hattrick rejected the training events: " + reason());
+        }
+        return core.file.xml.XMLTrainingEventsParser.parse(xml);
+    }
+
+    protected String fetchTrainingEvents(int playerId) {
+        final var was = Connector.instance().setSilentDownload(true);
+        try {
+            return Connector.instance().getTrainingEvents(playerId);
+        } finally {
+            Connector.instance().setSilentDownload(was);
+        }
+    }
+
     // ===================== match order =====================
 
     public String sendMatchOrderForAgent(int matchId, MatchType matchType, String orderString)
@@ -268,7 +330,7 @@ public class ChppWriteService {
         } catch (Exception e) {
             HOLogger.instance().log(ChppWriteService.class, e);
             throw new ChppWriteException(null,
-                    "Hattrick rejected the match order: " + e.getMessage());
+                    "Hattrick rejected the match order: " + ChppError.readable(e.getMessage()));
         }
     }
 
@@ -311,7 +373,8 @@ public class ChppWriteService {
         if (!error.isEmpty()) {
             // placeBid fails for many reasons: not a Supporter, bid below the minimum, deadline
             // passed, already the highest bidder. The CHPP <error> carries which.
-            throw new ChppWriteException("BidFailed", "Hattrick rejected the bid: " + error);
+            throw new ChppWriteException("BidFailed", "Hattrick rejected the bid: "
+                    + ChppError.readable(error));
         }
         final var doc = XMLManager.parseString(xml);
         final var player = doc == null ? null

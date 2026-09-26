@@ -61,6 +61,71 @@ public final class TrainingTools {
     private TrainingTools() {
     }
 
+    private static JsonObject trainingEvents(JsonObject args) throws McpToolException {
+        final var playerId = McpJson.reqInt(args, "playerId");
+        final core.file.xml.XMLTrainingEventsParser.TrainingEvents events;
+        try {
+            events = ChppWriteService.instance().trainingEventsForAgent(playerId);
+        } catch (ChppWriteService.ChppWriteException e) {
+            throw new McpToolException(e.getMessage());
+        }
+        final var model = core.model.HOVerwaltung.instance().getModel();
+        return trainingEventsJson(playerId, events,
+                model == null ? null : model.getBasics().getSeasonOffset());
+    }
+
+    /**
+     * {@code seasonOffset} turns the local season Hattrick reports into the global one
+     * {@link HODateTime#fromHTWeek} counts in; null leaves weekStart out.
+     */
+    static JsonObject trainingEventsJson(int playerId,
+            core.file.xml.XMLTrainingEventsParser.TrainingEvents events, Integer seasonOffset) {
+        final var sorted = new ArrayList<>(events.events());
+        sorted.sort(java.util.Comparator
+                .comparingInt(core.file.xml.XMLTrainingEventsParser.TrainingEvent::season)
+                .thenComparingInt(core.file.xml.XMLTrainingEventsParser.TrainingEvent::matchRound)
+                .thenComparingInt(core.file.xml.XMLTrainingEventsParser.TrainingEvent::dayNumber)
+                .reversed());
+        final var rows = new JsonArray();
+        for (final var e : sorted) {
+            final var row = new JsonObject();
+            row.addProperty("skill", chppSkillName(e.skillId()));
+            row.addProperty("oldLevel", e.oldLevel());
+            row.addProperty("newLevel", e.newLevel());
+            row.addProperty("season", e.season());
+            row.addProperty("matchRound", e.matchRound());
+            row.addProperty("dayNumber", e.dayNumber());
+            if (seasonOffset != null && e.season() > 0 && e.matchRound() > 0) {
+                row.addProperty("weekStart", HODateTime.fromHTWeek(new HODateTime.HTWeek(
+                        e.season() - seasonOffset, e.matchRound())).toHT());
+            }
+            rows.add(row);
+        }
+        final var out = new JsonObject();
+        out.addProperty("playerId", playerId);
+        out.addProperty("available", events.available());
+        out.add("events", rows);
+        return out;
+    }
+
+    /** CHPP SkillID (datatypes.md), which is not HO's PlayerSkill numbering. */
+    static String chppSkillName(int skillId) {
+        return switch (skillId) {
+            case 1 -> "keeper";
+            case 2 -> "stamina";
+            case 3 -> "setpieces";
+            case 4 -> "defending";
+            case 5 -> "scoring";
+            case 6 -> "winger";
+            case 7 -> "passing";
+            case 8 -> "playmaking";
+            case 9 -> "trainer";
+            case 10 -> "leadership";
+            case 11 -> "experience";
+            default -> "unknown_" + skillId;
+        };
+    }
+
     public static List<McpTool> tools() {
         return List.of(
                 new McpTool("get_training",
@@ -102,6 +167,16 @@ public final class TrainingTools {
                                                 + "the growth question on their own and the series "
                                                 + "is a wall of numbers"))),
                         TrainingTools::playerHistory),
+                new McpTool("get_training_events",
+                        "Hattrick's own record of a player's skill changes: skill, old -> new level, "
+                                + "season / matchRound / dayNumber, newest first, plus weekStart (the "
+                                + "date that week began, exact for players in our league). Dates "
+                                + "level-ups that get_player_history cannot. One CHPP read per call; "
+                                + "empty while the player is in a match.",
+                        McpTool.schema(McpTool.properties(
+                                        "playerId", McpTool.prop("integer", "the player to report on")),
+                                "playerId"),
+                        TrainingTools::trainingEvents),
                 new McpTool("set_training",
                         "Set the senior team's training. Call get_training first for the current "
                                 + "values and for what each trainingType id trains. This leaves the "

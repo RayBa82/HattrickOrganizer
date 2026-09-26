@@ -29,6 +29,39 @@ class TeamToolsTest {
                         "download_team");
     }
 
+    private static core.model.match.MatchKurzInfo upcoming(int id, core.model.enums.MatchType type,
+            String date, int home, int away) {
+        final var m = new core.model.match.MatchKurzInfo();
+        m.setMatchID(id);
+        m.setMatchType(type);
+        m.setMatchSchedule(core.util.HODateTime.fromHT(date));
+        m.setHomeTeamID(home);
+        m.setHomeTeamName("T" + home);
+        m.setGuestTeamID(away);
+        m.setGuestTeamName("T" + away);
+        return m;
+    }
+
+    /** The DB hands them over newest first; the tool must put the soonest first. */
+    @Test
+    void ownNonLeagueUpcoming_soonestFirstWithOpponentAndSide() {
+        final var rows = TeamTools.ownNonLeagueUpcoming(java.util.List.of(
+                upcoming(2, core.model.enums.MatchType.FRIENDLYNORMAL, "2026-10-01 18:00:00", 500, 1),
+                upcoming(1, core.model.enums.MatchType.CUP, "2026-09-30 18:00:00", 1, 600)), 1);
+
+        assertThat(rows).extracting(r -> r.getAsJsonObject().get("matchId").getAsInt())
+                .containsExactly(1, 2);
+        final var cup = rows.get(0).getAsJsonObject();
+        assertThat(cup.get("matchType").getAsString()).isEqualTo("CUP");
+        assertThat(cup.get("location").getAsString()).isEqualTo("home");
+        assertThat(cup.get("opponentTeamId").getAsInt()).isEqualTo(600);
+        assertThat(cup.has("cupLevel")).isTrue();
+        final var friendly = rows.get(1).getAsJsonObject();
+        assertThat(friendly.get("location").getAsString()).isEqualTo("away");
+        assertThat(friendly.get("opponentTeamName").getAsString()).isEqualTo("T500");
+        assertThat(friendly.has("cupLevel")).isFalse();
+    }
+
     @Test
     void downloadTeam_takesNoArgumentsAtAll() {
         final var download = TeamTools.tools().stream()
