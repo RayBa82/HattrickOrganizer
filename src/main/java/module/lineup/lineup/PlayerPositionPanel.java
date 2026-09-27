@@ -77,11 +77,18 @@ public class PlayerPositionPanel extends JPanel implements ItemListener, FocusLi
         // ponytail: getSize() hack, a custom ComboPopup if another LAF computes the width differently
         private boolean layingOut;
         private int popupWidth;
+        private boolean placingPopup;
+
 
         {
             addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
                 @Override
                 public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) {
+                    // the popup menu itself fires this once its location is set: placing is over
+                    if (e.getSource() instanceof JPopupMenu) {
+                        placingPopup = false;
+                        return;
+                    }
                     final JList<PlayerCBItem> probe = new JList<>();
                     int widest = UserParameter.instance().fontSize * 18;
                     for (int i = 0; i < getItemCount(); i++) {
@@ -89,6 +96,11 @@ public class PlayerPositionPanel extends JPanel implements ItemListener, FocusLi
                     }
                     // room for the popup's scroll bar and border
                     popupWidth = widest + UIManager.getInt("ScrollBar.width") + 8;
+                    if (getUI().getAccessibleChild((JComponent) e.getSource(), 0) instanceof JPopupMenu menu) {
+                        menu.removePopupMenuListener(this);
+                        menu.addPopupMenuListener(this);
+                        placingPopup = true;
+                    }
                 }
 
                 @Override
@@ -113,6 +125,15 @@ public class PlayerPositionPanel extends JPanel implements ItemListener, FocusLi
             final Dimension size = super.getSize();
             if (!layingOut) size.width = Math.max(size.width, popupWidth);
             return size;
+        }
+
+        // Every LAF places the popup at the combo's screen position; shifted left by half the overhang
+        // while it is placed, the popup opens centred under the tile.
+        @Override
+        public Point getLocationOnScreen() {
+            final Point at = super.getLocationOnScreen();
+            if (placingPopup) at.x -= Math.max(0, (popupWidth - getWidth()) / 2);
+            return at;
         }
     };
     private final CellRendererPane rendererPane = new CellRendererPane();
@@ -836,6 +857,15 @@ public class PlayerPositionPanel extends JPanel implements ItemListener, FocusLi
     }
 
     public void addSwapItem(Component c) {
+        if (isTile()) {
+            // span both columns so the arrows sit centred over the kit, like the dropdown below
+            final GridBagConstraints constraints = layout.getConstraints(c);
+            constraints.gridx = 0;
+            constraints.gridwidth = 2;
+            constraints.anchor = GridBagConstraints.CENTER;
+            constraints.insets = new Insets(5, 0, 0, 0);
+            layout.setConstraints(c, constraints);
+        }
         jlp.add(c, layerIndex);
         if (isTile() && c instanceof AbstractButton button) {
             showOnHover(button);

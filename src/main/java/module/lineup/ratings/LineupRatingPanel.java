@@ -19,7 +19,6 @@ import java.awt.*;
 import java.text.NumberFormat;
 
 import static core.model.UserParameter.GOALKEEPER_AT_TOP;
-import static module.lineup.LineupPanel.TITLE_FG;
 
 
 public final class LineupRatingPanel extends JPanel implements core.gui.Refreshable {
@@ -418,14 +417,14 @@ public final class LineupRatingPanel extends JPanel implements core.gui.Refresha
         //ratingPanelLayout.setConstraints(m_jbFeedbackButton, gbcRatingPanelLayout);
         //jpSharing.add(m_jbFeedbackButton);
 
-        m_jbCopyRatingButton.setIcon(ImageUtilities.getCopyIcon(22, TITLE_FG));
+        // a plain icon button: no box, some room around the icon, a hand cursor to show it is clickable
+        m_jbCopyRatingButton.setIcon(ImageUtilities.getCopyIcon(18, MUTED_FG));
         m_jbCopyRatingButton.addActionListener(new CopyListener(this));
         m_jbCopyRatingButton.setBorderPainted(false);
         m_jbCopyRatingButton.setContentAreaFilled(false);
-        m_jbCopyRatingButton.setBorderPainted(false);
-        m_jbCopyRatingButton.setPreferredSize(new Dimension(24, 24));
-        m_jbCopyRatingButton.setMinimumSize(new Dimension(24, 24));
-        m_jbCopyRatingButton.setMaximumSize(new Dimension(24, 24));
+        m_jbCopyRatingButton.setFocusPainted(false);
+        m_jbCopyRatingButton.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
+        m_jbCopyRatingButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         gbcRatingPanelLayout.gridy = 1;
         gbcRatingPanelLayout.insets = new Insets(5, 8, 5, 8);
         ratingPanelLayout.setConstraints(m_jbCopyRatingButton, gbcRatingPanelLayout);
@@ -453,15 +452,8 @@ public final class LineupRatingPanel extends JPanel implements core.gui.Refresha
         m_jlLoddarCompare.setSpecialNumber(0f, false);
     }
 
-    /** A sector heading as the TV-view page draws it: a green bar with condensed white capitals. */
     private static JPanel sectionBar(String key) {
-        var label = new JLabel(TranslationFacility.tr(key).toUpperCase());
-        label.setFont(PitchStyle.display(UserParameter.instance().fontSize + 2f));
-        label.setForeground(Color.WHITE);
-        var bar = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 3));
-        bar.setBackground(PitchStyle.BRAND_2);
-        bar.add(label);
-        return bar;
+        return PitchStyle.sectionBar(TranslationFacility.tr(key));
     }
 
     /** Title of a stats box: small grey capitals over the value. */

@@ -61,6 +61,17 @@ public final class PitchStyle {
         return font.canDisplayUpTo(text) == -1 ? font : new Font(Font.DIALOG, Font.BOLD, Math.round(size));
     }
 
+    /** A section heading as the TV-view page draws it: a green bar with condensed white capitals. */
+    public static JPanel sectionBar(String text) {
+        final JLabel label = new JLabel(text.toUpperCase());
+        label.setFont(display(core.model.UserParameter.instance().fontSize + 2f));
+        label.setForeground(Color.WHITE);
+        final JPanel bar = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 3));
+        bar.setBackground(BRAND_2);
+        bar.add(label);
+        return bar;
+    }
+
     /** The page's specialty colours; null for no specialty. */
     static @Nullable Color specialtyColor(int specialty) {
         if (specialty <= 0 || specialty >= Specialty.values().length) return null;

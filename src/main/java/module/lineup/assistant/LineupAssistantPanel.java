@@ -27,7 +27,6 @@ import java.util.List;
 import java.util.*;
 
 import static core.util.Helper.getTranslation;
-import static module.lineup.LineupPanel.TITLE_FG;
 
 
 //TODO check if it needs to implement Refreshable
@@ -397,183 +396,97 @@ public class LineupAssistantPanel extends ImagePanel implements Refreshable, Act
 	}
 
 	private void initComponents() {
-		final GridBagLayout layout = new GridBagLayout();
-		final GridBagConstraints constraints = new GridBagConstraints();
-		constraints.fill = GridBagConstraints.HORIZONTAL;
-		constraints.weightx = 0.0;
-		constraints.weighty = 0.0;
+		setLayout(new GridBagLayout());
+		setBorder(BorderFactory.createEmptyBorder(10, 12, 12, 12));
+		final GridBagConstraints c = new GridBagConstraints();
+		c.anchor = GridBagConstraints.WEST;
+		c.fill = GridBagConstraints.HORIZONTAL;
+		c.gridy = 0;
 
-		setLayout(layout);
-
-		// Line 1 ===================================================
-		constraints.gridx = 0;
-		constraints.gridy = 0;
-		JLabel label = new JLabel(getTranslation("NotLast_aufstellen"));
-		label.setToolTipText(getTranslation("tt_AufstellungsAssistent_NotLast"));
-		addLabel(constraints, layout, label);
-
-		constraints.gridx = 1;
-		m_jcbxNotLast.setToolTipText(getTranslation("tt_AufstellungsAssistent_NotLast"));
-		m_jcbxNotLast.addActionListener(this);
-		layout.setConstraints(m_jcbxNotLast, constraints);
-		add(m_jcbxNotLast);
-
-		constraints.gridx = 1;
-		constraints.weightx = 1.0;
-		add(new JLabel(""));
-
-//		Line 2 =======================================================
-		constraints.gridx = 0;
-		constraints.gridy = 1;
-		constraints.weightx = 0.0;
-		addLabel(constraints, layout, new JLabel(getTranslation("ls.module.lineup.assistant.group")));
-
-		constraints.gridx = 1;
-		constraints.gridwidth = 3;
-		constraints.anchor = GridBagConstraints.WEST;
-		JPanel jpGroupSelection = new JPanel(new FlowLayout(FlowLayout.LEFT));
+		// which players the assistant may pick: label | controls, the controls take the width
 		Helper.setComboBoxFromID(m_jcbIncludeExclude, userParameter.lineupAssistentPanel_include_group ? 1 : 0);
 		m_jcbIncludeExclude.addActionListener(this);
-		m_jcbIncludeExclude.setBackground(ThemeManager.getColor(HOColorName.BACKGROUND_CONTAINER));
-		jpGroupSelection.add(m_jcbIncludeExclude);
 		m_jcbGroups.setSelectedItem(userParameter.aufstellungsAssistentPanel_gruppe);
 		m_jcbGroups.setRenderer(new core.gui.comp.renderer.SmilieListCellRenderer());
 		m_jcbGroups.addActionListener(this);
-		jpGroupSelection.add(m_jcbGroups);
-		layout.setConstraints(jpGroupSelection, constraints);
-		add(jpGroupSelection);
+		final JPanel groupSelection = new JPanel(new GridLayout(1, 2, 6, 0));
+		groupSelection.setOpaque(false);
+		groupSelection.add(m_jcbIncludeExclude);
+		groupSelection.add(m_jcbGroups);
+		addRow(c, "ls.module.lineup.assistant.group", groupSelection);
 
-		// Line 3 ===============================================
-		constraints.gridx = 0;
-		constraints.gridy = 2;
-		constraints.gridwidth = 1;
-		constraints.anchor = GridBagConstraints.CENTER;
-		label = new JLabel(getTranslation("ls.module.lineup.sync_lineup_panel"));
-		label.setToolTipText(getTranslation("ls.module.lineup.sync_lineup_panel.tooltip"));
-		addLabel(constraints, layout, label);
-
-		constraints.gridx = 1;
-		m_jcbxFilterPlayerPositionCB.setToolTipText(getTranslation("ls.module.lineup.sync_lineup_panel.tooltip"));
-		m_jcbxFilterPlayerPositionCB.addActionListener(this);
-		layout.setConstraints(m_jcbxFilterPlayerPositionCB, constraints);
-		add(m_jcbxFilterPlayerPositionCB);
-
-		// Line 4 (break line)
-		constraints.gridx = 0;
-		constraints.gridy = 3;
-		addLabel(constraints, layout, new JLabel(" "));
-
-		// Line 5 ===============================================
-		constraints.gridx = 0;
-		constraints.gridy = 4;
-		label = new JLabel(getTranslation("Form_beruecksichtigen"));
-		label.setToolTipText(getTranslation("tt_AufstellungsAssistent_Form"));
-		addLabel(constraints, layout, label);
-
-		constraints.gridx++;
-		m_jcbxConsiderForm.setToolTipText(getTranslation("tt_AufstellungsAssistent_Form"));
-		layout.setConstraints(m_jcbxConsiderForm, constraints);
-		add(m_jcbxConsiderForm);
-
-		constraints.gridx++;
-		label = new JLabel(getTranslation("Verletze_aufstellen"));
-		label.setToolTipText(getTranslation("tt_AufstellungsAssistent_Verletzte"));
-		addLabel(constraints, layout, label);
-
-		constraints.gridx++;
-		m_jcbxConsiderInjuredPlayers.setToolTipText(getTranslation("tt_AufstellungsAssistent_Verletzte"));
-		layout.setConstraints(m_jcbxConsiderInjuredPlayers, constraints);
-		add(m_jcbxConsiderInjuredPlayers);
-
-		// Line 6 ===============================================
-		constraints.gridx = 0;
-		constraints.gridy++;
-		label = new JLabel(getTranslation("Gesperrte_aufstellen"));
-		label.setToolTipText(getTranslation("tt_AufstellungsAssistent_Gesperrte"));
-		addLabel(constraints, layout, label);
-
-		constraints.gridx++;
-		m_jcbxConsiderSuspendedPlayers.setToolTipText(getTranslation("tt_AufstellungsAssistent_Gesperrte"));
-		layout.setConstraints(m_jcbxConsiderSuspendedPlayers, constraints);
-		add(m_jcbxConsiderSuspendedPlayers);
-
-		constraints.gridx++;
-		label = new JLabel(getTranslation("Idealposition_zuerst"));
-		label.setToolTipText(getTranslation("tt_AufstellungsAssistent_Idealposition"));
-		addLabel(constraints, layout, label);
-
-		constraints.gridx++;
-		m_jcbxIdealPositionFirst.setToolTipText(getTranslation("tt_AufstellungsAssistent_Idealposition"));
-		layout.setConstraints(m_jcbxIdealPositionFirst, constraints);
-		add(m_jcbxIdealPositionFirst);
-
-		// Line 7 ===============================================
-		constraints.gridx = 0;
-		constraints.gridy++;
-		label = new JLabel(getTranslation("use_average_rating"));
-		label.setToolTipText(getTranslation("tt_use_average_rating"));
-		addLabel(constraints, layout, label);
-
-		constraints.gridx++;
-		isUsePlayerAverageRatingCheckbox.setToolTipText(getTranslation("tt_use_average_rating"));
-		layout.setConstraints(isUsePlayerAverageRatingCheckbox, constraints);
-		add(isUsePlayerAverageRatingCheckbox);
-
-		// Line 8 (break line)  =============================================================================
-		constraints.gridx = 0;
-		constraints.gridy++;
-		addLabel(constraints, layout, new JLabel(" "));
-
-		// Line 9 =============================================================================
-		constraints.gridx = 0;
-		constraints.gridy++;
-		addLabel(constraints, layout, new JLabel(getTranslation("ls.module.lineup.assistant.priority")));
-
-		constraints.gridx++;
-		constraints.gridwidth = 2;
-		constraints.fill = GridBagConstraints.NONE;
-		constraints.anchor = GridBagConstraints.WEST;
 		m_jcbPriority.setToolTipText(getTranslation("tt_AufstellungsAssistent_Reihenfolge"));
-		core.util.Helper.setComboBoxFromID(m_jcbPriority, userParameter.aufstellungsAssistentPanel_reihenfolge);
-		layout.setConstraints(m_jcbPriority, constraints);
-		m_jcbPriority.setBackground(ThemeManager.getColor(HOColorName.BACKGROUND_CONTAINER));
-		add(m_jcbPriority);
+		Helper.setComboBoxFromID(m_jcbPriority, userParameter.aufstellungsAssistentPanel_reihenfolge);
+		addRow(c, "ls.module.lineup.assistant.priority", m_jcbPriority);
 
-		// Line 10 =============================================================================
-		constraints.gridx = 0;
-		constraints.gridy++;
-		constraints.gridwidth = 4;
-		constraints.fill = GridBagConstraints.HORIZONTAL;
-		constraints.anchor = GridBagConstraints.CENTER;
-		JPanel jpButtons = new JPanel(new FlowLayout());
+		// the options as plain checkboxes with their text, two columns
+		c.gridx = 0;
+		c.gridwidth = 2;
+		c.insets = new Insets(12, 0, 4, 0);
+		add(module.lineup.lineup.PitchStyle.sectionBar(getTranslation("Optionen")), c);
+		c.gridy++;
 
-		m_jbStartAssistant.setIcon(ImageUtilities.getStartAssistantIcon(30, HOColorName.LINEUP_COLOR, HOColorName.START_ASSISTANT));
-		m_jbClearLineup.setIcon(ImageUtilities.getClearLineupIcon(30, HOColorName.LINEUP_COLOR, HOColorName.CLEAR_LINEUP));
+		final JPanel options = new JPanel(new GridLayout(0, 2, 12, 2));
+		options.setOpaque(false);
+		option(options, m_jcbxNotLast, "NotLast_aufstellen", "tt_AufstellungsAssistent_NotLast");
+		option(options, m_jcbxFilterPlayerPositionCB, "ls.module.lineup.sync_lineup_panel", "ls.module.lineup.sync_lineup_panel.tooltip");
+		option(options, m_jcbxConsiderForm, "Form_beruecksichtigen", "tt_AufstellungsAssistent_Form");
+		option(options, m_jcbxIdealPositionFirst, "Idealposition_zuerst", "tt_AufstellungsAssistent_Idealposition");
+		option(options, m_jcbxConsiderInjuredPlayers, "Verletze_aufstellen", "tt_AufstellungsAssistent_Verletzte");
+		option(options, m_jcbxConsiderSuspendedPlayers, "Gesperrte_aufstellen", "tt_AufstellungsAssistent_Gesperrte");
+		option(options, isUsePlayerAverageRatingCheckbox, "use_average_rating", "tt_use_average_rating");
+		m_jcbxNotLast.addActionListener(this);
+		m_jcbxFilterPlayerPositionCB.addActionListener(this);
+		c.insets = new Insets(0, 0, 0, 0);
+		add(options, c);
+		c.gridy++;
 
-		JButton[] buttons = new JButton[]{m_jbClearLineup, m_jbStartAssistant};
-		String[] tooltips = new String[]{"Aufstellung_leeren", "Assistent_starten"};
-
-		for(int i = 0; i < buttons.length; i++){
-			buttons[i].setToolTipText(getTranslation(tooltips[i]));
-			buttons[i].addActionListener(this);
-			buttons[i].setMargin(new Insets(6, 6, 6, 6));
-			buttons[i].setBackground(ThemeManager.getColor(HOColorName.BACKGROUND_CONTAINER));
-			jpButtons.add(buttons[i]);
+		// the two actions as text buttons with a small icon
+		m_jbClearLineup.setIcon(ImageUtilities.getClearLineupIcon(18, HOColorName.LINEUP_COLOR, HOColorName.CLEAR_LINEUP));
+		m_jbStartAssistant.setIcon(ImageUtilities.getStartAssistantIcon(18, HOColorName.LINEUP_COLOR, HOColorName.START_ASSISTANT));
+		final JPanel buttons = new JPanel(new GridLayout(1, 2, 8, 0));
+		buttons.setOpaque(false);
+		for (var entry : Map.of(m_jbClearLineup, "Aufstellung_leeren", m_jbStartAssistant, "Assistent_starten").entrySet()) {
+			entry.getKey().setText(capitalize(getTranslation(entry.getValue())));
+			entry.getKey().setToolTipText(getTranslation(entry.getValue()));
+			entry.getKey().setIconTextGap(6);
+			entry.getKey().addActionListener(this);
 		}
+		buttons.add(m_jbClearLineup);
+		buttons.add(m_jbStartAssistant);
+		c.insets = new Insets(14, 0, 0, 0);
+		add(buttons, c);
+		c.gridy++;
 
-		layout.setConstraints(jpButtons, constraints);
-		add(jpButtons);
+		// push everything to the top
+		c.weighty = 1.0;
+		add(Box.createGlue(), c);
 
 		core.gui.RefreshManager.instance().registerRefreshable(this);
 	}
 
+	private void addRow(GridBagConstraints c, String labelKey, JComponent control) {
+		c.gridwidth = 1;
+		c.gridx = 0;
+		c.weightx = 0.0;
+		c.insets = new Insets(3, 0, 3, 12);
+		add(new JLabel(getTranslation(labelKey)), c);
+		c.gridx = 1;
+		c.weightx = 1.0;
+		c.insets = new Insets(3, 0, 3, 0);
+		add(control, c);
+		c.gridy++;
+	}
 
-	private void addLabel(GridBagConstraints constraints, GridBagLayout layout, JLabel label) {
-		label.setForeground(TITLE_FG);
-		label.setFont(getFont().deriveFont(Font.BOLD));
-		label.setHorizontalAlignment(SwingConstants.LEFT);
-		layout.setConstraints(label, constraints);
-		add(label);
+	private static void option(JPanel panel, JCheckBox box, String textKey, String tooltipKey) {
+		box.setText(capitalize(getTranslation(textKey)));
+		box.setToolTipText(getTranslation(tooltipKey));
+		box.setOpaque(false);
+		panel.add(box);
+	}
+
+	private static String capitalize(String text) {
+		return text.isEmpty() ? text : Character.toUpperCase(text.charAt(0)) + text.substring(1);
 	}
 
 	@Override

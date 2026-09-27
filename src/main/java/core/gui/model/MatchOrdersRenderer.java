@@ -13,6 +13,8 @@ public class MatchOrdersRenderer implements javax.swing.ListCellRenderer<MatchOr
     public Component getListCellRendererComponent(JList<? extends MatchOrdersCBItem> list, MatchOrdersCBItem value, int index, boolean isSelected, boolean cellHasFocus) {
         if (value != null) {
             Component comp = value.getListCellRendererComponent(isSelected);
+            // room between the edge, the match type icon and the text
+            if (comp instanceof JComponent jc) jc.setBorder(BorderFactory.createEmptyBorder(3, 6, 3, 6));
             if (isSelected) {
                 comp.setBackground(HODefaultTableCellRenderer.SELECTION_BG);
             } else {

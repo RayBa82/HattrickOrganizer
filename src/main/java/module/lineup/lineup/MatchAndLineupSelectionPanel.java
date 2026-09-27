@@ -34,7 +34,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static core.gui.HOMainFrame.instance;
-import static module.lineup.LineupPanel.TITLE_FG;
 
 
 public class MatchAndLineupSelectionPanel extends JPanel implements Refreshable {
@@ -91,7 +90,7 @@ public class MatchAndLineupSelectionPanel extends JPanel implements Refreshable 
 
         setLayout(layout);
 
-        gbc.insets = new Insets(2, 2, 2, 2);
+        gbc.insets = new Insets(3, 0, 3, 0);
         gbc.weightx = 1.0;
         gbc.weighty = 0.0;
 
@@ -165,12 +164,14 @@ public class MatchAndLineupSelectionPanel extends JPanel implements Refreshable 
         layout.setConstraints(m_jcbStyleOfPlay, gbc);
         add(m_jcbStyleOfPlay);
 
-        // Panel with the 3 buttons
+        // the two buttons share the row equally
         gbc.gridx = 0;
         gbc.gridy++;
         gbc.gridwidth = 2;
         gbc.fill = GridBagConstraints.HORIZONTAL;
-        JPanel jpButtons = new JPanel(new FlowLayout());
+        gbc.insets = new Insets(10, 0, 0, 0);
+        JPanel jpButtons = new JPanel(new GridLayout(1, 2, 8, 0));
+        jpButtons.setOpaque(false);
 
         m_jbUploadLineup = new JButton(Helper.getTranslation("lineup.upload.btn.upload"));
         m_jbUploadLineup.setToolTipText(Helper.getTranslation("lineup.upload.btn.upload.tooltip"));
@@ -180,14 +181,15 @@ public class MatchAndLineupSelectionPanel extends JPanel implements Refreshable 
         m_jbDownloadLineup.setToolTipText(Helper.getTranslation("lineup.upload.btn.download.tooltip"));
         m_jbDownloadLineup.setEnabled((m_clSelectedMatch != null) && (m_clSelectedMatch.areOrdersSetInHT()));
 
-        GUIUtils.equalizeComponentSizes(m_jbUploadLineup, m_jbDownloadLineup);
-
         jpButtons.add(m_jbUploadLineup);
         jpButtons.add(m_jbDownloadLineup);
         layout.setConstraints(jpButtons, gbc);
         add(jpButtons);
 
-        setBorder(BorderFactory.createMatteBorder(3, 3, 3, 3, ThemeManager.getColor(HOColorName.PLAYER_POSITION_PANEL_BORDER)));
+        // a thin line to the tabs above and room around the form
+        setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(1, 0, 0, 0, ThemeManager.getColor(HOColorName.PANEL_BORDER)),
+                BorderFactory.createEmptyBorder(10, 12, 12, 12)));
 
         addListeners();
     }
@@ -300,12 +302,13 @@ public class MatchAndLineupSelectionPanel extends JPanel implements Refreshable 
         }
     }
 
+    /** A form label: takes only the width it needs, so the dropdown next to it gets the rest. */
     private void addLabel(GridBagConstraints constraints, GridBagLayout layout, String sLabel) {
         JLabel label = new JLabel(sLabel);
-        label.setForeground(TITLE_FG);
-        label.setFont(getFont().deriveFont(Font.BOLD));
-        label.setHorizontalAlignment(SwingConstants.LEFT);
-        layout.setConstraints(label, constraints);
+        final GridBagConstraints c = (GridBagConstraints) constraints.clone();
+        c.weightx = 0.0;
+        c.insets = new Insets(3, 0, 3, 12);
+        layout.setConstraints(label, c);
         add(label);
     }
 
@@ -577,6 +580,8 @@ public class MatchAndLineupSelectionPanel extends JPanel implements Refreshable 
         }
         Helper.setComboBoxFromID(m_jcbTeamAttitude, attitude);
         m_jcbTeamAttitude.setEnabled(enabled);
+        // say why it is locked: Hattrick allows PIC and MOTS only in competitive matches
+        m_jcbTeamAttitude.setToolTipText(enabled ? null : TranslationFacility.tr("ls.team.teamattitude.competitive_only"));
     }
 
 }
