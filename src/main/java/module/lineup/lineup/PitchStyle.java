@@ -77,11 +77,11 @@ public final class PitchStyle {
         if (specialty <= 0 || specialty >= Specialty.values().length) return null;
         final boolean dark = dark();
         return switch (Specialty.values()[specialty]) {
-            case UNPREDICTABLE -> dark ? new Color(0xa98bff) : new Color(0x7c4ddb);
-            case TECHNICAL -> dark ? new Color(0x5cb8ff) : new Color(0x1d7fc4);
-            case HEAD -> dark ? new Color(0xff9a52) : new Color(0xcf6417);
-            case POWERFUL -> dark ? new Color(0xff6b7a) : new Color(0xcc3848);
-            case QUICK -> dark ? new Color(0x6fd585) : new Color(0x2b9443);
+            case UNPREDICTABLE -> new Color(dark ? 0xa98bff : 0x7c4ddb);
+            case TECHNICAL -> new Color(dark ? 0x5cb8ff : 0x1d7fc4);
+            case HEAD -> new Color(dark ? 0xff9a52 : 0xcf6417);
+            case POWERFUL -> new Color(dark ? 0xff6b7a : 0xcc3848);
+            case QUICK -> new Color(dark ? 0x6fd585 : 0x2b9443);
             case SUPPORT -> SEA;
             case REGAINER -> SAND;
             default -> null;
@@ -89,15 +89,74 @@ public final class PitchStyle {
     }
 
     /**
-     * Shirt colour. Hattrick sends no kit colour, only the club page's two theme colours
-     * (Supporters only), whose background is mostly white. Take the more colourful of the two;
-     * when both are grey, brand green.
+     * Shirt colour, read off the club's kit image (dressURI) - Hattrick's club colours (TeamColors)
+     * come empty even for Supporters. Until the image is in, or without one, the more colourful of
+     * the two TeamColors; when both are grey or missing, brand green.
      */
     static Color clubShirt() {
+        final XtraData xtra = HOVerwaltung.instance().getModel().getXtraDaten();
+        final Color kit = xtra == null ? null : kitColor(xtra.getDressURI());
+        if (kit != null) return kit;
         final Color bg = clubColor(XtraData::getTeamColorBackground);
         final Color fg = clubColor(XtraData::getTeamColorText);
         final Color best = saturation(bg) >= saturation(fg) ? bg : fg;
-        return saturation(best) > 0.25f ? best : BRAND_2;
+        return best != null && saturation(best) > 0.25f ? best : BRAND_2;
+    }
+
+    // dressURI -> shirt colour; an empty Optional while loading or when the image is unusable
+    private static final java.util.Map<String, java.util.Optional<Color>> kitColors = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static @Nullable Color kitColor(@Nullable String dressUri) {
+        if (dressUri == null || dressUri.isBlank()) return null;
+        final String url = dressUri.startsWith("//") ? "https:" + dressUri : dressUri;
+        return kitColors.computeIfAbsent(url, u -> {
+            // off the EDT: this is asked while painting
+            new Thread(() -> {
+                try {
+                    final Color shirt = shirtColor(javax.imageio.ImageIO.read(new java.net.URL(u)));
+                    if (shirt == null) return;
+                    kitColors.put(u, java.util.Optional.of(shirt));
+                    SwingUtilities.invokeLater(() -> Arrays.stream(Window.getWindows()).forEach(Window::repaint));
+                } catch (Exception e) {
+                    core.util.HOLogger.instance().warning(PitchStyle.class, "kit image " + u + ": " + e);
+                }
+            }, "kit-colour").start();
+            return java.util.Optional.empty();
+        }).orElse(null);
+    }
+
+    /**
+     * The shirt's main colour in a Hattrick kit image (shirt on top, shorts and socks below): the
+     * most common colour of the shirt, a real colour winning over white or grey trim when it covers
+     * a quarter of the shirt.
+     */
+    static @Nullable Color shirtColor(@Nullable java.awt.image.BufferedImage kit) {
+        if (kit == null) return null;
+        final java.util.Map<Integer, int[]> buckets = new java.util.HashMap<>(); // count, r, g, b
+        int total = 0;
+        int colourful = 0;
+        for (int y = 0; y < kit.getHeight() * 2 / 5; y++) {
+            for (int x = 0; x < kit.getWidth(); x++) {
+                final int argb = kit.getRGB(x, y);
+                if ((argb >>> 24) < 200) continue;
+                final Color c = new Color(argb);
+                final int[] b = buckets.computeIfAbsent((argb >> 5) & 0x070707 | (saturation(c) > 0.25f ? 1 << 24 : 0), k -> new int[4]);
+                b[0]++;
+                b[1] += c.getRed();
+                b[2] += c.getGreen();
+                b[3] += c.getBlue();
+                total++;
+                if (saturation(c) > 0.25f) colourful++;
+            }
+        }
+        if (total == 0) return null;
+        final boolean preferColour = colourful * 4 >= total;
+        return buckets.entrySet().stream()
+                .filter(e -> !preferColour || (e.getKey() >> 24) == 1)
+                .map(java.util.Map.Entry::getValue)
+                .max(java.util.Comparator.comparingInt(b -> b[0]))
+                .map(b -> new Color(b[1] / b[0], b[2] / b[0], b[3] / b[0]))
+                .orElse(null);
     }
 
     private static float saturation(@Nullable Color c) {
@@ -130,13 +189,17 @@ public final class PitchStyle {
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         final boolean dark = dark();
         final int pad = 12;
-        g.setColor(dark ? new Color(0x1c3d1a) : new Color(0x2c5e28));
+        g.setColor(new Color(dark ? 0x1c3d1a : 0x2c5e28));
         g.fillRoundRect(r.x - pad, r.y - pad, r.width + 2 * pad, r.height + 2 * pad, 10, 10);
 
         final int stripes = 12;
         for (int i = 0; i < stripes; i++) {
-            final int y0 = r.y + r.height * i / stripes, y1 = r.y + r.height * (i + 1) / stripes;
-            g.setColor(i % 2 == 0 ? (dark ? new Color(0x2f6f2b) : new Color(0x3f8a3a)) : (dark ? new Color(0x367a31) : new Color(0x47953f)));
+            final int y0 = r.y + r.height * i / stripes;
+            final int y1 = r.y + r.height * (i + 1) / stripes;
+            final boolean even = i % 2 == 0;
+            final int darkStripe = even ? 0x2f6f2b : 0x367a31;
+            final int lightStripe = even ? 0x3f8a3a : 0x47953f;
+            g.setColor(new Color(dark ? darkStripe : lightStripe));
             g.fillRect(r.x, y0, r.width, y1 - y0);
         }
 
@@ -147,9 +210,18 @@ public final class PitchStyle {
         }
         g.setColor(CHALK);
         g.setStroke(new BasicStroke(2f));
-        final double w = r.width, h = r.height, x = r.x, y = r.y, cx = x + w / 2, bottom = y + h;
+        final double w = r.width;
+        final double h = r.height;
+        final double x = r.x;
+        final double y = r.y;
+        final double cx = x + w / 2;
+        final double bottom = y + h;
         g.draw(new Rectangle.Double(x, y, w, h));
-        final double boxW = w * 0.6, boxH = h * 0.2, areaW = w * 0.28, areaH = h * 0.07, circle = w * 0.13;
+        final double boxW = w * 0.6;
+        final double boxH = h * 0.2;
+        final double areaW = w * 0.28;
+        final double areaH = h * 0.07;
+        final double circle = w * 0.13;
         g.draw(new Rectangle.Double(cx - boxW / 2, bottom - boxH, boxW, boxH));
         g.draw(new Rectangle.Double(cx - areaW / 2, bottom - areaH, areaW, areaH));
         g.fill(new Ellipse2D.Double(cx - 2.5, bottom - boxH * 0.7 - 2.5, 5, 5));
@@ -231,16 +303,17 @@ public final class PitchStyle {
     }
 
     /** A small rounded flag with a short label, as the page puts on the shirt: C, SP, ▲. */
-    static int paintFlag(Graphics2D g, String text, Color bg, Color fg, int x, int y, float fontSize) {
+    static int paintFlag(Graphics2D g, String text, Color bg, Color fg, int x, float fontSize) {
         g.setFont(display(fontSize, text));
         final FontMetrics fm = g.getFontMetrics();
-        final int w = fm.stringWidth(text) + 6, h = fm.getAscent() + 3;
+        final int w = fm.stringWidth(text) + 6;
+        final int h = fm.getAscent() + 3;
         g.setColor(new Color(0, 0, 0, 70));
-        g.fill(new RoundRectangle2D.Double(x, y + 1, w, h, 5, 5));
+        g.fill(new RoundRectangle2D.Double(x, 1, w, h, 5, 5));
         g.setColor(bg);
-        g.fill(new RoundRectangle2D.Double(x, y, w, h, 5, 5));
+        g.fill(new RoundRectangle2D.Double(x, 0, w, h, 5, 5));
         g.setColor(fg);
-        g.drawString(text, x + 3, y + fm.getAscent() + 1);
+        g.drawString(text, x + 3, fm.getAscent() + 1);
         return w;
     }
 }

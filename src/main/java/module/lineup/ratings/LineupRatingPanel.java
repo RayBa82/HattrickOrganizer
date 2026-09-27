@@ -51,7 +51,7 @@ public final class LineupRatingPanel extends JPanel implements core.gui.Refresha
 
             add(jpSectorRating, BorderLayout.CENTER);
             setBorder(BorderFactory.createEmptyBorder(4, 0, 9, 0)); // room for the bar
-            setPreferredSize(SIZE);
+            setPreferredSize(tileSize);
 
             compare.setSpecialNumber(0f, false);
 
@@ -142,7 +142,7 @@ public final class LineupRatingPanel extends JPanel implements core.gui.Refresha
     private final JLabel copyrights = new JLabel("", SwingConstants.CENTER);
 
     // tall enough for the large condensed value, the verbal rating and the bar
-    private final Dimension SIZE = new Dimension(Helper.calcCellWidth(120), Helper.calcCellWidth(54));
+    private final Dimension tileSize = new Dimension(Helper.calcCellWidth(120), Helper.calcCellWidth(54));
 
     public LineupRatingPanel(LineupPanel lineupPanel) {
         this.lineupPanel = lineupPanel;
@@ -335,7 +335,7 @@ public final class LineupRatingPanel extends JPanel implements core.gui.Refresha
         jpSectorRating.add(jpRatingValueAndDelta);
 
         m_jpHatStats.add(jpSectorRating, BorderLayout.CENTER);
-        m_jpHatStats.setPreferredSize(SIZE);
+        m_jpHatStats.setPreferredSize(tileSize);
 
         gbcMainLayout.gridx = 0;
         gbcMainLayout.gridy = 7;
@@ -356,7 +356,7 @@ public final class LineupRatingPanel extends JPanel implements core.gui.Refresha
         jpSectorRating.add(jpRatingValueAndDelta);
 
         m_jpLoddarStats.add(jpSectorRating, BorderLayout.CENTER);
-        m_jpLoddarStats.setPreferredSize(SIZE);
+        m_jpLoddarStats.setPreferredSize(tileSize);
 
         gbcMainLayout.gridx = 1;
         gbcMainLayout.gridy = 7;
@@ -375,7 +375,7 @@ public final class LineupRatingPanel extends JPanel implements core.gui.Refresha
         jpSectorRating.add(jpRatingValueAndDelta);
 
         m_jpTacticStats.add(jpSectorRating, BorderLayout.CENTER);
-        m_jpTacticStats.setPreferredSize(SIZE);
+        m_jpTacticStats.setPreferredSize(tileSize);
 
         gbcMainLayout.gridx = 0;
         gbcMainLayout.gridy = 8;
@@ -395,7 +395,7 @@ public final class LineupRatingPanel extends JPanel implements core.gui.Refresha
         jpSectorRating.add(jpRatingValueAndDelta);
 
         m_jpFormationStats.add(jpSectorRating, BorderLayout.CENTER);
-        m_jpFormationStats.setPreferredSize(SIZE);
+        m_jpFormationStats.setPreferredSize(tileSize);
 
         gbcMainLayout.gridx = 1;
         gbcMainLayout.gridy = 8;

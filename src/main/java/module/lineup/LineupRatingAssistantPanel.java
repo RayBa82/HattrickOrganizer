@@ -23,6 +23,7 @@ public class LineupRatingAssistantPanel extends JPanel implements core.gui.Refre
     private LineupSettingsPanel lineupSettingsPanel;
     private LineupAssistantPanel lineupAssistantPanel;
     private MatchAndLineupSelectionPanel matchAndLineupPanel;
+    @lombok.Getter
     private MatchBanner matchBanner;
 
     public final LineupRatingPanel getLineupRatingPanel() {
@@ -44,10 +45,6 @@ public class LineupRatingAssistantPanel extends JPanel implements core.gui.Refre
             lineupAssistantPanel = new LineupAssistantPanel();
         }
         return lineupAssistantPanel;
-    }
-
-    public MatchBanner getMatchBanner() {
-        return matchBanner;
     }
 
     public MatchAndLineupSelectionPanel getMatchAndLineupSelectionPanel() {

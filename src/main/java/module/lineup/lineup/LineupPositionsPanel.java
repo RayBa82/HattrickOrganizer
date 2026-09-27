@@ -373,7 +373,7 @@ public class LineupPositionsPanel extends JPanel implements core.gui.Refreshable
 		constraints.gridy = 4;
 		constraints.gridwidth = 7;
 		constraints.fill = GridBagConstraints.HORIZONTAL;
-		JLabel label1 = new JLabel(TranslationFacility.tr("moduleLineup.LineupPanel.SubstitutesLabel").toUpperCase(), JLabel.LEFT);
+		JLabel label1 = new JLabel(TranslationFacility.tr("moduleLineup.LineupPanel.SubstitutesLabel").toUpperCase(), SwingConstants.LEFT);
 		label1.setBorder(BorderFactory.createEmptyBorder(5, 12, 5, 12));
 		label1.setBackground(PitchStyle.BRAND_2);
 		label1.setForeground(Color.WHITE);
