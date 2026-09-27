@@ -32,7 +32,9 @@ import core.net.OnlineWorker;
 import core.util.HODateTime;
 import core.util.HOLogger;
 
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 
 /** The read only view of the team HO already knows about. */
 public final class TeamTools {
@@ -140,9 +142,8 @@ public final class TeamTools {
                                                 + "next economy update, 1-" + FinanceForecast.MAX_WEEKS
                                                 + ": sponsors, wages, staff, youth and arena "
                                                 + "upkeep (after the expansion from its date), "
-                                                + "plus a gate for each upcoming home league match "
-                                                + "at recent league attendance. Conservative: cup "
-                                                + "and friendly gates are not counted"))),
+                                                + "plus our share of each upcoming match's gate "
+                                                + "(league, cup, friendly) at recent attendance"))),
                         TeamTools::finances),
                 new McpTool("download_team",
                         "Runs HO's own Download and rewrites the local database - squad, finances, "
@@ -667,7 +668,7 @@ public final class TeamTools {
         for (final var match : DBManager.instance().getMatchesKurzInfo(teamId, MatchKurzInfo.UPCOMING)) {
             if (match.getMatchSchedule() != null) {
                 fixtures.add(new FinanceForecast.Fixture(match.getMatchSchedule(), match.isHomeMatch(),
-                        match.getMatchType() == MatchType.LEAGUE));
+                        gateKind(match.getMatchType())));
             }
         }
         // A recurring line can be 0 in one of the two weeks (staff this week, youth last week), so
@@ -682,7 +683,7 @@ public final class TeamTools {
                 stadium == null ? money(economy.getCostsArena()) : money(ArenaMaintenance.calculateCosts(stadium)),
                 stadium == null ? money(economy.getCostsArena()) : money(maintenanceAfterExpansion(stadium)),
                 stadium == null ? null : stadium.getExpansionDate(),
-                homeLeagueGate(teamId, DEFAULT_HOME_MATCHES),
+                homeGates(teamId),
                 fixtures,
                 HODateTime.now());
     }
@@ -695,32 +696,50 @@ public final class TeamTools {
                 stadium.getFutureVipBoxes().orElse(stadium.getVipBox()));
     }
 
-    /**
-     * The gate of an average recent home league match: the seats it sold per stand at HO's
-     * admission prices. Cup and friendly crowds are left out - they are smaller and not what
-     * pays the bills every other week.
-     */
-    private static long homeLeagueGate(int teamId, int matches) {
-        long sum = 0;
-        var counted = 0;
-        for (final var info : DBManager.instance().getOwnPlayedMatchInfo(matches * 4, true)) {
-            if (counted >= matches) {
-                break;
-            }
-            if (info.getHomeTeamID() != teamId || info.getMatchType() != MatchType.LEAGUE) {
-                continue;
-            }
-            final var details = DBManager.instance()
-                    .loadMatchDetails(info.getMatchType().getId(), info.getMatchID());
-            if (details == null || details.getSoldTerraces() + details.getSoldBasic()
-                    + details.getSoldRoof() + details.getSoldVIP() <= 0) {
-                continue;
-            }
-            sum += money(ArenaAdmission.calculateIncome(details.getSoldTerraces(),
-                    details.getSoldBasic(), details.getSoldRoof(), details.getSoldVIP()));
-            counted++;
+    /** How Hattrick splits a match type's gate (wiki: Stadium). */
+    static FinanceForecast.Kind gateKind(MatchType type) {
+        if (type == MatchType.LEAGUE) {
+            return FinanceForecast.Kind.LEAGUE;
         }
-        return counted == 0 ? 0 : sum / counted;
+        if (type == MatchType.CUP) {
+            return FinanceForecast.Kind.CUP;
+        }
+        if (type == MatchType.QUALIFICATION || type.isFriendly()) {
+            return FinanceForecast.Kind.EVEN_SPLIT;
+        }
+        return FinanceForecast.Kind.NONE;
+    }
+
+    /**
+     * The full gate of an average recent home match per gate kind: the seats it sold per stand at
+     * HO's admission prices, over the last {@link #DEFAULT_HOME_MATCHES} home matches of each kind.
+     * A kind with no such match is left out, and the forecast does not count it.
+     */
+    private static Map<FinanceForecast.Kind, Long> homeGates(int teamId) {
+        final var sums = new EnumMap<FinanceForecast.Kind, long[]>(FinanceForecast.Kind.class);
+        // Friendlies and cup ties are rarer than league matches: look far enough back for a few.
+        for (final var info : DBManager.instance().getOwnPlayedMatchInfo(DEFAULT_HOME_MATCHES * 8, true)) {
+            final var kind = gateKind(info.getMatchType());
+            final var sum = sums.computeIfAbsent(kind, k -> new long[2]);
+            if (info.getHomeTeamID() == teamId && kind != FinanceForecast.Kind.NONE
+                    && sum[1] < DEFAULT_HOME_MATCHES) {
+                final var details = DBManager.instance()
+                        .loadMatchDetails(info.getMatchType().getId(), info.getMatchID());
+                if (details != null && details.getSoldTerraces() + details.getSoldBasic()
+                        + details.getSoldRoof() + details.getSoldVIP() > 0) {
+                    sum[0] += money(ArenaAdmission.calculateIncome(details.getSoldTerraces(),
+                            details.getSoldBasic(), details.getSoldRoof(), details.getSoldVIP()));
+                    sum[1]++;
+                }
+            }
+        }
+        final var gates = new EnumMap<FinanceForecast.Kind, Long>(FinanceForecast.Kind.class);
+        sums.forEach((kind, sum) -> {
+            if (sum[1] > 0) {
+                gates.put(kind, sum[0] / sum[1]);
+            }
+        });
+        return gates;
     }
 
     private static JsonObject thisWeek(Economy economy) {
