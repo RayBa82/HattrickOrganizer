@@ -148,7 +148,7 @@ public class HOVerwaltung {
 
 		// Make sure the training week list is up to date.
 		//TrainingManager.instance().refreshTrainingWeeks();
-		HOMainFrame.instance().resetInformation();
+		HOMainFrame.resetInformation();
 
 		var hrfListe = DBManager.instance().getHRFsSince(hrfDate);
 		long s1, s2, lSum = 0, mSum = 0;
@@ -156,7 +156,7 @@ public class HOVerwaltung {
 		for (var hrf : hrfListe) {
 			try {
 				if (showWait) {
-					HOMainFrame.instance().setWaitInformation();
+					HOMainFrame.setWaitInformation();
 				}
 				s1 = System.currentTimeMillis();
 				HOModel model = new HOModel(hrf, previousHRF);
@@ -180,14 +180,14 @@ public class HOVerwaltung {
 		}
 
 		if (showWait) {
-			HOMainFrame.instance().setWaitInformation();
+			HOMainFrame.setWaitInformation();
 		}
 
 		// Reload, because the subskills have changed
 		loadLatestHoModel();
 
 		if (showWait) {
-			HOMainFrame.instance().setWaitInformation();
+			HOMainFrame.setWaitInformation();
 		}
 
 		RefreshManager.instance().doReInit();
@@ -199,7 +199,7 @@ public class HOVerwaltung {
 						+ ", mSum=" + mSum);
 
 		if (showWait) {
-			HOMainFrame.instance().setInformationCompleted();
+			HOMainFrame.setInformationCompleted();
 		}
 	}
 
@@ -220,7 +220,7 @@ public class HOVerwaltung {
 	 *
 	 * @param key
 	 *            Key to be searched in language files
-	 * 
+	 *
 	 * @return String connected to the key or !key! if nothing can be found in
 	 *         language files
 	 */

@@ -246,7 +246,7 @@ public class FilterPanel extends JPanel {
 
 		protected void done() {
 			try {
-				HOMainFrame.instance().setInformationCompleted();
+				HOMainFrame.setInformationCompleted();
 				SystemManager.refresh();
 				HOLogger.instance().info(getClass(),
 						"Download complete for Team " + SystemManager.getActiveTeamId());

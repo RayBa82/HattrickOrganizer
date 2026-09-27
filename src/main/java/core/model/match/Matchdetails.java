@@ -952,7 +952,7 @@ public class Matchdetails extends AbstractTable.Storable implements core.model.m
                         "Reload Matchdetails id: " + this.getMatchID());
                 boolean silenDownloadMode = OnlineWorker.isSilentDownload();
                 try {
-                    HOMainFrame.instance().resetInformation();
+                    HOMainFrame.resetInformation();
                     OnlineWorker.setSilentDownload(true);
                     if (OnlineWorker.downloadMatchData(this.getMatchID(), this.m_MatchTyp, true)) {
                         m_vHighlights = DBManager.instance().getMatchHighlights(this.getMatchType().getId(), this.getMatchID());
@@ -964,7 +964,7 @@ public class Matchdetails extends AbstractTable.Storable implements core.model.m
                     HOLogger.instance().error(Matchdetails.class, ex.getMessage());
                 } finally {
                     OnlineWorker.setSilentDownload(silenDownloadMode);
-                    HOMainFrame.instance().setInformationCompleted();
+                    HOMainFrame.setInformationCompleted();
                 }
             }
         }

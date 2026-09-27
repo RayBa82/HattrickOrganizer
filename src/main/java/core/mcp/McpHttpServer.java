@@ -101,8 +101,12 @@ public final class McpHttpServer {
         if (server != null) {
             return;
         }
-        // loopback only, never 0.0.0.0
-        server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), 0);
+        // Loopback only - except in the Docker image (-Dho.mcpBind=0.0.0.0), where the host cannot
+        // reach the container's loopback; `docker run -p 127.0.0.1:...` keeps it host-local there.
+        // The Host guard in serve() applies either way.
+        final var bind = System.getProperty("ho.mcpBind");
+        final var address = bind == null ? InetAddress.getLoopbackAddress() : InetAddress.getByName(bind);
+        server = HttpServer.create(new InetSocketAddress(address, port), 0);
         // Single threaded on purpose. Handlers reach straight into DBManager, and HO's
         // ConnectionManager shares one JDBC Statement and one StatementCache across every table, so
         // two tool calls in parallel would interleave on it. A slow CHPP call therefore blocks the
@@ -111,7 +115,7 @@ public final class McpHttpServer {
         server.setExecutor(executor);
         server.createContext("/mcp", this::serve);
         server.start();
-        HOLogger.instance().info(getClass(), "MCP server listening on http://127.0.0.1:" + port() + "/mcp");
+        HOLogger.instance().info(getClass(), "MCP server listening on http://" + address.getHostAddress() + ":" + port() + "/mcp");
     }
 
     public synchronized void stop() {

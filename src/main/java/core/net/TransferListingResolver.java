@@ -387,9 +387,9 @@ public final class TransferListingResolver {
                 return;
             }
             shown = percent;
-            HOMainFrame.instance().setInformation(Helper.getTranslation(
+            HOMainFrame.setInformation(Helper.getTranslation(
                     "ls.update_status.transfer_prices") + " " + done + " / " + total);
-            HOMainFrame.instance().updateProgress(percent);
+            HOMainFrame.updateProgress(percent);
         }
     }
 

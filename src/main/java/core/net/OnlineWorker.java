@@ -122,7 +122,10 @@ public class OnlineWorker {
 		if (becameCurrent) {
 			hov.setModel(homodel);
 			// reset value of TS, confidence in Lineup Settings Panel after data download
-			Objects.requireNonNull(HOMainFrame.instance().getLineupPanel()).backupRealGameSettings();
+			final var frame = HOMainFrame.shown();
+			if (frame != null) {
+				Objects.requireNonNull(frame.getLineupPanel()).backupRealGameSettings();
+			}
 		}
 		return new TeamDownload(hrf, homodel, becameCurrent);
 	}
@@ -140,8 +143,8 @@ public class OnlineWorker {
 		} catch (DownloadFailed e) {
 			return report(parent, e);
 		} finally {
-			HOMainFrame.instance().setInformation(getLangString("HRFErfolg"), 0);
-			//HOMainFrame.instance().resetInformation();
+			HOMainFrame.setInformation(getLangString("HRFErfolg"), 0);
+			//HOMainFrame.resetInformation();
 		}
 	}
 
@@ -167,12 +170,12 @@ public class OnlineWorker {
 				return false;
 			}
 			case PLAYING_MATCH -> {
-				HOMainFrame.instance().resetInformation();
+				HOMainFrame.resetInformation();
 				JOptionPane.showMessageDialog(parent, getLangString("NO_HRF_Spiel"),
 						getLangString("NO_HRF_ERROR"), JOptionPane.INFORMATION_MESSAGE);
 			}
 			case NO_DATA -> {
-				HOMainFrame.instance().resetInformation();
+				HOMainFrame.resetInformation();
 				JOptionPane.showMessageDialog(parent, getLangString("NO_HRF_ERROR"),
 						getLangString("NO_HRF_ERROR"), JOptionPane.INFORMATION_MESSAGE);
 			}
@@ -278,7 +281,7 @@ public class OnlineWorker {
 				== core.module.IModule.STATUS_DEACTIVATED) {
 			return;
 		}
-		HOMainFrame.instance().setInformation(
+		HOMainFrame.setInformation(
 				Helper.getTranslation("ls.update_status.hall_of_fame"), DOWNLOAD_PROGRESS_STEP);
 		var hallOfFamesPlayer = downloadHallOfFame(model.getBasics().getTeamId());
 		model.setHallOfFamesPlayers(hallOfFamesPlayer);
@@ -295,7 +298,7 @@ public class OnlineWorker {
 	 */
 	public static boolean downloadCurrentMatches(HOModel model) {
 		final int teamId = model.getBasics().getTeamId();
-		HOMainFrame.instance().setInformation(
+		HOMainFrame.setInformation(
 				Helper.getTranslation("ls.update_status.match_info"), DOWNLOAD_PROGRESS_STEP);
 		// Only get lineups for own fixtures
 		boolean bOK = getMatches(teamId, false, true, true) != null;
@@ -326,7 +329,7 @@ public class OnlineWorker {
 			return true;
 		}
 		final int teamId = model.getBasics().getTeamId();
-		HOMainFrame.instance().setInformation(
+		HOMainFrame.setInformation(
 				Helper.getTranslation("ls.update_status.fixtures"), DOWNLOAD_PROGRESS_STEP);
 		var leagueId = model.getXtraDaten().getLeagueLevelUnitID();
 		var fixtures = downloadLeagueFixtures(-1, leagueId);
@@ -374,7 +377,7 @@ public class OnlineWorker {
 		if (!WorldDetailLeague.checkWorldDetailsDownload()) {
 			return;
 		}
-		HOMainFrame.instance().setInformation(
+		HOMainFrame.setInformation(
 				Helper.getTranslation("ls.update_status.world_details"), DOWNLOAD_PROGRESS_STEP);
 		var allLeagues = downloadWorldDetails();
 		DBManager.instance().storeWorldDetailLeagues(allLeagues);
@@ -401,7 +404,7 @@ public class OnlineWorker {
 		var endDate = HODateTime.now();
 
 		// Show wait Dialog
-		HOMainFrame.instance().resetInformation();
+		HOMainFrame.resetInformation();
 
 		try {
 			String matchesString;
@@ -413,20 +416,20 @@ public class OnlineWorker {
 				}
 
 				try {
-					HOMainFrame.instance().setInformation(TranslationFacility.tr("ls.update_status.match_info"), 20);
+					HOMainFrame.setInformation(TranslationFacility.tr("ls.update_status.match_info"), 20);
 					matchesString = Connector.instance().getMatchesArchive(teamId, firstDate,	lastDate);
-					HOMainFrame.instance().setInformation(TranslationFacility.tr("ls.update_status.match_info"), 20);
+					HOMainFrame.setInformation(TranslationFacility.tr("ls.update_status.match_info"), 20);
 				} catch (Exception e) {
 					// Info
 					String msg = getLangString("Downloadfehler")
 							+ " : Error fetching MatchArchiv : ";
 					setInfoMsg(msg, InfoPanel.FEHLERFARBE);
-					Helper.showMessage(HOMainFrame.instance(), msg, getLangString("Fehler"),
+					Helper.showMessage(HOMainFrame.shown(), msg, getLangString("Fehler"),
 							JOptionPane.ERROR_MESSAGE);
 					return null;
 				}
 
-				HOMainFrame.instance().setInformation(TranslationFacility.tr("ls.update_status.match_info"), 20);
+				HOMainFrame.setInformation(TranslationFacility.tr("ls.update_status.match_info"), 20);
 				List<MatchKurzInfo> matches = XMLMatchArchivParser
 						.parseMatchesFromString(matchesString);
 
@@ -440,7 +443,7 @@ public class OnlineWorker {
 			// Store in the db if store is true
 			if (store && (!allMatches.isEmpty())) {
 
-				HOMainFrame.instance().setInformation(TranslationFacility.tr("ls.update_status.match_info"), 20);
+				HOMainFrame.setInformation(TranslationFacility.tr("ls.update_status.match_info"), 20);
 				DBManager.instance().storeMatchKurzInfos(allMatches);
 
 				// Store full info for all matches
@@ -453,7 +456,7 @@ public class OnlineWorker {
 				}
 			}
 		} finally {
-			HOMainFrame.instance().setInformationCompleted();
+			HOMainFrame.setInformationCompleted();
 		}
 		return allMatches;
 	}
@@ -536,7 +539,7 @@ public class OnlineWorker {
 			return false;
 		}
 
-		HOMainFrame.instance().setWaitInformation();
+		HOMainFrame.setWaitInformation();
 		// Only download if not present in the database, or if refresh is true or if match not obsolete
 		if (refresh
 				|| !DBManager.instance().isMatchInDB(matchID, info.getMatchType())
@@ -554,7 +557,7 @@ public class OnlineWorker {
 				boolean bWeatherKnown = ((weatherDetails != null) && weatherDetails.isSure());
 
 				if (incompleteInfo || !bWeatherKnown) {
-					HOMainFrame.instance().setWaitInformation();
+					HOMainFrame.setWaitInformation();
 					details = downloadMatchDetails(matchID, info.getMatchType(), null);
 					if (details != null) {
 						info.setHomeTeamID(details.getHomeTeamId());
@@ -628,7 +631,7 @@ public class OnlineWorker {
 							String msg = getLangString("Downloadfehler") + " : Error fetching Matchlineup :";
 							// Info
 							setInfoMsg(msg, InfoPanel.FEHLERFARBE);
-							Helper.showMessage(HOMainFrame.instance(), msg, getLangString("Fehler"),
+							Helper.showMessage(HOMainFrame.shown(), msg, getLangString("Fehler"),
 									JOptionPane.ERROR_MESSAGE);
 						}
 						return false;
@@ -638,7 +641,7 @@ public class OnlineWorker {
 					downloadTeamRatings(matchID, info.getMatchType(), info.getGuestTeamID());
 
 					// Get details with highlights.
-					HOMainFrame.instance().setWaitInformation();
+					HOMainFrame.setWaitInformation();
 					details = downloadMatchDetails(matchID, info.getMatchType(), lineup);
 
 					if (details == null) {
@@ -685,7 +688,7 @@ public class OnlineWorker {
 			String msg = getLangString("Downloadfehler") + " : Error fetching Team ratings :";
 			// Info
 			setInfoMsg(msg, InfoPanel.FEHLERFARBE);
-			Helper.showMessage(HOMainFrame.instance(), msg, getLangString("Fehler"),
+			Helper.showMessage(HOMainFrame.shown(), msg, getLangString("Fehler"),
 					JOptionPane.ERROR_MESSAGE);
 		}
 	}
@@ -747,7 +750,7 @@ public class OnlineWorker {
 		try {
 			matchesString = Connector.instance().getMatches(teamId, true, date);
 		} catch (IOException e) {
-			Helper.showMessage(HOMainFrame.instance(), getLangString("Downloadfehler")
+			Helper.showMessage(HOMainFrame.shown(), getLangString("Downloadfehler")
 					+ " : Error fetching matches : " + e, getLangString("Fehler"),
 					JOptionPane.ERROR_MESSAGE);
 			HOLogger.instance().log(OnlineWorker.class, e);
@@ -770,7 +773,7 @@ public class OnlineWorker {
 		try {
 			tournamentString = Connector.instance().getTournamentDetails(tournamentId);
 		} catch (IOException e) {
-			Helper.showMessage(HOMainFrame.instance(), getLangString("Downloadfehler")
+			Helper.showMessage(HOMainFrame.shown(), getLangString("Downloadfehler")
 							+ " : Error fetching Tournament Details : " + e, getLangString("Fehler"),
 					JOptionPane.ERROR_MESSAGE);
 			HOLogger.instance().log(OnlineWorker.class, e);
@@ -801,19 +804,19 @@ public class OnlineWorker {
 		String matchesString;
 		List<MatchKurzInfo> matches = new ArrayList<>();
 		boolean bOK;
-		HOMainFrame.instance().setWaitInformation();
+		HOMainFrame.setWaitInformation();
 
 		try {
 			matchesString = Connector.instance().getMatches(teamId, forceRefresh, upcoming);
 			bOK = (matchesString != null && !matchesString.isEmpty());
 			if (bOK)
-				HOMainFrame.instance().setWaitInformation();
+				HOMainFrame.setWaitInformation();
 		} catch (Exception e) {
 			String msg = getLangString("Downloadfehler") + " : Error fetching matches: "
 					+ e.getMessage();
 			// Info
 			setInfoMsg(msg, InfoPanel.FEHLERFARBE);
-			Helper.showMessage(HOMainFrame.instance(), msg, getLangString("Fehler"),
+			Helper.showMessage(HOMainFrame.shown(), msg, getLangString("Fehler"),
 					JOptionPane.ERROR_MESSAGE);
 			HOLogger.instance().log(OnlineWorker.class, e);
 			return null;
@@ -823,12 +826,12 @@ public class OnlineWorker {
 
 			// Store in DB if store is true
 			if (store) {
-				HOMainFrame.instance().setWaitInformation();
+				HOMainFrame.setWaitInformation();
 
 				matches = FilterUserSelection(matches);
 				DBManager.instance().storeMatchKurzInfos(matches);
 
-				HOMainFrame.instance().setWaitInformation();
+				HOMainFrame.setWaitInformation();
 
 				// Automatically download additional match infos (lineup + arena)
 				for (MatchKurzInfo match : matches) {
@@ -847,7 +850,7 @@ public class OnlineWorker {
 				}
 			}
 		}
-		HOMainFrame.instance().setWaitInformation();
+		HOMainFrame.setWaitInformation();
 		return matches;
 	}
 
@@ -914,12 +917,12 @@ public class OnlineWorker {
 												   int teamId2) {
 		MatchLineup lineUp2 = null;
 
-		HOMainFrame.instance().setWaitInformation();
+		HOMainFrame.setWaitInformation();
 
 		// Lineups holen
 		var lineUp1 = downloadMatchLineup(matchId, teamId1, matchType);
 		if (lineUp1 != null) {
-			HOMainFrame.instance().setWaitInformation();
+			HOMainFrame.setWaitInformation();
 			if (teamId2 > 0)
 				lineUp2 = downloadMatchLineup(matchId, teamId2, matchType);
 
@@ -942,7 +945,7 @@ public class OnlineWorker {
 				}
 			}
 		}
-		HOMainFrame.instance().setWaitInformation();
+		HOMainFrame.setWaitInformation();
 		return lineUp1;
 	}
 
@@ -959,16 +962,16 @@ public class OnlineWorker {
 	public static MatchFixtures downloadLeagueFixtures(int season, int leagueID) {
 		String leagueFixtures;
 		try {
-			HOMainFrame.instance().setWaitInformation();
+			HOMainFrame.setWaitInformation();
 			leagueFixtures = Connector.instance().getLeagueFixtures(season, leagueID);
-			HOMainFrame.instance().setWaitInformation();
+			HOMainFrame.setWaitInformation();
 			return XMLSpielplanParser.parseSpielplanFromString(leagueFixtures);
 		} catch (Exception e) {
 			HOLogger.instance().log(OnlineWorker.class, e);
 			String msg = getLangString("Downloadfehler") + " : Error fetching leagueFixture: "
 					+ e.getMessage();
 			setInfoMsg(msg, InfoPanel.FEHLERFARBE);
-			Helper.showMessage(HOMainFrame.instance(), msg, getLangString("Fehler"),
+			Helper.showMessage(HOMainFrame.shown(), msg, getLangString("Fehler"),
 					JOptionPane.ERROR_MESSAGE);
 		}
 		return null;
@@ -985,17 +988,17 @@ public class OnlineWorker {
 	 */
 	public static XMLTransferSearchParser.Page searchTransfers(TransferSearchQuery query) {
 		try {
-			HOMainFrame.instance().setWaitInformation();
+			HOMainFrame.setWaitInformation();
 			return TransferSearchService.instance().search(query);
 		} catch (TransferSearchService.SearchFailed e) {
 			String msg = e.errorKey() != null
 					? getLangString(e.errorKey())
 					: getLangString("Downloadfehler") + " : " + e.getMessage();
 			setInfoMsg(msg, InfoPanel.FEHLERFARBE);
-			Helper.showMessage(HOMainFrame.instance(), msg, getLangString("Fehler"),
+			Helper.showMessage(HOMainFrame.shown(), msg, getLangString("Fehler"),
 					JOptionPane.ERROR_MESSAGE);
 		} finally {
-			HOMainFrame.instance().setInformationCompleted();
+			HOMainFrame.setInformationCompleted();
 		}
 		return null;
 	}
@@ -1111,21 +1114,21 @@ public class OnlineWorker {
 			if (downloadOfMatchDetailsFailed(matchDetails, matchID)) {
 				return null;
 			}
-			HOMainFrame.instance().setWaitInformation();
+			HOMainFrame.setWaitInformation();
 			details = XMLMatchdetailsParser.parseMatchdetailsFromString(matchDetails, lineup);
-			HOMainFrame.instance().setWaitInformation();
+			HOMainFrame.setWaitInformation();
 			if (details == null) {
 				HOLogger.instance().warning(OnlineWorker.class, "Error parsing match details for match " + matchID);
 				return null;
 			}
 			String arenaString = Connector.instance().downloadArena(details.getArenaID());
-			HOMainFrame.instance().setWaitInformation();
+			HOMainFrame.setWaitInformation();
 			details.setRegionId(XMLArenaParser.parseArenaFromString(arenaString).getRight().getRegion().id());
 		} catch (Exception e) {
 			String msg = getLangString("Downloadfehler") + ": Error fetching Matchdetails XML.: ";
 			// Info
 			setInfoMsg(msg, InfoPanel.FEHLERFARBE);
-			Helper.showMessage(HOMainFrame.instance(), msg, getLangString("Fehler"), JOptionPane.ERROR_MESSAGE);
+			Helper.showMessage(HOMainFrame.shown(), msg, getLangString("Fehler"), JOptionPane.ERROR_MESSAGE);
 			return null;
 		}
 		return details;
@@ -1150,7 +1153,7 @@ public class OnlineWorker {
 			String msg = getLangString("Downloadfehler") + " : Error fetching Matchlineup :";
 			// Info
 			setInfoMsg(msg, InfoPanel.FEHLERFARBE);
-			Helper.showMessage(HOMainFrame.instance(), msg, getLangString("Fehler"),
+			Helper.showMessage(HOMainFrame.shown(), msg, getLangString("Fehler"),
 					JOptionPane.ERROR_MESSAGE);
 			return null;
 		}
@@ -1220,7 +1223,7 @@ public class OnlineWorker {
 		} catch (Exception e) {
 			String msg = getLangString("Downloadfehler") + " : Error fetching Matchorder :";
 			setInfoMsg(msg, InfoPanel.FEHLERFARBE);
-			Helper.showMessage(HOMainFrame.instance(), msg, getLangString("Fehler"),
+			Helper.showMessage(HOMainFrame.shown(), msg, getLangString("Fehler"),
 					JOptionPane.ERROR_MESSAGE);
 			HOLogger.instance().error(OnlineWorker.class, e.getMessage());
 		}
@@ -1239,7 +1242,7 @@ public class OnlineWorker {
 		catch(Exception e){
 			String msg = getLangString("Downloadfehler") + " : Error fetching region details :";
 			setInfoMsg(msg, InfoPanel.FEHLERFARBE);
-			Helper.showMessage(HOMainFrame.instance(), msg, getLangString("Fehler"),
+			Helper.showMessage(HOMainFrame.shown(), msg, getLangString("Fehler"),
 					JOptionPane.ERROR_MESSAGE);
 			HOLogger.instance().error(OnlineWorker.class, e.getMessage());
 		}
@@ -1304,7 +1307,7 @@ public class OnlineWorker {
 				try {
 					saveFile(file.getPath(), hrfData);
 				} catch (IOException e) {
-					Helper.showMessage(HOMainFrame.instance(),
+					Helper.showMessage(HOMainFrame.shown(),
 							TranslationFacility.tr("Show_SaveHRF_Failed") + " " + file.getParentFile() + ".\nError: " + e.getMessage(),
 							getLangString("Fehler"), JOptionPane.ERROR_MESSAGE);
 				}
@@ -1387,7 +1390,7 @@ public class OnlineWorker {
 	 *            the message to show
 	 */
 	private static void setInfoMsg(String msg) {
-		HOMainFrame.instance().setInformation(msg);
+		HOMainFrame.setInformation(msg);
 	}
 
 	/**
@@ -1400,7 +1403,7 @@ public class OnlineWorker {
 	 *            the color
 	 */
 	private static void setInfoMsg(String msg, Color color) {
-		HOMainFrame.instance().setInformation(msg, color);
+		HOMainFrame.setInformation(msg, color);
 	}
 
 	/**

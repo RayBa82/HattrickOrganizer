@@ -75,6 +75,8 @@ test {
     // build folder, which clean wipes on every build, instead of the working directory or the
     // real HO folder of the user.
     systemProperty 'ho.dbParentFolder', layout.buildDirectory.dir('test-ho').get().asFile.absolutePath
+    // No window in a unit test - and it keeps HOMainFrameHeadlessTest (core.HeadlessMain) running.
+    systemProperty 'java.awt.headless', 'true'
 }
 
 //  configure application plugin --------------------------------
@@ -566,6 +568,65 @@ tasks.register("dmg", GradleBuild) {
     group 'build'
     description "One-shot macOS .dmg build: version stamp, distribution and jpackage."
     tasks = ['createVersion', 'jpackageDmg']
+}
+
+tasks.register("headlessTar", Tar) {
+    group 'sub tasks'
+    description "Packs the distribution plus ho-headless.sh into build/headless/HO-headless-<version>.tar.gz."
+    dependsOn tasks.createDistribution
+    archiveFileName = "HO-headless-${version}.tar.gz"
+    destinationDirectory = file("${buildDir}/headless")
+    compression = Compression.GZIP
+    into("HO") {
+        from "${buildDir}/install/XXX"
+        from("${projectDir}/utils/buildResources/ho-headless.sh") {
+            filePermissions { unix("rwxr-xr-x") }
+        }
+    }
+}
+
+tasks.register("headless", GradleBuild) {
+    group 'build'
+    description "One-shot headless MCP server build (core.HeadlessMain): version stamp, distribution and tarball."
+    tasks = ['createVersion', 'headlessTar']
+}
+
+tasks.register("dockerImage", Exec) {
+    group 'sub tasks'
+    description "Builds the headless MCP server image ho-headless:<version> from the distribution."
+    dependsOn tasks.createDistribution
+    // -PdockerPlatform=linux/amd64 when the server's CPU differs from this machine's (Apple silicon -> x86 server)
+    def platform = project.findProperty('dockerPlatform')
+    commandLine(['docker', 'build'] + (platform ? ['--platform', platform] : []) +
+            ['-f', "${projectDir}/utils/buildResources/Dockerfile",
+             '-t', "ho-headless:${version}", '-t', 'ho-headless:latest', "${buildDir}/install/XXX"])
+}
+
+tasks.register("docker", GradleBuild) {
+    group 'build'
+    description "One-shot Docker image of the headless MCP server: version stamp, distribution and docker build."
+    tasks = ['createVersion', 'dockerImage']
+    // GradleBuild does not hand -P properties to the nested build; dockerPlatform needs them
+    startParameter.projectProperties = gradle.startParameter.projectProperties
+}
+
+tasks.register("dockerPushImage", Exec) {
+    group 'sub tasks'
+    description "Builds the headless MCP server image for amd64 + arm64 and pushes it to dockerRegistry."
+    dependsOn tasks.createDistribution
+    // -PdockerRegistry=host[:port] (default docker.rayba.de), -PdockerPlatforms=linux/amd64 to narrow it
+    def image = "${project.findProperty('dockerRegistry') ?: 'docker.rayba.de'}/ho-headless"
+    commandLine 'docker', 'buildx', 'build', '--push',
+            '--platform', project.findProperty('dockerPlatforms') ?: 'linux/amd64,linux/arm64',
+            '-f', "${projectDir}/utils/buildResources/Dockerfile",
+            '-t', "${image}:${version}", '-t', "${image}:latest", "${buildDir}/install/XXX"
+}
+
+tasks.register("dockerPush", GradleBuild) {
+    group 'build'
+    description "One-shot multi-arch build and push of the headless MCP server image (docker login first)."
+    tasks = ['createVersion', 'dockerPushImage']
+    startParameter.projectProperties = gradle.startParameter.projectProperties
 }
 
 tasks.register("release", GradleBuild) {

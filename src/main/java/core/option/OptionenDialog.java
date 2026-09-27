@@ -167,9 +167,9 @@ public class OptionenDialog extends JDialog {
                 JOptionPane.INFORMATION_MESSAGE);
         }
         if (OptionManager.instance().isReInitNeeded()) {
-            HOMainFrame.instance().resetInformation();
+            HOMainFrame.resetInformation();
             RefreshManager.instance().doReInit();
-            HOMainFrame.instance().setInformationCompleted();
+            HOMainFrame.setInformationCompleted();
         }
     }
 }

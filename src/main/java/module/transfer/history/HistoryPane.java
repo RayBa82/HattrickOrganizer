@@ -123,9 +123,9 @@ public class HistoryPane extends JSplitPane {
 
                 if (choice == JOptionPane.YES_OPTION) {
                     try {
-                        HOMainFrame.instance().resetInformation();
+                        HOMainFrame.resetInformation();
                         XMLParser.updateTeamTransfers(teamId);
-                        HOMainFrame.instance().setInformationCompleted();
+                        HOMainFrame.setInformationCompleted();
                     } catch (Exception ex) {
                         ex.printStackTrace();
                     }

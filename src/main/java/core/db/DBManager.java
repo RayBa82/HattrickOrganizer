@@ -147,6 +147,7 @@ public class DBManager implements PersistenceManager {
 			}
 
 			if (errorMsg != null) {
+				exitIfHeadless(errorMsg);
 				javax.swing.JOptionPane.showMessageDialog(null, errorMsg, "Fatal DB Error", javax.swing.JOptionPane.ERROR_MESSAGE);
 				System.exit(-1);
 			}
@@ -179,6 +180,7 @@ public class DBManager implements PersistenceManager {
 					msg = "Fatal database error. Exiting HO!\nYou should restore the db-folder from backup or delete that folder.";
 				}
 
+				exitIfHeadless(msg);
 				javax.swing.JOptionPane
 						.showMessageDialog(null, msg, "Fatal DB Error",
 								javax.swing.JOptionPane.ERROR_MESSAGE);
@@ -221,6 +223,14 @@ public class DBManager implements PersistenceManager {
 			HOLogger.instance().info(DBManager.class, "instance " + UserManager.instance().getCurrentUser().getDbURL() + "; parent folder: " + UserManager.instance().getDbParentFolder());
 		}
 		return m_clInstance;
+	}
+
+	/** core.HeadlessMain: there is no dialog to show the reason in, so log it and stop. */
+	private static void exitIfHeadless(String msg) {
+		if (java.awt.GraphicsEnvironment.isHeadless()) {
+			HOLogger.instance().error(DBManager.class, "Fatal DB Error: " + msg);
+			System.exit(-1);
+		}
 	}
 
 	public static double getDBConfigVersion() {

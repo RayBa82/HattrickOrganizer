@@ -1,0 +1,27 @@
+# Headless HO MCP server - see README.md, "Docker".
+# Put this file next to a ./data folder holding HO's data: users.json and db/ (copied from a desktop
+# HO data folder to keep its history, or created by `docker compose run --rm ho authorize`).
+# `version` is only for the old docker-compose v1 (Ubuntu's `docker-compose` package), which otherwise
+# reads this as its own legacy format; Compose v2 (`docker compose`) ignores it with a warning.
+# v1 against a current Docker engine ("client version 1.25 is too old") also needs
+# COMPOSE_API_VERSION=1.40 in .env - no file version gets it past API 1.38. Prefer `docker compose`.
+version: "3"
+services:
+  ho:
+    # docker.rayba.de/ho-headless:latest from the registry (set HO_IMAGE in .env), else a loaded image
+    image: "${HO_IMAGE:-ho-headless:latest}"
+    container_name: ho
+    restart: unless-stopped
+    # A bind mount keeps its host owner: run as the owner of ./data (`id -u` / `id -g`), e.g. in .env
+    user: "${HO_UID:-1000}:${HO_GID:-1000}"
+    volumes:
+      - ./data:/data
+    ports:
+      - "127.0.0.1:8765:8765"   # host loopback only - the server has no authentication
+    environment:
+      JAVA_OPTS: "${HO_JAVA_OPTS:-}"   # e.g. -Dho.teamId=<teamId> for authorize
+    # HO prints every message to the console; cap what Docker keeps (data/logs/ has the file log)
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -39,7 +39,7 @@ public class HRFImport {
 				}
 
 				if (!files[i].exists()) {
-					frame.setInformation(getLangStr("DateiNichtGefunden"), InfoPanel.FEHLERFARBE);
+					HOMainFrame.setInformation(getLangStr("DateiNichtGefunden"), InfoPanel.FEHLERFARBE);
 					Helper.showMessage(frame, getLangStr("DateiNichtGefunden"), getLangStr("Fehler"), JOptionPane.ERROR_MESSAGE);
 					return;
 				}
@@ -47,7 +47,7 @@ public class HRFImport {
 				// remember path
 				UserParameter.instance().hrfImport_HRFPath = files[i].getParentFile().getAbsolutePath();
 				var teamId = HOVerwaltung.instance().getModel().getBasics().getTeamId();
-				frame.setInformation(getLangStr("StartParse"));
+				HOMainFrame.setInformation(getLangStr("StartParse"));
 				homodel = HRFFileParser.parse(files[i]);
 				var errorMessage = "Importfehler";
 				if ( homodel != null && homodel.getBasics().getTeamId() != teamId){
@@ -58,10 +58,10 @@ public class HRFImport {
 
 				if (homodel == null) {
 					var languageErrorMessage = getLangStr(errorMessage);
-					frame.setInformation(languageErrorMessage + " : " + files[i].getName(), InfoPanel.FEHLERFARBE);
+					HOMainFrame.setInformation(languageErrorMessage + " : " + files[i].getName(), InfoPanel.FEHLERFARBE);
 					Helper.showMessage(frame, languageErrorMessage, getLangStr("Fehler"), JOptionPane.ERROR_MESSAGE);
 				} else {
-					frame.setInformation(getLangStr("HRFSave"));
+					HOMainFrame.setInformation(getLangStr("HRFSave"));
 
 					// file already imported?
 					var HRFts = homodel.getBasics().getDatum().toDbTimestamp();
@@ -83,10 +83,10 @@ public class HRFImport {
 						if ( training != null) {
 							DBManager.instance().saveTraining(training, HODateTime.now());
 						}
-						frame.setInformation(getLangStr("HRFErfolg"));
+						HOMainFrame.setInformation(getLangStr("HRFErfolg"));
 					} else {
 						// Cancel
-						frame.setInformation(getLangStr("HRFAbbruch"), InfoPanel.FEHLERFARBE);
+						HOMainFrame.setInformation(getLangStr("HRFAbbruch"), InfoPanel.FEHLERFARBE);
 					}
 				}
 			}

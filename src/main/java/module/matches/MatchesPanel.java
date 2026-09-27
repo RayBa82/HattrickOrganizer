@@ -160,18 +160,18 @@ public final class MatchesPanel extends LazyImagePanel {
 	}
 
 	private void reloadSelectedMatches() {
-		HOMainFrame.instance().resetInformation();
+		HOMainFrame.resetInformation();
 		int matchid = matchesModel.getMatch().getMatchID();
 		int i=0;
 		int n = matchesTable.getSelectedRows().length;
 		for ( var selectedRowNumber : matchesTable.getSelectedRows()){
 			var matchKurzInfo = matchesTable.getMatchAtRow(selectedRowNumber);
 			OnlineWorker.downloadMatchData( matchKurzInfo.getMatchID(), matchKurzInfo.getMatchType(), true);
-			HOMainFrame.instance().updateProgress((int)(++i * 100.0 / n));
+			HOMainFrame.updateProgress((int)(++i * 100.0 / n));
 		}
 		RefreshManager.instance().doReInit();
 		showMatch(matchid);
-		HOMainFrame.instance().setInformationCompleted();
+		HOMainFrame.setInformationCompleted();
 	}
 
 	private void deleteSelectedMatches() {

@@ -34,7 +34,8 @@ public final class ScoutList {
 
     /** Whether the Transfers tab is showing, and so holds the authoritative list. */
     public static boolean isLive() {
-        return HOMainFrame.instance().getTabbedPane().isModuleTabVisible(IModule.TRANSFERS);
+        final var frame = HOMainFrame.shown();
+        return frame != null && frame.getTabbedPane().isModuleTabVisible(IModule.TRANSFERS);
     }
 
     /** The scout entries - the open panel's live list, or the stored one. */

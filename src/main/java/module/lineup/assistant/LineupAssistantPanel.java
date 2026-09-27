@@ -155,7 +155,7 @@ public class LineupAssistantPanel extends ImagePanel implements Refreshable, Act
             lineup.resetSubstituteBench();
             lineup.setKicker(0);
             lineup.setCaptain(0);
-            HOMainFrame.instance().setInformation(TranslationFacility.tr("Aufstellung_geloescht"));
+            HOMainFrame.setInformation(TranslationFacility.tr("Aufstellung_geloescht"));
             mainFrame.getLineupPanel().update();
         }
 		else if (actionEvent.getSource().equals(m_jbStartAssistant)) {
@@ -266,7 +266,7 @@ public class LineupAssistantPanel extends ImagePanel implements Refreshable, Act
 						isUseAverageRating()
 				);
 
-		mainFrame.setInformation(TranslationFacility.tr("Autoaufstellung_fertig"));
+		HOMainFrame.setInformation(TranslationFacility.tr("Autoaufstellung_fertig"));
 		mainFrame.getLineupPanel().update();
 
 		// gui.RefreshManager.instance ().doRefresh ();

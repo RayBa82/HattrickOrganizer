@@ -65,9 +65,9 @@ public class CsvPlayerExport {
 				return;
             }
 
-			HOMainFrame.instance().resetInformation();
+			HOMainFrame.resetInformation();
 			doExport (file);
-			HOMainFrame.instance().setInformationCompleted();
+			HOMainFrame.setInformationCompleted();
 		}
 	}
 

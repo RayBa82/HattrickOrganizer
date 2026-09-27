@@ -16,6 +16,44 @@ hint naming its own paging/filter arguments. The rule is documented but not impl
 - Then audit every tool's defaults against it, starting with the list-shaped ones. Today only
   `list_scout` pages (it was ~260k chars before paging).
 
+## Headless MCP server (2026-09-27, uncommitted)
+
+**Live since 2026-09-27** on the user's Linux server (Ubuntu 24.04, x86_64), in `~/ho` via
+`docker compose` (Compose v2 plugin; Ubuntu's `docker-compose` v1 cannot talk to the current engine).
+It runs the desktop HO's live DB (history since 2026-04-11), and `~/ho/data` is its only copy. Desktop
+HO on the Mac must stay unused. The code is still uncommitted: it lives only in the Mac's working tree.
+
+Asked by the user: HO on a Linux server with no display, serving only the MCP tools. Documented
+in AGENTS.md, "Headless server". `core.HeadlessMain` reuses `HO.initRuntime` (extracted from
+`HO.main`), then does the non-UI startup steps and starts `McpHttpServer`.
+
+- Verified with `-Djava.awt.headless=true` against a copy of the dev DB: all 29 tools listed, every
+  read tool, `apply_lineup`, `set_player_group`, `list_challenges` (live CHPP) and a full
+  `download_team` (all sections) worked; SIGTERM stops the server and disconnects the DB. On an
+  empty DB, `authorize` creates the database and prints the authorization URL. The PIN exchange
+  itself has not been run end to end yet: it needs a human with a Hattrick login.
+- Not exercised headless: the CHPP writes (`send_match_order`, `place_bid`, `set_training`,
+  `manage_challenge`). Their 401 path now throws under `silentDownload` like the GET path
+  did already, where it used to open `OAuthDialog`.
+- Packaging: `./gradlew headless` (tarball + `ho-headless.sh`) and `./gradlew docker`
+  (image `ho-headless`, Temurin 17 JRE, volume `/data`, `-Dho.mcpBind`). The image was verified on
+  Docker Desktop (arm64) with a copy of the dev DB: tools answer on the host through
+  `-p 127.0.0.1:8765:8765`, `simulate_lineup` (prediction/) and a full `download_team` work, a write
+  survives stop/start, `docker stop` shuts down cleanly, and `authorize` on a fresh volume prints the
+  URL. The `-PdockerPlatform=linux/amd64` image was only started under emulation.
+- `docker-compose.yml` with `./data` bind mount, for moving the live desktop DB (with its history) to the
+  server. Rehearsed with a copy of the live `~/Library/Application Support/HO` data: packed as in the
+  README, served through `docker compose up`, history tools answered (26 weeks). Ownership was
+  simulated with a volume: matching uid works, a wrong owner exits with HO's "Could not write to
+  database" message. A real Linux host has not been tried yet.
+- `./gradlew dockerPush` (buildx, amd64 + arm64, `-PdockerRegistry`, default docker.rayba.de);
+  compose takes `HO_IMAGE`. Pushed to docker.rayba.de on 2026-09-27 (digest sha256:7be84146…); pulled
+  back, both architectures run. That needed the registry's nginx to forward `Host` and
+  `X-Forwarded-Host` as `$http_host`: with `:443` in the upload URLs, Docker sent the upload PUT
+  without credentials (401).
+- Pre-existing, seen in desktop logs too: `WorldDetailsTable` CURRENCY_RATE NPE and CHPP error 56
+  from `TransferListingResolver`.
+
 ## Lineup tab in the TV-view look (2026-09-27, uncommitted)
 
 Asked by the hattrick session, after the user approved the plan there: make the lineup tab look like the
@@ -40,25 +78,3 @@ else brand green. The tile combo reports a wider `getSize()` so its popup list f
 - `LineupRatingPanel`: each sector shows a bar (rating / 20) in place of the coloured dot.
 - Not done: the page's A/B squad badge (HO has no such concept), restyling the penalty-takers
   and team-orders tabs.
-
-## Lineup: Hattrick-style tiles, penalty takers and team orders over MCP (2026-09-27, uncommitted)
-
-Asked by the hattrick repo's consumer session, approved by the user.
-
-- **Lineup tab look.** Superseded by the TV-view section above. Formation and its experience
-  are a row under the tactic dropdown (`MatchAndLineupSelectionPanel`). New skin "IntelliJ Light"
-  (`IntelliJLightTheme`, darklaf).
-- **MCP.** `get_lineup` reports `penaltyTakers` [{playerId, name, strength}] and `teamOrders`
-  [{type, minute, playerOut, playerIn, roleId, behaviour, redCard, standing}] (`LineupOrders`).
-  `apply_lineup` takes both, each replacing the whole list (omit = untouched, [] = clear), refuses
-  what Hattrick would refuse before writing, and returns `orderWarnings` for what HO's tabs flag.
-  `simulate_lineup` lists them under `ignored`.
-- **send_match_order** echoes the order as sent (`order`, parsed from the upload string). Without
-  Supporter it returns `status: supporterRequired`, `sent: false` and `wouldSend`: setmatchorder is
-  Supporter-only (CHPP error 6), which the CHPP docs do not say. An `OrdersSet="False"` answer used
-  to come back as "ok"; it is now a failure with Hattrick's Reason.
-- **Limits** in one place, `OrderLimits`, used by the team orders tab and MCP: 5 orders + 1 per
-  Tactical Assistant level, at most 3 substitutions (wiki: Substitutions; the tab did not enforce
-  this before), 1 man marking.
-- **Silent losses fixed.** `Lineup.toJson` always sends 11 kicker slots. The penalty tab writes
-  every edit into the lineup at once instead of on leaving the tab.

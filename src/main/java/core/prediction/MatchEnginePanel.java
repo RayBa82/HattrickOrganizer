@@ -84,23 +84,22 @@ public class MatchEnginePanel extends ImagePanel implements	 ActionListener {
 	 */
 	public final void calculateNMatches(int numberOfMatches) {
 		int match = (1 + numberOfMatches) * 1000;
-		var mainframe = HOMainFrame.instance();
-		mainframe.resetInformation();
+		HOMainFrame.resetInformation();
 		MatchResult result = new MatchResult();
 		final TeamData team1 = homeTeamPanel.getTeamData();
 		final TeamData team2 = guestTeamPanel.getTeamData();
 		for (int i = 0; i < match; i++) {
 			result.addMatchResult(MatchPredictionManager.instance().calculateMatchResult(team1, team2));
-			if (i%1000==0)mainframe.updateProgress((int) ((i * 100d) / match));
+			if (i%1000==0)HOMainFrame.updateProgress((int) ((i * 100d) / match));
 		}
-		mainframe.resetInformation();
+		HOMainFrame.resetInformation();
 		refresh(result);
 	}
 
 	/**
 	 * Use this methode, if you have created your own matchresults. To calculate
 	 * n matches use calculateNMatches
-	 * 
+	 *
 	 */
 	public final void refresh(MatchResult matchresults) {
 

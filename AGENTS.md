@@ -232,6 +232,39 @@ works if no single call floods its context.
 - **New or changed tools** ship with a test for the over-budget path: the envelope comes back,
   nothing partial leaks through, and the hint names real arguments of that tool.
 
+#### Headless server
+
+`core.HeadlessMain` runs HO without a window and serves only the MCP tools, e.g. on a Linux box.
+Same jar, different main class. `./gradlew headless` (createVersion + `headlessTar`) packs the
+distribution plus `utils/buildResources/ho-headless.sh` into `build/headless/HO-headless-<version>.tar.gz`;
+`./gradlew docker [-PdockerPlatform=linux/amd64]` (createVersion + `dockerImage`) builds the image
+`ho-headless:<version>` from `utils/buildResources/Dockerfile`, with the distribution as the build context:
+workdir `/opt/ho` (so `prediction/` and `truststore.jks` resolve), data under the `/data` volume via
+`-Dho.dbParentFolder`, and `-Dho.mcpBind=0.0.0.0`, the only non-loopback bind, because the host
+cannot reach a container's loopback (publish with `-p 127.0.0.1:8765:8765`).
+`utils/buildResources/docker-compose.yml` (Compose v2, `docker compose`) runs it with the data folder bind-mounted from `./data`, as the
+owner of that folder (`HO_UID`/`HO_GID`, default 1000). The image's own `ho` user only fits named
+volumes. Fatal DB errors (lock held, no write access) log and exit when headless
+(`DBManager.exitIfHeadless`) instead of opening their dialog. User-facing steps are
+in README.md, "Headless MCP server". The script boils down to:
+
+```bash
+java -Djava.awt.headless=true -cp HO.jar core.HeadlessMain authorize   # once: CHPP PIN flow + first download
+java -Djava.awt.headless=true -cp HO.jar core.HeadlessMain [--port 8765] [--user 0] [INSTALLED] [DEBUG]
+```
+
+- `authorize` prints the Hattrick authorization URL and reads the code from stdin (CHPP's
+  out-of-band flow, no browser needed on the server). The token is stored the way `OAuthDialog`
+  stores it. It then runs the first team download, which `download_team` refuses on an empty DB.
+  With several teams and no picker it takes the primary team, or `-Dho.teamId=<id>`.
+- Loopback only, no authentication: reach it through `ssh -L 8765:localhost:8765 server`.
+- HSQLDB is single-process: desktop HO and the server must not open the same DB at the same time.
+- Code the tools reach must not build `HOMainFrame`: under `java.awt.headless` that throws
+  `HeadlessException`. Status-line updates go through the static `HOMainFrame.setInformation(...)`
+  family (no-ops headless), dialog parents and panel refreshes through `HOMainFrame.shown()`
+  (null headless), and CHPP errors stay behind `Connector.setSilentDownload`, which `HeadlessMain`
+  keeps on. `HOMainFrameHeadlessTest` covers the status line; the test JVM runs headless.
+
 ### Where user data lives
 
 `UserManager.setDBParentFolder()` picks the location, and it depends on how HO was launched.

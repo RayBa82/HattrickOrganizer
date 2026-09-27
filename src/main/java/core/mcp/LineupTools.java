@@ -346,7 +346,8 @@ public final class LineupTools {
             // be unfielded again the moment the tab refreshes. Refreshing now makes that happen
             // inside the call, so what gets stored and reported is the lineup HO is really left
             // holding. It also makes the tab show the write, the way set_player_group already does.
-            final var lineupPanel = HOMainFrame.instance().getLineupPanel();
+            final var frame = HOMainFrame.shown();
+            final var lineupPanel = frame == null ? null : frame.getLineupPanel();
             if (lineupPanel != null) {
                 lineupPanel.update();
             }
@@ -451,7 +452,8 @@ public final class LineupTools {
                 changed.add(json);
             }
             // What HO's own group buttons do afterwards - the tables render the group icons.
-            final var lineupPanel = HOMainFrame.instance().getLineupPanel();
+            final var frame = HOMainFrame.shown();
+            final var lineupPanel = frame == null ? null : frame.getLineupPanel();
             if (lineupPanel != null) {
                 lineupPanel.update();
             }

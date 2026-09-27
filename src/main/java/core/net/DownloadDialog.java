@@ -294,7 +294,7 @@ public class DownloadDialog extends JDialog implements ActionListener {
 				bOK = OnlineWorker.downloadCurrentMatches(model);
 			}
 			if (bOK && m_jchMatchArchive.isSelected()) {
-				HOMainFrame.instance().setInformation(Helper.getTranslation("ls.update_status.match_info"), progressIncrement);
+				HOMainFrame.setInformation(Helper.getTranslation("ls.update_status.match_info"), progressIncrement);
 				var date = new HODateTime(m_clSpinnerModel.getDate().toInstant());
 				List<MatchKurzInfo> allmatches = OnlineWorker.getMatchArchive(teamId, date, false);
 				if (allmatches != null) {
@@ -319,14 +319,14 @@ public class DownloadDialog extends JDialog implements ActionListener {
 						selection.add(child.getUserObject());
 					}
 				}
-				HOMainFrame.instance().setInformation(Helper.getTranslation("ls.update_status.fixtures"), progressIncrement);
+				HOMainFrame.setInformation(Helper.getTranslation("ls.update_status.fixtures"), progressIncrement);
 				downloadOldFixtures(teamId, selection);
 			}
 
 			OnlineWorker.refreshWorldDetailsIfDue();
 		}
 
-		HOMainFrame.instance().setInformation(Helper.getTranslation("ls.update_status.calc_subskills"), progressIncrement);
+		HOMainFrame.setInformation(Helper.getTranslation("ls.update_status.calc_subskills"), progressIncrement);
 		model.calcSubskills();
 
 		// Last, and outside the team-data branch: what a watched market player sold for is not in
@@ -335,12 +335,12 @@ public class DownloadDialog extends JDialog implements ActionListener {
 		// the parts they are watching for. Skipped when something upstream failed - a broken
 		// download should not be followed by a burst of further CHPP calls.
 		if (bOK) {
-			HOMainFrame.instance().setInformation(
+			HOMainFrame.setInformation(
 					Helper.getTranslation("ls.update_status.transfer_prices"), progressIncrement);
 			OnlineWorker.resolveTransferListings();
 		}
 
-		HOMainFrame.instance().setInformationCompleted();
+		HOMainFrame.setInformationCompleted();
 
 	}
 

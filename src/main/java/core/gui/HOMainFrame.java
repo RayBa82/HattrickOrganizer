@@ -174,6 +174,14 @@ public final class HOMainFrame extends JFrame implements Refreshable {
 		return m_clHOMainFrame;
 	}
 
+	/**
+	 * The frame, or null when HO runs headless (core.HeadlessMain) and there is none. For code the
+	 * headless MCP server also runs: a dialog parent, or a panel to refresh if one is showing.
+	 */
+	public static HOMainFrame shown() {
+		return GraphicsEnvironment.isHeadless() ? null : instance();
+	}
+
 	public static boolean isHOMainFrame_initialized() {
 		return m_HOMainFrame_initialized;
 	}
@@ -196,37 +204,45 @@ public final class HOMainFrame extends JFrame implements Refreshable {
 		return m_jpInfoPanel;
 	}
 
-	public void setWaitInformation() {
+	// The status-line methods are static so that code the headless MCP server also runs
+	// (core.HeadlessMain) can call them: without a display there is no frame to build, and they
+	// do nothing. Call them as HOMainFrame.setInformation(...), not through instance().
+	public static void setWaitInformation() {
 		setInformation(TranslationFacility.tr("BitteWarten"), 1);
 	}
 
-	public void resetInformation() {
+	public static void resetInformation() {
 		setInformation("", -100);
 	}
 
-	public void setInformation(String information) {
+	public static void setInformation(String information) {
 		setInformation(information, -100);
 	}
 
-	public void setInformationCompleted() {
+	public static void setInformationCompleted() {
 		setInformation(Helper.getTranslation("ls.update_status.complete"), -100);
 	}
 
-	public void setInformation(String information, int progress) {
+	public static void setInformation(String information, int progress) {
+		if (GraphicsEnvironment.isHeadless()) return;
+		final var frame = instance();
 		if (launching.get()) return;
-		getInfoPanel().setInformation(information, progress);
+		frame.getInfoPanel().setInformation(information, progress);
 	}
 
-	public void setInformation(String information, Color color) {
+	public static void setInformation(String information, Color color) {
+		if (GraphicsEnvironment.isHeadless()) return;
+		final var frame = instance();
 		if (launching.get()) return;
-		getInfoPanel().setInformation(information, color);
+		frame.getInfoPanel().setInformation(information, color);
 	}
 
-	public void updateProgress(int progress) {
+	public static void updateProgress(int progress) {
+		if (GraphicsEnvironment.isHeadless()) return;
+		final var frame = instance();
 		if (launching.get()) return;
-		getInfoPanel().setProgressbarValue(progress);
+		frame.getInfoPanel().setProgressbarValue(progress);
 	}
-
 	public PlayerAnalysisModulePanel getSpielerAnalyseMainPanel() {
 		return ((PlayerAnalysisModulePanel) getTabbedPane().getModulePanel(IModule.PLAYERANALYSIS));
 	}

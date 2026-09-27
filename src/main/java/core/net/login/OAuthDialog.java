@@ -39,7 +39,15 @@ public class OAuthDialog extends JDialog {
 	private final OAuth10aService m_service;
 	private OAuth1AccessToken m_AccessToken;
 	private OAuth1RequestToken m_RequestToken;
-	private String scopes;
+
+	/**
+	 * Appended to the authorization URL - shared with the headless console flow
+	 * ({@code Connector.authorizeOnConsole}). Hard coded due to authorization woes - the
+	 * {@code scope} constructor parameter is never read. manage_youthplayers is needed for action
+	 * type unlockskills; set_training / manage_challenges / place_bid are the CHPP write families
+	 * exposed over MCP (docs/superpowers/specs/2026-09-02-chpp-write-operations-over-mcp-design.md).
+	 */
+	public static final String SCOPES = "&scope=" + "set_matchorder,manage_youthplayers,set_training,manage_challenges,place_bid";
 
 	public OAuthDialog(HOMainFrame mainFrame, OAuth10aService service, String scope) {
 		super(mainFrame, TranslationFacility.tr(
@@ -49,12 +57,6 @@ public class OAuthDialog extends JDialog {
 		this.m_service = service;
 		setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
 
-		// Hard code the scope set due to authorization woes - the `scope` constructor
-		// parameter is never read.
-		// manage_youthplayers is needed for action type unlockskills;
-		// set_training / manage_challenges / place_bid are the CHPP write families exposed over MCP
-		// (docs/superpowers/specs/2026-09-02-chpp-write-operations-over-mcp-design.md).
-		scopes = "&scope=" + "set_matchorder,manage_youthplayers,set_training,manage_challenges,place_bid";
 
 		obtainUserURL();
 		initComponents();
@@ -65,7 +67,7 @@ public class OAuthDialog extends JDialog {
 		try {
 			m_RequestToken = m_service.getRequestToken();
 			m_sUserURL = m_service.getAuthorizationUrl(m_RequestToken);
-			m_sUserURL += scopes;
+			m_sUserURL += SCOPES;
 		} catch (Exception e) {
 			HOLogger.instance().error(getClass(),
 					"Exception in obtainUserCode: " + e.getMessage());

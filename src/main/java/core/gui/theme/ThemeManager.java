@@ -300,7 +300,7 @@ public final class ThemeManager {
 
 		for (var avatar:missingAvatars) {
 			HOLogger.instance().info(this.getClass(), "Downloading player's avatar: %s/%s".formatted(i, iMax));
-			HOMainFrame.instance().setInformation("Downloading player's avatar: %s/%s".formatted(i, iMax), progress);
+			HOMainFrame.setInformation("Downloading player's avatar: %s/%s".formatted(i, iMax), progress);
 			try {
 				avatar.generateAvatar(playerAvatarPath);
 			} catch (IOException e) {
@@ -423,7 +423,7 @@ public final class ThemeManager {
 			}
 		}
 		ThemeManager.instance().generateAllPlayerAvatar(playerAvatar, 1);
-		HOMainFrame.instance().resetInformation();
+		HOMainFrame.resetInformation();
 	}
 
     public static ImageProvider createStadiumImageProvider(String primaryUrl, String fallbackUrl) {

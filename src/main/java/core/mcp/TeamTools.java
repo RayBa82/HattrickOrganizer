@@ -1083,7 +1083,7 @@ public final class TeamTools {
                 // the success path: createHrf drives HO's progress bar as it goes, so a failure
                 // part-way through would otherwise leave the info panel stuck mid-download for
                 // the rest of the session.
-                HOMainFrame.instance().setInformationCompleted();
+                HOMainFrame.setInformationCompleted();
             }
         });
     }

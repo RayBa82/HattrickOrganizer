@@ -65,6 +65,27 @@ public class Connector {
 		m_OAAccessToken = createOAAccessToken();
 	}
 
+	/**
+	 * {@code OAuthDialog} for a console (core.HeadlessMain): CHPP's out-of-band PIN flow needs no
+	 * browser on this machine - the user opens the printed URL anywhere and types the code back.
+	 * The token is stored like the dialog stores it, encrypted in the user parameters.
+	 */
+	public void authorizeOnConsole(java.io.BufferedReader in, java.io.PrintStream out) throws Exception {
+		final var requestToken = m_OAService.getRequestToken();
+		out.println("Open this URL, log in to Hattrick and grant HO access:");
+		out.println(m_OAService.getAuthorizationUrl(requestToken) + core.net.login.OAuthDialog.SCOPES);
+		out.print("Code shown by Hattrick: ");
+		out.flush();
+		final var code = in.readLine();
+		if (code == null || code.isBlank()) {
+			throw new IllegalStateException("No code entered.");
+		}
+		m_OAAccessToken = m_OAService.getAccessToken(requestToken, code.trim());
+		UserParameter.instance().AccessToken = Helper.cryptString(m_OAAccessToken.getToken());
+		UserParameter.instance().TokenSecret = Helper.cryptString(m_OAAccessToken.getTokenSecret());
+		core.db.DBManager.instance().saveUserParameter();
+	}
+
 	private OAuth1AccessToken createOAAccessToken() {
 		return new OAuth1AccessToken(Helper.decryptString(UserParameter.instance().AccessToken),
 				Helper.decryptString(UserParameter.instance().TokenSecret));
@@ -864,6 +885,10 @@ public class Connector {
 						return getResultStream(response);
 					}
 					case 401 -> {
+						// Same rule as the GET path: nobody can answer the dialog (MCP call, headless).
+						if (silentDownload) {
+							throw new RuntimeException("HTTP Response Code 401: CHPP Connection failed.");
+						}
 						// disable WaitCursor to unblock GUI
 						CursorToolkit.stopWaitCursor(HOMainFrame.instance().getRootPane());
 						if (authDialog == null) {
@@ -888,8 +913,9 @@ public class Connector {
 				}
 			}
 		} catch (Exception sox) {
+			lastError = sox.getMessage();
 			HOLogger.instance().error(getClass(), sox);
-			if (showErrorMessage) {
+			if (showErrorMessage && !silentDownload) {
 				JOptionPane.showMessageDialog(null, sox.getMessage() + "\nURL: " + surl,
 						TranslationFacility.tr("Fehler"),
 						JOptionPane.ERROR_MESSAGE);

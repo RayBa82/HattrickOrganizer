@@ -79,17 +79,13 @@ public class HO {
 	}
 
 	/**
-	 *  HO entry point
+	 * What every entry point needs before touching the database: the platform, the portable/
+	 * INSTALLED switch, the log level arguments, the version from the manifest and the exception
+	 * handler. Shared with {@link HeadlessMain}.
 	 */
-	public static void main(String[] args) {
+	static void initRuntime(String[] args) {
 		portable_version = true;
 		platform = OSUtils.getOS();
-
-		if (platform == OSUtils.OS.MAC) {
-			System.setProperty("apple.laf.useScreenMenuBar", "true");
-			System.setProperty("apple.awt.showGroupBox", "true");
-			System.setProperty("apple.eawt.quitStrategy", "CLOSE_ALL_WINDOWS");
-		}
 
 		System.setProperty("sun.awt.exception.handler", ExceptionHandler.class.getName());
 		Thread.setDefaultUncaughtExceptionHandler(new ExceptionHandler());
@@ -127,6 +123,20 @@ public class HO {
         	VERSION = 0d;
         	versionType = "DEV";
         }
+	}
+
+	/**
+	 *  HO entry point
+	 */
+	public static void main(String[] args) {
+		initRuntime(args);
+
+		if (platform == OSUtils.OS.MAC) {
+			System.setProperty("apple.laf.useScreenMenuBar", "true");
+			System.setProperty("apple.awt.showGroupBox", "true");
+			System.setProperty("apple.eawt.quitStrategy", "CLOSE_ALL_WINDOWS");
+		}
+
 
 		// Login selection in case of multi-users DB
 		try {
