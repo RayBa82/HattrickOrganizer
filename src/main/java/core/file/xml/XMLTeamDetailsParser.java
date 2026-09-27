@@ -91,7 +91,7 @@ public class XMLTeamDetailsParser {
 
 			// We need to find the correct team in doc
 			final Element team = selectTeamWithId(doc, teamId);
-			if (team == null) { 
+			if (team == null) {
 				return hash;
 			}
 
@@ -100,6 +100,14 @@ public class XMLTeamDetailsParser {
 			xmlValue2Hash(hash, team, "FoundedDate", "ActivationDate");
 			xmlValue2Hash(hash, team, "HomePage");
 			xmlValue2Hash(hash, team, "LogoURL");
+			xmlValue2Hash(hash, team, "DressURI");
+			xmlValue2Hash(hash, team, "DressAlternateURI");
+			// Only Supporters get TeamColors; without it both keys stay empty.
+			final var colors = (Element) team.getElementsByTagName("TeamColors").item(0);
+			if (colors != null) {
+				xmlValue2Hash(hash, colors, "BackgroundColor", "TeamColorBackground");
+				xmlValue2Hash(hash, colors, "Color", "TeamColorText");
+			}
 			// youth team info
 			xmlValue2Hash(hash, team, "YouthTeamID");
 			xmlValue2Hash(hash, team, "YouthTeamName");
@@ -189,11 +197,11 @@ public class XMLTeamDetailsParser {
 		root = (Element) root.getElementsByTagName("Teams").item(0);
 
 		NodeList list = root.getElementsByTagName("Team");
-		
+
 		for (int i = 0; (list != null) && (i < list.getLength()); i++) {
 			Element team = (Element) list.item(i);
 			Element ele;
-			
+
 			TeamInfo info = new TeamInfo();
 
 			ele = (Element) team.getElementsByTagName("TeamID").item(0);
@@ -208,22 +216,22 @@ public class XMLTeamDetailsParser {
 			ele = (Element) team.getElementsByTagName("IsPrimaryClub").item(0);
 			info.setPrimaryTeam(Boolean.parseBoolean(XMLManager.getFirstChildNodeValue(ele)));
 
-			
+
 			Element league = (Element) team.getElementsByTagName("League").item(0);
 			ele = (Element) league.getElementsByTagName("LeagueName").item(0);
 			info.setCountry(XMLManager.getFirstChildNodeValue(ele));
-			
+
 			ele = (Element) league.getElementsByTagName("LeagueID").item(0);
 			info.setLeagueId(Integer.parseInt(XMLManager.getFirstChildNodeValue(ele)));
-			
+
 			ele = (Element) team.getElementsByTagName("LeagueLevelUnit").item(0);
 			ele = (Element) ele.getElementsByTagName("LeagueLevelUnitName").item(0);
 			info.setLeague(XMLManager.getFirstChildNodeValue(ele));
-			
+
 			ret.add(info);
 		}
-		
+
 		return ret;
 	}
-		
+
 }

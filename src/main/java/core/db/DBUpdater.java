@@ -101,6 +101,8 @@ final class DBUpdater {
 						case 1005:
 							updateDBv1006(DBVersion);
 						case 1006:
+							updateDBv1007(DBVersion);
+						case 1007:
 				}
 
 			} catch (Exception e) {
@@ -239,6 +241,21 @@ final class DBUpdater {
 			connectionManager.executeUpdate("DELETE FROM USERCOLUMNS WHERE COLUMN_ID BETWEEN 2000 AND 2999");
 
 			updateDBVersion(dbVersion, 1006);
+		}
+
+		/**
+		 * HO 10.0.7: the team's kit images and club colours from teamdetails, filled by the next
+		 * download. The colours are only sent to Supporters, so all four stay nullable.
+		 */
+		private void updateDBv1007(int dbVersion) throws SQLException {
+			for (var column : new String[]{"DressURI VARCHAR(255)", "DressAlternateURI VARCHAR(255)",
+					"TeamColorBackground VARCHAR(16)", "TeamColorText VARCHAR(16)"}) {
+				if (!columnExistsInTable(column.substring(0, column.indexOf(' ')), XtraDataTable.TABLENAME)) {
+					connectionManager.executeUpdate("ALTER TABLE " + XtraDataTable.TABLENAME + " ADD COLUMN " + column);
+				}
+			}
+
+			updateDBVersion(dbVersion, 1007);
 		}
 
     private void updateDBv901(int dbVersion) throws SQLException {

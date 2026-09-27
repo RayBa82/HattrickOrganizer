@@ -708,6 +708,10 @@ public class HRFStringBuilder {
         }
         appendKeyValue(xtraStringBuilder, "CurrencyRate", currencyRate);
         appendKeyValue(xtraStringBuilder, "LogoURL", teamdetailsDataMap.get("LogoURL"));
+        appendKeyValue(xtraStringBuilder, "DressURI", teamdetailsDataMap.get("DressURI"));
+        appendKeyValue(xtraStringBuilder, "DressAlternateURI", teamdetailsDataMap.get("DressAlternateURI"));
+        appendKeyValue(xtraStringBuilder, "TeamColorBackground", teamdetailsDataMap.get("TeamColorBackground"));
+        appendKeyValue(xtraStringBuilder, "TeamColorText", teamdetailsDataMap.get("TeamColorText"));
         appendKeyValue(xtraStringBuilder, "HasPromoted", clubDataMap.get("HasPromoted"));
         appendKeyValue(xtraStringBuilder, "TrainerID", trainingDataMap.get("TrainerID"));
         appendKeyValue(xtraStringBuilder, "TrainerName", trainingDataMap.get("TrainerName"));

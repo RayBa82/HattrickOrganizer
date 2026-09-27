@@ -1,5 +1,8 @@
 package core.model;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import core.db.AbstractTable;
 import core.util.HODateTime;
 import org.apache.commons.lang3.math.NumberUtils;
@@ -12,6 +15,11 @@ import java.util.Properties;
 public class XtraData extends AbstractTable.Storable {
 
     private String m_sLogoURL;
+    /** Kit images and the club theme's colours (teamdetails); the colours only for Supporters. */
+    @Getter @Setter private String dressURI;
+    @Getter @Setter private String dressAlternateURI;
+    @Getter @Setter private String teamColorBackground;
+    @Getter @Setter private String teamColorText;
     private HODateTime m_clEconomyDate;
     private HODateTime m_clSeriesMatchDate;
     private HODateTime m_TrainingDate;
@@ -43,6 +51,10 @@ public class XtraData extends AbstractTable.Storable {
         m_iCountryId = getInteger(properties, "countryid", null);
         m_bHasPromoted = Boolean.parseBoolean(properties.getProperty("haspromoted", "FALSE"));
         m_sLogoURL = properties.getProperty("logourl", "");
+        dressURI = properties.getProperty("dressuri", "");
+        dressAlternateURI = properties.getProperty("dressalternateuri", "");
+        teamColorBackground = properties.getProperty("teamcolorbackground", "");
+        teamColorText = properties.getProperty("teamcolortext", "");
         m_clSeriesMatchDate = HODateTime.fromHT(properties.getProperty("seriesmatchdate"));
         m_clEconomyDate = HODateTime.fromHT(properties.getProperty("economydate"));
         m_TrainingDate = HODateTime.fromHT(properties.getProperty("trainingdate"));

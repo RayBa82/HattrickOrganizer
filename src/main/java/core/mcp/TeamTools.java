@@ -57,7 +57,8 @@ public final class TeamTools {
                 new McpTool("get_team",
                         "The user's team as of the latest download: name, league, cash, stadium, "
                                 + "team spirit and confidence, the head coach and the rest of the "
-                                + "staff. get_finances has the full statement.",
+                                + "staff, and the club's logo, kit images and colours (teamColors: "
+                                + "Supporters only, else null). get_finances has the full statement.",
                         McpTool.schema(new JsonObject()),
                         args -> team()),
                 new McpTool("get_squad",
@@ -255,6 +256,7 @@ public final class TeamTools {
 
         json.addProperty("leagueId", basics.getLiga());
         json.addProperty("countryId", basics.getLand());
+        addKit(json, model.getXtraDaten());
 
         if (league != null) {
             // core.model.series.Liga: getLiga() is the series name, not an id
@@ -694,6 +696,36 @@ public final class TeamTools {
                 stadium.getFutureBasicSeating().orElse(stadium.getBasicSeating()),
                 stadium.getFutureUnderRoofSeating().orElse(stadium.getUnderRoofSeating()),
                 stadium.getFutureVipBoxes().orElse(stadium.getVipBox()));
+    }
+
+    /**
+     * The club's look from teamdetails: logo, home and away kit images, and the club theme's
+     * colours, which Hattrick sends to Supporters only. Anything missing is null.
+     */
+    static void addKit(JsonObject json, @org.jetbrains.annotations.Nullable core.model.XtraData xtra) {
+        json.addProperty("logoUrl", xtra == null ? null : absoluteUrl(xtra.getLogoURL()));
+        json.addProperty("dressUri", xtra == null ? null : absoluteUrl(xtra.getDressURI()));
+        json.addProperty("dressAlternateUri", xtra == null ? null : absoluteUrl(xtra.getDressAlternateURI()));
+        final var background = xtra == null ? null : blankToNull(xtra.getTeamColorBackground());
+        final var text = xtra == null ? null : blankToNull(xtra.getTeamColorText());
+        if (background == null && text == null) {
+            json.add("teamColors", JsonNull.INSTANCE);
+        } else {
+            final var colors = new JsonObject();
+            colors.addProperty("background", background);
+            colors.addProperty("text", text);
+            json.add("teamColors", colors);
+        }
+    }
+
+    /** CHPP hands out protocol-relative URIs ("//res.hattrick.org/..."); those get https. */
+    static String absoluteUrl(String uri) {
+        final var value = blankToNull(uri);
+        return value != null && value.startsWith("//") ? "https:" + value : value;
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     /** How Hattrick splits a match type's gate (wiki: Stadium). */

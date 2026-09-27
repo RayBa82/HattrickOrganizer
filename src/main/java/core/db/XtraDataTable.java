@@ -27,7 +27,11 @@ final class XtraDataTable extends AbstractTable {
 				ColumnDescriptor.Builder.newInstance().setColumnName("DailyUpdate2").setGetter((p) -> ((XtraData) p).getDailyUpdate(1)).setSetter((p, v) -> ((XtraData) p).setDailyUpdate(1, (HODateTime) v)).setType(Types.TIMESTAMP).isNullable(true).build(),
 				ColumnDescriptor.Builder.newInstance().setColumnName("DailyUpdate3").setGetter((p) -> ((XtraData) p).getDailyUpdate(2)).setSetter((p, v) -> ((XtraData) p).setDailyUpdate(2, (HODateTime) v)).setType(Types.TIMESTAMP).isNullable(true).build(),
 				ColumnDescriptor.Builder.newInstance().setColumnName("DailyUpdate4").setGetter((p) -> ((XtraData) p).getDailyUpdate(3)).setSetter((p, v) -> ((XtraData) p).setDailyUpdate(3, (HODateTime) v)).setType(Types.TIMESTAMP).isNullable(true).build(),
-				ColumnDescriptor.Builder.newInstance().setColumnName("DailyUpdate5").setGetter((p) -> ((XtraData) p).getDailyUpdate(4)).setSetter((p, v) -> ((XtraData) p).setDailyUpdate(4, (HODateTime) v)).setType(Types.TIMESTAMP).isNullable(true).build()
+					ColumnDescriptor.Builder.newInstance().setColumnName("DailyUpdate5").setGetter((p) -> ((XtraData) p).getDailyUpdate(4)).setSetter((p, v) -> ((XtraData) p).setDailyUpdate(4, (HODateTime) v)).setType(Types.TIMESTAMP).isNullable(true).build(),
+					ColumnDescriptor.Builder.newInstance().setColumnName("DressURI").setGetter((p) -> ((XtraData) p).getDressURI()).setSetter((p, v) -> ((XtraData) p).setDressURI((String) v)).setType(Types.VARCHAR).setLength(255).isNullable(true).build(),
+					ColumnDescriptor.Builder.newInstance().setColumnName("DressAlternateURI").setGetter((p) -> ((XtraData) p).getDressAlternateURI()).setSetter((p, v) -> ((XtraData) p).setDressAlternateURI((String) v)).setType(Types.VARCHAR).setLength(255).isNullable(true).build(),
+					ColumnDescriptor.Builder.newInstance().setColumnName("TeamColorBackground").setGetter((p) -> ((XtraData) p).getTeamColorBackground()).setSetter((p, v) -> ((XtraData) p).setTeamColorBackground((String) v)).setType(Types.VARCHAR).setLength(16).isNullable(true).build(),
+					ColumnDescriptor.Builder.newInstance().setColumnName("TeamColorText").setGetter((p) -> ((XtraData) p).getTeamColorText()).setSetter((p, v) -> ((XtraData) p).setTeamColorText((String) v)).setType(Types.VARCHAR).setLength(16).isNullable(true).build()
 		};
 	}
 
