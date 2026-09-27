@@ -46,6 +46,10 @@ public class LineupRatingAssistantPanel extends JPanel implements core.gui.Refre
         return lineupAssistantPanel;
     }
 
+    public MatchBanner getMatchBanner() {
+        return matchBanner;
+    }
+
     public MatchAndLineupSelectionPanel getMatchAndLineupSelectionPanel() {
         if ( matchAndLineupPanel == null){
             new MatchAndLineupSelectionPanel(m_clLineupPanel);
@@ -76,13 +80,10 @@ public class LineupRatingAssistantPanel extends JPanel implements core.gui.Refre
         tabView.addTab(TranslationFacility.tr("ls.menu.file.database"), new JScrollPane(lineupDatabasePanel));
         pane.add(tabView, BorderLayout.CENTER);
 
-        var matchPanel = new JPanel(new BorderLayout());
+        // the match banner is shown over the pitch, see LineupPanel
         this.matchAndLineupPanel = new MatchAndLineupSelectionPanel(m_clLineupPanel);
-        matchPanel.add(matchAndLineupPanel);
         matchBanner = new MatchBanner(matchAndLineupPanel);
-        matchPanel.add(matchBanner, BorderLayout.NORTH);
-
-        pane.add(matchPanel, BorderLayout.SOUTH);
+        pane.add(matchAndLineupPanel, BorderLayout.SOUTH);
 
         setLayout(new BorderLayout());
         add(new JScrollPane(pane), BorderLayout.CENTER);

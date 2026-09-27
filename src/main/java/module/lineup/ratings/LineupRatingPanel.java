@@ -2,7 +2,6 @@ package module.lineup.ratings;
 
 import core.constants.player.PlayerAbility;
 import core.gui.comp.entry.ColorLabelEntry;
-import core.gui.comp.panel.RasenPanel;
 import core.gui.theme.HOColorName;
 import core.gui.theme.ImageUtilities;
 import core.gui.theme.ThemeManager;
@@ -13,6 +12,7 @@ import core.util.Helper;
 import module.lineup.CopyListener;
 import module.lineup.Lineup;
 import module.lineup.LineupPanel;
+import module.lineup.lineup.PitchStyle;
 
 import javax.swing.*;
 import java.awt.*;
@@ -22,7 +22,7 @@ import static core.model.UserParameter.GOALKEEPER_AT_TOP;
 import static module.lineup.LineupPanel.TITLE_FG;
 
 
-public final class LineupRatingPanel extends RasenPanel implements core.gui.Refreshable {
+public final class LineupRatingPanel extends JPanel implements core.gui.Refreshable {
 
     private final LineupPanel lineupPanel;
 
@@ -36,17 +36,22 @@ public final class LineupRatingPanel extends RasenPanel implements core.gui.Refr
 
         public RatingPanel(String tooltipText) {
             super(new BorderLayout());
+            // big value and its change on top, the verbal rating small underneath, the bar at the bottom
             var jpRatingValueAndDelta = new JPanel(new GridLayout(1, 2));
-            number.setFontStyle(Font.BOLD);
+            jpRatingValueAndDelta.setOpaque(false);
+            number.setFont(PitchStyle.display(UserParameter.instance().fontSize + 6f));
             jpRatingValueAndDelta.add(number.getComponent(false));
             jpRatingValueAndDelta.add(compare.getComponent(false));
+            text.setFont(text.getFont().deriveFont(UserParameter.instance().fontSize - 1f));
+            text.setForeground(MUTED_FG);
 
             var jpSectorRating = new JPanel(new GridLayout(2, 1));
             jpSectorRating.setBackground(LABEL_BG);
-            jpSectorRating.add(text);
             jpSectorRating.add(jpRatingValueAndDelta);
+            jpSectorRating.add(text);
 
             add(jpSectorRating, BorderLayout.CENTER);
+            setBorder(BorderFactory.createEmptyBorder(4, 0, 9, 0)); // room for the bar
             setPreferredSize(SIZE);
 
             compare.setSpecialNumber(0f, false);
@@ -56,13 +61,17 @@ public final class LineupRatingPanel extends RasenPanel implements core.gui.Refr
             compare.setToolTipText(tooltipText);
         }
 
+        /** A bar along the bottom: length is the rating out of 20 (divine), colour its ratio to the average. */
         @Override
         public void paint(Graphics g) {
             super.paint(g);
-            int width = 10;
-            int height = 10;
+            final int h = 5;
+            final int y = getHeight() - h - 3;
+            final int w = getWidth() - 12;
+            g.setColor(new Color(128, 128, 128, 60));
+            g.fillRoundRect(6, y, w, h, h, h);
             g.setColor(color);
-            g.fillOval(5, this.getHeight() - 15, width, height);
+            g.fillRoundRect(6, y, (int) Math.round(w * Math.min(1, getRating() / 20)), h, h, h);
         }
 
         public void setColor(Color color) {
@@ -105,7 +114,8 @@ public final class LineupRatingPanel extends RasenPanel implements core.gui.Refr
     private static final Color LABEL_BG = ThemeManager.getColor(HOColorName.PANEL_BG);
     private static final Color LABEL_FG = ThemeManager.getColor(HOColorName.LEAGUE_FG);
     private static final Color BAD_LABEL_FG = ThemeManager.getColor(HOColorName.TABLEENTRY_DECLINE_FG);
-    private static final Color RATING_DEFAULT = ThemeManager.getColor(HOColorName.PLAYER_POSITION_PANEL_BORDER);
+    private static final Color RATING_DEFAULT = PitchStyle.BRAND_2;
+    private static final Color MUTED_FG = ThemeManager.getColor(HOColorName.PLAYER_OLD_FG);
     private static final Color RATING_BELOW_LIMIT = ThemeManager.getColor(HOColorName.RATING_BORDER_BELOW_LIMIT);
     private static final Color RATING_ABOVE_LIMIT = ThemeManager.getColor(HOColorName.RATING_BORDER_ABOVE_LIMIT);
     int iHatStats;
@@ -132,7 +142,8 @@ public final class LineupRatingPanel extends RasenPanel implements core.gui.Refr
 //    private final JButton m_jbFeedbackButton = new JButton();
     private final JLabel copyrights = new JLabel("", SwingConstants.CENTER);
 
-    private final Dimension SIZE = new Dimension(Helper.calcCellWidth(120), Helper.calcCellWidth(40));
+    // tall enough for the large condensed value, the verbal rating and the bar
+    private final Dimension SIZE = new Dimension(Helper.calcCellWidth(120), Helper.calcCellWidth(54));
 
     public LineupRatingPanel(LineupPanel lineupPanel) {
         this.lineupPanel = lineupPanel;
@@ -240,15 +251,12 @@ public final class LineupRatingPanel extends RasenPanel implements core.gui.Refr
         mainPanel.add(m_jpMinuteToggler);
 
         // DEFENSE
-        var defenseLabel = new JLabel(TranslationFacility.tr("ls.match.ratingsector.defense"));
-        defenseLabel.setFont(defenseLabel.getFont().deriveFont(Font.BOLD));
 
         gbcMainLayout.gridx = 0;
         gbcMainLayout.gridy = 1 + getLineupRatingLabelRowNumber(0);
         gbcMainLayout.gridwidth = 3;
         //gbcMainLayout.fill = GridBagConstraints.HORIZONTAL;
-        var defenseLabelPanel = new JPanel();
-        defenseLabelPanel.add(defenseLabel);
+        var defenseLabelPanel = sectionBar("ls.match.ratingsector.defense");
         mainLayout.setConstraints(defenseLabelPanel, gbcMainLayout);
         mainPanel.add(defenseLabelPanel);
 
@@ -272,14 +280,11 @@ public final class LineupRatingPanel extends RasenPanel implements core.gui.Refr
         mainPanel.add(m_jpLeftDefense);
 
         //Midfield ==================================================
-        var midfieldLabel = new JLabel(TranslationFacility.tr("ls.match.ratingsector.midfield"));
-        midfieldLabel.setFont(midfieldLabel.getFont().deriveFont(Font.BOLD));
         gbcMainLayout.gridx = 0;
         gbcMainLayout.gridy = 1 + getLineupRatingLabelRowNumber(1);
         gbcMainLayout.gridwidth = 3;
         gbcMainLayout.insets = new Insets(5, 5, 0, 5);
-        var midfieldLabelPanel = new JPanel();
-        midfieldLabelPanel.add(midfieldLabel);
+        var midfieldLabelPanel = sectionBar("ls.match.ratingsector.midfield");
         mainLayout.setConstraints(midfieldLabelPanel, gbcMainLayout);
         mainPanel.add(midfieldLabelPanel);
 
@@ -291,14 +296,11 @@ public final class LineupRatingPanel extends RasenPanel implements core.gui.Refr
         mainPanel.add(m_jpMidfield);
 
         // Attack
-        var attackLabel = new JLabel(TranslationFacility.tr("ls.match.ratingsector.attack"));
-        attackLabel.setFont(attackLabel.getFont().deriveFont(Font.BOLD));
         gbcMainLayout.gridx = 0;
         gbcMainLayout.gridy = 1 + getLineupRatingLabelRowNumber(2);
         gbcMainLayout.gridwidth = 3;
         gbcMainLayout.insets = new Insets(5, 5, 0, 5);
-        var attackLabelPanel = new JPanel();
-        attackLabelPanel.add(attackLabel);
+        var attackLabelPanel = sectionBar("ls.match.ratingsector.attack");
         mainLayout.setConstraints(attackLabelPanel, gbcMainLayout);
         mainPanel.add(attackLabelPanel);
 
@@ -323,16 +325,13 @@ public final class LineupRatingPanel extends RasenPanel implements core.gui.Refr
 
         //HATSTATS  ========================
         var jpRatingValueAndDelta = new JPanel(new GridLayout(1, 2));
-        m_jlHatstatMain.setFontStyle(Font.BOLD);
+        m_jlHatstatMain.setFont(PitchStyle.display(UserParameter.instance().fontSize + 4f));
         jpRatingValueAndDelta.add(m_jlHatstatMain.getComponent(false));
         jpRatingValueAndDelta.add(m_jlHatstatCompare.getComponent(false));
 
         var jpSectorRating = new JPanel(new GridLayout(2, 1));
         jpSectorRating.setBackground(LABEL_BG);
-        JLabel lblHatStat = new JLabel(getLangStr("ls.match.ratingtype.hatstats"));
-        lblHatStat.setForeground(TITLE_FG);
-        lblHatStat.setFont(getFont().deriveFont(Font.BOLD));
-        lblHatStat.setHorizontalAlignment(SwingConstants.LEFT);
+        JLabel lblHatStat = statTitle("ls.match.ratingtype.hatstats");
         jpSectorRating.add(lblHatStat);
         jpSectorRating.add(jpRatingValueAndDelta);
 
@@ -347,16 +346,13 @@ public final class LineupRatingPanel extends RasenPanel implements core.gui.Refr
 
         // LODDAR ========================================
         jpRatingValueAndDelta = new JPanel(new GridLayout(1, 2));
-        m_jlLoddarMain.setFontStyle(Font.BOLD);
+        m_jlLoddarMain.setFont(PitchStyle.display(UserParameter.instance().fontSize + 4f));
         jpRatingValueAndDelta.add(m_jlLoddarMain.getComponent(false));
         jpRatingValueAndDelta.add(m_jlLoddarCompare.getComponent(false));
 
         jpSectorRating = new JPanel(new GridLayout(2, 1));
         jpSectorRating.setBackground(LABEL_BG);
-        JLabel lblLoddarStat = new JLabel(getLangStr("ls.match.ratingtype.loddarstats"));
-        lblLoddarStat.setForeground(TITLE_FG);
-        lblLoddarStat.setFont(getFont().deriveFont(Font.BOLD));
-        lblLoddarStat.setHorizontalAlignment(SwingConstants.LEFT);
+        JLabel lblLoddarStat = statTitle("ls.match.ratingtype.loddarstats");
         jpSectorRating.add(lblLoddarStat);
         jpSectorRating.add(jpRatingValueAndDelta);
 
@@ -370,15 +366,12 @@ public final class LineupRatingPanel extends RasenPanel implements core.gui.Refr
 
         // Tactic ========================================
         jpRatingValueAndDelta = new JPanel(new GridLayout(1, 2));
-        m_jlTacticRating.setFontStyle(Font.BOLD);
+        m_jlTacticRating.setFont(PitchStyle.display(UserParameter.instance().fontSize + 2f));
         jpRatingValueAndDelta.add(m_jlTacticRating.getComponent(false));
 
         jpSectorRating = new JPanel(new GridLayout(2, 1));
         jpSectorRating.setBackground(LABEL_BG);
-        JLabel lblTactic = new JLabel(getLangStr("ls.team.tactic"));
-        lblTactic.setForeground(TITLE_FG);
-        lblTactic.setFont(getFont().deriveFont(Font.BOLD));
-        lblTactic.setHorizontalAlignment(SwingConstants.LEFT);
+        JLabel lblTactic = statTitle("ls.team.tactic");
         jpSectorRating.add(lblTactic);
         jpSectorRating.add(jpRatingValueAndDelta);
 
@@ -392,15 +385,12 @@ public final class LineupRatingPanel extends RasenPanel implements core.gui.Refr
 
         // Formation experience ========================================
         jpRatingValueAndDelta = new JPanel(new GridLayout(1, 2));
-        m_jlFormationExperience.setFontStyle(Font.BOLD);
+        m_jlFormationExperience.setFont(PitchStyle.display(UserParameter.instance().fontSize + 2f));
         jpRatingValueAndDelta.add(m_jlFormationExperience.getComponent(false));
 
         jpSectorRating = new JPanel(new GridLayout(2, 1));
         jpSectorRating.setBackground(LABEL_BG);
-        JLabel lbFormation = new JLabel(getLangStr("ls.team.formation"));
-        lbFormation.setForeground(TITLE_FG);
-        lbFormation.setFont(getFont().deriveFont(Font.BOLD));
-        lbFormation.setHorizontalAlignment(SwingConstants.LEFT);
+        JLabel lbFormation = statTitle("ls.team.formation");
 
         jpSectorRating.add(lbFormation);
         jpSectorRating.add(jpRatingValueAndDelta);
@@ -419,7 +409,7 @@ public final class LineupRatingPanel extends RasenPanel implements core.gui.Refr
         gbcRatingPanelLayout.anchor = GridBagConstraints.CENTER;
         gbcRatingPanelLayout.insets = new Insets(0, 0, 0, 0);
         JPanel jpSharing = new JPanel(ratingPanelLayout);
-        jpSharing.setBackground(ThemeManager.getColor(HOColorName.BACKGROUND_CONTAINER));
+        jpSharing.setOpaque(false);
         //jpSharing.setBorder(BORDER_RATING_DEFAULT);
 
         gbcRatingPanelLayout.gridx = 1;
@@ -461,6 +451,25 @@ public final class LineupRatingPanel extends RasenPanel implements core.gui.Refr
         //initialize all rating compare to 0
         m_jlHatstatCompare.setSpecialNumber(0, false);
         m_jlLoddarCompare.setSpecialNumber(0f, false);
+    }
+
+    /** A sector heading as the TV-view page draws it: a green bar with condensed white capitals. */
+    private static JPanel sectionBar(String key) {
+        var label = new JLabel(TranslationFacility.tr(key).toUpperCase());
+        label.setFont(PitchStyle.display(UserParameter.instance().fontSize + 2f));
+        label.setForeground(Color.WHITE);
+        var bar = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 3));
+        bar.setBackground(PitchStyle.BRAND_2);
+        bar.add(label);
+        return bar;
+    }
+
+    /** Title of a stats box: small grey capitals over the value. */
+    private JLabel statTitle(String key) {
+        var label = new JLabel(getLangStr(key).toUpperCase());
+        label.setForeground(MUTED_FG);
+        label.setFont(PitchStyle.display(UserParameter.instance().fontSize).deriveFont(Font.PLAIN));
+        return label;
     }
 
     private int getLineupRatingLabelRowNumber(int i) {

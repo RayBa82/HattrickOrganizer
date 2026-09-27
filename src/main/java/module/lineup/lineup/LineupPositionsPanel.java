@@ -3,7 +3,6 @@ package module.lineup.lineup;
 import core.gui.HOMainFrame;
 import core.gui.RefreshManager;
 import core.gui.Updatable;
-import core.gui.theme.HOColorName;
 import core.gui.theme.HOIconName;
 import core.gui.theme.ThemeManager;
 import core.model.HOVerwaltung;
@@ -28,7 +27,7 @@ import static core.model.UserParameter.GOALKEEPER_AT_TOP;
 /**
  * Create the panel allowing lineup creation
  */
-public class LineupPositionsPanel extends core.gui.comp.panel.RasenPanel implements core.gui.Refreshable, Updatable, ActionListener {
+public class LineupPositionsPanel extends JPanel implements core.gui.Refreshable, Updatable, ActionListener {
 
 	private final LineupPanel m_clLineupPanel;
 	//private MatchAndLineupSelectionPanel m_jpMatchAndLineupSelectionPanel;
@@ -98,6 +97,19 @@ public class LineupPositionsPanel extends core.gui.comp.panel.RasenPanel impleme
 				panel.update();
 			}
 		}
+	}
+
+	/** The pitch goes behind the eleven field slots, wherever the layout put them. */
+	@Override
+	protected void paintComponent(Graphics g) {
+		super.paintComponent(g);
+		if (m_clKeeper == null) return;
+		Rectangle field = SwingUtilities.convertRectangle(centerPanel, m_clKeeper.getBounds(), this);
+		for (var slot : getAllPositions()) {
+			field = field.union(SwingUtilities.convertRectangle(centerPanel, slot.getBounds(), this));
+		}
+		field.grow(6, 10);
+		PitchStyle.paintPitch((Graphics2D) g, field, UserParameter.instance().lineupOrientationSetting == GOALKEEPER_AT_TOP);
 	}
 
 	@Override
@@ -200,6 +212,8 @@ public class LineupPositionsPanel extends core.gui.comp.panel.RasenPanel impleme
 
 	private void initComponents() {
 		setLayout(new BorderLayout());
+		// room for the pitch's surround above the first row
+		setBorder(BorderFactory.createEmptyBorder(24, 8, 8, 8));
 
 		centerPanel = new javax.swing.JLayeredPane();
 		centerPanel.setOpaque(false);
@@ -359,14 +373,17 @@ public class LineupPositionsPanel extends core.gui.comp.panel.RasenPanel impleme
 		constraints.gridy = 4;
 		constraints.gridwidth = 7;
 		constraints.fill = GridBagConstraints.HORIZONTAL;
-		JLabel label1 = new JLabel(TranslationFacility.tr("moduleLineup.LineupPanel.SubstitutesLabel"), JLabel.CENTER);
-		label1.setBorder(BorderFactory.createMatteBorder(3, 3, 3, 3, ThemeManager.getColor(HOColorName.PLAYER_POSITION_PANEL_BORDER)));
-		label1.setBackground(ThemeManager.getColor(HOColorName.BACKGROUND_CONTAINER));
-		label1.setForeground(ThemeManager.getColor(HOColorName.LABEL_FG));
-		label1.setFont(label1.getFont().deriveFont(Font.BOLD));
+		JLabel label1 = new JLabel(TranslationFacility.tr("moduleLineup.LineupPanel.SubstitutesLabel").toUpperCase(), JLabel.LEFT);
+		label1.setBorder(BorderFactory.createEmptyBorder(5, 12, 5, 12));
+		label1.setBackground(PitchStyle.BRAND_2);
+		label1.setForeground(Color.WHITE);
+		label1.setFont(PitchStyle.display(UserParameter.instance().fontSize + 3f));
 		label1.setOpaque(true);
+		// clear of the pitch's bottom edge and surround
+		constraints.insets = new Insets(28, 3, 3, 3);
 		layout.setConstraints(label1, constraints);
 		centerPanel.add(label1);
+		constraints.insets = new Insets(3, 3, 3, 3);
 
 		// The reserves
 		constraints.gridx = 0;

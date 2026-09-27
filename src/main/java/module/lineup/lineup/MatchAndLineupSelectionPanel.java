@@ -26,6 +26,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionListener;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -56,6 +57,25 @@ public class MatchAndLineupSelectionPanel extends JPanel implements Refreshable 
 
     public MatchOrdersCBItem getSelectedMatch() {
         return m_clSelectedMatch;
+    }
+
+    /**
+     * Formation, tactic, attitude (competitive matches only), style of play and the number of match
+     * orders, as the match header's tactic bar shows them.
+     */
+    List<String> getTacticBarItems() {
+        final Lineup lineup = HOVerwaltung.instance().getModel().getCurrentLineup();
+        final List<String> items = new ArrayList<>();
+        items.add(Helper.getTranslation("ls.team.formation") + " " + lineup.getCurrentTeamFormationString());
+        final List<String> labels = Arrays.asList("ls.team.tactic", "ls.team.teamattitude", "ls.team.styleofPlay");
+        final List<JComboBox<CBItem>> combos = Arrays.asList(m_jcbTactic, m_jcbTeamAttitude, m_jcbStyleOfPlay);
+        for (int i = 0; i < combos.size(); i++) {
+            if (combos.get(i) != null && combos.get(i).isEnabled() && combos.get(i).getSelectedItem() instanceof CBItem item) {
+                items.add(Helper.getTranslation(labels.get(i)) + " " + item.getText());
+            }
+        }
+        items.add(TranslationFacility.tr("subs.Title") + ": " + lineup.getSubstitutionList().size());
+        return items;
     }
 
     public MatchAndLineupSelectionPanel(LineupPanel parent) {

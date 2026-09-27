@@ -2,7 +2,6 @@ package module.lineup.lineup;
 
 import core.datatype.CBItem;
 import core.gui.Updatable;
-import core.gui.comp.panel.ImagePanel;
 import core.gui.comp.table.PlayersTable;
 import core.gui.model.PlayerCBItem;
 import core.gui.model.PlayerCBItemRenderer;
@@ -39,16 +38,62 @@ import static core.model.UserParameter.POSITIONNAMES_SHORT;
 import static core.model.player.IMatchRoleID.*;
 
 
-public class PlayerPositionPanel extends ImagePanel implements ItemListener, FocusListener {
+public class PlayerPositionPanel extends JPanel implements ItemListener, FocusListener {
 
     private static final PlayerCBItem oNullPlayer = new PlayerCBItem("", 0f, null, false, true);
     private static final Color defaultBorderColor = ThemeManager.getColor(HOColorName.PLAYER_POSITION_PANEL_BORDER);
 
     //~ Instance fields ----------------------------------------------------------------------------
-    private final JComboBox<PlayerCBItem> m_jcbPlayer = new JComboBox<>();
+    private final JComboBox<PlayerCBItem> m_jcbPlayer = new JComboBox<>() {
+        // Tile slots paint only the renderer: no box and no arrow, so the pitch shows through.
+        // The combo still takes the clicks and opens its usual popup.
+        @Override
+        protected void paintComponent(Graphics g) {
+            if (!isTile()) {
+                super.paintComponent(g);
+                return;
+            }
+            final Component c = getRenderer().getListCellRendererComponent(null, (PlayerCBItem) getSelectedItem(), -1, false, false);
+            SwingUtilities.paintComponent(g, c, rendererPane, 0, 0, getWidth(), getHeight());
+        }
+
+        @Override
+        protected void paintChildren(Graphics g) {
+            if (!isTile()) super.paintChildren(g);
+        }
+
+        @Override
+        protected void paintBorder(Graphics g) {
+            if (!isTile()) super.paintBorder(g);
+        }
+
+        @Override
+        public boolean isOpaque() {
+            return !isTile() && super.isOpaque();
+        }
+
+        // BasicComboPopup sizes its list to getSize().width. A tile is narrower than a player row,
+        // so report a wider size to everyone but the combo's own layout.
+        // ponytail: getSize() hack, a custom ComboPopup if another LAF computes the width differently
+        private boolean layingOut;
+
+        @Override
+        public void doLayout() {
+            layingOut = true;
+            super.doLayout();
+            layingOut = false;
+        }
+
+        @Override
+        public Dimension getSize() {
+            final Dimension size = super.getSize();
+            if (isTile() && !layingOut) size.width = Math.max(size.width, UserParameter.instance().fontSize * 18);
+            return size;
+        }
+    };
+    private final CellRendererPane rendererPane = new CellRendererPane();
     private final JComboBox<CBItem> m_jcbTactic = new JComboBox<>();
     private final JLabel m_jlPosition = new JLabel();
-    private final JPanel m_jpBadges = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
     private final PlayerCBItem m_clSelectedPlayer = new PlayerCBItem("", 0f, null, false, true);
     private final Updatable m_clUpdater;
     private PlayerCBItem @Nullable [] m_clCBItems = new PlayerCBItem[0];
@@ -63,15 +108,13 @@ public class PlayerPositionPanel extends ImagePanel implements ItemListener, Foc
 
     //constructor
     protected PlayerPositionPanel(Updatable updater, int positionsID, @Nullable Weather weather, boolean useWeatherImpact, Integer matchMinute) {
-        super(false);
-
         m_clUpdater = updater;
         m_iPositionID = positionsID;
         m_weather = weather;
         m_useWeatherImpact = useWeatherImpact;
         this.matchMinute = matchMinute;
 
-        setOpaque(true);
+        setOpaque(!isTile());
 
         initTaktik(null);
         initLabel();
@@ -84,6 +127,15 @@ public class PlayerPositionPanel extends ImagePanel implements ItemListener, Foc
 
     public int getPositionsID() {
         return m_iPositionID;
+    }
+
+    /** Field and bench slots show a kit with a name plate; captain and set pieces stay plain dropdowns. */
+    private boolean isTile() {
+        return m_iPositionID != IMatchRoleID.captain && m_iPositionID != IMatchRoleID.setPieces;
+    }
+
+    private boolean isOnPitch() {
+        return IMatchRoleID.aFieldMatchRoleID.contains(m_iPositionID);
     }
 
     private byte getTactic() {
@@ -122,7 +174,7 @@ public class PlayerPositionPanel extends ImagePanel implements ItemListener, Foc
         constraints.weightx = 1.0;
         constraints.weighty = 0.0;
 
-        setBorder(BorderFactory.createMatteBorder(3, 3, 3, 3, defaultBorderColor));
+        setBorder(isTile() ? BorderFactory.createEmptyBorder(2, 2, 2, 2) : BorderFactory.createMatteBorder(3, 3, 3, 3, defaultBorderColor));
 
         jlp.setLayout(layout);
 
@@ -135,14 +187,10 @@ public class PlayerPositionPanel extends ImagePanel implements ItemListener, Foc
         constraints.gridy = 0;
         constraints.gridwidth = 1;
         constraints.insets = new Insets(5, 8, 0, 0);
-        // position name and badges share cell 0; cell 1 of this row belongs to the swap button
-        // (or the captain / set pieces icon)
-        final JPanel header = new JPanel(new BorderLayout(4, 0));
-        header.setOpaque(false);
-        m_jpBadges.setOpaque(false);
-        header.add(m_jlPosition, BorderLayout.CENTER);
-        header.add(m_jpBadges, BorderLayout.EAST);
-        jlp.add(header, constraints, layerIndex);
+        // cell 1 of this row belongs to the swap button (or the captain / set pieces icon); tiles
+        // show the position on their name plate instead of this label
+        m_jlPosition.setVisible(!isTile());
+        jlp.add(m_jlPosition, constraints, layerIndex);
 
         constraints.gridy = 1;
         constraints.gridwidth = 2;
@@ -159,6 +207,11 @@ public class PlayerPositionPanel extends ImagePanel implements ItemListener, Foc
 
             constraints.gridy = 2;
             constraints.insets = new Insets(2, 4, 5, 4);
+            // on a tile the behaviour dropdown is a compact one under the name plate
+            if (isTile()) {
+                constraints.fill = GridBagConstraints.NONE;
+                constraints.anchor = GridBagConstraints.CENTER;
+            }
             m_jcbTactic.setBackground(ThemeManager.getColor(HOColorName.BACKGROUND_CONTAINER));
             jlp.add(m_jcbTactic, constraints, layerIndex);
         }
@@ -516,6 +569,8 @@ public class PlayerPositionPanel extends ImagePanel implements ItemListener, Foc
 
         //Update Tactic!
         initTaktik(currentPlayer);
+        // an empty tile has no behaviour to set
+        m_jcbTactic.setVisible(currentPlayer != null || !isTile());
 
         //Suche nach der Taktik
         Helper.setComboBoxFromID(m_jcbTactic, tactic);
@@ -538,8 +593,6 @@ public class PlayerPositionPanel extends ImagePanel implements ItemListener, Foc
             final MatchRoleID position = lineup.getPositionById(m_iPositionID);
 
             if (position != null) {
-                updateTile(lineup, position);
-
                 Font defaultFont = m_jlPosition.getFont();
                 int fontSize = defaultFont.getSize();
                 String fontFamily = defaultFont.getFamily();
@@ -554,14 +607,15 @@ public class PlayerPositionPanel extends ImagePanel implements ItemListener, Foc
                 if (IMatchRoleID.aFieldMatchRoleID.contains(position.getId())) {
                     m_jlPosition.setText(nameForPosition);
 
+                    // a rounded frame on the pitch marks the positions next week's training covers
                     if (MatchRoleID.isFullTrainPosition(position.getPosition(), nextWeekTrain)) {
-                        this.setBorder(BorderFactory.createMatteBorder(3, 3, 3, 3,ThemeManager.getColor(HOColorName.LINEUP_FULL_TRAINING)));
+                        this.setBorder(BorderFactory.createLineBorder(ThemeManager.getColor(HOColorName.LINEUP_FULL_TRAINING), 2, true));
                     }
                     else if (MatchRoleID.isPartialTrainPosition(position.getPosition(), nextWeekTrain)) {
-                        this.setBorder(BorderFactory.createMatteBorder(3, 3, 3, 3,ThemeManager.getColor(HOColorName.LINEUP_PARTIAL_TRAINING)));
+                        this.setBorder(BorderFactory.createLineBorder(ThemeManager.getColor(HOColorName.LINEUP_PARTIAL_TRAINING), 2, true));
                     }
                     else{
-                        this.setBorder(BorderFactory.createMatteBorder(3, 3, 3, 3, defaultBorderColor));
+                        this.setBorder(BorderFactory.createEmptyBorder(2, 2, 2, 2));
                     }
                 }
                 // Subs
@@ -759,6 +813,35 @@ public class PlayerPositionPanel extends ImagePanel implements ItemListener, Foc
 
     public void addSwapItem(Component c) {
         jlp.add(c, layerIndex);
+        if (isTile() && c instanceof AbstractButton button) {
+            showOnHover(button);
+        }
+    }
+
+    /**
+     * On a tile the swap arrows show only while the pointer is on the slot, or while a swap is
+     * pending. The icon is blanked rather than the button hidden, so the tile keeps its place.
+     */
+    private void showOnHover(AbstractButton button) {
+        final Icon arrows = button.getIcon();
+        final Icon blank = new ImageIcon(new java.awt.image.BufferedImage(arrows.getIconWidth(), arrows.getIconHeight(), java.awt.image.BufferedImage.TYPE_INT_ARGB));
+        final Runnable update = () -> button.setIcon(button.isSelected() || getMousePosition(true) != null ? arrows : blank);
+        final java.awt.event.MouseAdapter hover = new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseEntered(java.awt.event.MouseEvent e) {
+                update.run();
+            }
+
+            @Override
+            public void mouseExited(java.awt.event.MouseEvent e) {
+                update.run();
+            }
+        };
+        for (Component each : new Component[]{this, m_jcbPlayer, m_jcbTactic, button}) {
+            each.addMouseListener(hover);
+        }
+        button.addItemListener(e -> update.run());
+        update.run();
     }
 
     public void addAssistantOverlay(LineupAssistantSelectorOverlay overlay) {
@@ -814,116 +897,154 @@ public class PlayerPositionPanel extends ImagePanel implements ItemListener, Foc
     }
 
     /**
-     * Badges next to the position name: captain and set pieces taker (the tile itself is drawn by
-     * {@link TileRenderer}, the specialty is in the dropdown list).
-     */
-    private void updateTile(Lineup lineup, MatchRoleID position) {
-        final Player player = HOVerwaltung.instance().getModel().getCurrentPlayer(position.getPlayerId());
-
-        m_jpBadges.removeAll();
-        if (player != null) {
-            if (player.getPlayerId() == lineup.getCaptain()) {
-                addBadge(ImageUtilities.getSmileyIcon("smiley-coach"), getLangStr("Spielfuehrer"));
-            }
-            if (player.getPlayerId() == lineup.getKicker()) {
-                addBadge(ImageUtilities.getSetPiecesIcon(14, 14), getLangStr("match.setpiecestaker"));
-            }
-        }
-        m_jpBadges.revalidate();
-    }
-
-    private void addBadge(@Nullable Icon icon, @Nullable String tooltip) {
-        if (icon != null) {
-            JLabel badge = new JLabel(icon);
-            badge.setToolTipText(tooltip);
-            m_jpBadges.add(badge);
-        }
-    }
-
-    /**
-     * Draws the closed player dropdown as a Hattrick-style tile: big shirt, bold surname, rating,
-     * or a faded ghost tile when the slot is empty. The open list keeps HO's usual rows, so the
-     * dropdown stays the way to pick a player.
+     * Draws the closed player dropdown of a tile slot as a {@link SlotView}. The open list keeps HO's
+     * usual rows, so the dropdown stays the way to pick a player.
      */
     private final class TileRenderer implements ListCellRenderer<PlayerCBItem> {
         private final PlayerCBItemRenderer listRenderer = new PlayerCBItemRenderer();
-        private final JPanel tile = new JPanel(new BorderLayout(6, 0));
-        private final JLabel shirt = new JLabel();
-        private final JLabel name = new JLabel();
-        private final JLabel rating = new JLabel();
-
-        TileRenderer() {
-            JPanel text = new JPanel(new GridLayout(2, 1));
-            text.setOpaque(false);
-            text.add(name);
-            text.add(rating);
-            tile.add(shirt, BorderLayout.WEST);
-            tile.add(text, BorderLayout.CENTER);
-            tile.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
-            tile.setOpaque(true);
-        }
+        private final SlotView slot = new SlotView();
 
         @Override
         public Component getListCellRendererComponent(JList<? extends PlayerCBItem> list, PlayerCBItem value, int index,
                                                       boolean isSelected, boolean cellHasFocus) {
-            if (index != -1) {
+            if (index != -1 || !isTile()) {
                 return listRenderer.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
             }
-            final Font font = list.getFont();
-            name.setFont(font.deriveFont(Font.BOLD, font.getSize2D() + 2));
-            rating.setFont(font);
-            tile.setBackground(ThemeManager.getColor(HOColorName.BACKGROUND_CONTAINER));
+            slot.item = value;
+            return slot;
+        }
+    }
 
-            final Color fg = ThemeManager.getColor(HOColorName.LABEL_FG);
-            final MatchRoleID position = HOVerwaltung.instance().getModel().getCurrentLineup().getPositionById(m_iPositionID);
-            final int shirtSize = Math.round(UserParameter.instance().fontSize * 2.5f);
-            final Player player = value != null ? value.getPlayer() : null;
-            if (player != null) {
-                shirt.setIcon(jersey(position, player.getShirtNumber(), shirtSize));
-                name.setText(player.getLastName());
-                name.setForeground(fg);
-                // extra substitutes have no position to rate
-                final float stars = value.getPositionsEvaluation();
-                final String notBestPosition = value.isSetInBestPosition() ? "" : "  ⚠";
-                rating.setText(stars > 0 ? String.format("%.2f%s", stars, notBestPosition) : " ");
-                rating.setForeground(fg);
+    /**
+     * One slot the way the TV-view lineup page draws it: a kit in the club colours with the shirt
+     * number, flags for captain, set pieces and behaviour, and a dark name plate with surname,
+     * position and rating. An empty slot is a faint ghost circle.
+     */
+    private final class SlotView extends JComponent {
+        private @Nullable PlayerCBItem item;
+
+        private int fontSize() {
+            return UserParameter.instance().fontSize;
+        }
+
+        private int kitSize() {
+            return Math.round(fontSize() * 2.6f);
+        }
+
+        private Font nameFont() {
+            return PitchStyle.display(fontSize() + 2f);
+        }
+
+        private Font infoFont() {
+            return PitchStyle.display(fontSize() - 1f).deriveFont(Font.PLAIN);
+        }
+
+        @Override
+        public Dimension getPreferredSize() {
+            final int plate = getFontMetrics(nameFont()).getHeight() + getFontMetrics(infoFont()).getHeight() + 4;
+            return new Dimension(fontSize() * 9, kitSize() + 6 + plate);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g0) {
+            final Graphics2D g = (Graphics2D) g0.create();
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            final int kit = kitSize();
+            final int kx = (getWidth() - kit) / 2;
+            final Lineup lineup = HOVerwaltung.instance().getModel().getCurrentLineup();
+            final MatchRoleID position = lineup.getPositionById(m_iPositionID);
+            final String role = position != null ? MatchRoleID.getShortNameForPosition(position.getPosition()) : "";
+            final Player player = item != null ? item.getPlayer() : null;
+            if (player == null) {
+                paintGhost(g, kx, kit, role);
             } else {
-                // ghost tile: the slot exists, nobody is in it
-                final Color faint = new Color(fg.getRed(), fg.getGreen(), fg.getBlue(), 100);
-                shirt.setIcon(faded(jersey(position, 0, shirtSize)));
-                name.setText("—");
-                name.setForeground(faint);
-                rating.setText(" ");
+                final boolean keeper = m_iPositionID == IMatchRoleID.keeper || m_iPositionID == substGK1 || m_iPositionID == substGK2;
+                PitchStyle.kit(keeper, player.getShirtNumber(), kit).paintIcon(this, g, kx, 2);
+                int fx = kx + kit * 3 / 4;
+                final float flagSize = fontSize() - 2f;
+                if (player.getPlayerId() == lineup.getCaptain()) {
+                    fx += 2 + PitchStyle.paintFlag(g, "C", Color.WHITE, PitchStyle.INK, fx, 0, flagSize);
+                }
+                if (player.getPlayerId() == lineup.getKicker()) {
+                    fx += 2 + PitchStyle.paintFlag(g, "SP", PitchStyle.SEA, Color.WHITE, fx, 0, flagSize);
+                }
+                final String behaviour = getTacticSymbol();
+                if (!behaviour.isEmpty()) {
+                    PitchStyle.paintFlag(g, behaviour, PitchStyle.SAND, PitchStyle.ON_SAND, fx, 0, flagSize);
+                }
+                paintPlate(g, player, role, kit + 6);
             }
-            return tile;
+            g.dispose();
         }
 
-        private Icon jersey(@Nullable MatchRoleID position, int shirtNumber, int size) {
-            return position != null
-                    ? ImageUtilities.getJerseyIcon(position.getId(), position.getTactic(), shirtNumber, size)
-                    : ImageUtilities.getJerseyIcon(m_iPositionID, IMatchRoleID.NORMAL, shirtNumber, size);
+        private void paintGhost(Graphics2D g, int kx, int kit, String role) {
+            final Color faint = isOnPitch() ? Color.WHITE : ThemeManager.getColor(HOColorName.LABEL_FG);
+            g.setColor(alpha(faint, 36));
+            g.fillOval(kx, 2, kit, kit);
+            g.setColor(alpha(faint, 110));
+            g.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10f, new float[]{4f, 3f}, 0f));
+            g.drawOval(kx, 2, kit, kit);
+            g.setFont(PitchStyle.display(fontSize()));
+            final FontMetrics fm = g.getFontMetrics();
+            g.setColor(alpha(faint, 190));
+            // extra substitutes are "Unbestimmt" and the like, longer than the circle
+            final String shown = fit(role, fm, kit - 2);
+            g.drawString(shown, kx + (kit - fm.stringWidth(shown)) / 2, 2 + (kit + fm.getAscent()) / 2 - 1);
         }
 
-        private static Icon faded(Icon icon) {
-            return new Icon() {
-                @Override
-                public void paintIcon(Component c, Graphics g, int x, int y) {
-                    Graphics2D g2 = (Graphics2D) g.create();
-                    g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.3f));
-                    icon.paintIcon(c, g2, x, y);
-                    g2.dispose();
-                }
+        private void paintPlate(Graphics2D g, Player player, String fullRole, int y) {
+            final FontMetrics nf = g.getFontMetrics(nameFont());
+            final FontMetrics inf = g.getFontMetrics(infoFont());
+            final String role = fit(fullRole, inf, fontSize() * 4);
+            final String name = player.getLastName().toUpperCase();
+            // extra substitutes have no position to rate
+            final float stars = item != null ? item.getPositionsEvaluation() : 0;
+            final String rating = stars > 0 ? String.format("  %.2f", stars) : "";
+            final Color specialty = PitchStyle.specialtyColor(player.getSpecialty());
+            final int dot = specialty != null ? inf.getAscent() * 2 / 3 : 0;
+            final int infoWidth = (dot > 0 ? dot + 4 : 0) + inf.stringWidth(role + rating);
 
-                @Override
-                public int getIconWidth() {
-                    return icon.getIconWidth();
-                }
+            final int w = getWidth();
+            final int pw = Math.min(w - 2, Math.max(nf.stringWidth(name), infoWidth) + 14);
+            final int ph = nf.getHeight() + inf.getHeight() + 2;
+            final int px = (w - pw) / 2;
+            g.setColor(new Color(0, 0, 0, 60));
+            g.fillRoundRect(px, y + 2, pw, ph, 6, 6);
+            g.setColor(PitchStyle.PLATE);
+            g.fillRoundRect(px, y, pw, ph, 6, 6);
 
-                @Override
-                public int getIconHeight() {
-                    return icon.getIconHeight();
-                }
-            };
+            final String shown = fit(name, nf, pw - 8);
+            g.setFont(nameFont());
+            g.setColor(Color.WHITE);
+            g.drawString(shown, (w - nf.stringWidth(shown)) / 2, y + 1 + nf.getAscent());
+
+            final int baseline = y + 1 + nf.getHeight() + inf.getAscent();
+            int x = (w - infoWidth) / 2;
+            if (specialty != null) {
+                g.setColor(specialty);
+                g.fillOval(x, baseline - dot, dot, dot);
+                x += dot + 4;
+            }
+            g.setFont(infoFont());
+            g.setColor(alpha(Color.WHITE, 215));
+            g.drawString(role, x, baseline);
+            // a player outside his best positions gets his rating in sand; the tooltip says why
+            g.setColor(item != null && item.isSetInBestPosition() ? alpha(Color.WHITE, 215) : PitchStyle.SAND);
+            g.drawString(rating, x + inf.stringWidth(role), baseline);
+        }
+
+        private static String fit(String text, FontMetrics fm, int width) {
+            if (fm.stringWidth(text) <= width) return text;
+            String s = text;
+            while (s.length() > 1 && fm.stringWidth(s + "…") > width) {
+                s = s.substring(0, s.length() - 1);
+            }
+            return s + "…";
+        }
+
+        private static Color alpha(Color c, int a) {
+            return new Color(c.getRed(), c.getGreen(), c.getBlue(), a);
         }
     }
 

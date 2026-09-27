@@ -109,7 +109,11 @@ public class LineupPanel extends core.gui.comp.panel.ImagePanel implements Refre
 
 		verticalSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, false);
 		var lineupPositionsPanel = getLineupPositionsPanel();
-		verticalSplitPane.setTopComponent(new JScrollPane(lineupPositionsPanel));
+		var pitchPane = new JPanel(new BorderLayout(0, 4));
+		pitchPane.setBorder(BorderFactory.createEmptyBorder(4, 4, 0, 4));
+		pitchPane.add(lineupRatingAssistantPanel.getMatchBanner(), BorderLayout.NORTH);
+		pitchPane.add(new JScrollPane(lineupPositionsPanel), BorderLayout.CENTER);
+		verticalSplitPane.setTopComponent(pitchPane);
 		verticalSplitPane.setBottomComponent(initSpielerTabelle());
 
 		horizontalSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, false);
