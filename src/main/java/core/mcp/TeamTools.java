@@ -66,7 +66,8 @@ public final class TeamTools {
                                 + "specialty, injuries, cards, squad group and the three character "
                                 + "traits (0-5), plus a positionRatings map giving what he is worth "
                                 + "in each of the fourteen field slots (100 keeper through 113 left "
-                                + "forward) at normal behaviour.",
+                                + "forward) at normal behaviour. penaltyStrength: 1.5 experience + "
+                                + "0.7 set pieces + 0.3 scoring (form+loyalty), x1.1 Technical.",
                         McpTool.schema(McpTool.properties(
                                 "playerIds", McpTool.prop("array",
                                         "only these players; the whole squad if omitted. An id not "

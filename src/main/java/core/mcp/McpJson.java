@@ -174,6 +174,7 @@ public final class McpJson {
                     ratingModel.getPlayerRatingMatchBeginning(p, roleId, IMatchRoleID.NORMAL));
         }
         json.add("positionRatings", ratings);
+        json.addProperty("penaltyStrength", Math.round(ratingModel.getPlayerPenaltyStrength(p) * 100) / 100.0);
         return json;
     }
 
