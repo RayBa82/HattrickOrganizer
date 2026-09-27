@@ -47,31 +47,33 @@ public class MatchBanner extends JPanel implements Refreshable {
     private void initComponents() {
         setOpaque(false);
         setLayout(new BorderLayout(12, 0));
-        setBorder(BorderFactory.createEmptyBorder(8, 12, 8, 12));
+        setBorder(BorderFactory.createEmptyBorder(4, 10, 4, 10));
 
         final float fontSize = UserParameter.instance().fontSize;
         final JLabel vs = new JLabel("vs");
         for (JLabel team : new JLabel[]{jlHomeTeam, jlAwayTeam}) {
-            team.setFont(PitchStyle.display(fontSize + 8f));
+            team.setFont(PitchStyle.display(fontSize + 5f));
             team.setForeground(Color.WHITE);
             team.setCursor(new Cursor(Cursor.HAND_CURSOR));
         }
-        vs.setFont(PitchStyle.display(fontSize + 4f).deriveFont(Font.PLAIN));
+        vs.setFont(PitchStyle.display(fontSize + 2f).deriveFont(Font.PLAIN));
         vs.setForeground(MUTED);
         jlMatchSchedule.setForeground(MUTED);
         jlTactic.setForeground(Color.WHITE);
         jlTactic.setFont(PitchStyle.display(fontSize + 1f).deriveFont(Font.PLAIN));
 
+        // two rows: teams with date and league beside them, then the match orders
         final JPanel title = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         title.setOpaque(false);
         title.add(jlHomeTeam);
         title.add(vs);
         title.add(jlAwayTeam);
+        title.add(Box.createHorizontalStrut(10));
+        title.add(jlMatchSchedule);
 
-        final JPanel text = new JPanel(new GridLayout(3, 1));
+        final JPanel text = new JPanel(new GridLayout(2, 1));
         text.setOpaque(false);
         text.add(title);
-        text.add(jlMatchSchedule);
         text.add(jlTactic);
 
         final JPanel icons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
@@ -140,7 +142,7 @@ public class MatchBanner extends JPanel implements Refreshable {
 
         jlWeather.setIcon(ThemeManager.getIcon(HOIconName.WEATHER[m_clSelectedMatch.getWeather().getId()]));
         jlMatchTypeIcon.setIcon(ThemeManager.getScaledIcon(HOIconName.MATCHICONS[m_clSelectedMatch.getMatchTypeExtended().getIconArrayIndex()], 22, 22));
-        jlCrest.setIcon(ThemeManager.instance().getClubLogo(HOVerwaltung.instance().getModel().getBasics().getTeamId(), 44));
+        jlCrest.setIcon(ThemeManager.instance().getClubLogo(HOVerwaltung.instance().getModel().getBasics().getTeamId(), 34));
         jlHomeTeam.setText(teamName(true));
         jlAwayTeam.setText(teamName(false));
 

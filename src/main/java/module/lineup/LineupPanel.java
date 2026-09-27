@@ -182,16 +182,12 @@ public class LineupPanel extends core.gui.comp.panel.ImagePanel implements Refre
 		this.getLineupPositionsPanel().refresh();
 	}
 
-	public void addPositionComponent(Component component, Object constraints, int i) {
-		this.getLineupPositionsPanel().getCenterPanel().add(component, constraints, i);
+	public void showSideCard(JComponent card) {
+		this.getLineupPositionsPanel().showSideCard(card);
 	}
 
-	public void revalidatePositionComponents() {
-		this.getLineupPositionsPanel().getCenterPanel().revalidate();
-	}
-
-	public void removePositionComponent(Component component) {
-		this.getLineupPositionsPanel().getCenterPanel().remove(component);
+	public void hideSideCard(int delayMs) {
+		this.getLineupPositionsPanel().hideSideCard(delayMs);
 	}
 
 	public int getAssistantOrder() {

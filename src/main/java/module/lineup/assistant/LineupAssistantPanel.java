@@ -7,7 +7,6 @@ import core.gui.comp.panel.ImagePanel;
 import core.gui.theme.GroupTeamFactory;
 import core.gui.theme.HOColorName;
 import core.gui.theme.ImageUtilities;
-import core.gui.theme.ThemeManager;
 import core.model.HOModel;
 import core.model.HOVerwaltung;
 import core.model.TranslationFacility;
@@ -23,8 +22,15 @@ import java.awt.*;
 import java.awt.event.ActionListener;
 import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
-import java.util.*;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 import static core.util.Helper.getTranslation;
 
@@ -80,7 +86,13 @@ public class LineupAssistantPanel extends ImagePanel implements Refreshable, Act
 
 	// UI items for additions to the LineupPositionsPanel
 
-	JLabel infoLabel = null;
+	private JPanel assistantBar = null;
+	// the opening: the card unfolds, the position frames follow as a wave; closing plays it backwards
+	private static final int WAVE_START_MS = 80;
+	private static final int WAVE_STEP_MS = 25;
+	private static final int FRAME_MS = 200;
+	private List<PlayerPositionPanel> revealOrder = new ArrayList<>();
+	private Timer pendingRemoval;
 	JButton overlayOk = null;
 	JButton overlayCancel = null;
 
@@ -260,99 +272,123 @@ public class LineupAssistantPanel extends ImagePanel implements Refreshable, Act
 		// gui.RefreshManager.instance ().doRefresh ();
 	}
 
+	/** Which positions the assistant fills when there is no full eleven to start from. */
+	private static boolean savedSelection(int posId) {
+		if (UserParameter.instance().assistantSaved) {
+			return UserParameter.instance().getBooleanValue(UserParameter.instance().getValues(), "assistant" + posId);
+		}
+		return posId != IMatchRoleID.centralForward
+				&& posId != IMatchRoleID.centralInnerMidfield
+				&& posId != IMatchRoleID.middleCentralDefender;
+	}
+
 	private void displayGUI() {
+		// reopened while the last closing still plays: keep the frames it would remove
+		if (pendingRemoval != null) pendingRemoval.stop();
 
 		// Add overlays to player panels
 
+
 		for (Map.Entry<PlayerPositionPanel, LineupAssistantSelectorOverlay> entry : positions.entrySet()) {
 			if (entry.getValue() == null) {
-				boolean selected = true;
 				LineupAssistantSelectorOverlay laso = new LineupAssistantSelectorOverlay();
-				Map<String, String> upValues = UserParameter.instance().getValues();
-				if (UserParameter.instance().assistantSaved) {
-					selected = UserParameter.instance().getBooleanValue(upValues,
-							"assistant" + entry.getKey().getPositionsID());
-				} else {
-					int posId = entry.getKey().getPositionsID();
-					if ((posId == IMatchRoleID.centralForward)
-							|| (posId == IMatchRoleID.centralInnerMidfield)
-							|| (posId == IMatchRoleID.middleCentralDefender)) {
-						selected = false;
-					}
-				}
-
-				laso.setSelected(selected);
+				laso.setSelected(savedSelection(entry.getKey().getPositionsID()));
 				entry.setValue(laso);
 			}
+		}
+		// a full eleven on the pitch is the formation the user plays: start from it. The keeper is
+		// not among these positions, so a full eleven leaves exactly three of them empty.
+		final var occupied = occupiedFieldPositions();
+		if (occupied.size() == positions.size() - 3) {
+			positions.forEach((panel, overlay) -> overlay.setSelected(occupied.contains(panel.getPositionsID())));
+		}
+		for (Map.Entry<PlayerPositionPanel, LineupAssistantSelectorOverlay> entry : positions.entrySet()) {
 			entry.getKey().addAssistantOverlay(entry.getValue());
 		}
 
-		// Add two buttons and a label
+		final var posPanel = Objects.requireNonNull(HOMainFrame.instance().getLineupPanel());
 
-		var posPanel = HOMainFrame.instance().getLineupPanel();
-		GridBagConstraints constraints = new GridBagConstraints();
-		constraints.anchor = GridBagConstraints.CENTER;
-		constraints.fill = GridBagConstraints.BOTH;
-		constraints.weightx = 1.0;
-		constraints.weighty = 0.0;
-		constraints.insets = new Insets(2, 2, 2, 2);
+		// Instructions with Cancel and OK in a card in the free corner left of the pitch, where
+		// captain and set pieces sit further down
+		if (assistantBar == null) {
+			final JTextArea info = new JTextArea(TranslationFacility.tr("lineupassist.Info")
+					.replace("<br>", " ").replace("<html>", "").replace("</html>", ""), 0, 22);
+			info.setLineWrap(true);
+			info.setWrapStyleWord(true);
+			info.setEditable(false);
+			info.setFocusable(false);
+			info.setOpaque(false);
+			// Nimbus paints a text area's background even when it is not opaque
+			info.setBackground(new Color(0, 0, 0, 0));
+			info.setBorder(null);
+			info.setFont(UIManager.getFont("Label.font"));
 
-		constraints.gridx = 5;
-		constraints.gridy = 4;
-		constraints.gridwidth = 2;
-		if (infoLabel == null) {
-			infoLabel = new JLabel();
-			infoLabel.setText(TranslationFacility.tr("lineupassist.Info"));
-			infoLabel.setOpaque(true);
-			infoLabel.setHorizontalAlignment(JLabel.CENTER);
-			infoLabel.setFont(getFont().deriveFont(Font.BOLD));
-		}
-		posPanel.addPositionComponent(infoLabel, constraints, 2);
-
-		constraints.gridx = 6;
-		constraints.gridy = 3;
-		constraints.gridwidth = 1;
-		constraints.gridheight = 1;
-
-		if (overlayOk == null) {
 			overlayOk = new JButton(TranslationFacility.tr("ls.button.ok"));
-			overlayOk.setFont(new Font("serif", Font.BOLD, 16));
-			overlayOk.setBackground(ThemeManager.getColor(HOColorName.BUTTON_ASSIST_OK_BG));
-			overlayOk.setForeground(ImageUtilities.getColorForContrast(HOColorName.BUTTON_ASSIST_OK_BG));
 			overlayOk.addActionListener(this);
-		}
-		posPanel.addPositionComponent(overlayOk, constraints, 2);
-
-		constraints.gridy = 2;
-		if (overlayCancel == null) {
 			overlayCancel = new JButton(TranslationFacility.tr("ls.button.cancel"));
 			overlayCancel.addActionListener(this);
-			overlayCancel.setFont(new Font("serif", Font.BOLD, 16));
-			overlayCancel.setBackground(ThemeManager.getColor(HOColorName.BUTTON_ASSIST_CANCEL_BG));
-			overlayCancel.setForeground(ImageUtilities.getColorForContrast(HOColorName.BUTTON_ASSIST_CANCEL_BG));
-		}
-		posPanel.addPositionComponent(overlayCancel, constraints, 2);
+			final JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+			buttons.setOpaque(false);
+			buttons.add(overlayCancel);
+			buttons.add(overlayOk);
 
-		posPanel.revalidatePositionComponents();
+			assistantBar = new JPanel(new BorderLayout(0, 8));
+			assistantBar.setBorder(BorderFactory.createCompoundBorder(module.lineup.lineup.PitchStyle.card(),
+					BorderFactory.createEmptyBorder(6, 6, 6, 6)));
+			assistantBar.add(info, BorderLayout.CENTER);
+			assistantBar.add(buttons, BorderLayout.SOUTH);
+		}
+		posPanel.showSideCard(assistantBar);
+
+		// the position frames follow as a quick wave, top to bottom and left to right
+		revealOrder = new ArrayList<>(positions.keySet());
+		revealOrder.sort(Comparator.comparingInt(PlayerPositionPanel::getY).thenComparingInt(PlayerPositionPanel::getX));
+		for (int i = 0; i < revealOrder.size(); i++) {
+			positions.get(revealOrder.get(i)).reveal(frameStart(i), FRAME_MS, 8f);
+		}
+		SwingUtilities.invokeLater(() -> SwingUtilities.getRootPane(overlayOk).setDefaultButton(overlayOk));
 
 	}
 
-	private void removeGUI() {
-		// Remove overlays
-		for (Map.Entry<PlayerPositionPanel, LineupAssistantSelectorOverlay> entry : positions
-				.entrySet()) {
-			entry.getKey().removeAssistantOverlay(entry.getValue());
+	private Set<Integer> occupiedFieldPositions() {
+		final var lineup = HOVerwaltung.instance().getModel().getCurrentLineup();
+		final Set<Integer> occupied = new HashSet<>();
+		for (PlayerPositionPanel panel : positions.keySet()) {
+			final var position = lineup.getPositionById(panel.getPositionsID());
+			if (position != null && position.getPlayerId() > 0) {
+				occupied.add(panel.getPositionsID());
+			}
 		}
+		return occupied;
+	}
 
-		// Remove buttons and labels
-		var pane = HOMainFrame.instance().getLineupPanel();
+	/** The opening played backwards: the frames go last first, then the card folds away. */
+	private void removeGUI() {
+		final int end = timelineMillis();
+		for (int i = 0; i < revealOrder.size(); i++) {
+			positions.get(revealOrder.get(i)).conceal(end - frameStart(i) - FRAME_MS, FRAME_MS);
+		}
+		final var pane = Objects.requireNonNull(HOMainFrame.instance().getLineupPanel());
+		pane.hideSideCard(end - module.lineup.lineup.LineupPositionsPanel.sideCardMillis());
 
-		pane.removePositionComponent(infoLabel);
-		pane.removePositionComponent(overlayCancel);
-		pane.removePositionComponent(overlayOk);
+		pendingRemoval = new Timer(end, e -> {
+			for (Map.Entry<PlayerPositionPanel, LineupAssistantSelectorOverlay> entry : positions.entrySet()) {
+				entry.getKey().removeAssistantOverlay(entry.getValue());
+			}
+			pane.repaint();
+		});
+		pendingRemoval.setRepeats(false);
+		pendingRemoval.start();
+	}
 
-		HOMainFrame.instance().getLineupPanel().repaint();
+	private static int frameStart(int i) {
+		return WAVE_START_MS + i * WAVE_STEP_MS;
+	}
 
+	/** From the first movement to the last frame in place. */
+	private int timelineMillis() {
+		return Math.max(module.lineup.lineup.LineupPositionsPanel.sideCardMillis(),
+				frameStart(revealOrder.size() - 1) + FRAME_MS);
 	}
 
 	public Map<Integer, Boolean> getPositionsStatus() {

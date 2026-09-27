@@ -32,6 +32,9 @@ public class LineupPositionsPanel extends JPanel implements core.gui.Refreshable
 	private final LineupPanel m_clLineupPanel;
 	//private MatchAndLineupSelectionPanel m_jpMatchAndLineupSelectionPanel;
 	//private MatchBanner m_jpMatchBanner;
+	/** Column 0 holds captain, set pieces and groups beside the pitch; the field starts here. */
+	private static final int FIRST_FIELD_COLUMN = 1;
+	private JLabel benchTitle;
 	private final JButton m_jbFlipSide = new JButton(ThemeManager.getIcon(HOIconName.RELOAD));
 	private PlayerPositionPanel m_clKeeper;
 	private PlayerPositionPanel m_clLeftBack;
@@ -64,6 +67,7 @@ public class LineupPositionsPanel extends JPanel implements core.gui.Refreshable
 	private PlayerPositionPanel m_clCaptain;
 	private PlayerPositionPanel m_clSetPieceTaker;
 	private javax.swing.JLayeredPane centerPanel;
+	private @org.jetbrains.annotations.Nullable Unfold sideCard;
 	private final SwapPositionsManager swapPositionsManager = new SwapPositionsManager(this);
 
 	private Weather m_weather;
@@ -82,10 +86,6 @@ public class LineupPositionsPanel extends JPanel implements core.gui.Refreshable
 		m_useWeatherImpact = useWeatherImpact;
 		initComponents();
 		RefreshManager.instance().registerRefreshable(this);
-	}
-
-	public javax.swing.JLayeredPane getCenterPanel() {
-		return centerPanel;
 	}
 
 	@Override
@@ -110,6 +110,7 @@ public class LineupPositionsPanel extends JPanel implements core.gui.Refreshable
 		}
 		field.grow(6, 10);
 		PitchStyle.paintPitch((Graphics2D) g, field, UserParameter.instance().lineupOrientationSetting == GOALKEEPER_AT_TOP);
+		paintBench(g);
 	}
 
 	@Override
@@ -222,13 +223,15 @@ public class LineupPositionsPanel extends JPanel implements core.gui.Refreshable
 		centerPanel.setLayout(layout);
 
 		final GridBagConstraints constraints = new GridBagConstraints();
-		constraints.anchor = GridBagConstraints.CENTER;
+		// top-aligned: an empty slot is shorter than a filled one, and centring it would drop its
+		// swap arrows below those of the other slots in the row
+		constraints.anchor = GridBagConstraints.NORTH;
 		constraints.weightx = 1.0;
 		constraints.weighty = 0.0;
 		constraints.insets = new Insets(3, 3, 3, 3);
 
 		// Keeper
-		constraints.gridx = 1 + getLineupColumnNumber(2); //3;
+		constraints.gridx = FIRST_FIELD_COLUMN + getLineupColumnNumber(2);
 		constraints.gridy = getLineupRowNumber(0);
 		constraints.gridwidth = 1;
 		constraints.gridheight = 1;
@@ -240,7 +243,7 @@ public class LineupPositionsPanel extends JPanel implements core.gui.Refreshable
 		centerPanel.add(m_clKeeper);
 
 		// WBr ==========================================================================
-		constraints.gridx = 1 + getLineupColumnNumber(0);
+		constraints.gridx = FIRST_FIELD_COLUMN + getLineupColumnNumber(0);
 		constraints.gridy = getLineupRowNumber(1);
 		constraints.insets = new Insets(3, 3, 3, 3);
 		//constraints.anchor = GridBagConstraints.CENTER;
@@ -251,7 +254,7 @@ public class LineupPositionsPanel extends JPanel implements core.gui.Refreshable
 		m_clLineupPanel.addToAssistant(m_clRightBack);
 
 		// Defense line
-		constraints.gridx = 1 + getLineupColumnNumber(1); //2;
+		constraints.gridx = FIRST_FIELD_COLUMN + getLineupColumnNumber(1);
 		m_clRightCentralDefender = new PlayerPositionPanel(this,
 				IMatchRoleID.rightCentralDefender, m_weather, m_useWeatherImpact, matchMinute);
 		layout.setConstraints(m_clRightCentralDefender, constraints);
@@ -259,7 +262,7 @@ public class LineupPositionsPanel extends JPanel implements core.gui.Refreshable
 		swapPositionsManager.addSwapCapabilityTo(m_clRightCentralDefender);
 		m_clLineupPanel.addToAssistant(m_clRightCentralDefender);
 
-		constraints.gridx = 1 + getLineupColumnNumber(2); //3;
+		constraints.gridx = FIRST_FIELD_COLUMN + getLineupColumnNumber(2);
 		m_clMiddleCentralDefender = new PlayerPositionPanel(this,
 				IMatchRoleID.middleCentralDefender, m_weather, m_useWeatherImpact, matchMinute);
 		layout.setConstraints(m_clMiddleCentralDefender, constraints);
@@ -267,7 +270,7 @@ public class LineupPositionsPanel extends JPanel implements core.gui.Refreshable
 		swapPositionsManager.addSwapCapabilityTo(m_clMiddleCentralDefender);
 		m_clLineupPanel.addToAssistant(m_clMiddleCentralDefender);
 
-		constraints.gridx = 1 + getLineupColumnNumber(3); //4;
+		constraints.gridx = FIRST_FIELD_COLUMN + getLineupColumnNumber(3);
 		m_clLeftCentralDefender = new PlayerPositionPanel(this,
 				IMatchRoleID.leftCentralDefender, m_weather, m_useWeatherImpact, matchMinute);
 		layout.setConstraints(m_clLeftCentralDefender, constraints);
@@ -275,7 +278,7 @@ public class LineupPositionsPanel extends JPanel implements core.gui.Refreshable
 		swapPositionsManager.addSwapCapabilityTo(m_clLeftCentralDefender);
 		m_clLineupPanel.addToAssistant(m_clLeftCentralDefender);
 
-		constraints.gridx = 1 + getLineupColumnNumber(4);//5;
+		constraints.gridx = FIRST_FIELD_COLUMN + getLineupColumnNumber(4);
 		m_clLeftBack = new PlayerPositionPanel(this, IMatchRoleID.leftBack, m_weather, m_useWeatherImpact, matchMinute);
 		layout.setConstraints(m_clLeftBack, constraints);
 		centerPanel.add(m_clLeftBack);
@@ -283,7 +286,7 @@ public class LineupPositionsPanel extends JPanel implements core.gui.Refreshable
 		m_clLineupPanel.addToAssistant(m_clLeftBack);
 
 		// Midfield Line
-		constraints.gridx = 1 + getLineupColumnNumber(0); //1;
+		constraints.gridx = FIRST_FIELD_COLUMN + getLineupColumnNumber(0);
 		constraints.gridy = getLineupRowNumber(2);
 		m_clRightWinger = new PlayerPositionPanel(this, IMatchRoleID.rightWinger, m_weather, m_useWeatherImpact, matchMinute);
 		layout.setConstraints(m_clRightWinger, constraints);
@@ -291,7 +294,7 @@ public class LineupPositionsPanel extends JPanel implements core.gui.Refreshable
 		swapPositionsManager.addSwapCapabilityTo(m_clRightWinger);
 		m_clLineupPanel.addToAssistant(m_clRightWinger);
 
-		constraints.gridx = 1 + getLineupColumnNumber(1); //2;
+		constraints.gridx = FIRST_FIELD_COLUMN + getLineupColumnNumber(1);
 		m_clRightInnerMidfielder = new PlayerPositionPanel(this,
 				IMatchRoleID.rightInnerMidfield, m_weather, m_useWeatherImpact, matchMinute);
 		layout.setConstraints(m_clRightInnerMidfielder, constraints);
@@ -299,7 +302,7 @@ public class LineupPositionsPanel extends JPanel implements core.gui.Refreshable
 		swapPositionsManager.addSwapCapabilityTo(m_clRightInnerMidfielder);
 		m_clLineupPanel.addToAssistant(m_clRightInnerMidfielder);
 
-		constraints.gridx = 1 + getLineupColumnNumber(2); //3;
+		constraints.gridx = FIRST_FIELD_COLUMN + getLineupColumnNumber(2);
 		m_clCentralInnerMidfielder = new PlayerPositionPanel(this,
 				IMatchRoleID.centralInnerMidfield, m_weather, m_useWeatherImpact, matchMinute);
 		layout.setConstraints(m_clCentralInnerMidfielder, constraints);
@@ -307,14 +310,14 @@ public class LineupPositionsPanel extends JPanel implements core.gui.Refreshable
 		swapPositionsManager.addSwapCapabilityTo(m_clCentralInnerMidfielder);
 		m_clLineupPanel.addToAssistant(m_clCentralInnerMidfielder);
 
-		constraints.gridx = 1 + getLineupColumnNumber(3); //4;
+		constraints.gridx = FIRST_FIELD_COLUMN + getLineupColumnNumber(3);
 		m_clLeftInnerMidfielder = new PlayerPositionPanel(this, IMatchRoleID.leftInnerMidfield, m_weather, m_useWeatherImpact, matchMinute);
 		layout.setConstraints(m_clLeftInnerMidfielder, constraints);
 		centerPanel.add(m_clLeftInnerMidfielder);
 		swapPositionsManager.addSwapCapabilityTo(m_clLeftInnerMidfielder);
 		m_clLineupPanel.addToAssistant(m_clLeftInnerMidfielder);
 
-		constraints.gridx = 1 + getLineupColumnNumber(4); //5;
+		constraints.gridx = FIRST_FIELD_COLUMN + getLineupColumnNumber(4);
 		m_clLeftWinger = new PlayerPositionPanel(this, IMatchRoleID.leftWinger, m_weather, m_useWeatherImpact, matchMinute);
 		layout.setConstraints(m_clLeftWinger, constraints);
 		centerPanel.add(m_clLeftWinger);
@@ -322,7 +325,7 @@ public class LineupPositionsPanel extends JPanel implements core.gui.Refreshable
 		m_clLineupPanel.addToAssistant(m_clLeftWinger);
 
 		// Forward line
-		constraints.gridx = 1 + getLineupColumnNumber(1); //2;
+		constraints.gridx = FIRST_FIELD_COLUMN + getLineupColumnNumber(1);
 		constraints.gridy = getLineupRowNumber(3);
 		m_clRightForward = new PlayerPositionPanel(this, IMatchRoleID.rightForward, m_weather, m_useWeatherImpact, matchMinute);
 		layout.setConstraints(m_clRightForward, constraints);
@@ -330,24 +333,26 @@ public class LineupPositionsPanel extends JPanel implements core.gui.Refreshable
 		swapPositionsManager.addSwapCapabilityTo(m_clRightForward);
 		m_clLineupPanel.addToAssistant(m_clRightForward);
 
-		constraints.gridx = 1 + getLineupColumnNumber(2); //3;
+		constraints.gridx = FIRST_FIELD_COLUMN + getLineupColumnNumber(2);
 		m_clCentralForward = new PlayerPositionPanel(this, IMatchRoleID.centralForward, m_weather, m_useWeatherImpact, matchMinute);
 		layout.setConstraints(m_clCentralForward, constraints);
 		centerPanel.add(m_clCentralForward);
 		swapPositionsManager.addSwapCapabilityTo(m_clCentralForward);
 		m_clLineupPanel.addToAssistant(m_clCentralForward);
 
-		constraints.gridx = 1 + getLineupColumnNumber(3); //4;
+		constraints.gridx = FIRST_FIELD_COLUMN + getLineupColumnNumber(3);
 		m_clLeftForward = new PlayerPositionPanel(this, IMatchRoleID.leftForward, m_weather, m_useWeatherImpact, matchMinute);
 		layout.setConstraints(m_clLeftForward, constraints);
 		centerPanel.add(m_clLeftForward);
 		swapPositionsManager.addSwapCapabilityTo(m_clLeftForward);
 		m_clLineupPanel.addToAssistant(m_clLeftForward);
 
-		// Captain and setpieces
+		// Captain and setpieces left of the pitch. The right inset keeps them clear of the pitch's
+		// surround and widens this column, which moves the pitch to the right.
 		constraints.gridx = 0;
 		constraints.gridy = 1;
 		constraints.anchor = GridBagConstraints.SOUTH;
+		constraints.insets = new Insets(3, 3, 3, 40);
 		m_clCaptain = new PlayerPositionPanel(this, IMatchRoleID.captain, null, false, matchMinute);
 		m_clCaptain.addCaptainIcon();
 		layout.setConstraints(m_clCaptain, constraints);
@@ -359,33 +364,33 @@ public class LineupPositionsPanel extends JPanel implements core.gui.Refreshable
 		m_clSetPieceTaker.addSetPiecesIcon();
 		layout.setConstraints(m_clSetPieceTaker, constraints);
 		centerPanel.add(m_clSetPieceTaker);
+		constraints.insets = new Insets(3, 3, 3, 3);
 
-		// Buttons to allocate team number to players currently on the line up
-		constraints.gridx = 0;
+		// Buttons to allocate team number to players currently on the line up; may reach onto the pitch
 		constraints.gridy = 3;
 		constraints.gridwidth = 2;
 		constraints.fill = GridBagConstraints.NONE;
-		constraints.anchor = GridBagConstraints.CENTER;
-		centerPanel.add(new AllTeamsPanel(), constraints);
+		constraints.anchor = GridBagConstraints.WEST;
+		final AllTeamsPanel groups = new AllTeamsPanel();
+		groups.setBorder(PitchStyle.card());
+		centerPanel.add(groups, constraints);
 
-		// Reserves Separation
+		// The bench: a board under the pitch, titled by this label, with the positions as column heads
 		constraints.gridx = 0;
 		constraints.gridy = 4;
 		constraints.gridwidth = 7;
 		constraints.fill = GridBagConstraints.HORIZONTAL;
-		JLabel label1 = new JLabel(TranslationFacility.tr("moduleLineup.LineupPanel.SubstitutesLabel").toUpperCase(), SwingConstants.LEFT);
-		label1.setBorder(BorderFactory.createEmptyBorder(5, 12, 5, 12));
-		label1.setBackground(PitchStyle.BRAND_2);
-		label1.setForeground(Color.WHITE);
-		label1.setFont(PitchStyle.display(UserParameter.instance().fontSize + 3f));
-		label1.setOpaque(true);
+		benchTitle = new JLabel(TranslationFacility.tr("moduleLineup.LineupPanel.SubstitutesLabel").toUpperCase(), SwingConstants.LEFT);
+		benchTitle.setBorder(BorderFactory.createEmptyBorder(4, 12, 0, 12));
+		benchTitle.setForeground(Color.WHITE);
+		benchTitle.setFont(PitchStyle.display(UserParameter.instance().fontSize + 3f));
 		// clear of the pitch's bottom edge and surround
 		constraints.insets = new Insets(28, 3, 3, 3);
-		layout.setConstraints(label1, constraints);
-		centerPanel.add(label1);
-		constraints.insets = new Insets(3, 3, 3, 3);
+		layout.setConstraints(benchTitle, constraints);
+		centerPanel.add(benchTitle);
 
-		// The reserves
+		// The reserves; the first row leaves room above for the column heads
+		constraints.insets = new Insets(3 + getFontMetrics(benchHeadFont()).getHeight(), 3, 3, 3);
 		constraints.gridx = 0;
 		constraints.gridy = 5;
 		constraints.gridwidth = 1;
@@ -430,6 +435,8 @@ public class LineupPositionsPanel extends JPanel implements core.gui.Refreshable
 		centerPanel.add(m_clSubstXtr1);
 		swapPositionsManager.addSwapCapabilityTo(m_clSubstXtr1);
 
+		// the backups, under a divider
+		constraints.insets = new Insets(3 + getFontMetrics(benchHeadFont()).getHeight() / 2, 3, 3, 3);
 		constraints.gridx = 0;
 		constraints.gridy = 6;
 		m_clSubstKeeper2 = new PlayerPositionPanel(this, IMatchRoleID.substGK2, m_weather, m_useWeatherImpact, matchMinute);
@@ -468,6 +475,80 @@ public class LineupPositionsPanel extends JPanel implements core.gui.Refreshable
 
 		add(centerPanel, BorderLayout.CENTER);
 
+	}
+
+	/**
+	 * Shows a card in the corner left of the pitch, above the captain. Its room grows in, so the
+	 * pitch slides right to make space instead of jumping.
+	 */
+	public void showSideCard(JComponent card) {
+		if (sideCard != null) centerPanel.remove(sideCard);
+		// a card still folding away from the last time goes at once
+		for (Component each : centerPanel.getComponents()) {
+			if (each instanceof Unfold) centerPanel.remove(each);
+		}
+		// only as wide as the room to spare allows: the lineup must not outgrow its view
+		sideCard = new Unfold(card, this::repaint, () -> m_clCaptain.getPreferredSize().width
+				+ Math.max(0, centerPanel.getWidth() - centerPanel.getPreferredSize().width));
+		final GridBagConstraints constraints = new GridBagConstraints();
+		constraints.gridx = 0;
+		constraints.gridy = 0;
+		constraints.anchor = GridBagConstraints.NORTH;
+		constraints.insets = new Insets(3, 3, 3, 40);
+		centerPanel.add(sideCard, constraints);
+		sideCard.animate(true, 0, null);
+	}
+
+	/** How long the side card takes to unfold, and to fold away again. */
+	public static int sideCardMillis() {
+		return Unfold.DURATION_MS;
+	}
+
+	/** Folds the side card away again after {@code delayMs}; the pitch slides back. */
+	public void hideSideCard(int delayMs) {
+		final Unfold closing = sideCard;
+		sideCard = null;
+		if (closing == null) return;
+		closing.animate(false, delayMs, () -> {
+			centerPanel.remove(closing);
+			centerPanel.revalidate();
+			repaint();
+		});
+	}
+
+	private static Font benchHeadFont() {
+		return PitchStyle.display(UserParameter.instance().fontSize - 1f);
+	}
+
+	/** The bench board: green behind title and both rows, a head over each column, a line between the rows. */
+	private void paintBench(Graphics g0) {
+		final Graphics2D g = (Graphics2D) g0.create();
+		final PlayerPositionPanel[] first = {m_clSubstKeeper1, m_clSubstCD1, m_clSubstWB1, m_clSubstIM1, m_clSubstFwd1, m_clSubstWI1, m_clSubstXtr1};
+		final PlayerPositionPanel[] second = {m_clSubstKeeper2, m_clSubstCD2, m_clSubstWB2, m_clSubstIM2, m_clSubstFwd2, m_clSubstWI2, m_clSubstXtr2};
+		Rectangle board = SwingUtilities.convertRectangle(centerPanel, benchTitle.getBounds(), this);
+		for (var slot : second) {
+			board = board.union(SwingUtilities.convertRectangle(centerPanel, slot.getBounds(), this));
+		}
+		board.grow(6, 6);
+		g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+		g.setColor(PitchStyle.BRAND);
+		g.fillRoundRect(board.x, board.y, board.width, board.height, 12, 12);
+
+		g.setFont(benchHeadFont());
+		final FontMetrics fm = g.getFontMetrics();
+		g.setColor(new Color(255, 255, 255, 170));
+		for (var slot : first) {
+			final Rectangle r = SwingUtilities.convertRectangle(centerPanel, slot.getBounds(), this);
+			final String head = slot.getRoleName();
+			g.drawString(head, r.x + (r.width - fm.stringWidth(head)) / 2, r.y - fm.getDescent() - 3);
+		}
+		final Rectangle upper = SwingUtilities.convertRectangle(centerPanel, first[0].getBounds(), this);
+		final Rectangle lower = SwingUtilities.convertRectangle(centerPanel, second[0].getBounds(), this);
+		final int y = (upper.y + upper.height + lower.y) / 2;
+		g.setColor(new Color(255, 255, 255, 50));
+		g.drawLine(board.x + 12, y, board.x + board.width - 12, y);
+		g.dispose();
 	}
 
 	/**

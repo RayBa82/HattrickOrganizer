@@ -72,6 +72,13 @@ public final class PitchStyle {
         return bar;
     }
 
+    /** A thin card outline beside the pitch that reads on light and dark themes alike. */
+    public static javax.swing.border.Border card() {
+        return BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(dark() ? new Color(255, 255, 255, 56) : new Color(0, 0, 0, 40)),
+                BorderFactory.createEmptyBorder(3, 3, 3, 3));
+    }
+
     /** The page's specialty colours; null for no specialty. */
     static @Nullable Color specialtyColor(int specialty) {
         if (specialty <= 0 || specialty >= Specialty.values().length) return null;

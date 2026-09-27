@@ -6,6 +6,7 @@ import core.gui.comp.table.PlayersTable;
 import core.gui.model.PlayerCBItem;
 import core.gui.model.PlayerCBItemRenderer;
 import core.gui.theme.HOColorName;
+import core.gui.theme.HOIconName;
 import core.gui.theme.ImageUtilities;
 import core.gui.theme.ThemeManager;
 import core.model.HOModel;
@@ -41,7 +42,6 @@ import static core.model.player.IMatchRoleID.*;
 public class PlayerPositionPanel extends JPanel implements ItemListener, FocusListener {
 
     private static final PlayerCBItem oNullPlayer = new PlayerCBItem("", 0f, null, false, true);
-    private static final Color defaultBorderColor = ThemeManager.getColor(HOColorName.PLAYER_POSITION_PANEL_BORDER);
     private static final String BEHAVIOUR_NORMAL = "ls.player.behaviour.normal";
     private static final String BEHAVIOUR_OFFENSIVE = "ls.player.behaviour.offensive";
     private static final String BEHAVIOUR_DEFENSIVE = "ls.player.behaviour.defensive";
@@ -134,11 +134,15 @@ public class PlayerPositionPanel extends JPanel implements ItemListener, FocusLi
         }
 
         // Every LAF places the popup at the combo's screen position; shifted left by half the overhang
-        // while it is placed, the popup opens centred under the tile.
+        // while it is placed, a tile's popup opens centred under the tile. The shift stays on the
+        // combo's own screen, or the popup would jump to a monitor left of it.
         @Override
         public Point getLocationOnScreen() {
             final Point at = super.getLocationOnScreen();
-            if (placingPopup) at.x -= Math.max(0, (popupWidth - getWidth()) / 2);
+            if (placingPopup && isTile()) {
+                final int screenLeft = getGraphicsConfiguration().getBounds().x;
+                at.x = Math.max(screenLeft, at.x - Math.max(0, (popupWidth - getWidth()) / 2));
+            }
             return at;
         }
     };
@@ -178,6 +182,12 @@ public class PlayerPositionPanel extends JPanel implements ItemListener, FocusLi
 
     public int getPositionsID() {
         return positionId;
+    }
+
+    /** The slot's short position name, e.g. "IV"; empty while the lineup does not know the slot. */
+    String getRoleName() {
+        final MatchRoleID position = HOVerwaltung.instance().getModel().getCurrentLineup().getPositionById(positionId);
+        return position != null ? MatchRoleID.getShortNameForPosition(position.getPosition()) : "";
     }
 
     /** Field and bench slots show a kit with a name plate; captain and set pieces stay plain dropdowns. */
@@ -221,7 +231,7 @@ public class PlayerPositionPanel extends JPanel implements ItemListener, FocusLi
         constraints.weightx = 1.0;
         constraints.weighty = 0.0;
 
-        setBorder(isTile() ? BorderFactory.createEmptyBorder(2, 2, 2, 2) : BorderFactory.createMatteBorder(3, 3, 3, 3, defaultBorderColor));
+        setBorder(isTile() ? BorderFactory.createEmptyBorder(2, 2, 2, 2) : PitchStyle.card());
 
         jlp.setLayout(layout);
 
@@ -261,6 +271,9 @@ public class PlayerPositionPanel extends JPanel implements ItemListener, FocusLi
             }
             tacticCombo.setBackground(ThemeManager.getColor(HOColorName.BACKGROUND_CONTAINER));
             jlp.add(tacticCombo, constraints, LAYER_INDEX);
+            // an empty tile hides the behaviour dropdown; this keeps its room, so every tile in a
+            // row has one height
+            jlp.add(Box.createVerticalStrut(tacticCombo.getPreferredSize().height), constraints, LAYER_INDEX);
         }
         else {
             constraints.insets = new Insets(2, 4, 5, 4);
@@ -738,30 +751,83 @@ public class PlayerPositionPanel extends JPanel implements ItemListener, FocusLi
         }
     }
 
+    /** Watches the pointer for {@link #showOnHover}; registered only while the tile is on screen. */
+    private transient java.awt.event.@Nullable AWTEventListener hoverWatcher;
+
     /**
      * On a tile the swap arrows show only while the pointer is on the slot, or while a swap is
      * pending. The icon is blanked rather than the button hidden, so the tile keeps its place.
+     * <p>
+     * Enter/exit listeners are not enough here: the combos' own children swallow them and the
+     * tiles' areas overlap, so the tile tests every pointer move against its own screen bounds.
      */
     private void showOnHover(AbstractButton button) {
-        final Icon arrows = button.getIcon();
+        // the theme's green arrows vanish on the grass: white ones on the name plate's dark disc
+        final Icon arrows = onPlate(ImageUtilities.getSvgIcon(HOIconName.SWAP, java.util.Map.of("fillColor", Color.WHITE), 16, 16));
+        button.setSelectedIcon(onPlate(ImageUtilities.getSvgIcon(HOIconName.SWAP, java.util.Map.of("fillColor", PitchStyle.SAND), 16, 16)));
+        final Dimension size = new Dimension(arrows.getIconWidth(), arrows.getIconHeight());
+        button.setPreferredSize(size);
+        button.setMinimumSize(size);
+        button.setMaximumSize(size);
         final Icon blank = new ImageIcon(new java.awt.image.BufferedImage(arrows.getIconWidth(), arrows.getIconHeight(), java.awt.image.BufferedImage.TYPE_INT_ARGB));
-        final Runnable update = () -> button.setIcon(button.isSelected() || getMousePosition(true) != null ? arrows : blank);
-        final java.awt.event.MouseAdapter hover = new java.awt.event.MouseAdapter() {
+        final java.util.function.Consumer<@Nullable Point> update = pointer -> button.setIcon(
+                button.isSelected() || pointer != null && isShowing()
+                        && new Rectangle(getLocationOnScreen(), getSize()).contains(pointer) ? arrows : blank);
+        hoverWatcher = e -> {
+            if (e instanceof java.awt.event.MouseEvent mouse && isShowing()) {
+                update.accept(mouse.getLocationOnScreen());
+            }
+        };
+        button.addItemListener(e -> update.accept(null));
+        update.accept(null);
+        if (isDisplayable()) {
+            watchHover();
+        }
+    }
+
+    private static Icon onPlate(Icon icon) {
+        final int d = Math.max(icon.getIconWidth(), icon.getIconHeight()) + 8;
+        return new Icon() {
             @Override
-            public void mouseEntered(java.awt.event.MouseEvent e) {
-                update.run();
+            public void paintIcon(Component c, Graphics g0, int x, int y) {
+                final Graphics2D g = (Graphics2D) g0.create();
+                g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g.setColor(PitchStyle.PLATE);
+                g.fillOval(x, y, d, d);
+                icon.paintIcon(c, g, x + (d - icon.getIconWidth()) / 2, y + (d - icon.getIconHeight()) / 2);
+                g.dispose();
             }
 
             @Override
-            public void mouseExited(java.awt.event.MouseEvent e) {
-                update.run();
+            public int getIconWidth() {
+                return d;
+            }
+
+            @Override
+            public int getIconHeight() {
+                return d;
             }
         };
-        for (Component each : new Component[]{this, playerCombo, tacticCombo, button}) {
-            each.addMouseListener(hover);
+    }
+
+    private void watchHover() {
+        if (hoverWatcher != null) {
+            Toolkit.getDefaultToolkit().removeAWTEventListener(hoverWatcher);
+            Toolkit.getDefaultToolkit().addAWTEventListener(hoverWatcher,
+                    AWTEvent.MOUSE_EVENT_MASK | AWTEvent.MOUSE_MOTION_EVENT_MASK);
         }
-        button.addItemListener(e -> update.run());
-        update.run();
+    }
+
+    @Override
+    public void addNotify() {
+        super.addNotify();
+        watchHover();
+    }
+
+    @Override
+    public void removeNotify() {
+        Toolkit.getDefaultToolkit().removeAWTEventListener(hoverWatcher);
+        super.removeNotify();
     }
 
     public void addAssistantOverlay(LineupAssistantSelectorOverlay overlay) {
@@ -864,8 +930,7 @@ public class PlayerPositionPanel extends JPanel implements ItemListener, FocusLi
             final int kit = kitSize();
             final int kx = (getWidth() - kit) / 2;
             final Lineup lineup = HOVerwaltung.instance().getModel().getCurrentLineup();
-            final MatchRoleID position = lineup.getPositionById(positionId);
-            final String role = position != null ? MatchRoleID.getShortNameForPosition(position.getPosition()) : "";
+            final String role = getRoleName();
             final Player player = item != null ? item.getPlayer() : null;
             if (player == null) {
                 paintGhost(g, kx, kit, role);
@@ -890,7 +955,9 @@ public class PlayerPositionPanel extends JPanel implements ItemListener, FocusLi
         }
 
         private void paintGhost(Graphics2D g, int kx, int kit, String role) {
-            final Color faint = isOnPitch() ? Color.WHITE : ThemeManager.getColor(HOColorName.LABEL_FG);
+            // pitch and bench board are both green; on the bench the column head names the position
+            final Color faint = Color.WHITE;
+            final String label = isOnPitch() ? role : "+";
             g.setColor(alpha(faint, 36));
             g.fillOval(kx, 2, kit, kit);
             g.setColor(alpha(faint, 110));
@@ -899,8 +966,7 @@ public class PlayerPositionPanel extends JPanel implements ItemListener, FocusLi
             g.setFont(PitchStyle.display(fontSize()));
             final FontMetrics fm = g.getFontMetrics();
             g.setColor(alpha(faint, 190));
-            // extra substitutes are "Unbestimmt" and the like, longer than the circle
-            final String shown = fit(role, fm, kit - 2);
+            final String shown = fit(label, fm, kit - 2);
             g.drawString(shown, kx + (kit - fm.stringWidth(shown)) / 2, 2 + (kit + fm.getAscent()) / 2 - 1);
         }
 
