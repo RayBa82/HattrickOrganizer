@@ -327,7 +327,7 @@ public class LineupAssistantPanel extends ImagePanel implements Refreshable, Act
 			overlayOk.addActionListener(this);
 			overlayCancel = new JButton(TranslationFacility.tr("ls.button.cancel"));
 			overlayCancel.addActionListener(this);
-			final JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+			final JPanel buttons = new JPanel(new ButtonRow());
 			buttons.setOpaque(false);
 			buttons.add(overlayCancel);
 			buttons.add(overlayOk);
@@ -531,5 +531,80 @@ public class LineupAssistantPanel extends ImagePanel implements Refreshable, Act
 	@Override
 	public void refresh() {
 		reInit();
+	}
+
+	/**
+	 * Buttons side by side, right-aligned, or stacked full width once the panel is too narrow for
+	 * one row. Unlike a wrapping FlowLayout it reports the height it will really use.
+	 */
+	private static final class ButtonRow implements LayoutManager {
+		private static final int GAP = 6;
+
+		private static int rowWidth(Container parent) {
+			int width = 0;
+			for (Component c : parent.getComponents()) {
+				width += c.getPreferredSize().width + (width > 0 ? GAP : 0);
+			}
+			return width;
+		}
+
+		private static boolean stacked(Container parent) {
+			final Insets in = parent.getInsets();
+			return parent.getWidth() > 0 && parent.getWidth() - in.left - in.right < rowWidth(parent);
+		}
+
+		@Override
+		public void addLayoutComponent(String name, Component comp) {
+			// nothing to remember
+		}
+
+		@Override
+		public void removeLayoutComponent(Component comp) {
+			// nothing to remember
+		}
+
+		@Override
+		public Dimension preferredLayoutSize(Container parent) {
+			final Insets in = parent.getInsets();
+			final boolean stacked = stacked(parent);
+			int widest = 0;
+			int tallest = 0;
+			int stackHeight = -GAP;
+			for (Component c : parent.getComponents()) {
+				final Dimension d = c.getPreferredSize();
+				widest = Math.max(widest, d.width);
+				tallest = Math.max(tallest, d.height);
+				stackHeight += d.height + GAP;
+			}
+			final int width = stacked ? widest : rowWidth(parent);
+			final int height = stacked ? Math.max(0, stackHeight) : tallest;
+			return new Dimension(width + in.left + in.right, height + in.top + in.bottom);
+		}
+
+		@Override
+		public Dimension minimumLayoutSize(Container parent) {
+			return preferredLayoutSize(parent);
+		}
+
+		@Override
+		public void layoutContainer(Container parent) {
+			final Insets in = parent.getInsets();
+			final int inner = parent.getWidth() - in.left - in.right;
+			if (stacked(parent)) {
+				int y = in.top;
+				for (Component c : parent.getComponents()) {
+					final int h = c.getPreferredSize().height;
+					c.setBounds(in.left, y, inner, h);
+					y += h + GAP;
+				}
+			} else {
+				int x = in.left + inner - rowWidth(parent);
+				for (Component c : parent.getComponents()) {
+					final Dimension d = c.getPreferredSize();
+					c.setBounds(x, in.top, d.width, d.height);
+					x += d.width + GAP;
+				}
+			}
+		}
 	}
 }

@@ -68,6 +68,7 @@ public class LineupPositionsPanel extends JPanel implements core.gui.Refreshable
 	private PlayerPositionPanel m_clSetPieceTaker;
 	private javax.swing.JLayeredPane centerPanel;
 	private @org.jetbrains.annotations.Nullable Unfold sideCard;
+	private final JPanel leftStack = new JPanel();
 	private final SwapPositionsManager swapPositionsManager = new SwapPositionsManager(this);
 
 	private Weather m_weather;
@@ -347,23 +348,26 @@ public class LineupPositionsPanel extends JPanel implements core.gui.Refreshable
 		swapPositionsManager.addSwapCapabilityTo(m_clLeftForward);
 		m_clLineupPanel.addToAssistant(m_clLeftForward);
 
-		// Captain and setpieces left of the pitch. The right inset keeps them clear of the pitch's
+		// Captain and setpieces stacked at the top left of the pitch; a side card (the assistant's)
+		// unfolds above them and pushes them down. The right inset keeps them clear of the pitch's
 		// surround and widens this column, which moves the pitch to the right.
-		constraints.gridx = 0;
-		constraints.gridy = 1;
-		constraints.anchor = GridBagConstraints.SOUTH;
-		constraints.insets = new Insets(3, 3, 3, 40);
+		leftStack.setLayout(new BoxLayout(leftStack, BoxLayout.Y_AXIS));
+		leftStack.setOpaque(false);
 		m_clCaptain = new PlayerPositionPanel(this, IMatchRoleID.captain, null, false, matchMinute);
 		m_clCaptain.addCaptainIcon();
-		layout.setConstraints(m_clCaptain, constraints);
-		centerPanel.add(m_clCaptain);
-
-		constraints.gridy = 2;
-		constraints.anchor = GridBagConstraints.NORTH;
 		m_clSetPieceTaker = new PlayerPositionPanel(this, IMatchRoleID.setPieces, m_weather, m_useWeatherImpact, matchMinute);
 		m_clSetPieceTaker.addSetPiecesIcon();
-		layout.setConstraints(m_clSetPieceTaker, constraints);
-		centerPanel.add(m_clSetPieceTaker);
+		leftStack.add(m_clCaptain);
+		leftStack.add(Box.createVerticalStrut(6));
+		leftStack.add(m_clSetPieceTaker);
+		constraints.gridx = 0;
+		constraints.gridy = 0;
+		constraints.gridheight = 3;
+		constraints.anchor = GridBagConstraints.NORTH;
+		constraints.insets = new Insets(3, 3, 3, 40);
+		layout.setConstraints(leftStack, constraints);
+		centerPanel.add(leftStack);
+		constraints.gridheight = 1;
 		constraints.insets = new Insets(3, 3, 3, 3);
 
 		// Buttons to allocate team number to players currently on the line up; may reach onto the pitch
@@ -482,20 +486,14 @@ public class LineupPositionsPanel extends JPanel implements core.gui.Refreshable
 	 * pitch slides right to make space instead of jumping.
 	 */
 	public void showSideCard(JComponent card) {
-		if (sideCard != null) centerPanel.remove(sideCard);
 		// a card still folding away from the last time goes at once
-		for (Component each : centerPanel.getComponents()) {
-			if (each instanceof Unfold) centerPanel.remove(each);
+		for (Component each : leftStack.getComponents()) {
+			if (each instanceof Unfold) leftStack.remove(each);
 		}
 		// only as wide as the room to spare allows: the lineup must not outgrow its view
 		sideCard = new Unfold(card, this::repaint, () -> m_clCaptain.getPreferredSize().width
 				+ Math.max(0, centerPanel.getWidth() - centerPanel.getPreferredSize().width));
-		final GridBagConstraints constraints = new GridBagConstraints();
-		constraints.gridx = 0;
-		constraints.gridy = 0;
-		constraints.anchor = GridBagConstraints.NORTH;
-		constraints.insets = new Insets(3, 3, 3, 40);
-		centerPanel.add(sideCard, constraints);
+		leftStack.add(sideCard, 0);
 		sideCard.animate(true, 0, null);
 	}
 
@@ -504,14 +502,14 @@ public class LineupPositionsPanel extends JPanel implements core.gui.Refreshable
 		return Unfold.DURATION_MS;
 	}
 
-	/** Folds the side card away again after {@code delayMs}; the pitch slides back. */
+	/** Folds the side card away again after {@code delayMs}; captain and set pieces slide back up. */
 	public void hideSideCard(int delayMs) {
 		final Unfold closing = sideCard;
 		sideCard = null;
 		if (closing == null) return;
 		closing.animate(false, delayMs, () -> {
-			centerPanel.remove(closing);
-			centerPanel.revalidate();
+			leftStack.remove(closing);
+			leftStack.revalidate();
 			repaint();
 		});
 	}

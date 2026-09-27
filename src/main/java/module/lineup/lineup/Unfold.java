@@ -11,6 +11,7 @@ import java.awt.*;
 final class Unfold extends JComponent {
 
     static final int DURATION_MS = 280;
+    private static final int GAP_BELOW = 6;
 
     private final JComponent content;
     private final transient Runnable onFrame;
@@ -72,7 +73,14 @@ final class Unfold extends JComponent {
 
     @Override
     public Dimension getPreferredSize() {
-        return new Dimension(Math.round(natural.width * openness()), Math.round(natural.height * openness()));
+        // the gap below keeps the content off whatever follows it
+        return new Dimension(Math.round(natural.width * openness()), Math.round((natural.height + GAP_BELOW) * openness()));
+    }
+
+    /** Any width a stacking layout offers, but never taller than the room it asks for. */
+    @Override
+    public Dimension getMaximumSize() {
+        return new Dimension(Short.MAX_VALUE, getPreferredSize().height);
     }
 
     @Override
