@@ -94,8 +94,9 @@ public final class PlayerLabelEntry implements IHOTableCellEntry {
             m_clComponent.setBackground(isSelected ? HODefaultTableCellRenderer.SELECTION_BG : ColorLabelEntry.BG_STANDARD);
         }
 
-        if (TrainingPreviewPlayers.instance().getTrainPreviewPlayer(m_clPlayer).getText() != null) {
-            m_clComponent.setToolTipText(TrainingPreviewPlayers.instance().getTrainPreviewPlayer(m_clPlayer).getText());
+        final var trainPreview = TrainingPreviewPlayers.instance().getTrainPreviewPlayer(m_clPlayer);
+        if (trainPreview != null && trainPreview.getText() != null) {
+            m_clComponent.setToolTipText(trainPreview.getText());
         }
 
         m_jlName.setFont(isSelected ? m_jlName.getFont().deriveFont(Font.BOLD) : m_jlName.getFont().deriveFont(Font.PLAIN));
@@ -394,7 +395,8 @@ public final class PlayerLabelEntry implements IHOTableCellEntry {
             m_jlPositionWarning.setIcon(null);
         }
 
-        m_jlTrainUp.setIcon(TrainingPreviewPlayers.instance().getTrainPreviewPlayer(player).getIcon());
+        final var trainPreview = TrainingPreviewPlayers.instance().getTrainPreviewPlayer(player);
+        m_jlTrainUp.setIcon(trainPreview != null ? trainPreview.getIcon() : null);
 
         if (m_bMultiLine) {
             List.of(injuredLabel,

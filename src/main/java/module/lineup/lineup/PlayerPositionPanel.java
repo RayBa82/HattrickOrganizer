@@ -73,9 +73,33 @@ public class PlayerPositionPanel extends JPanel implements ItemListener, FocusLi
         }
 
         // BasicComboPopup sizes its list to getSize().width. A tile is narrower than a player row,
-        // so report a wider size to everyone but the combo's own layout.
+        // so report the widest row to everyone but the combo's own layout; measured as the popup opens.
         // ponytail: getSize() hack, a custom ComboPopup if another LAF computes the width differently
         private boolean layingOut;
+        private int popupWidth;
+
+        {
+            addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
+                @Override
+                public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) {
+                    final JList<PlayerCBItem> probe = new JList<>();
+                    int widest = UserParameter.instance().fontSize * 18;
+                    for (int i = 0; i < getItemCount(); i++) {
+                        widest = Math.max(widest, getRenderer().getListCellRendererComponent(probe, getItemAt(i), i, false, false).getPreferredSize().width);
+                    }
+                    // room for the popup's scroll bar and border
+                    popupWidth = widest + UIManager.getInt("ScrollBar.width") + 8;
+                }
+
+                @Override
+                public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent e) {
+                }
+
+                @Override
+                public void popupMenuCanceled(javax.swing.event.PopupMenuEvent e) {
+                }
+            });
+        }
 
         @Override
         public void doLayout() {
@@ -87,7 +111,7 @@ public class PlayerPositionPanel extends JPanel implements ItemListener, FocusLi
         @Override
         public Dimension getSize() {
             final Dimension size = super.getSize();
-            if (isTile() && !layingOut) size.width = Math.max(size.width, UserParameter.instance().fontSize * 18);
+            if (!layingOut) size.width = Math.max(size.width, popupWidth);
             return size;
         }
     };

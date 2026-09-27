@@ -6,6 +6,7 @@ import core.gui.comp.renderer.HODefaultTableCellRenderer;
 import core.gui.theme.HOColorName;
 import core.gui.theme.ThemeManager;
 import core.model.HOVerwaltung;
+import core.model.TranslationFacility;
 import core.model.UserParameter;
 import core.model.match.MatchLineupPosition;
 import core.model.player.Player;
@@ -58,13 +59,35 @@ public class PlayerCBItem implements Comparable<PlayerCBItem>, ComboItem {
             matchLineupPosition = lineup.getPositionByPlayerId(player.getPlayerId());
             m_clEntry.updateComponent(player, matchLineupPosition, getPositionsEvaluation(), m_bSetInBestPosition, m_sText);
             JComponent comp = m_clEntry.getComponent(isSelected, index==-1);
-            if (m_bMultiLine) comp.setPreferredSize(new Dimension(comp.getPreferredSize().width, PLAYER_COMBO_HEIGHT));
+            if (m_bMultiLine) {
+                comp.setBorder(rowBorder(index));
+                // reset first: a set preferred size would stick and freeze the first row's width
+                comp.setPreferredSize(null);
+                final Dimension size = comp.getPreferredSize();
+                size.height = Math.max(size.height, PLAYER_COMBO_HEIGHT);
+                comp.setPreferredSize(size);
+            }
             return comp;
         } else {
+            // in the open list the empty entry is how a position gets cleared, so say so
+            m_jlLeer.setText(index == -1 ? " " : "✕  " + TranslationFacility.tr("RemoveTempspieler"));
+            m_jlLeer.setBorder(m_bMultiLine ? rowBorder(index) : BorderFactory.createEmptyBorder(0, 6, 0, 6));
+            m_jlLeer.setPreferredSize(null);
+            if (m_bMultiLine && index != -1) {
+                m_jlLeer.setPreferredSize(new Dimension(m_jlLeer.getPreferredSize().width, PLAYER_COMBO_HEIGHT));
+            }
             m_jlLeer.setOpaque(true);
             m_jlLeer.setBackground(isSelected ? HODefaultTableCellRenderer.SELECTION_BG : ThemeManager.getColor(HOColorName.BACKGROUND_CONTAINER));
             return m_jlLeer;
         }
+    }
+
+    /** Open-list rows get some padding and a line underneath; the closed combo keeps none. */
+    private static javax.swing.border.Border rowBorder(int index) {
+        if (index == -1) return null;
+        return BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0, ThemeManager.getColor(HOColorName.PANEL_BORDER)),
+                BorderFactory.createEmptyBorder(4, 8, 4, 8));
     }
 
     public PlayerLabelEntry getEntry() {
