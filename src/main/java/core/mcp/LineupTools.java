@@ -162,10 +162,23 @@ public final class LineupTools {
                 "positions");
     }
 
-    /** A throwaway lineup built from a lineup spec. Never the live one. */
+    /**
+     * A throwaway lineup built from a lineup spec, team orders included since they move the
+     * ratings. Never the live one.
+     */
     static Lineup scratchLineup(JsonObject spec) throws McpToolException {
+        final var model = core.model.HOVerwaltung.instance().getModel();
+        final var club = model != null ? model.getClub() : null;
+        final var orders = LineupOrders.parseTeamOrders(spec, model,
+                club != null ? club.getTacticalAssistantLevels() : 0);
+        if (!McpJson.optBool(spec, "allowUnavailable", false)) {
+            LineupOrders.rejectUnavailable(null, orders, model);
+        }
         final var lineup = new Lineup();
         applySpec(lineup, spec);
+        if (orders != null) {
+            lineup.setSubstitionList(orders);
+        }
         return lineup;
     }
 

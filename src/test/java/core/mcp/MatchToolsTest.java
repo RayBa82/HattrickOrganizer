@@ -248,7 +248,7 @@ class MatchToolsTest {
         assertThat(properties.has("positions")).isTrue();
         assertThat(properties.has("tactic")).isTrue();
         assertThat(properties.has("allowUnavailable")).isTrue();
-        // apply_lineup's spec, so these are accepted - and reported back as ignored
+        // apply_lineup's spec: team orders are scored, penalty takers reported back as ignored
         assertThat(properties.keySet()).contains("penaltyTakers", "teamOrders");
         // the opponent half, as predict_match took it
         assertThat(properties.keySet()).contains("opponentMidfield", "opponentDefenceLeft",
@@ -272,6 +272,18 @@ class MatchToolsTest {
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> tool("simulate_lineup").handler().call(args))
                 .withMessageContaining("opponentAttackRight");
+    }
+
+    /** Without positions the live lineup is scored, orders and all; extra orders cannot apply. */
+    @Test
+    void simulateLineup_refusesTeamOrdersWithoutPositions() {
+        final var args = JsonParser.parseString("""
+                {"teamOrders":[{"type":"behaviour","minute":60,"playerOut":1,"behaviour":1}]}
+                """).getAsJsonObject();
+
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> tool("simulate_lineup").handler().call(args))
+                .withMessageContaining("teamOrders need positions");
     }
 
     @Test

@@ -106,8 +106,8 @@ public final class MatchTools {
                                 + "all seven opponent sector ratings (copy them from "
                                 + "scout_opponent's ratings) for a Monte Carlo win/draw/loss forecast; "
                                 + "omit them for sector ratings alone. Weather is the next match's "
-                                + "stored forecast unless matchId or weather says otherwise (both need "
-                                + "positions). Nothing in HO changes, so call it in a loop.",
+                                + "stored forecast unless matchId or weather says otherwise. These "
+                                + "and teamOrders (scored) need positions. Changes nothing in HO.",
                         McpTool.schema(
                                 opponentProperties(LineupTools.lineupSchema().getAsJsonObject("properties"))),
                         MatchTools::simulateLineup),
@@ -829,14 +829,11 @@ public final class MatchTools {
 
     private static JsonObject simulateLineup(JsonObject args) throws McpToolException {
         final var result = scoreLineup(args);
-        // The spec is apply_lineup's, but penalties and team orders do not move a rating.
-        final var ignored = new JsonArray();
-        for (final var field : List.of(LineupOrders.PENALTY_TAKERS, LineupOrders.TEAM_ORDERS)) {
-            if (args.has(field)) {
-                ignored.add(field);
-            }
-        }
-        if (!ignored.isEmpty()) {
+        // The spec is apply_lineup's, but penalty takers do not move a rating. Team orders do,
+        // and scratchLineup applies them.
+        if (args.has(LineupOrders.PENALTY_TAKERS)) {
+            final var ignored = new JsonArray();
+            ignored.add(LineupOrders.PENALTY_TAKERS);
             result.add("ignored", ignored);
         }
         return result;
@@ -855,10 +852,12 @@ public final class MatchTools {
                     + "exactly these names.");
         }
 
-        if (!args.has("positions") && (args.has("weather") || args.has("matchId"))) {
-            throw new IllegalArgumentException("weather and matchId need positions: without them "
-                    + "HO's live lineup is scored, and a simulation never changes it. Copy the "
-                    + "positions from get_lineup.");
+        if (!args.has("positions") && (args.has("weather") || args.has("matchId")
+                || args.has(LineupOrders.TEAM_ORDERS))) {
+            throw new IllegalArgumentException("weather, matchId and teamOrders need positions: "
+                    + "without them HO's live lineup is scored as it is (its own team orders "
+                    + "included), and a simulation never changes it. Copy the positions from "
+                    + "get_lineup.");
         }
         final var lineup = args.has("positions")
                 ? LineupTools.scratchLineup(args)

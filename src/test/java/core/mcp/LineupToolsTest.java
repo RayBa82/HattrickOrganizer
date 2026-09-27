@@ -71,6 +71,20 @@ class LineupToolsTest {
         assertThat(lineup.getKicker()).isEqualTo(22);
     }
 
+    /** Team orders move the ratings, so the scratch lineup simulate_lineup scores carries them. */
+    @Test
+    void scratchLineup_carriesTheTeamOrders() throws McpToolException {
+        final var lineup = LineupTools.scratchLineup(JsonParser.parseString("""
+                {"positions":[{"roleId":100,"playerId":11},{"roleId":113,"playerId":22}],
+                 "bench":[{"roleId":204,"playerId":33}],
+                 "teamOrders":[{"type":"substitution","minute":60,"playerOut":22,"playerIn":33}]}""")
+                .getAsJsonObject());
+
+        assertThat(lineup.getSubstitutionList()).hasSize(1);
+        assertThat(lineup.getFieldPlayers(59)).extracting(p -> p.getPlayerId()).contains(22).doesNotContain(33);
+        assertThat(lineup.getFieldPlayers(60)).extracting(p -> p.getPlayerId()).contains(33).doesNotContain(22);
+    }
+
     @Test
     void scratchLineup_scoresUnderTheGivenWeatherAndRejectsAnUnknownOne() throws McpToolException {
         final var sunny = LineupTools.scratchLineup(JsonParser.parseString("""
