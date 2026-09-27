@@ -154,7 +154,8 @@ class TeamToolsTest {
 
         assertThat(tool.inputSchema().getAsJsonArray("required")).isEmpty();
         assertThat(tool.inputSchema().getAsJsonObject("properties").keySet())
-                .containsExactlyInAnyOrder("homeMatches", "sizeArena", "supporters", "capacity");
+                .containsExactlyInAnyOrder("homeMatches", "sizeArena", "supporters", "capacity",
+                        "forecastWeeks");
     }
 
     @Test

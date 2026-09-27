@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import core.constants.player.PlayerSkill;
 import core.db.DBManager;
+import core.model.enums.MatchType;
 import core.model.misc.Economy;
 import core.model.player.IMatchRoleID;
 import core.model.player.MatchRoleID;
@@ -116,8 +117,8 @@ public final class TeamTools {
                                 + "fan club, the staff levels that drive the cost line, and the "
                                 + "stadium with its recent home attendance and utilisation. Pass "
                                 + "sizeArena to add HO's arena sizer - what to build, and what it "
-                                + "costs to build and to keep. Amounts are in the currency field's "
-                                + "currency.",
+                                + "costs to build and to keep. forecastWeeks projects cash week by "
+                                + "week. Amounts are in the currency field's currency.",
                         McpTool.schema(McpTool.properties(
                                 "homeMatches", McpTool.prop("integer",
                                         "how many recent home matches to read the attendance of, "
@@ -133,7 +134,15 @@ public final class TeamTools {
                                                 + "one; implies sizeArena"),
                                 "capacity", McpTool.prop("integer",
                                         "price this exact total capacity instead of the three "
-                                                + "scenarios; implies sizeArena"))),
+                                                + "scenarios; implies sizeArena"),
+                                "forecastWeeks", McpTool.prop("integer",
+                                        "add a cash projection for this many weeks after the "
+                                                + "next economy update, 1-" + FinanceForecast.MAX_WEEKS
+                                                + ": sponsors, wages, staff, youth and arena "
+                                                + "upkeep (after the expansion from its date), "
+                                                + "plus a gate for each upcoming home league match "
+                                                + "at recent league attendance. Conservative: cup "
+                                                + "and friendly gates are not counted"))),
                         TeamTools::finances),
                 new McpTool("download_team",
                         "Runs HO's own Download and rewrites the local database - squad, finances, "
@@ -640,7 +649,78 @@ public final class TeamTools {
                         model.getClub() == null ? 0 : model.getClub().getFans(), args));
             }
         }
+        final var forecastWeeks = McpJson.optInteger(args, "forecastWeeks");
+        if (forecastWeeks != null) {
+            if (forecastWeeks < 1 || forecastWeeks > FinanceForecast.MAX_WEEKS) {
+                throw new IllegalArgumentException("forecastWeeks is 1-" + FinanceForecast.MAX_WEEKS
+                        + " (a season), not " + forecastWeeks + ".");
+            }
+            json.add("forecast", FinanceForecast.forecast(forecastInputs(model, economy), forecastWeeks));
+        }
         return json;
+    }
+
+    private static FinanceForecast.Inputs forecastInputs(core.model.HOModel model, Economy economy) {
+        final var teamId = model.getBasics().getTeamId();
+        final var stadium = model.getStadium();
+        final var fixtures = new java.util.ArrayList<FinanceForecast.Fixture>();
+        for (final var match : DBManager.instance().getMatchesKurzInfo(teamId, MatchKurzInfo.UPCOMING)) {
+            if (match.getMatchSchedule() != null) {
+                fixtures.add(new FinanceForecast.Fixture(match.getMatchSchedule(), match.isHomeMatch(),
+                        match.getMatchType() == MatchType.LEAGUE));
+            }
+        }
+        // A recurring line can be 0 in one of the two weeks (staff this week, youth last week), so
+        // the higher of the two is the week to plan for.
+        return new FinanceForecast.Inputs(
+                money(economy.getExpectedCash()),
+                Math.max(money(economy.getIncomeSponsors()) + money(economy.getIncomeSponsorsBonus()),
+                        money(economy.getLastIncomeSponsors()) + money(economy.getLastIncomeSponsorsBonus())),
+                Math.max(money(economy.getCostsPlayers()), money(economy.getLastCostsPlayers())),
+                Math.max(money(economy.getCostsStaff()), money(economy.getLastCostsStaff())),
+                Math.max(money(economy.getCostsYouth()), money(economy.getLastCostsYouth())),
+                stadium == null ? money(economy.getCostsArena()) : money(ArenaMaintenance.calculateCosts(stadium)),
+                stadium == null ? money(economy.getCostsArena()) : money(maintenanceAfterExpansion(stadium)),
+                stadium == null ? null : stadium.getExpansionDate(),
+                homeLeagueGate(teamId, DEFAULT_HOME_MATCHES),
+                fixtures,
+                HODateTime.now());
+    }
+
+    private static AmountOfMoney maintenanceAfterExpansion(Stadium stadium) {
+        return ArenaMaintenance.calculateCosts(
+                stadium.getFutureTerraces().orElse(stadium.getTerraces()),
+                stadium.getFutureBasicSeating().orElse(stadium.getBasicSeating()),
+                stadium.getFutureUnderRoofSeating().orElse(stadium.getUnderRoofSeating()),
+                stadium.getFutureVipBoxes().orElse(stadium.getVipBox()));
+    }
+
+    /**
+     * The gate of an average recent home league match: the seats it sold per stand at HO's
+     * admission prices. Cup and friendly crowds are left out - they are smaller and not what
+     * pays the bills every other week.
+     */
+    private static long homeLeagueGate(int teamId, int matches) {
+        long sum = 0;
+        var counted = 0;
+        for (final var info : DBManager.instance().getOwnPlayedMatchInfo(matches * 4, true)) {
+            if (counted >= matches) {
+                break;
+            }
+            if (info.getHomeTeamID() != teamId || info.getMatchType() != MatchType.LEAGUE) {
+                continue;
+            }
+            final var details = DBManager.instance()
+                    .loadMatchDetails(info.getMatchType().getId(), info.getMatchID());
+            if (details == null || details.getSoldTerraces() + details.getSoldBasic()
+                    + details.getSoldRoof() + details.getSoldVIP() <= 0) {
+                continue;
+            }
+            sum += money(ArenaAdmission.calculateIncome(details.getSoldTerraces(),
+                    details.getSoldBasic(), details.getSoldRoof(), details.getSoldVIP()));
+            counted++;
+        }
+        return counted == 0 ? 0 : sum / counted;
     }
 
     private static JsonObject thisWeek(Economy economy) {
@@ -699,6 +779,20 @@ public final class TeamTools {
         stadium.getTotalSizeUnderConstruction()
                 .ifPresent(size -> json.addProperty("capacityUnderConstruction", size));
         stadium.getFutureTotalSize().ifPresent(size -> json.addProperty("futureCapacity", size));
+        if (stadium.getTotalSizeUnderConstruction().isPresent()) {
+            // Which stands are growing decides the new upkeep: a VIP box costs five terraces.
+            final var building = new JsonObject();
+            building.addProperty("terraces", stadium.getTerracesUnderConstruction());
+            building.addProperty("basicSeating", stadium.getBasicSeatingUnderConstruction());
+            building.addProperty("underRoofSeating", stadium.getUnderRoofSeatingUnderConstruction());
+            building.addProperty("vipBoxes", stadium.getVipBoxUnderConstruction());
+            json.add("underConstruction", building);
+            if (stadium.getExpansionDate() != null) {
+                json.addProperty("expansionDate", stadium.getExpansionDate().toHT());
+            }
+            json.addProperty("weeklyMaintenanceAfterExpansion", money(maintenanceAfterExpansion(stadium)));
+        }
+        json.addProperty("weeklyMaintenance", money(ArenaMaintenance.calculateCosts(stadium)));
         if (stadium.getExpansionCostsInSwedishKrona() != null) {
             json.addProperty("expansionCosts",
                     money(new AmountOfMoney(stadium.getExpansionCostsInSwedishKrona())));
