@@ -46,7 +46,9 @@ public final class LineupTools {
         return List.of(
                 new McpTool("get_lineup",
                         "The lineup currently set in HO, with its sector ratings and formation, "
-                                + "penalty takers (with strength) and team orders. "
+                                + "penalty takers (with strength) and team orders. Ratings average "
+                                + "90 minutes with every team order firing at its minute; standing "
+                                + "and red-card conditions are not modelled. "
                                 + "assumptions.weather is the weather they were scored under. "
                                 + "simulate_lineup scores a hypothetical one instead.",
                         McpTool.schema(new JsonObject()),

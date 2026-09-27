@@ -248,6 +248,8 @@ class MatchToolsTest {
         assertThat(properties.has("positions")).isTrue();
         assertThat(properties.has("tactic")).isTrue();
         assertThat(properties.has("allowUnavailable")).isTrue();
+        // apply_lineup's spec, so these are accepted - and reported back as ignored
+        assertThat(properties.keySet()).contains("penaltyTakers", "teamOrders");
         // the opponent half, as predict_match took it
         assertThat(properties.keySet()).contains("opponentMidfield", "opponentDefenceLeft",
                 "opponentDefenceCentral", "opponentDefenceRight", "opponentAttackLeft",
