@@ -125,30 +125,22 @@ public final class TransferTools {
                                         "return every tracked transfer, not just your open bids; "
                                                 + "default false"))),
                         TransferTools::openBids),
-                new McpTool("add_to_scout",
-                        "Put players on HO's OWN local shortlist (the Transfers -> TransferScout "
-                                + "tab) - not a Hattrick bookmark; get_open_bids reads Hattrick's "
-                                + "separate list. Each player must have been seen by an earlier "
-                                + "search_transfers. Adding one already listed replaces his entry. "
-                                + "One CHPP call per player for character traits, echoed back per "
-                                + "player (same shape as list_scout) - no read-back call needed.",
+                new McpTool("manage_scout",
+                        "Edit HO's OWN local shortlist (Transfers -> TransferScout tab), not a "
+                                + "Hattrick bookmark. action=add: each player must have been seen "
+                                + "by an earlier search_transfers; re-adding replaces the entry; one "
+                                + "CHPP call per player for character, echoed back in list_scout's "
+                                + "shape. action=remove: also stops the re-listing watch each entry "
+                                + "costs on every team download. list_scout reads it.",
                         McpTool.schema(McpTool.properties(
+                                        "action", McpTool.prop("string", "add or remove"),
                                         "players", McpTool.prop("array",
-                                                "the players to add, either bare player ids or "
-                                                        + "{playerId, note} objects; the note is "
-                                                        + "free text kept in the scout entry's "
-                                                        + "notes column, e.g. why he is a target")),
-                                "players"),
-                        TransferTools::addToScout),
-                new McpTool("remove_from_scout",
-                        "Take players off HO's local scout shortlist. This also stops the "
-                                + "re-listing watch each entry costs on every team download, which "
-                                + "is the reason to prune a list grown past what is actually being "
-                                + "tracked.",
-                        McpTool.schema(McpTool.properties(
-                                        "playerIds", McpTool.prop("array", "the player ids to remove")),
-                                "playerIds"),
-                        TransferTools::removeFromScout),
+                                                "bare player ids, or for add {playerId, note} "
+                                                        + "objects; the note is free text kept in "
+                                                        + "the entry's notes column, e.g. why he "
+                                                        + "is a target")),
+                                "action", "players"),
+                        TransferTools::manageScout),
                 new McpTool("list_scout",
                         "Read back HO's local scout shortlist, filtered, one page (count = the "
                                 + "filtered total). Rows: playerId, playerName, note, age, specialty, "
@@ -200,7 +192,7 @@ public final class TransferTools {
                                                         + "playerId or profile, not both. Also "
                                                         + "optional: playerId (this player's real "
                                                         + "Hattrick id, e.g. from get_team_transfers "
-                                                        + "or scout_opponent - bookkeeping only, "
+                                                        + "or analyze_opponent - bookkeeping only, "
                                                         + "never used to look him up in the squad) "
                                                         + "and salePrice - given both, this profile "
                                                         + "is recorded into HO's local transfer-"
@@ -245,19 +237,17 @@ public final class TransferTools {
                                                         + "ordinal placeholders; weather is not modelled."),
                                         "observedWithinDays", McpTool.prop("integer",
                                                 "ignore listings older than this many days, default "
-                                                        + DEFAULT_CORPUS_DAYS + " (one Hattrick season)"))),
-                        TransferTools::estimateMarketValue),
-                new McpTool("market_corpus_stats",
-                        "How much stored market data estimate_market_value has to work with: "
-                                + "listings (one player's spell on the market) by outcome - sold, "
-                                + "open, noSaleFound, awaitingResolve - plus oldest/newest "
-                                + "observation, and for the window: counts by age, position group "
-                                + "and specialty id, each with how many sold. Local read, free.",
-                        McpTool.schema(McpTool.properties(
-                                "observedWithinDays", McpTool.prop("integer",
-                                        "the window, as in estimate_market_value; default "
-                                                + DEFAULT_CORPUS_DAYS))),
-                        TransferTools::marketCorpusStats)
+                                                        + DEFAULT_CORPUS_DAYS + " (one Hattrick season)"),
+                                        "includeCorpus", McpTool.prop("boolean",
+                                                "add corpus: how much stored market data there is - "
+                                                        + "listings by outcome (sold, open, "
+                                                        + "noSaleFound, awaitingResolve), oldest/newest "
+                                                        + "observation, and for the window counts by "
+                                                        + "age, position group and specialty id with "
+                                                        + "how many sold. Local and free; alone, without "
+                                                        + "playerId or profile, it returns only corpus. "
+                                                        + "Default false"))),
+                        TransferTools::estimateMarketValue)
         );
     }
 
@@ -776,6 +766,17 @@ public final class TransferTools {
     }
 
     static JsonObject estimateMarketValue(JsonObject args) throws McpToolException {
+        final var withCorpus = McpJson.optBool(args, "includeCorpus", false);
+        final var hasPlayer = args.has("playerId") && !args.get("playerId").isJsonNull()
+                || args.has("profile") && !args.get("profile").isJsonNull();
+        final var json = withCorpus && !hasPlayer ? new JsonObject() : valuation(args);
+        if (withCorpus) {
+            json.add("corpus", marketCorpusStats(args));
+        }
+        return json;
+    }
+
+    private static JsonObject valuation(JsonObject args) throws McpToolException {
         final var hasPlayerId = args.has("playerId") && !args.get("playerId").isJsonNull();
         final var hasProfile = args.has("profile") && !args.get("profile").isJsonNull();
         if (!hasPlayerId && !hasProfile) {
@@ -1416,6 +1417,14 @@ public final class TransferTools {
         }
     }
 
+    private static JsonObject manageScout(JsonObject args) throws McpToolException {
+        return switch (McpJson.reqString(args, "action")) {
+            case "add" -> addToScout(args);
+            case "remove" -> removeFromScout(args);
+            default -> throw new IllegalArgumentException("action must be add or remove.");
+        };
+    }
+
     private static JsonObject addToScout(JsonObject args) throws McpToolException {
         final var requested = McpJson.reqArray(args, "players");
         if (requested.isEmpty()) {
@@ -1461,7 +1470,7 @@ public final class TransferTools {
 
             // Full entry, not just the id: observeForScout already paid for the character fields
             // (and everything else scoutEntry reads off entry), so echo them back instead of
-            // making the caller round-trip through list_scout to read what add_to_scout just fetched.
+            // making the caller round-trip through list_scout to read what manage_scout add just fetched.
             final var added = new JsonArray();
             for (final var entry : entries.values()) {
                 added.add(McpJson.scoutEntry(entry));
@@ -1491,12 +1500,13 @@ public final class TransferTools {
      * TRANSFERLISTING and keep feeding {@code estimate_market_value}; only the watch goes.
      */
     private static JsonObject removeFromScout(JsonObject args) throws McpToolException {
-        final var requested = McpJson.reqArray(args, "playerIds");
+        final var requested = McpJson.reqArray(args, "players");
         if (requested.isEmpty()) {
-            throw new IllegalArgumentException("playerIds is empty - pass at least one player id.");
+            throw new IllegalArgumentException("players is empty - pass at least one player id.");
         }
         final var wanted = new java.util.LinkedHashSet<Integer>();
-        requested.forEach(e -> wanted.add(e.getAsInt()));
+        requested.forEach(e -> wanted.add(e.isJsonObject()
+                ? e.getAsJsonObject().get("playerId").getAsInt() : e.getAsInt()));
 
         return LineupTools.onEdt(() -> {
             final var tabOpen = ScoutList.isLive();
@@ -1558,7 +1568,7 @@ public final class TransferTools {
         // apart - read them back off the EDT, where the database reads belong. Missing for an entry
         // typed into the TransferScout tab by hand.
         //
-        // This is the NEWEST observation of the player, not necessarily the one add_to_scout built
+        // This is the NEWEST observation of the player, not necessarily the one manage_scout add built
         // the entry from: a later search_transfers over the same profile stores a fresher row, and a
         // re-listed player's newest row belongs to a different transfer altogether. Fresher is the
         // better number, but it is no longer the same instant as the frozen price and deadline

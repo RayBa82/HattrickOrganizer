@@ -427,8 +427,8 @@ class TransferToolsTest {
     void tools_areTheTransferTools() {
         assertThat(TransferTools.tools()).extracting(McpTool::name)
                 .containsExactly("search_transfers", "get_team_transfers",
-                        "get_player_transfer_history", "place_bid", "get_open_bids", "add_to_scout",
-                        "remove_from_scout", "list_scout", "estimate_market_value", "market_corpus_stats");
+                        "get_player_transfer_history", "place_bid", "get_open_bids", "manage_scout",
+                        "list_scout", "estimate_market_value");
     }
 
     @Test
@@ -847,18 +847,35 @@ class TransferToolsTest {
     }
 
     @Test
-    void removeFromScout_requiresPlayerIdsAndRejectsAnEmptyList() {
-        final var tool = TransferTools.tools().stream()
-                .filter(t -> t.name().equals("remove_from_scout")).findFirst().orElseThrow();
+    void manageScout_requiresActionAndPlayersAndRejectsAnEmptyRemove() {
+        final var tool = tool("manage_scout");
 
         assertThat(tool.inputSchema().getAsJsonArray("required"))
                 .extracting(com.google.gson.JsonElement::getAsString)
-                .containsExactly("playerIds");
+                .containsExactly("action", "players");
 
-        final var empty = JsonParser.parseString("{\"playerIds\":[]}").getAsJsonObject();
+        final var handler = tool.handler();
+        final var empty = JsonParser.parseString("{\"action\":\"remove\",\"players\":[]}")
+                .getAsJsonObject();
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> tool.handler().call(empty))
+                .isThrownBy(() -> handler.call(empty))
                 .withMessageContaining("at least one player id");
+
+        final var unknown = JsonParser.parseString("{\"action\":\"list\",\"players\":[1]}")
+                .getAsJsonObject();
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> handler.call(unknown))
+                .withMessageContaining("add or remove");
+    }
+
+    @Test
+    void estimateMarketValue_includeCorpusAloneReturnsOnlyTheCorpus() throws Exception {
+        final var args = JsonParser.parseString("{\"includeCorpus\":true}").getAsJsonObject();
+
+        final var result = TransferTools.estimateMarketValue(args);
+
+        assertThat(result.keySet()).containsExactly("corpus");
+        assertThat(result.getAsJsonObject("corpus").has("listings")).isTrue();
     }
 
     private static McpTool openBidsTool() {

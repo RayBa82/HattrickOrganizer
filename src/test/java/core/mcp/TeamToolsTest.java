@@ -24,30 +24,26 @@ class TeamToolsTest {
     @Test
     void tools_areTheReadToolsPlusTheDownload() {
         assertThat(TeamTools.tools()).extracting(McpTool::name)
-                .containsExactly("get_team", "get_squad", "scout_opponent", "get_series",
-                        "get_bookmarks", "get_finances", "download_team");
+                .containsExactly("get_team", "get_squad", "analyze_opponent", "get_series",
+                        "get_finances", "download_team");
     }
 
     @Test
-    void bookmarksJson_namesTheTypeAndKeepsTheIds() {
-        final var xml = """
-                <HattrickData><BookmarkList>
-                <Bookmark><BookmarkID>1</BookmarkID><BookmarkTypeID>1</BookmarkTypeID><Text>FC Foo</Text>
-                <Text2>bob</Text2><ObjectID>123</ObjectID><ObjectID2></ObjectID2><ObjectID3></ObjectID3>
-                <Comment>friendly partner</Comment></Bookmark>
-                <Bookmark><BookmarkID>y2</BookmarkID><BookmarkTypeID>7</BookmarkTypeID><Text>Kid</Text>
-                <Text2></Text2><ObjectID>456</ObjectID><ObjectID2></ObjectID2><ObjectID3></ObjectID3>
-                <Comment></Comment></Bookmark>
-                </BookmarkList></HattrickData>""";
-        final var rows = TeamTools.bookmarksJson(core.file.xml.XMLBookmarksParser.parse(xml))
-                .getAsJsonArray("bookmarks");
-        assertThat(rows).hasSize(2);
-        final var team = rows.get(0).getAsJsonObject();
-        assertThat(team.get("type").getAsString()).isEqualTo("team");
-        assertThat(team.get("text").getAsString()).isEqualTo("FC Foo");
-        assertThat(team.get("objectId").getAsString()).isEqualTo("123");
-        assertThat(team.get("comment").getAsString()).isEqualTo("friendly partner");
-        assertThat(rows.get(1).getAsJsonObject().get("type").getAsString()).isEqualTo("youthPlayer");
+    void fixtureRow_carriesTheStoredForecastOnlyForOurOwnUpcomingMatch() {
+        final var pairing = new core.model.series.Paarung();
+        pairing.setMatchId(77);
+        pairing.setHeimId(1);
+        pairing.setGastId(600);
+        final var own = upcoming(77, core.model.enums.MatchType.LEAGUE, "2026-10-10 18:00:00", 1, 600);
+
+        final var ours = TeamTools.fixtureRow(pairing, own);
+        assertThat(ours.get("weather").getAsString()).isEqualTo(own.getWeather().name());
+        assertThat(ours.get("weatherForecast").getAsString())
+                .isEqualTo(own.getWeatherForecast().name());
+
+        final var someoneElses = TeamTools.fixtureRow(pairing, null);
+        assertThat(someoneElses.has("weather")).isFalse();
+        assertThat(someoneElses.get("matchId").getAsInt()).isEqualTo(77);
     }
 
     private static core.model.match.MatchKurzInfo upcoming(int id, core.model.enums.MatchType type,
@@ -118,10 +114,10 @@ class TeamToolsTest {
                 .filter(t -> t.name().equals("get_squad")).findFirst().orElseThrow();
         assertThat(squad.inputSchema().getAsJsonArray("required")).isEmpty();
         assertThat(squad.inputSchema().getAsJsonObject("properties").keySet())
-                .containsExactlyInAnyOrder("playerIds", "includeTransfers");
+                .containsExactly("playerIds");
 
         final var scout = TeamTools.tools().stream()
-                .filter(t -> t.name().equals("scout_opponent")).findFirst().orElseThrow();
+                .filter(t -> t.name().equals("analyze_opponent")).findFirst().orElseThrow();
         assertThat(scout.inputSchema().getAsJsonArray("required"))
                 .extracting(element -> element.getAsString())
                 .containsExactly("teamId");
@@ -131,7 +127,7 @@ class TeamToolsTest {
     @Test
     void scoutOpponent_rejectsAnUnknownIncludeBeforeAnyRequest() {
         final var scout = TeamTools.tools().stream()
-                .filter(t -> t.name().equals("scout_opponent")).findFirst().orElseThrow();
+                .filter(t -> t.name().equals("analyze_opponent")).findFirst().orElseThrow();
         final var args = com.google.gson.JsonParser.parseString(
                 "{\"teamId\":1,\"include\":[\"lineup\"]}").getAsJsonObject();
         org.assertj.core.api.Assertions.assertThatExceptionOfType(IllegalArgumentException.class)

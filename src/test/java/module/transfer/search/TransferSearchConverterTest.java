@@ -89,7 +89,7 @@ class TransferSearchConverterTest {
         assertThat(entry.getAlter()).isEqualTo(17);
     }
 
-    // --- from a stored listing, the path add_to_scout takes -----------------------------------
+    // --- from a stored listing, the path manage_scout add takes -----------------------------------
 
     @Test
     void toScoutEintrag_ofAListing_copiesTheMarketDataAndSkills() {

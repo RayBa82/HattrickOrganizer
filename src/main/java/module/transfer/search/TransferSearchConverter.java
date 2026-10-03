@@ -55,7 +55,7 @@ public final class TransferSearchConverter {
     }
 
     /**
-     * The scout entry of a stored market observation, as {@code add_to_scout} pushes it into the
+     * The scout entry of a stored market observation, as {@code manage_scout} add pushes it into the
      * transfer scout. A listing that carries no age was snapshotted after its deadline had passed
      * (or came from {@code currentbids}), and keeps the defaults of a fresh {@link ScoutEintrag}.
      * Nationality is not part of a listing snapshot and stays at its default.

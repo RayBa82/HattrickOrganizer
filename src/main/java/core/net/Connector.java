@@ -394,11 +394,6 @@ public class Connector {
 		return getCHPPWebFile(challengesUrl(actionType, params));
 	}
 
-    /** The user's Hattrick bookmarks, all types (file=bookmarks, version 1.0). */
-    public String getBookmarks() {
-        return getCHPPWebFile(htUrl + "?file=bookmarks&version=1.0");
-    }
-
     /** Hattrick's own skill-change record for one player (file=trainingevents, version 1.3). */
 	public String getTrainingEvents(int playerId) {
 		return getCHPPWebFile(htUrl + "?file=trainingevents&version=1.3&playerID=" + playerId);

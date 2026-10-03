@@ -332,25 +332,7 @@ public class ChppWriteService {
         }
     }
 
-    // ===================== bookmarks / player transfers =====================
-
-    /** A read, like {@link #trainingEventsForAgent}. */
-    public List<core.file.xml.XMLBookmarksParser.Bookmark> bookmarksForAgent() throws ChppWriteException {
-        final var xml = fetchBookmarks();
-        if (xml == null || xml.isBlank()) {
-            throw new ChppWriteException(null, "Hattrick rejected the bookmarks: " + reason());
-        }
-        return core.file.xml.XMLBookmarksParser.parse(xml);
-    }
-
-    protected String fetchBookmarks() {
-        final var was = Connector.instance().setSilentDownload(true);
-        try {
-            return Connector.instance().getBookmarks();
-        } finally {
-            Connector.instance().setSilentDownload(was);
-        }
-    }
+    // ===================== player transfers =====================
 
     /** A read, like {@link #trainingEventsForAgent}. */
     public List<module.transfer.PlayerTransfer> playerTransfersForAgent(int playerId) throws ChppWriteException {

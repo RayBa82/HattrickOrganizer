@@ -15,7 +15,7 @@ and the data types are captured under [`raw/chpp/`](raw/chpp/README.md), one fil
 | alliances              | Alliance / Federation search                                                                | 1.4 (2013-03-04)         | -            |
 | alliancedetails        | Alliance / Federation information                                                           | 1.5 (2013-03-04)         | -            |
 | avatars                | Avatars for all players of user's team                                                      | 1.1 (2013-01-08)         | 1.1          |
-| bookmarks              | User bookmarks                                                                              | 1.0                      | 1.0          |
+| bookmarks              | User bookmarks                                                                              | 1.0                      | -            |
 | challenges             | Challenges                                                                                  | 1.6 (2016-10-27)         | 1.6          |
 | club                   | Information about specialists and youth                                                     | 1.5 (2015-09-22)         | 1.5          |
 | cupmatches             | Information about cup matches                                                               | 1.4 (2011-06-03)         | -            |

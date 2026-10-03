@@ -290,7 +290,7 @@ public final class McpJson {
         json.addProperty("form", entry.getForm());
         json.addProperty("experience", entry.getErfahrung());
         json.addProperty("leadership", entry.getLeadership());
-        // Character, 0-5 each, from the playerdetails fetch add_to_scout makes. All three null when
+        // Character, 0-5 each, from the playerdetails fetch manage_scout add makes. All three null when
         // nobody has looked: the honesty column is the one that only this fetch ever writes, so it
         // is what says whether the older, always-present agreeability column holds an observation
         // or its 0 default - and 0 is "nasty fellow", a claim we would not be entitled to make.

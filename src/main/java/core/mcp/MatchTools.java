@@ -104,7 +104,7 @@ public final class MatchTools {
                 new McpTool("simulate_lineup",
                         "Score a lineup. Omit positions to score the one HO currently holds. Supply "
                                 + "all seven opponent sector ratings (copy them from "
-                                + "scout_opponent's ratings) for a Monte Carlo win/draw/loss forecast; "
+                                + "analyze_opponent's ratings) for a Monte Carlo win/draw/loss forecast; "
                                 + "omit them for sector ratings alone. Weather is the next match's "
                                 + "stored forecast unless matchId or weather says otherwise. These "
                                 + "and teamOrders (scored) need positions. Changes nothing in HO.",
@@ -642,7 +642,7 @@ public final class MatchTools {
 
 
     /**
-     * scout_opponent's ratings half: what a team - any team, not just one we have played - earned in its
+     * analyze_opponent's ratings half: what a team - any team, not just one we have played - earned in its
      * recent matches, averaged into the arguments simulate_lineup asks for.
      */
     static JsonObject opponentRatings(JsonObject args) throws McpToolException {
@@ -848,7 +848,7 @@ public final class MatchTools {
         if (!missing.isEmpty() && missing.size() < OPPONENT_SECTORS.length) {
             throw new IllegalArgumentException("All seven opponent sector ratings are needed to "
                     + "simulate, or none of them to score the lineup on its own. Missing: "
-                    + String.join(", ", missing) + ". scout_opponent's ratings holds all seven under "
+                    + String.join(", ", missing) + ". analyze_opponent's ratings holds all seven under "
                     + "exactly these names.");
         }
 

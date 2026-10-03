@@ -1530,11 +1530,11 @@ public class OnlineWorker {
 	 * <p>
 	 * Silent: both callers ({@code TransferListingResolver.observe}, backing the sale/character/
 	 * skill-fill passes and {@code backfill_character}; {@code TransferTools.observeForScout},
-	 * backing {@code add_to_scout}) already treat a failed lookup as best-effort - logged and
+	 * backing {@code manage_scout} add) already treat a failed lookup as best-effort - logged and
 	 * skipped, never surfaced. Without this, any CHPP error on this file - reproduced as error 56,
 	 * plausibly Hattrick refusing to answer for a player mid-match, though this project has no
 	 * confirmed mapping for that code - pops a blocking modal dialog for every failure. Harmless for
-	 * the single call {@code add_to_scout} makes per player; not for {@code backfill_character},
+	 * the single call {@code manage_scout} add makes per player; not for {@code backfill_character},
 	 * which can look up dozens of players in one call and would freeze on each one in turn, waiting
 	 * for someone at the keyboard to click through it.
 	 */

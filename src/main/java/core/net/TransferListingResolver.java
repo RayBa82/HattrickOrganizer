@@ -138,7 +138,7 @@ public final class TransferListingResolver {
             seen.add(candidate.playerId());
             final var observation = observe(candidate.playerId(), now);
             // Free: the call has already been made, and character comes back whether or not he is
-            // listed. Fills in entries added before add_to_scout started fetching it.
+            // listed. Fills in entries added before manage_scout add started fetching it.
             if (observation != null) {
                 recordCharacterOnScoutList(candidate.playerId(), observation);
             }

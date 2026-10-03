@@ -55,10 +55,10 @@ public final class TeamTools {
     public static List<McpTool> tools() {
         return List.of(
                 new McpTool("get_team",
-                        "The user's team as of the latest download: name, league, cash, stadium, "
+                        "The user's team as of the latest download: name, league, stadium, "
                                 + "team spirit and confidence, the head coach and the rest of the "
                                 + "staff, and the club's logo, kit images and colours (teamColors: "
-                                + "Supporters only, else null). get_finances has the full statement.",
+                                + "Supporters only, else null). Cash and the statement: get_finances.",
                         McpTool.schema(new JsonObject()),
                         args -> team()),
                 new McpTool("get_squad",
@@ -71,12 +71,9 @@ public final class TeamTools {
                         McpTool.schema(McpTool.properties(
                                 "playerIds", McpTool.prop("array",
                                         "only these players; the whole squad if omitted. An id not "
-                                                + "in the squad is an error"),
-                                "includeTransfers", McpTool.prop("boolean",
-                                        "add each player's transfers as HO recorded them; default "
-                                                + "false"))),
+                                                + "in the squad is an error"))),
                         TeamTools::squad),
-                new McpTool("scout_opponent",
+                new McpTool("analyze_opponent",
                         "Pre-match scouting of another team. ratings: the sector ratings it earned "
                                 + "in recent matches, averaged and named as simulate_lineup wants "
                                 + "them (~1 CHPP request per match). squad: visible attributes, "
@@ -105,17 +102,10 @@ public final class TeamTools {
                                 + "matches (the season's fixtures), otherUpcoming (our cup and "
                                 + "friendly matches, soonest first) and nextCupMatch (null = "
                                 + "eliminated or not yet drawn); cup rows name the cup (cup, cupId). "
-                                + "As of HO's last download; get_match_weather refreshes a forecast.",
+                                + "Our upcoming rows carry the stored weather forecast. As of HO's "
+                                + "last download; get_match_weather refreshes a forecast.",
                         McpTool.schema(new JsonObject()),
                         args -> series()),
-                new McpTool("get_bookmarks",
-                        "The user's Hattrick bookmarks, read-only. type is team, player, match, "
-                                + "user, league, youth*, forumPost or forumThread; objectId is that "
-                                + "object's id (team: text=team name, text2=manager; player: "
-                                + "text2=transfer deadline; match: text2=match date; league: "
-                                + "objectId2=LeagueID). One CHPP request.",
-                        McpTool.schema(new JsonObject()),
-                        args -> bookmarks()),
                 new McpTool("get_finances",
                         "The full weekly financial statement with last week's copy beside it, the "
                                 + "fan club, the staff levels that drive the cost line, and the "
@@ -159,38 +149,6 @@ public final class TeamTools {
                                         + "report that download's status instead of starting one"))),
                         TeamTools::downloadTeam)
         );
-    }
-
-    /** CHPP BookmarkTypeID 1..11; index 0 unused. */
-    private static final String[] BOOKMARK_TYPES = {null, "team", "player", "match", "user",
-            "league", "youthTeam", "youthPlayer", "youthMatch", "youthLeague", "forumPost",
-            "forumThread"};
-
-    private static JsonObject bookmarks() throws McpToolException {
-        try {
-            return bookmarksJson(core.net.ChppWriteService.instance().bookmarksForAgent());
-        } catch (core.net.ChppWriteService.ChppWriteException e) {
-            throw new McpToolException(e.getMessage());
-        }
-    }
-
-    static JsonObject bookmarksJson(List<core.file.xml.XMLBookmarksParser.Bookmark> bookmarks) {
-        final var rows = new JsonArray();
-        for (final var b : bookmarks) {
-            final var json = new JsonObject();
-            json.addProperty("type", b.typeId() > 0 && b.typeId() < BOOKMARK_TYPES.length
-                    ? BOOKMARK_TYPES[b.typeId()] : "type" + b.typeId());
-            json.addProperty("text", b.text());
-            json.addProperty("text2", b.text2());
-            json.addProperty("objectId", b.objectId());
-            json.addProperty("objectId2", b.objectId2());
-            json.addProperty("objectId3", b.objectId3());
-            json.addProperty("comment", b.comment());
-            rows.add(json);
-        }
-        final var out = new JsonObject();
-        out.add("bookmarks", rows);
-        return out;
     }
 
     /**
@@ -246,7 +204,6 @@ public final class TeamTools {
     private static JsonObject team() throws McpToolException {
         final var model = McpJson.model();
         final var basics = model.getBasics();
-        final var economy = model.getEconomy();
         final var league = model.getLeague();
         final var stadium = model.getStadium();
 
@@ -270,13 +227,6 @@ public final class TeamTools {
             leagueJson.addProperty("goalsFor", league.getToreFuer());
             leagueJson.addProperty("goalsAgainst", league.getToreGegen());
             json.add("league", leagueJson);
-        }
-        if (economy != null) {
-            final var economyJson = new JsonObject();
-            economyJson.addProperty("currency", McpJson.currency());
-            economyJson.addProperty("cash", money(economy.getCash()));
-            economyJson.addProperty("expectedWeeksTotal", money(economy.getExpectedWeeksTotal()));
-            json.add("economy", economyJson);
         }
         if (stadium != null) {
             final var stadiumJson = new JsonObject();
@@ -338,7 +288,6 @@ public final class TeamTools {
     private static JsonObject squad(JsonObject args) throws McpToolException {
         final var model = McpJson.model();
         final var ratingModel = McpJson.privateRatingModel();
-        final var withTransfers = McpJson.optBool(args, "includeTransfers", false);
         final var wanted = new java.util.LinkedHashSet<Integer>();
         if (args.has("playerIds") && args.get("playerIds").isJsonArray()) {
             args.getAsJsonArray("playerIds").forEach(e -> wanted.add(e.getAsInt()));
@@ -347,11 +296,7 @@ public final class TeamTools {
         final var players = new JsonArray();
         for (final var player : onlyWanted(model.getCurrentPlayers(), wanted,
                 core.model.player.Player::getPlayerId)) {
-            final var json = McpJson.player(player, ratingModel);
-            if (withTransfers) {
-                json.add("transfers", transfers(player.getPlayerId()));
-            }
-            players.add(json);
+            players.add(McpJson.player(player, ratingModel));
         }
         final var json = new JsonObject();
         json.add("players", players);
@@ -379,24 +324,8 @@ public final class TeamTools {
         return picked;
     }
 
-    /** A player's transfers as HO recorded them locally. */
-    private static JsonArray transfers(int playerId) {
-        final var transfers = new JsonArray();
-        for (final var transfer : DBManager.instance().getTransfers(playerId, true)) {
-            final var transferJson = new JsonObject();
-            transferJson.addProperty("date", transfer.getDate() == null ? null : transfer.getDate().toHT());
-            transferJson.addProperty("price", money(transfer.getPrice()));
-            transferJson.addProperty("tsi", transfer.getTsi());
-            transferJson.addProperty("type", transfer.getType());
-            transferJson.addProperty("buyerTeamName", transfer.getBuyerName());
-            transferJson.addProperty("sellerTeamName", transfer.getSellerName());
-            transfers.add(transferJson);
-        }
-        return transfers;
-    }
-
     /**
-     * scout_opponent's squad half: the players file for a team that is not ours.
+     * analyze_opponent's squad half: the players file for a team that is not ours.
      * <p>
      * Routed through {@link HattrickManager#downloadPlayers} rather than {@code Connector} directly
      * because that is the one call in the codebase that knows what the players file yields for a
@@ -435,7 +364,7 @@ public final class TeamTools {
         return json;
     }
 
-    /** scout_opponent: ratings and/or squad (default both), one round trip. */
+    /** analyze_opponent: ratings and/or squad (default both), one round trip. */
     private static JsonObject scoutOpponent(JsonObject args) throws McpToolException {
         final var include = new java.util.HashSet<String>();
         if (args.has("include") && args.get("include").isJsonArray()) {
@@ -539,16 +468,11 @@ public final class TeamTools {
             json.addProperty("seriesName", plan.getLigaName());
             json.addProperty("leagueLevelUnitId", plan.getLigaId());
             json.addProperty("season", plan.getSaison());
+            final var ownUpcoming = new java.util.HashMap<Integer, MatchKurzInfo>();
+            DBManager.instance().getMatchesKurzInfo(model.getBasics().getTeamId(), MatchKurzInfo.UPCOMING)
+                    .forEach(m -> ownUpcoming.put(m.getMatchID(), m));
             for (final var pairing : plan.getMatches()) {
-                final var matchJson = new JsonObject();
-                matchJson.addProperty("matchId", pairing.getMatchId());
-                matchJson.addProperty("matchDay", pairing.getSpieltag());
-                matchJson.addProperty("date", pairing.getDatum() == null ? null : pairing.getDatum().toHT());
-                matchJson.addProperty("homeTeamId", pairing.getHeimId());
-                matchJson.addProperty("homeTeamName", pairing.getHeimName());
-                matchJson.addProperty("awayTeamId", pairing.getGastId());
-                matchJson.addProperty("awayTeamName", pairing.getGastName());
-                matches.add(matchJson);
+                matches.add(fixtureRow(pairing, ownUpcoming.get(pairing.getMatchId())));
             }
         }
         json.add("matches", matches);
@@ -575,6 +499,28 @@ public final class TeamTools {
         return json;
     }
 
+    /** One series fixture; {@code ownUpcoming} is our stored match for it, null for any other. */
+    static JsonObject fixtureRow(core.model.series.Paarung pairing, MatchKurzInfo ownUpcoming) {
+        final var matchJson = new JsonObject();
+        matchJson.addProperty("matchId", pairing.getMatchId());
+        matchJson.addProperty("matchDay", pairing.getSpieltag());
+        matchJson.addProperty("date", pairing.getDatum() == null ? null : pairing.getDatum().toHT());
+        matchJson.addProperty("homeTeamId", pairing.getHeimId());
+        matchJson.addProperty("homeTeamName", pairing.getHeimName());
+        matchJson.addProperty("awayTeamId", pairing.getGastId());
+        matchJson.addProperty("awayTeamName", pairing.getGastName());
+        if (ownUpcoming != null) {
+            addStoredWeather(matchJson, ownUpcoming);
+        }
+        return matchJson;
+    }
+
+    /** As stored at the last download; get_match_weather refreshes a forecast that is not sure yet. */
+    private static void addStoredWeather(JsonObject row, MatchKurzInfo m) {
+        row.addProperty("weather", m.getWeather().name());
+        row.addProperty("weatherForecast", m.getWeatherForecast().name());
+    }
+
     /**
      * Our own upcoming cup, friendly and other non-league matches, soonest first, as HO last
      * downloaded them. No cup match here means eliminated - or a download older than the draw.
@@ -598,9 +544,7 @@ public final class TeamTools {
         row.addProperty("location", m.isNeutral() ? "neutral" : where);
         row.addProperty("opponentTeamId", home ? m.getGuestTeamID() : m.getHomeTeamID());
         row.addProperty("opponentTeamName", home ? m.getGuestTeamName() : m.getHomeTeamName());
-        // As stored at the last download; get_match_weather refreshes a forecast that is not sure yet.
-        row.addProperty("weather", m.getWeather().name());
-        row.addProperty("weatherForecast", m.getWeatherForecast().name());
+        addStoredWeather(row, m);
         MatchTools.addCup(row, m);
         return row;
     }
