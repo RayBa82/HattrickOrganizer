@@ -383,6 +383,8 @@ class TransferToolsTest {
     private int placeCalls;
     private long placedAmount;
     private Long placedMax;
+    /** false: the faked answer shows no MaxBid, as if Hattrick ignored the autobid. */
+    private boolean hattrickKeepsMax = true;
 
     private void installRecordingService() {
         originalService = ChppWriteService.instance();
@@ -392,7 +394,8 @@ class TransferToolsTest {
                 placeCalls++;
                 placedAmount = bidAmount;
                 placedMax = maxBidAmount;
-                return new BidResult(1_750_000L, "2026-09-05 20:00:00", "HO FC");
+                return new BidResult(1_750_000L, "2026-09-05 20:00:00", "HO FC",
+                        hattrickKeepsMax ? maxBidAmount : null);
             }
         });
     }
@@ -1173,6 +1176,57 @@ class TransferToolsTest {
         bidTool().handler().call(a2);
 
         assertThat(placedMax).isEqualTo(20_000_000L);
+    }
+
+    private static JsonObject commit(String token) {
+        final var a = new JsonObject();
+        a.addProperty("playerId", 111);
+        a.addProperty("confirmToken", token);
+        return a;
+    }
+
+    /** A 1,000,000 bid with an autobid ceiling. */
+    private static JsonObject step1WithMax(long max) {
+        final var a = step1(111, 1_000_000L);
+        a.addProperty("maxBidAmount", max);
+        return a;
+    }
+
+    @Test
+    void step1_rejectsAMaxBidBelowTheBid() {
+        installRecordingService();
+        assertThatExceptionOfType(McpToolException.class)
+                .isThrownBy(() -> bidTool().handler().call(step1WithMax(900_000L)))
+                .withMessageContaining("maxBidAmount");
+        assertThat(placeCalls).isZero();
+    }
+
+    @Test
+    void step1_acceptsAMaxBidEqualToTheBid() throws Exception {
+        installRecordingService();
+        assertThat(bidTool().handler().call(step1WithMax(1_000_000L)).has("confirmToken")).isTrue();
+    }
+
+    @Test
+    void step2_reportsTheMaxBidHattrickConfirmed() throws Exception {
+        installRecordingService();
+        final var token = bidTool().handler().call(step1WithMax(2_000_000L))
+                .get("confirmToken").getAsString();
+        final var result = bidTool().handler().call(commit(token));
+        assertThat(result.get("maxBid").getAsLong()).isEqualTo(2_000_000L);
+        assertThat(result.has("warning")).isFalse();
+    }
+
+    /** Placed, but the answer shows no autobid: say so rather than report a plain success. */
+    @Test
+    void step2_warnsWhenHattrickDidNotTakeTheMaxBid() throws Exception {
+        installRecordingService();
+        hattrickKeepsMax = false;
+        final var token = bidTool().handler().call(step1WithMax(2_000_000L))
+                .get("confirmToken").getAsString();
+        final var result = bidTool().handler().call(commit(token));
+        assertThat(result.has("maxBid")).isFalse();
+        assertThat(result.get("warning").getAsString()).contains("maxBidAmount");
     }
 
     @Test

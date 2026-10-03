@@ -429,8 +429,9 @@ public class ChppWriteService {
     /**
      * {@code highestBid} is Swedish krona, the raw CHPP value; the tool layer converts to the user's
      * currency. {@code bidderTeamName} is the team currently holding the highest bid ("" if none).
+     * {@code maxBid} is the autobid ceiling Hattrick has on record for us, krona, null if none.
      */
-    public record BidResult(long highestBid, String deadline, String bidderTeamName) {
+    public record BidResult(long highestBid, String deadline, String bidderTeamName, Long maxBid) {
     }
 
     public BidResult placeBidForAgent(int playerId, long bidAmount, Long maxBidAmount)
@@ -466,10 +467,13 @@ public class ChppWriteService {
         // (playerdetails 3.2). getElementsByTagName is recursive, but <TeamName> is not unique in
         // the file, so read it from inside <BidderTeam>.
         final var bidderTeam = (Element) player.getElementsByTagName("BidderTeam").item(0);
+        final var maxBid = parseLongOrZero(XMLManager.xmlValue(player, "MaxBid"));
         return new BidResult(
                 parseLongOrZero(XMLManager.xmlValue(player, "HighestBid")),
                 XMLManager.xmlValue(player, "Deadline"),
-                bidderTeam == null ? "" : XMLManager.xmlValue(bidderTeam, "TeamName"));
+                bidderTeam == null ? "" : XMLManager.xmlValue(bidderTeam, "TeamName"),
+                // Shown only while an autobid is set - the one sign Hattrick took maxBidAmount.
+                maxBid > 0 ? maxBid : null);
     }
 
     protected String fetchPlaceBid(int playerId, int teamId, long bidAmount, Long maxBidAmount) {

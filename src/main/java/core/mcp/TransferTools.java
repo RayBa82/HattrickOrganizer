@@ -1945,6 +1945,11 @@ public final class TransferTools {
         // a captured placeBid request (docs/current.md @ f5c51d0d); adjust if a real response says otherwise.
         final var bidAmountLocal = McpJson.reqLong(args, "bidAmount");
         final Long maxBidAmountLocal = McpJson.optLong(args, "maxBidAmount");
+        if (maxBidAmountLocal != null && maxBidAmountLocal < bidAmountLocal) {
+            throw new McpToolException("maxBidAmount " + maxBidAmountLocal + " is below bidAmount "
+                    + bidAmountLocal + ": the autobid ceiling must be at least the bid. Nothing was "
+                    + "placed.");
+        }
         final var bidAmountSek = McpJson.swedishKrona(bidAmountLocal);
         final Long maxBidAmountSek =
                 maxBidAmountLocal == null ? null : McpJson.swedishKrona(maxBidAmountLocal);
@@ -2011,6 +2016,18 @@ public final class TransferTools {
         player.addProperty("id", pending.playerId());
         out.add("player", player);
         out.addProperty("highestBid", McpJson.money(result.highestBid()));
+        if (result.maxBid() != null) {
+            out.addProperty("maxBid", McpJson.money(result.maxBid()));
+        }
+        // Hattrick answers a placed bid either way, so the autobid is only known to be set when the
+        // answer shows it. Compared in krona, the unit both sides of the call use.
+        if (pending.maxBidAmountSek() != null && !pending.maxBidAmountSek().equals(result.maxBid())) {
+            out.addProperty("warning", "You asked for maxBidAmount "
+                    + McpJson.money(pending.maxBidAmountSek()) + " but Hattrick's answer shows "
+                    + (result.maxBid() == null ? "no autobid"
+                            : "a max bid of " + McpJson.money(result.maxBid()))
+                    + ". The bid itself is placed; check the autobid on the Hattrick website.");
+        }
         out.addProperty("deadline", result.deadline());
         out.addProperty("bidderTeamName", result.bidderTeamName());
         out.addProperty("note", "Bid placed. Poll get_open_bids or search_transfers for the updated "

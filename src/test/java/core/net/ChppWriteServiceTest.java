@@ -290,6 +290,18 @@ class ChppWriteServiceTest {
         assertThat(service.writesThisSession).isEqualTo(1);
     }
 
+    /** The answer is how we know Hattrick took the autobid: MaxBid is only shown when one is set. */
+    @Test
+    void placeBid_readsTheConfirmedMaxBid() throws Exception {
+        assertThat(service.placeBidForAgent(111, 1_500_000L, 2_000_000L).maxBid()).isEqualTo(2_000_000L);
+    }
+
+    @Test
+    void placeBid_noMaxBidInTheAnswerMeansNone() throws Exception {
+        service.bidResponse = service.bidResponse.replace("<MaxBid>2000000</MaxBid>", "");
+        assertThat(service.placeBidForAgent(111, 1_500_000L, 2_000_000L).maxBid()).isNull();
+    }
+
     @Test
     void placeBid_blankResponseFailsWithBidFailedKey() {
         service.bidResponse = "";
