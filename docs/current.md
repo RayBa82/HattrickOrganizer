@@ -16,12 +16,28 @@ hint naming its own paging/filter arguments. The rule is documented but not impl
 - Then audit every tool's defaults against it, starting with the list-shaped ones. Today only
   `list_scout` pages (it was ~260k chars before paging).
 
-## Headless MCP server (2026-09-27, uncommitted)
+## Headless finances (2026-10-03)
+
+Reported by the hattrick session: `get_finances` after a headless `download_team` was wrong. Three
+bugs in the economy path, all also hitting desktop HO, fixed and verified on the live server
+(HRF 159: every cost line adds up to `costsSum` for both weeks):
+
+- `AmountOfMoney.parse` returned 0 while no currency formatter existed yet - always so headless,
+  so every ECONOMY field was stored as 0 (`adc77098`).
+- `HRFStringBuilder` wrote `LastCostsStaff` under the pre-v500 key `lastCostsPersonal` (`96423bb3`).
+- `XMLEconomyParser` never read CHPP's `CostsTemporary`/`LastCostsTemporary`; the HRF stored bought
+  players + arena building in their place, which `FinancePanel` then showed twice (`fd6a672a`).
+  `get_finances` now reports `costsTemporary`.
+
+`HRFStringBuilderTest` round-trips a real economy.xml through parser, HRF and `Economy`. ECONOMY rows
+from before these fixes keep their wrong values; only new downloads are right.
+
+## Headless MCP server (2026-09-27, committed 2026-10-03)
 
 **Live since 2026-09-27** on the user's Linux server (Ubuntu 24.04, x86_64), in `~/ho` via
 `docker compose` (Compose v2 plugin; Ubuntu's `docker-compose` v1 cannot talk to the current engine).
 It runs the desktop HO's live DB (history since 2026-04-11), and `~/ho/data` is its only copy. Desktop
-HO on the Mac must stay unused. The code is still uncommitted: it lives only in the Mac's working tree.
+HO on the Mac must stay unused. Committed on `lineup-tv-view` (`ed2f4059`, `742c2ef9`).
 
 Asked by the user: HO on a Linux server with no display, serving only the MCP tools. Documented
 in AGENTS.md, "Headless server". `core.HeadlessMain` reuses `HO.initRuntime` (extracted from
@@ -51,30 +67,5 @@ in AGENTS.md, "Headless server". `core.HeadlessMain` reuses `HO.initRuntime` (ex
   back, both architectures run. That needed the registry's nginx to forward `Host` and
   `X-Forwarded-Host` as `$http_host`: with `:443` in the upload URLs, Docker sent the upload PUT
   without credentials (401).
-- Pre-existing, seen in desktop logs too: `WorldDetailsTable` CURRENCY_RATE NPE and CHPP error 56
-  from `TransferListingResolver`.
-
-## Lineup tab in the TV-view look (2026-09-27, uncommitted)
-
-Asked by the hattrick session, after the user approved the plan there: make the lineup tab look like the
-hattrick repo's `scripts/lineup-page`. System fonts only (no bundled Saira/Barlow), crest = HO's
-downloaded club logo. Checked on screen by the user with real data (screenshots, 2026-09-27).
-Hattrick sends no kit colour: the shirt is the more saturated of the club page's two theme colours,
-else brand green. The tile combo reports a wider `getSize()` so its popup list fits a player row.
-
-- `PitchStyle` (module.lineup.lineup) holds the palette, the pitch painter, the kit icon and the flags.
-  Kits use the club colours from XtraData (`TeamColorBackground`/`Text`, Supporters only), else
-  brand green; the keeper wears sea. Dark themes (`DarkTheme`) get the page's dark grass and
-  specialty colours.
-- `LineupPositionsPanel` is a plain JPanel now (was `RasenPanel`) and paints a half pitch behind
-  the union of the eleven field slots, flipped for keeper-at-top.
-- `PlayerPositionPanel`: field and bench slots draw their player combo as a `SlotView` (kit, C/SP/
-  behaviour flags, name plate with specialty dot, position and rating; ghost circle when empty).
-  The combo paints only that view (no box, no arrow) but still opens the usual popup. Captain and
-  set-pieces slots stay plain dropdowns. The position label is hidden on tiles; training positions
-  get a rounded frame.
-- `MatchBanner` moved over the pitch (`LineupPanel`): brand band with crest, HOME vs AWAY,
-  date/type, and a tactic line from `MatchAndLineupSelectionPanel.getTacticBarItems()`.
-- `LineupRatingPanel`: each sector shows a bar (rating / 20) in place of the coloured dot.
-- Not done: the page's A/B squad badge (HO has no such concept), restyling the penalty-takers
-  and team-orders tabs.
+- The `WorldDetailsTable` CURRENCY_RATE NPE is guarded (`742c2ef9`); players CHPP answers with error
+  56 are marked and no longer re-asked (`e9aaf907`).
