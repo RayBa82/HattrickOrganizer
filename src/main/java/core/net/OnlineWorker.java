@@ -1542,6 +1542,7 @@ public class OnlineWorker {
 		var silent = Connector.instance().setSilentDownload(true);
 		try {
 			var xml = Connector.instance().downloadPlayerDetails(playerID);
+			if (xml.isEmpty()) return null; // CHPP error, already logged - 56 = player gone (retired)
 			return new XMLPlayersParser().parseMarketPlayerFromString(xml);
 		} finally {
 			Connector.instance().setSilentDownload(silent);

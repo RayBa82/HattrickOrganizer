@@ -53,7 +53,7 @@ public class TransferListingTable extends AbstractTable {
                 intCol("SETPIECES", p -> ((TransferListing) p).getSetPieces(), (p, v) -> ((TransferListing) p).setSetPieces((Integer) v), true),
                 // Only a playerdetails observation carries these; a transfersearch or currentbids
                 // row leaves them null. See TransferListing's field comment.
-                intCol("AGREEABILITY", p -> ((TransferListing) p).getAgreeability(), (p, v) -> ((TransferListing) p).setAgreeability((Integer) v), true),
+                intCol("AGREEABILITY", p -> ((TransferListing) p).getAgreeability(), (p, v) -> ((TransferListing) p).setAgreeability(v == null || (Integer) v == PLAYER_GONE ? null : (Integer) v), true),
                 intCol("AGGRESSIVENESS", p -> ((TransferListing) p).getAggressiveness(), (p, v) -> ((TransferListing) p).setAggressiveness((Integer) v), true),
                 intCol("HONESTY", p -> ((TransferListing) p).getHonesty(), (p, v) -> ((TransferListing) p).setHonesty((Integer) v), true),
                 longCol("SALEPRICE", p -> ((TransferListing) p).getSalePrice(), (p, v) -> ((TransferListing) p).setSalePrice(v == null ? null : ((Number) v).longValue()), true),
@@ -176,6 +176,21 @@ public class TransferListingTable extends AbstractTable {
             core.util.HOLogger.instance().log(getClass(), e);
         }
         return ids;
+    }
+
+    /**
+     * AGREEABILITY value for a player Hattrick no longer knows (CHPP error 56, retired or deleted):
+     * keeps him out of {@link #loadPlayerIdsMissingCharacter} so no pass asks about him again. It
+     * never leaves this table - the column setter reads it back as null, i.e. unknown.
+     */
+    static final int PLAYER_GONE = -1;
+
+    /** Mark every character-less observation of this player as {@link #PLAYER_GONE}. */
+    public void markPlayerGone(int playerId) {
+        connectionManager.executeUpdate("UPDATE " + getTableName()
+                + " SET AGREEABILITY=" + PLAYER_GONE
+                + " WHERE PLAYERID=" + playerId
+                + " AND AGREEABILITY IS NULL");
     }
 
     /** Fill in character on every observation of this player still missing it. */

@@ -420,7 +420,14 @@ public final class TransferListingResolver {
     private static XMLPlayersParser.MarketPlayer observe(int playerId, HODateTime now) {
         try {
             final var m = OnlineWorker.downloadMarketPlayer(String.valueOf(playerId));
-            if (m == null || m.player().getPlayerId() == 0) {
+            if (m == null) {
+                final var error = ChppError.parse(Connector.instance().lastError());
+                if (error != null && error.code() == 56) {   // Unknown PlayerID: gone for good
+                    DBManager.instance().markTransferListingPlayerGone(playerId);
+                }
+                return null;
+            }
+            if (m.player().getPlayerId() == 0) {
                 return null;
             }
             if (m.transferListed()) {

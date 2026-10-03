@@ -1559,6 +1559,10 @@ public class DBManager implements PersistenceManager {
 				.loadPlayerIdsMissingCharacter(max);
 	}
 
+	public void markTransferListingPlayerGone(int playerId) {
+		((TransferListingTable) getTable(TransferListingTable.TABLENAME)).markPlayerGone(playerId);
+	}
+
 	public void storeTransferListingCharacter(int playerId, int agreeability, int aggressiveness,
 											   int honesty) {
 		((TransferListingTable) getTable(TransferListingTable.TABLENAME))

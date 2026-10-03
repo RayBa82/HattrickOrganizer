@@ -406,4 +406,17 @@ class TransferListingTableTest {
             assertThat(l.getHonesty()).isEqualTo(0);
         });
     }
+
+    /** A player CHPP answers 56 for is never asked about again, and reads back as unknown. */
+    @Test
+    void aGonePlayerLeavesTheMissingCharacterQueueButReadsBackAsUnknown() {
+        table.storeListing(TransferListing.fromHit(hit(900555666, details()), DEADLINE));
+
+        table.markPlayerGone(900555666);
+
+        assertThat(table.loadPlayerIdsMissingCharacter(1000)).doesNotContain(900555666);
+        final var loaded = table.loadUnresolved(1000).stream()
+                .filter(l -> l.getPlayerId() == 900555666).findFirst().orElseThrow();
+        assertThat(loaded.getAgreeability()).isNull();
+    }
 }
