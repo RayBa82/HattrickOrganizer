@@ -224,7 +224,7 @@ public class HRFStringBuilder {
         appendKeyValue(economyStringBuilder, "lastCostsArena", economyDataMap.get("LastCostsArena"));
         appendKeyValue(economyStringBuilder, "LastCostsPlayers", economyDataMap.get("LastCostsPlayers"));
         appendKeyValue(economyStringBuilder, "LastCostsFinancial", economyDataMap.get("LastCostsFinancial"));
-        appendKeyValue(economyStringBuilder, "lastCostsPersonal", economyDataMap.get("LastCostsStaff"));
+        appendKeyValue(economyStringBuilder, "LastCostsStaff", economyDataMap.get("LastCostsStaff"));
         appendKeyValue(economyStringBuilder, "LastCostsBoughtPlayers", economyDataMap.get("LastCostsBoughtPlayers"));
         appendKeyValue(economyStringBuilder, "LastCostsArenaBuilding", economyDataMap.get("LastCostsArenaBuilding"));
         appendKeyValue(economyStringBuilder, "LastCostsTemporary", iLastCostsTemporary); // recreate defect LastCostsTemporary field for compatibility reasons
