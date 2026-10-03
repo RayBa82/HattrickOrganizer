@@ -20,6 +20,8 @@ services:
       - "127.0.0.1:8765:8765"   # host loopback only - the server has no authentication
     environment:
       JAVA_OPTS: "${HO_JAVA_OPTS:-}"   # e.g. -Dho.teamId=<teamId> for authorize
+      # The zone the DB was written in - HO stores local wall-clock time. Never change it on a live DB.
+      TZ: "${HO_TZ:-Europe/Berlin}"
     # HO prints every message to the console; cap what Docker keeps (data/logs/ has the file log)
     logging:
       options:

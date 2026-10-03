@@ -121,6 +121,7 @@ public class WorldDetailLeague  extends AbstractTable.Storable {
 	}
 
 	public void setCurrencyRate(String currencyRate) {
+		if (currencyRate == null) return;
 		try {
 			this.currencyRate = Double.parseDouble(currencyRate.replace(',', '.'));
 		} catch (NumberFormatException ignored) {

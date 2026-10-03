@@ -258,7 +258,19 @@ java -Djava.awt.headless=true -cp HO.jar core.HeadlessMain [--port 8765] [--user
   stores it. It then runs the first team download, which `download_team` refuses on an empty DB.
   With several teams and no picker it takes the primary team, or `-Dho.teamId=<id>`.
 - Loopback only, no authentication: reach it through `ssh -L 8765:localhost:8765 server`.
+- Publish: `./gradlew dockerPush` builds amd64+arm64 and pushes `docker.rayba.de/ho-headless:<version>`
+  and `:latest` (needs a prior `docker login docker.rayba.de`, done by the user). Run Gradle on JDK 17
+  (`JAVA_HOME=~/.sdkman/candidates/java/17.0.15-sapmchn`): a newer default JDK fails Gradle 8.13
+  with "Type T not present". The server then updates with `docker compose pull && docker compose up -d`.
+- `database_backup` (`core.mcp.BackupTools`) restores by exiting, not by swapping the open database:
+  HOVerwaltung, UserParameter, TrainingManager and the tables all cache what they loaded. The tool
+  backs up into `backups/pre-restore/` and writes `db/restore-pending.properties`;
+  `RestoreHelper.applyPending` runs first in `HeadlessMain`, before anything opens the DB, and rolls
+  back unless the restored DB opens. It relies on Docker's `restart: unless-stopped`; desktop HO refuses.
 - HSQLDB is single-process: desktop HO and the server must not open the same DB at the same time.
+- The JVM time zone must be the one the DB was written in: `HODateTime.toDbTimestamp` stores local
+  wall-clock time. The image sets `TZ=Europe/Berlin` (the desktop's zone); under UTC every moved-over
+  timestamp reads hours off.
 - Code the tools reach must not build `HOMainFrame`: under `java.awt.headless` that throws
   `HeadlessException`. Status-line updates go through the static `HOMainFrame.setInformation(...)`
   family (no-ops headless), dialog parents and panel refreshes through `HOMainFrame.shown()`

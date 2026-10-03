@@ -81,6 +81,7 @@ public final class McpHttpServer {
         registerAll(LineupTools.tools());
         registerAll(TrainingTools.tools());
         registerAll(MatchTools.tools());
+        registerAll(BackupTools.tools());
     }
 
     public synchronized boolean isRunning() {

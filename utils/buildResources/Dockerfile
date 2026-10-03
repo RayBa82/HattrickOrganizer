@@ -6,6 +6,10 @@ RUN useradd --system --home-dir /data ho && mkdir /data && chown ho /data
 
 # prediction/ and truststore.jks resolve from the working directory, so the app dir is the workdir;
 # users.json, db/ and logs/ go to the /data volume via ho.dbParentFolder.
+# HO writes timestamps as JVM-local wall-clock time (HODateTime.toDbTimestamp), so the zone must be
+# the one the database was written in - Europe/Berlin for a DB moved over from desktop HO. With UTC
+# every existing timestamp reads hours off and TrainingWeekManager finds two "next" training weeks.
+ENV TZ=Europe/Berlin
 COPY . /opt/ho
 WORKDIR /opt/ho
 USER ho

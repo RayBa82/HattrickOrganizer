@@ -148,6 +148,7 @@ public class GUIUtils {
 	 * @return int – Location of point <code>width</code> px from the right.
 	 */
 	public static int getLocationFromRight(int width, int defaultWidth) {
+		if (GraphicsEnvironment.isHeadless()) return defaultWidth;
 		try {
 			final Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
 			int calculatedWidth = screenSize.width - width;

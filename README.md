@@ -223,3 +223,18 @@ same as HO's Download button.
   error (HTTP 401 in `HO/logs/`). Stop the server and run `authorize` again.
 - The Download dialog's match archive and previous-season fixtures are not available headless;
   `download_team` says so in its answer.
+- **Time zone.** HO stores local wall-clock time, so the server must run in the zone the database
+  was written in. The image defaults to `TZ=Europe/Berlin`; set `HO_TZ` in `.env` for another one,
+  and never change it on a live database.
+- **Backup and restore.** The MCP tool `database_backup` does both. `action: create` writes a
+  consistent copy of the whole database (snapshots, matches, transfers, settings, CHPP login) to
+  `data/db/backups/database-<timestamp>.tar.gz` while HO runs; the newest 10 are kept. `list` shows
+  them. `restore` with `file` and `confirm: true` first backs up the current database into
+  `backups/pre-restore/` (its own rotation), then HO exits; Docker restarts it and the swap happens
+  on start, with an automatic roll back if the restored database cannot be opened. `list` then
+  reports the outcome as `lastRestore`. The archives hold the CHPP login: keep them private.
+  By hand, with the server stopped: move `data/db/database.*` aside, then
+  `tar xzf data/db/backups/<archive> -C data/db`.
+- **Removing a bad snapshot.** Stop the server, then `docker compose run --rm ho delete-hrf` lists
+  the newest snapshots and `docker compose run --rm ho delete-hrf <hrfId>` deletes one (the usual
+  startup backup runs first).
