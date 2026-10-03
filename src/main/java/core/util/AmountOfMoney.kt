@@ -65,7 +65,8 @@ data class AmountOfMoney(var swedishKrona: BigDecimal) {
         fun parse(v: String?): AmountOfMoney? {
             var amount: Number?
             amount = try {
-                currencyFormatter?.parse(v)
+                // Not yet formatted anything (always so headless): a null formatter must not read as 0.
+                currencyFormatter?.parse(v) ?: Helper.getNumberFormat(0).parse(v)
             } catch (_: Exception) {
                 try {
                     Helper.getNumberFormat(0).parse(v)

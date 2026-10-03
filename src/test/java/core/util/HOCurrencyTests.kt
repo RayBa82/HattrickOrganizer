@@ -40,6 +40,17 @@ class HOCurrencyTests {
         Assertions.assertEquals("10" + nbsp + "€", d.toLocaleString())
     }
 
+    /** Headless HO never formats money before a download, so parse runs without a currency formatter. */
+    @Test
+    fun parseWithoutCurrencyFormatter() {
+        val field = AmountOfMoney::class.java.getDeclaredField("currencyFormatter")
+        field.isAccessible = true
+        field.set(null, null)
+
+        Assertions.assertEquals(AmountOfMoney(3628160), AmountOfMoney.parse("3628160"))
+        Assertions.assertEquals(AmountOfMoney(-129260), AmountOfMoney.parse("-129260"))
+    }
+
     @AfterEach
     fun tearDown() {
         Locale.setDefault(currentLocale)
