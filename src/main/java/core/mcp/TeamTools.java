@@ -809,6 +809,7 @@ public final class TeamTools {
         json.addProperty("costsFinancial", money(economy.getCostsFinancial()));
         json.addProperty("costsBoughtPlayers", money(economy.getCostsBoughtPlayers()));
         json.addProperty("costsArenaBuilding", money(economy.getCostsArenaBuilding()));
+        json.addProperty("costsTemporary", money(economy.getCostsTemporary()));
         return json;
     }
 
@@ -829,6 +830,7 @@ public final class TeamTools {
         json.addProperty("costsFinancial", money(economy.getLastCostsFinancial()));
         json.addProperty("costsBoughtPlayers", money(economy.getLastCostsBoughtPlayers()));
         json.addProperty("costsArenaBuilding", money(economy.getLastCostsArenaBuilding()));
+        json.addProperty("costsTemporary", money(economy.getLastCostsTemporary()));
         json.addProperty("weeksTotal", money(economy.getLastWeeksTotal()));
         return json;
     }

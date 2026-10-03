@@ -189,11 +189,9 @@ public class HRFStringBuilder {
         int iIncomeTemporary = Integer.parseInt(economyDataMap.get("IncomeSoldPlayers")) +
                 Integer.parseInt(economyDataMap.get("IncomeSoldPlayersCommission")) +
                 Integer.parseInt(economyDataMap.get("IncomeTemporary"));
-        int iCostsTemporary = Integer.parseInt(economyDataMap.get("CostsBoughtPlayers")) + Integer.parseInt(economyDataMap.get("CostsArenaBuilding"));
         int iLastIncomeTemporary = Integer.parseInt(economyDataMap.get("LastIncomeSoldPlayers")) +
                 Integer.parseInt(economyDataMap.get("LastIncomeSoldPlayersCommission")) +
                 Integer.parseInt(economyDataMap.get("LastIncomeTemporary"));
-        int iLastCostsTemporary = Integer.parseInt(economyDataMap.get("LastCostsBoughtPlayers")) + Integer.parseInt(economyDataMap.get("LastCostsArenaBuilding"));
 
         appendKeyValue(economyStringBuilder, "IncomeSpectators", economyDataMap.get("IncomeSpectators"));
         appendKeyValue(economyStringBuilder, "IncomeSponsors", economyDataMap.get("IncomeSponsors"));
@@ -209,7 +207,7 @@ public class HRFStringBuilder {
         appendKeyValue(economyStringBuilder, "CostsStaff", economyDataMap.get("CostsStaff"));
         appendKeyValue(economyStringBuilder, "CostsBoughtPlayers", economyDataMap.get("CostsBoughtPlayers"));
         appendKeyValue(economyStringBuilder, "CostsArenaBuilding", economyDataMap.get("CostsArenaBuilding"));
-        appendKeyValue(economyStringBuilder, "CostsTemporary", iCostsTemporary); // recreate defect CostsTemporary field for compatibility reasons
+        appendKeyValue(economyStringBuilder, "CostsTemporary", economyDataMap.get("CostsTemporary"));
         appendKeyValue(economyStringBuilder, "CostsYouth", economyDataMap.get("CostsYouth"));
         appendKeyValue(economyStringBuilder, "CostsSum", economyDataMap.get("CostsSum"));
         appendKeyValue(economyStringBuilder, "ExpectedWeeksTotal", economyDataMap.get("ExpectedWeeksTotal"));
@@ -227,7 +225,7 @@ public class HRFStringBuilder {
         appendKeyValue(economyStringBuilder, "LastCostsStaff", economyDataMap.get("LastCostsStaff"));
         appendKeyValue(economyStringBuilder, "LastCostsBoughtPlayers", economyDataMap.get("LastCostsBoughtPlayers"));
         appendKeyValue(economyStringBuilder, "LastCostsArenaBuilding", economyDataMap.get("LastCostsArenaBuilding"));
-        appendKeyValue(economyStringBuilder, "LastCostsTemporary", iLastCostsTemporary); // recreate defect LastCostsTemporary field for compatibility reasons
+        appendKeyValue(economyStringBuilder, "LastCostsTemporary", economyDataMap.get("LastCostsTemporary"));
         appendKeyValue(economyStringBuilder, "LastCostsYouth", economyDataMap.get("LastCostsYouth"));
         appendKeyValue(economyStringBuilder, "LastCostsSum", economyDataMap.get("LastCostsSum"));
         appendKeyValue(economyStringBuilder, "LastWeeksTotal", economyDataMap.get("LastWeeksTotal"));

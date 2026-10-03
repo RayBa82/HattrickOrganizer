@@ -93,7 +93,7 @@ final class FinancePanel extends JPanel {
             otherCostsLabel.setAmountOfMoney(nullAmountOfMoney.minus(finances.getLastCostsTemporary()), true);
             staffLabel.setAmountOfMoney(nullAmountOfMoney.minus(finances.getLastCostsStaff()), true);
             youthLabel.setAmountOfMoney(nullAmountOfMoney.minus(finances.getLastCostsYouth()), true);
-            newSigningsLabel.setAmountOfMoney(nullAmountOfMoney.minus(finances.getCostsBoughtPlayers()), true);
+            newSigningsLabel.setAmountOfMoney(nullAmountOfMoney.minus(finances.getLastCostsBoughtPlayers()), true);
             interestExpensesLabel.setAmountOfMoney(nullAmountOfMoney.minus(finances.getLastCostsFinancial()), true);
             revenueTotalLabel.setAmountOfMoney(finances.getLastIncomeSum(), true);
             totalCostLabel.setAmountOfMoney(nullAmountOfMoney.minus(finances.getLastCostsSum()), true);
