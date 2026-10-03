@@ -116,7 +116,8 @@ public final class TransferTools {
                                 + "so it sees bids placed on the website too. Each row says whether "
                                 + "you are the leading bidder, plus askingPrice and, once finished, "
                                 + "salePrice, outcome and ourBid. selling lists our own listed players "
-                                + "with their highest bid. includeAll returns every tracked transfer.",
+                                + "(sellingCount) with askingPrice and highest bid. includeAll returns "
+                                + "every tracked transfer.",
                         McpTool.schema(McpTool.properties(
                                 "includeAll", McpTool.prop("boolean",
                                         "return every tracked transfer, not just your open bids; "
@@ -1746,7 +1747,9 @@ public final class TransferTools {
         out.addProperty("currency", McpJson.currency());
         out.addProperty("count", bids.size());
         out.add("bids", bids);
-        out.add("selling", sellingRows(current));
+        final var selling = sellingRows(current);
+        out.addProperty("sellingCount", selling.size());
+        out.add("selling", selling);
         if (!includeAll) {
             out.addProperty("note", "leading_bid / losing_bid are inferred from trackingTypeId "
                     + "2 / 8; pass includeAll to see every tracked transfer.");
@@ -1756,7 +1759,8 @@ public final class TransferTools {
 
     /**
      * Our own transfer-listed players (trackingTypeId 1, "Selling" in the CHPP data types) with the
-     * current highest bid. Not Supporter-gated, unlike the 5 / 8 / 9 / 10 categories.
+     * asking price and the current highest bid. Not Supporter-gated, unlike the 5 / 8 / 9 / 10
+     * categories.
      */
     static JsonArray sellingRows(XMLCurrentBidsParser.CurrentBids current) {
         final var rows = new JsonArray();
@@ -1768,6 +1772,10 @@ public final class TransferTools {
             json.addProperty("playerId", item.playerId());
             json.addProperty("playerName", item.playerName());
             json.addProperty("deadline", item.deadline());
+            final var askingPrice = ownAskingPrice(item);
+            if (askingPrice > 0) {
+                json.addProperty("askingPrice", McpJson.money(askingPrice));
+            }
             json.addProperty("hasBids", item.highestBidAmount() > 0);
             json.addProperty("highestBid", McpJson.money(item.highestBidAmount()));
             json.addProperty("highestBidTeamId", item.highestBidTeamId());
@@ -1775,6 +1783,33 @@ public final class TransferTools {
             rows.add(json);
         }
         return rows;
+    }
+
+    /**
+     * What we asked for one of our own listed players. currentbids does not say, and nothing else
+     * HO does observes our own players on the market, so the first check of a new listing makes
+     * one playerdetails call and stores the answer; every later check reads it back for free.
+     * 0 when Hattrick refuses - the row then simply has no askingPrice.
+     */
+    private static long ownAskingPrice(XMLCurrentBidsParser.BidItem item) {
+        final var deadline = HODateTime.fromHT(item.deadline());
+        if (deadline == null) {
+            return 0;
+        }
+        final var stored = DBManager.instance().loadTransferListingAskingPrice(item.playerId(), deadline);
+        if (stored > 0) {
+            return stored;
+        }
+        final var m = ChppWriteService.instance().marketPlayerForAgent(item.playerId());
+        if (m == null || !m.transferListed() || m.askingPrice() <= 0) {
+            return 0;
+        }
+        try {
+            DBManager.instance().storeTransferListing(TransferListing.fromPlayerDetails(m, HODateTime.now()));
+        } catch (RuntimeException e) {
+            HOLogger.instance().log(TransferTools.class, e);   // the price is still good for this answer
+        }
+        return m.askingPrice();
     }
 
     private static JsonObject playerTransferHistory(JsonObject args) throws McpToolException {
@@ -1857,7 +1892,15 @@ public final class TransferTools {
                 final var existing = DBManager.instance().loadTransferBid(item.playerId());
                 DBManager.instance().storeTransferBid(
                         TransferBid.fromObservation(existing, item, current.teamId(), now));
-                DBManager.instance().storeTransferListing(TransferListing.fromBidItem(item, now));
+                final var listing = TransferListing.fromBidItem(item, now);
+                // currentbids sends no asking price. This row becomes the player's newest, which is
+                // what every "latest snapshot" reader takes, so carry over what an earlier
+                // observation of the same listing had rather than hide it behind a 0.
+                if (listing.getDeadline() != null) {
+                    listing.setAskingPrice(DBManager.instance()
+                            .loadTransferListingAskingPrice(item.playerId(), listing.getDeadline()));
+                }
+                DBManager.instance().storeTransferListing(listing);
             }
         } catch (RuntimeException e) {
             HOLogger.instance().log(TransferTools.class, e);

@@ -303,6 +303,14 @@ public class ChppWriteService {
         }
     }
 
+    /**
+     * A read: {@code playerdetails} of a player as market data, for the asking price
+     * {@code currentbids} does not carry. Null when Hattrick refuses (already logged).
+     */
+    public core.file.xml.XMLPlayersParser.MarketPlayer marketPlayerForAgent(int playerId) {
+        return OnlineWorker.downloadMarketPlayer(String.valueOf(playerId));
+    }
+
     // ===================== training events =====================
 
     /** A read. Shares the silent-fetch handling but does not count against the write cap. */

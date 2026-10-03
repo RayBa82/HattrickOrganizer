@@ -122,6 +122,20 @@ public class TransferListingTable extends AbstractTable {
         return !load(TransferListing.class, connectionManager.executeQuery(sql)).isEmpty();
     }
 
+    /**
+     * The asking price of one listing - this player, this deadline - from whichever observation
+     * carried one, 0 if none did. Not simply the newest row: a currentbids snapshot carries no
+     * asking price and is usually the newest. The deadline keeps an earlier listing of the same
+     * player, with its own price, out.
+     */
+    public long loadAskingPrice(int playerId, HODateTime deadline) {
+        final var sql = createSelectStatement("WHERE PLAYERID = " + playerId
+                + " AND DEADLINE = '" + HODateTime.toDbTimestamp(deadline) + "'"
+                + " AND ASKINGPRICE > 0 ORDER BY OBSERVEDAT DESC LIMIT 1");
+        final var rows = load(TransferListing.class, connectionManager.executeQuery(sql));
+        return rows.isEmpty() ? 0 : rows.get(0).getAskingPrice();
+    }
+
     /** Every stored observation - for corpus statistics, which group in Java. */
     public List<TransferListing> loadAll() {
         return load(TransferListing.class, connectionManager.executeQuery(createSelectStatement("")));

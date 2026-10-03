@@ -863,12 +863,22 @@ class TransferToolsTest {
                 .filter(t -> t.name().equals("get_open_bids")).findFirst().orElseThrow();
     }
 
+    /** What the faked playerdetails call answers, and who it was asked about. */
+    private core.file.xml.XMLPlayersParser.MarketPlayer marketPlayer;
+    private final List<Integer> marketPlayerCalls = new java.util.ArrayList<>();
+
     private void installBidsService(XMLCurrentBidsParser.CurrentBids bids) {
         originalService = ChppWriteService.instance();
         ChppWriteService.setInstanceForTest(new ChppWriteService() {
             @Override
             public XMLCurrentBidsParser.CurrentBids listCurrentBidsForAgent() {
                 return bids;
+            }
+
+            @Override
+            public core.file.xml.XMLPlayersParser.MarketPlayer marketPlayerForAgent(int playerId) {
+                marketPlayerCalls.add(playerId);
+                return marketPlayer;
             }
         });
     }
@@ -995,6 +1005,74 @@ class TransferToolsTest {
                 .map(com.google.gson.JsonElement::getAsJsonObject)
                 .filter(o -> o.get("playerId").getAsInt() == 111).findFirst().orElseThrow();
         assertThat(larry.get("highestBid").getAsLong()).isEqualTo(150_000);   // 1.5M krona / 10
+    }
+
+    // ---- askingPrice: currentbids sends none, so it comes from what HO stored for the same listing
+
+    private static final String FUTURE = "2030-01-01 20:00:00";
+
+    private static void storeAskingPrice(int playerId, String deadline, long askingPrice) {
+        final var l = new TransferListing();
+        l.setPlayerId(playerId);
+        l.setObservedAt(new HODateTime(HODateTime.now().getInstant().minus(java.time.Duration.ofHours(1))));
+        l.setDeadline(HODateTime.fromHT(deadline));
+        l.setAskingPrice(askingPrice);
+        core.db.DBManager.instance().storeTransferListing(l);
+    }
+
+    private static JsonObject rowOf(JsonArray rows, int playerId) {
+        return StreamSupport.stream(rows.spliterator(), false)
+                .map(com.google.gson.JsonElement::getAsJsonObject)
+                .filter(o -> o.get("playerId").getAsInt() == playerId).findFirst().orElseThrow();
+    }
+
+    private static XMLCurrentBidsParser.CurrentBids oneBid(int trackingTypeId, int playerId) {
+        return new XMLCurrentBidsParser.CurrentBids(1234, List.of(new XMLCurrentBidsParser.BidItem(
+                trackingTypeId, 7000 + playerId, playerId, "Player " + playerId, 0, 0, "", FUTURE)));
+    }
+
+    /** Each get_open_bids call stores a newer currentbids row first - it must not hide the price. */
+    @Test
+    void openBids_reportsTheAskingPriceStoredForTheSameListing() throws Exception {
+        storeAskingPrice(7001, FUTURE, 1_200_000L);
+        installBidsService(oneBid(8, 7001));
+        final var bids = openBidsTool().handler().call(new JsonObject()).getAsJsonArray("bids");
+        assertThat(rowOf(bids, 7001).get("askingPrice").getAsLong()).isEqualTo(1_200_000L);
+    }
+
+    @Test
+    void openBids_ignoresTheAskingPriceOfAnEarlierListingOfTheSamePlayer() throws Exception {
+        storeAskingPrice(7002, "2025-01-01 20:00:00", 900_000L);
+        installBidsService(oneBid(8, 7002));
+        final var bids = openBidsTool().handler().call(new JsonObject()).getAsJsonArray("bids");
+        assertThat(rowOf(bids, 7002).has("askingPrice")).isFalse();
+    }
+
+    @Test
+    void openBids_sellingRowsCarryTheirAskingPriceAndACount() throws Exception {
+        storeAskingPrice(7003, FUTURE, 350_000L);
+        installBidsService(oneBid(1, 7003));
+        final var result = openBidsTool().handler().call(new JsonObject());
+        assertThat(rowOf(result.getAsJsonArray("selling"), 7003).get("askingPrice").getAsLong()).isEqualTo(350_000L);
+        assertThat(result.get("sellingCount").getAsInt()).isEqualTo(1);
+        assertThat(marketPlayerCalls).isEmpty();   // stored already, no CHPP call
+    }
+
+    /** Nothing stored for our own listed player: one playerdetails call, kept for the next check. */
+    @Test
+    void openBids_fetchesTheAskingPriceOfOurListedPlayerOnce() throws Exception {
+        final var player = new Player();
+        player.setPlayerId(7004);
+        marketPlayer = new core.file.xml.XMLPlayersParser.MarketPlayer(player, true, 1234, false,
+                420_000L, HODateTime.fromHT(FUTURE), 0L);
+        installBidsService(oneBid(1, 7004));
+
+        final var first = openBidsTool().handler().call(new JsonObject()).getAsJsonArray("selling");
+        final var second = openBidsTool().handler().call(new JsonObject()).getAsJsonArray("selling");
+
+        assertThat(rowOf(first, 7004).get("askingPrice").getAsLong()).isEqualTo(420_000L);
+        assertThat(rowOf(second, 7004).get("askingPrice").getAsLong()).isEqualTo(420_000L);
+        assertThat(marketPlayerCalls).containsExactly(7004);
     }
 
     @Test
