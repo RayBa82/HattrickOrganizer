@@ -2083,8 +2083,8 @@ public final class TransferTools {
                 "nativeCountryId", McpTool.prop("integer", "native country id"),
                 "tsiMin", McpTool.prop("integer", "minimum TSI"),
                 "tsiMax", McpTool.prop("integer", "maximum TSI"),
-                "priceMin", McpTool.prop("integer", "minimum current price (highest bid once there is one), in the user's currency"),
-                "priceMax", McpTool.prop("integer", "maximum current price (highest bid once there is one), in the user's currency"),
+                "priceMin", McpTool.prop("integer", "minimum current price (highest bid, else asking price), in the user's currency"),
+                "priceMax", McpTool.prop("integer", "maximum current price (highest bid, else asking price), in the user's currency"),
                 "pageSize", McpTool.prop("integer", "results per page, default and maximum 100"),
                 "queries", McpTool.prop("array", "several searches in one call, each shaped like "
                         + "the single-search arguments above; replaces them. Returns results[], "
