@@ -84,15 +84,16 @@ class TeamToolsTest {
     }
 
     @Test
-    void downloadTeam_takesNoArgumentsAtAll() {
+    void downloadTeam_takesOnlyAnOptionalTaskId() {
         final var download = TeamTools.tools().stream()
                 .filter(t -> t.name().equals("download_team"))
                 .findFirst().orElseThrow();
 
         assertThat(download.inputSchema().getAsJsonArray("required")).isEmpty();
         // resolvePrices is gone: the download always resolves sale prices, the way HO's own
-        // Download button always has.
-        assertThat(download.inputSchema().getAsJsonObject("properties").entrySet()).isEmpty();
+        // Download button always has. taskId only polls.
+        assertThat(download.inputSchema().getAsJsonObject("properties").keySet())
+                .containsExactly("taskId");
         // the lineup clobber is the one surprise this tool has, so it has to be in the description
         assertThat(download.description()).contains("lineupReplaced");
     }
@@ -365,5 +366,45 @@ class TeamToolsTest {
         // the underlying message verbatim - it is the only thing that says what actually broke
         assertThat(TeamTools.advice(OnlineWorker.Failure.CHPP_ERROR, "Corrupt/Missing Data").message())
                 .contains("Corrupt/Missing Data");
+    }
+
+    /** The live bug: 3 ids asked, 3 plus every player after the last match came back. */
+    @Test
+    void onlyWanted_returnsExactlyTheRequestedPlayersAndNamesTheMissing() throws Exception {
+        final var squad = java.util.List.of(10, 20, 30, 40, 50);
+
+        assertThat(TeamTools.onlyWanted(squad, java.util.Set.of(20, 30), i -> i))
+                .containsExactly(20, 30);
+        assertThat(TeamTools.onlyWanted(squad, java.util.Set.of(), i -> i)).isEqualTo(squad);
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> TeamTools.onlyWanted(squad, java.util.Set.of(20, 99), i -> i))
+                .isInstanceOf(McpToolException.class)
+                .hasMessageContaining("[99]");
+    }
+
+    @Test
+    void aDownloadTaskReportsRunningThenItsRuntimeAndResult() {
+        final var task = new TeamTools.DownloadTask("download-7");
+
+        final var running = TeamTools.downloadStatus(task);
+        assertThat(running.get("status").getAsString()).isEqualTo("running");
+        assertThat(running.get("taskId").getAsString()).isEqualTo("download-7");
+        assertThat(running.has("runtimeSeconds")).isFalse();
+
+        final var result = new com.google.gson.JsonObject();
+        result.addProperty("hrfId", 151);
+        task.result = result;
+        task.runtimeMs = 118_342;
+        task.finishedAt = core.util.HODateTime.now();
+        final var done = TeamTools.downloadStatus(task);
+        assertThat(done.get("status").getAsString()).isEqualTo("done");
+        assertThat(done.get("runtimeSeconds").getAsDouble()).isEqualTo(118.342);
+        assertThat(done.getAsJsonObject("result").get("hrfId").getAsInt()).isEqualTo(151);
+
+        task.error = "CHPP login expired";
+        final var failed = TeamTools.downloadStatus(task);
+        assertThat(failed.get("status").getAsString()).isEqualTo("failed");
+        assertThat(failed.get("error").getAsString()).isEqualTo("CHPP login expired");
+        assertThat(failed.has("result")).isFalse();
     }
 }

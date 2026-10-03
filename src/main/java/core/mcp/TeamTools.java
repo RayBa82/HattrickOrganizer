@@ -148,13 +148,15 @@ public final class TeamTools {
                                                 + "(league, cup, friendly) at recent attendance"))),
                         TeamTools::finances),
                 new McpTool("download_team",
-                        "Runs HO's own Download and rewrites the local database - squad, finances, "
-                                + "staff, stadium, matches, fixtures, transfers, sub-skills. Call it "
-                                + "when the user changed something in Hattrick that HO cannot see. "
-                                + "Twenty to sixty-plus CHPP requests with HO's window frozen "
-                                + "throughout, so not a routine refresh. It replaces HO's stored "
-                                + "lineup with Hattrick's match order: check lineupReplaced.",
-                        McpTool.schema(McpTool.properties()),
+                        "Runs HO's Download (squad, finances, matches, transfers, sub-skills) in the "
+                                + "background, ~2 min: returns a taskId at once (a running download's, "
+                                + "if any). Call again with taskId until status is done or failed; "
+                                + "done carries runtimeSeconds and the result. Not a routine refresh. "
+                                + "It replaces HO's stored lineup with Hattrick's match order: check "
+                                + "result.lineupReplaced.",
+                        McpTool.schema(McpTool.properties(
+                                TASK_ID, McpTool.prop("string", "a taskId this tool returned: "
+                                        + "report that download's status instead of starting one"))),
                         TeamTools::downloadTeam)
         );
     }
@@ -343,23 +345,38 @@ public final class TeamTools {
         }
 
         final var players = new JsonArray();
-        for (final var player : model.getCurrentPlayers()) {
-            if (!wanted.isEmpty() && !wanted.remove(player.getPlayerId())) {
-                continue;
-            }
+        for (final var player : onlyWanted(model.getCurrentPlayers(), wanted,
+                core.model.player.Player::getPlayerId)) {
             final var json = McpJson.player(player, ratingModel);
             if (withTransfers) {
                 json.add("transfers", transfers(player.getPlayerId()));
             }
             players.add(json);
         }
-        if (!wanted.isEmpty()) {
-            throw new McpToolException("Not in the squad: " + wanted + ". Call get_squad without "
-                    + "playerIds for the ids HO knows about.");
-        }
         final var json = new JsonObject();
         json.add("players", players);
         return json;
+    }
+
+    /**
+     * The players whose id is in {@code wanted}, in squad order - all of them when it is empty.
+     * Refuses when an id is not in the squad. Matches are ticked off a copy: emptying
+     * {@code wanted} itself would read as "no filter" and let every player after the last
+     * requested one through, which is what get_squad(playerIds) used to do.
+     */
+    static <T> List<T> onlyWanted(List<T> all, java.util.Set<Integer> wanted,
+                                  java.util.function.ToIntFunction<T> id) throws McpToolException {
+        if (wanted.isEmpty()) {
+            return all;
+        }
+        final var missing = new java.util.LinkedHashSet<>(wanted);
+        final var picked = all.stream().filter(p -> wanted.contains(id.applyAsInt(p))).toList();
+        picked.forEach(p -> missing.remove(id.applyAsInt(p)));
+        if (!missing.isEmpty()) {
+            throw new McpToolException("Not in the squad: " + missing + ". Call get_squad without "
+                    + "playerIds for the ids HO knows about.");
+        }
+        return picked;
     }
 
     /** A player's transfers as HO recorded them locally. */
@@ -886,6 +903,121 @@ public final class TeamTools {
         return json;
     }
 
+    /**
+     * One background {@code download_team} run. {@code finishedAt} is written last, so a non-null
+     * value means {@code result} or {@code error} is already set.
+     */
+    static final class DownloadTask {
+        final String id;
+        final HODateTime startedAt = HODateTime.now();
+        final long startNanos = System.nanoTime();
+        volatile JsonObject result;
+        volatile String error;
+        volatile long runtimeMs;
+        volatile HODateTime finishedAt;
+
+        DownloadTask(String id) {
+            this.id = id;
+        }
+    }
+
+    private static final String TASK_ID = "taskId";
+    /** What a caller is told to expect - both of the first live downloads took about two minutes. */
+    static final int EXPECTED_DOWNLOAD_SECONDS = 120;
+    /** This session's downloads by taskId, the newest few only - status is asked for right after. */
+    private static final Map<String, DownloadTask> downloadTasks = new java.util.LinkedHashMap<>() {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, DownloadTask> eldest) {
+            return size() > 10;
+        }
+    };
+    private static DownloadTask latestDownload;
+    private static int downloadTaskCounter;
+    /** One at a time: a second start while one runs gets the running task back. */
+    private static final java.util.concurrent.ExecutorService downloadExecutor =
+            java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+                final var t = new Thread(r, "mcp-download-team");
+                t.setDaemon(true);
+                return t;
+            });
+
+    /**
+     * Start a download in the background, or report one. The download takes about two minutes,
+     * longer than an MCP client waits for a tool call, so it can no longer run inside the call:
+     * the first two live runs timed out on the client while the server finished them anyway.
+     */
+    private static JsonObject downloadTeam(JsonObject args) throws McpToolException {
+        if (args.has(TASK_ID)) {
+            final var taskId = args.get(TASK_ID).getAsString();
+            final DownloadTask task;
+            synchronized (downloadTasks) {
+                task = downloadTasks.get(taskId);
+            }
+            if (task == null) {
+                throw new McpToolException("Unknown taskId " + taskId
+                        + ". HO keeps the last 10 downloads of this session; call download_team "
+                        + "without taskId to start one.");
+            }
+            return downloadStatus(task);
+        }
+        synchronized (downloadTasks) {
+            if (latestDownload != null && latestDownload.finishedAt == null) {
+                final var json = downloadStatus(latestDownload);
+                json.addProperty("alreadyRunning", true);
+                return json;
+            }
+        }
+        // Refusals come back now, not only when the caller polls. runDownload checks again.
+        LineupTools.onEdt(() -> {
+            checkDownloadCap();
+            requireTeamSelected();
+            return null;
+        });
+        final DownloadTask task;
+        synchronized (downloadTasks) {
+            task = new DownloadTask("download-" + (++downloadTaskCounter));
+            downloadTasks.put(task.id, task);
+            latestDownload = task;
+        }
+        downloadExecutor.execute(() -> {
+            try {
+                task.result = runDownload();
+            } catch (McpToolException e) {
+                task.error = e.getMessage();
+            } catch (Exception e) {
+                HOLogger.instance().error(TeamTools.class, e);
+                task.error = "The download failed: " + e;
+            }
+            task.runtimeMs = (System.nanoTime() - task.startNanos) / 1_000_000;
+            task.finishedAt = HODateTime.now();
+        });
+        return downloadStatus(task);
+    }
+
+    /** status running / done / failed, with the runtime once it has finished. */
+    static JsonObject downloadStatus(DownloadTask task) {
+        final var json = new JsonObject();
+        json.addProperty(TASK_ID, task.id);
+        json.addProperty("startedAt", task.startedAt.toHT());
+        final var finishedAt = task.finishedAt;
+        if (finishedAt == null) {
+            json.addProperty("status", "running");
+            json.addProperty("elapsedSeconds", (System.nanoTime() - task.startNanos) / 1_000_000_000L);
+            json.addProperty("expectedSeconds", EXPECTED_DOWNLOAD_SECONDS);
+            json.addProperty("hint", "call download_team with this taskId again to check");
+            return json;
+        }
+        json.addProperty("status", task.error == null ? "done" : "failed");
+        json.addProperty("finishedAt", finishedAt.toHT());
+        json.addProperty("runtimeSeconds", task.runtimeMs / 1000.0);
+        if (task.error == null) {
+            json.add("result", task.result);
+        } else {
+            json.addProperty("error", task.error);
+        }
+        return json;
+    }
+
     /** Team downloads issued over MCP in this HO session. Manual downloads do not count. */
     static int downloadsThisSession;
 
@@ -953,7 +1085,7 @@ public final class TeamTools {
      * silently declined to download the team because of a checkbox in a dialog the agent cannot
      * see would be worse than useless.
      */
-    private static JsonObject downloadTeam(JsonObject args) throws McpToolException {
+    private static JsonObject runDownload() throws McpToolException {
         return LineupTools.onEdt(() -> {
             // Both before any CHPP traffic, so a refusal costs nothing.
             checkDownloadCap();
