@@ -100,13 +100,15 @@ public final class TransferTools {
                                 + "with playerId + bidAmount for a preview and a confirmToken, then "
                                 + "again with the same playerId and that token to place it. The "
                                 + "second call leaves the machine and commits money in Hattrick. "
-                                + "Amounts are in the user's currency.",
+                                + "Amounts are in the user's currency. Step 2 echoes Hattrick's "
+                                + "confirmed maxBid, or a warning if the autobid is missing.",
                         McpTool.schema(McpTool.properties(
                                         "playerId", McpTool.prop("integer", "the player to bid on"),
                                         "bidAmount", McpTool.prop("integer",
                                                 "the bid, in the user's currency (required in step 1)"),
                                         "maxBidAmount", McpTool.prop("integer",
-                                                "optional autobid ceiling"),
+                                                "optional autobid ceiling, at least bidAmount "
+                                                        + "(step 1 refuses a lower one)"),
                                         "confirmToken", McpTool.prop("string",
                                                 "the token from step 1 (required in step 2, omit in step 1)")),
                                 "playerId"),
