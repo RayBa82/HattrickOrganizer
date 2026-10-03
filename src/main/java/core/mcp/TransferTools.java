@@ -271,11 +271,11 @@ public final class TransferTools {
 
     /**
      * The size of the corpus, per listing rather than per row: a listing seen in four searches is
-     * four observations but one data point. Outcome: sold (a sale price is known), open (deadline
      * ahead), noSaleFound (looked up after the deadline, no sale), awaitingResolve (deadline passed,
-     * not looked up yet). The window - what a valuation reads - is broken down by the listing's
-     * newest skill-bearing observation; a listing only ever seen through currentbids has no age or
-     * skills and counts as unknown.
+     * not looked up yet). suspectedLostSales counts the noSaleFound listings that ever showed a bid,
+     * which in Hattrick means they sold. The window - what a valuation reads - is broken down by the
+     * listing's newest skill-bearing observation; a listing only ever seen through currentbids has
+     * no age or skills and counts as unknown.
      */
     static JsonObject corpusStats(List<TransferListing> rows, HODateTime now, int days) {
         final var since = new HODateTime(now.getInstant().minus(java.time.Duration.ofDays(days)));
@@ -297,8 +297,10 @@ public final class TransferTools {
 
         final var outcomes = new LinkedHashMap<String, Integer>();
         List.of("sold", "open", "noSaleFound", "awaitingResolve").forEach(k -> outcomes.put(k, 0));
+        int suspectedLostSales = 0;
         int windowListings = 0;
         int windowSold = 0;
+        int windowSuspected = 0;
         final var byAge = buckets(AGE_BUCKETS);
         final var byGroup = buckets(POSITION_GROUPS);
         final var bySpecialty = new JsonObject();
@@ -307,18 +309,24 @@ public final class TransferTools {
         for (final var observations : listings.values()) {
             final var outcome = outcome(observations, now);
             outcomes.merge(outcome, 1, Integer::sum);
+            // A Hattrick bid cannot be withdrawn: a listing that ever showed one sold. Filed
+            // noSaleFound, it is a sale the resolver failed to match.
+            final var suspect = outcome.equals("noSaleFound")
+                    && observations.stream().anyMatch(o -> o.getHighestBid() > 0);
+            if (suspect) suspectedLostSales++;
             if (observations.stream().noneMatch(o -> o.getObservedAt() != null && !o.getObservedAt().isBefore(since))) {
                 continue;
             }
             final var isSold = outcome.equals("sold");
             windowListings++;
             if (isSold) windowSold++;
+            if (suspect) windowSuspected++;
             final var rep = observations.stream().filter(o -> o.getPlaymaker() != null).min(newestFirst)
                     .orElse(observations.stream().min(newestFirst).orElseThrow());
-            count(byAge, ageBucket(rep.getAge()), isSold);
+            count(byAge, ageBucket(rep.getAge()), isSold, suspect);
             final var levels = listingSkillLevels(rep);
-            count(byGroup, levels.containsValue(null) ? "unknown" : derivePositionGroup(levels), isSold);
-            count(bySpecialty, rep.getSpecialty() == null ? "unknown" : rep.getSpecialty().toString(), isSold);
+            count(byGroup, levels.containsValue(null) ? "unknown" : derivePositionGroup(levels), isSold, suspect);
+            count(bySpecialty, rep.getSpecialty() == null ? "unknown" : rep.getSpecialty().toString(), isSold, suspect);
         }
 
         final var window = new JsonObject();
@@ -326,6 +334,7 @@ public final class TransferTools {
         window.addProperty("observations", windowObservations);
         window.addProperty("listings", windowListings);
         window.addProperty("sold", windowSold);
+        window.addProperty("suspectedLostSales", windowSuspected);
         window.add("byAge", byAge);
         window.add("byPositionGroup", byGroup);
         window.add("bySpecialty", bySpecialty);
@@ -334,6 +343,7 @@ public final class TransferTools {
         json.addProperty("observations", rows.size());
         json.addProperty("listings", listings.size());
         outcomes.forEach(json::addProperty);
+        json.addProperty("suspectedLostSales", suspectedLostSales);
         json.addProperty("oldestObservedAt", oldest == null ? null : oldest.toHT());
         json.addProperty("newestObservedAt", newest == null ? null : newest.toHT());
         json.add("window", window);
@@ -361,25 +371,29 @@ public final class TransferTools {
     private static JsonObject buckets(List<String> keys) {
         final var json = new JsonObject();
         for (final var key : keys) {
-            final var bucket = new JsonObject();
-            bucket.addProperty("listings", 0);
-            bucket.addProperty("sold", 0);
-            json.add(key, bucket);
+            json.add(key, emptyBucket());
         }
         return json;
     }
 
+    private static JsonObject emptyBucket() {
+        final var bucket = new JsonObject();
+        bucket.addProperty("listings", 0);
+        bucket.addProperty("sold", 0);
+        bucket.addProperty("suspectedLostSales", 0);
+        return bucket;
+    }
 
-    private static void count(JsonObject buckets, String key, boolean sold) {
+    private static void count(JsonObject buckets, String key, boolean sold, boolean suspectedLostSale) {
         if (!buckets.has(key)) {
-            final var bucket = new JsonObject();
-            bucket.addProperty("listings", 0);
-            bucket.addProperty("sold", 0);
-            buckets.add(key, bucket);
+            buckets.add(key, emptyBucket());
         }
         final var bucket = buckets.getAsJsonObject(key);
         bucket.addProperty("listings", bucket.get("listings").getAsInt() + 1);
         if (sold) bucket.addProperty("sold", bucket.get("sold").getAsInt() + 1);
+        if (suspectedLostSale) {
+            bucket.addProperty("suspectedLostSales", bucket.get("suspectedLostSales").getAsInt() + 1);
+        }
     }
 
     /**

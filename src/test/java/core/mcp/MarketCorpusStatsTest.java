@@ -112,4 +112,32 @@ class MarketCorpusStatsTest {
         assertThat(stats.get("listings").getAsInt()).isZero();
         assertThat(stats.get("oldestObservedAt").isJsonNull()).isTrue();
     }
+
+    /**
+     * A Hattrick bid cannot be withdrawn, so an expired listing that ever showed a bid sold. Filed
+     * noSaleFound, it is a sale the resolver failed to match, and it is counted per cell.
+     */
+    @Test
+    void countsNoSaleFoundListingsThatHadABidAsSuspectedLostSales() {
+        final var bidSeen = hit(1, daysAgo(4), daysAgo(3), 18, 0, 10, 4);
+        bidSeen.setHighestBid(300_000L);
+        bidSeen.setResolvedAt(daysAgo(2));
+        final var noBid = hit(2, daysAgo(4), daysAgo(3), 18, 0, 10, 4);
+        noBid.setResolvedAt(daysAgo(2));
+        final var sold = hit(3, daysAgo(4), daysAgo(3), 18, 0, 10, 4);
+        sold.setHighestBid(500_000L);
+        sold.setSalePrice(500_000L);
+
+        final var stats = TransferTools.corpusStats(List.of(bidSeen, noBid, sold), NOW, 112);
+
+        assertThat(stats.get("noSaleFound").getAsInt()).isEqualTo(2);
+        assertThat(stats.get("suspectedLostSales").getAsInt()).isEqualTo(1);
+        final var window = stats.getAsJsonObject("window");
+        assertThat(window.get("suspectedLostSales").getAsInt()).isEqualTo(1);
+        assertThat(window.getAsJsonObject("byAge").getAsJsonObject("18")
+                .get("suspectedLostSales").getAsInt()).isEqualTo(1);
+        assertThat(window.getAsJsonObject("byPositionGroup").getAsJsonObject("inner_mid")
+                .get("suspectedLostSales").getAsInt()).isEqualTo(1);
+    }
 }
+

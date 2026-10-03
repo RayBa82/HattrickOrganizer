@@ -192,5 +192,23 @@ class TransferListingResolverTest {
                 List.of(noDeadline), HODateTime.fromHT("2026-09-05 10:00:00"), NOW)).isEmpty();
         assertThat(TransferListingResolver.relistingsToWatch(List.of(noDeadline), NOW)).isEmpty();
     }
+
+    /**
+     * A player listed twice: the history one lookup fetched holds both sales, and each listing
+     * gets its own. The old code matched only the deadline it was asked about and stamped the
+     * other listing noSaleFound although its sale was right there in the same answer.
+     */
+    @Test
+    void matchesEveryExpiredDeadlineAgainstOneHistory() {
+        final var first = transfer("2026-06-10 20:00:00", 400_000L);
+        final var second = transfer("2026-09-02 20:15:00", 1_700_000L);
+        final var unsoldDeadline = HODateTime.fromHT("2026-07-20 18:00:00");
+
+        final var sales = TransferListingResolver.salesAt(List.of(second, first),
+                List.of(HODateTime.fromHT("2026-06-10 20:00:00"), unsoldDeadline, DEADLINE));
+
+        assertThat(sales).containsExactly(first, second);
+    }
 }
+
 

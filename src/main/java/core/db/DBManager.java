@@ -1562,6 +1562,15 @@ public class DBManager implements PersistenceManager {
 				.markResolveAttempted(playerId, now);
 	}
 
+	public List<HODateTime> loadTransferListingUnsoldDeadlines(int playerId, HODateTime before) {
+		return ((TransferListingTable) getTable(TransferListingTable.TABLENAME))
+				.loadUnsoldDeadlines(playerId, before);
+	}
+
+	public void resetTransferListingNoSaleFound() {
+		((TransferListingTable) getTable(TransferListingTable.TABLENAME)).resetNoSaleFound();
+	}
+
 	public List<Integer> loadTransferListingPlayerIdsMissingCharacter(int max) {
 		return ((TransferListingTable) getTable(TransferListingTable.TABLENAME))
 				.loadPlayerIdsMissingCharacter(max);

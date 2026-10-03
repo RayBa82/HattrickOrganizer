@@ -138,6 +138,13 @@ public final class UserParameter extends Configuration {
      */
     public String mcpScoutResolvedThrough = "";
 
+    /**
+     * Whether the noSaleFound listings have been handed back to the resolver once, after it
+     * learned to match every deadline of a player rather than one. See
+     * TransferListingResolver.resetNoSaleFoundOnce.
+     */
+    public boolean mcpNoSaleFoundReset = false;
+
     //Whether or not the player analysis is packed vertically one below the other
     public boolean spieleranalyseVertikal = true;
     public boolean statistikAlleBeschriftung = true;
@@ -475,6 +482,7 @@ public final class UserParameter extends Configuration {
         map.put("mcpDownloadsPerSession", String.valueOf(mcpDownloadsPerSession));
         map.put("mcpScoutResolvedThrough",
                 mcpScoutResolvedThrough == null ? "" : mcpScoutResolvedThrough);
+        map.put("mcpNoSaleFoundReset", String.valueOf(mcpNoSaleFoundReset));
 
         if (ReleaseChannel == null) {
             ReleaseChannel = "Stable";
@@ -728,6 +736,7 @@ public final class UserParameter extends Configuration {
         mcpChppWritesPerSession = orDefault(getIntValue(values, "mcpChppWritesPerSession"), 20);
         mcpDownloadsPerSession = orDefault(getIntValue(values, "mcpDownloadsPerSession"), 5);
         mcpScoutResolvedThrough = getStringValue(values, "mcpScoutResolvedThrough");
+        mcpNoSaleFoundReset = getBooleanValue(values, "mcpNoSaleFoundReset");
         ReleaseChannel = getStringValue(values, "ReleaseChannel");
         fixtures = getBooleanValue(values, "fixtures");
         downloadCurrentMatchlist = getBooleanValue(values, "currentMatchlist");

@@ -115,6 +115,24 @@ public class TransferListingTable extends AbstractTable {
                 + " AND DEADLINE < '" + HODateTime.toDbTimestamp(now) + "'");
     }
 
+    /**
+     * The distinct deadlines of this player's listings that ended before {@code before} with no
+     * sale price - looked up already or not, since one history answer can price them all.
+     */
+    public List<HODateTime> loadUnsoldDeadlines(int playerId, HODateTime before) {
+        final var sql = createSelectStatement("WHERE PLAYERID=" + playerId
+                + " AND SALEPRICE IS NULL"
+                + " AND DEADLINE < '" + HODateTime.toDbTimestamp(before) + "'");
+        return load(TransferListing.class, connectionManager.executeQuery(sql)).stream()
+                .map(TransferListing::getDeadline).distinct().toList();
+    }
+
+    /** Clear RESOLVEDAT on every listing looked up without a sale, so the resolver asks again. */
+    public void resetNoSaleFound() {
+        connectionManager.executeUpdate("UPDATE " + getTableName()
+                + " SET RESOLVEDAT=NULL WHERE SALEPRICE IS NULL AND RESOLVEDAT IS NOT NULL");
+    }
+
     /** Whether any snapshot of this player carries skill data (a search hit, or the skills-fill pass). */
     public boolean hasSkillData(int playerId) {
         final var sql = createSelectStatement(

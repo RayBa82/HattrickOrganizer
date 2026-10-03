@@ -96,9 +96,27 @@ public final class TransferListingResolver {
     private TransferListingResolver() {
     }
 
+    /**
+     * Hands every noSaleFound listing back to the corpus pass, once per database.
+     * <p>
+     * Up to this fix a lookup matched only the one deadline it was asked about, then stamped every
+     * expired listing of that player as looked-at - so the sale of a relisted or flipped player's
+     * other listing was filed as noSaleFound although the answer held it. Clearing RESOLVEDAT puts
+     * those rows back in the oldest-first queue, which works through them one player per call
+     * under CORPUS_BACKFILL_BUDGET, over as many downloads as it takes.
+     */
+    private static void resetNoSaleFoundOnce() {
+        if (UserParameter.instance().mcpNoSaleFoundReset) {
+            return;
+        }
+        DBManager.instance().resetTransferListingNoSaleFound();
+        UserParameter.instance().mcpNoSaleFoundReset = true;
+        DBManager.instance().saveUserParameter("mcpNoSaleFoundReset", "true");
+    }
     /** @return how many listings got a sale price */
     public static int resolve() {
         final var now = HODateTime.now();
+        resetNoSaleFoundOnce();
         final var deadline = System.nanoTime() + TIME_BUDGET.toNanos();
         var resolved = 0;
         final var seen = new HashSet<Integer>();
@@ -151,9 +169,7 @@ public final class TransferListingResolver {
             // transfersPlayer call - add the column and compare observation.owningTeamId() against
             // it if the scout list ever grows enough for one call per watched entry to matter.
             final var outcome = resolvePlayer(candidate.playerId(), candidate.deadline(), now);
-            if (outcome.resolved()) {
-                resolved++;
-            }
+            resolved += outcome.sales();
             if (outcome.failed()) {
                 // The lookup did not answer. Stop here and leave the watermark on this candidate:
                 // a network blip must not silently consume the one moment his sale was askable.
@@ -208,9 +224,7 @@ public final class TransferListingResolver {
                     || listing.getDeadline().compareTo(settled(now)) >= 0) {
                 continue;                      // not settled yet, nothing to resolve
             }
-            if (resolvePlayer(listing.getPlayerId(), listing.getDeadline(), now).resolved()) {
-                resolved++;
-            }
+            resolved += resolvePlayer(listing.getPlayerId(), listing.getDeadline(), now).sales();
         }
         return resolved;
     }
@@ -230,7 +244,11 @@ public final class TransferListingResolver {
      * pass needs a window that closes the way a sale price freshly past its deadline does, so a
      * player or row this budget runs out on is simply picked up again next call.
      */
-    private static final java.time.Duration CORPUS_BACKFILL_BUDGET = java.time.Duration.ofSeconds(20);
+    // Headless there is no UI to freeze, so the server gets three times the desktop's budget: the
+    // one-time re-resolve of every noSaleFound listing (see resetNoSaleFoundOnce) then finishes in
+    // a handful of downloads rather than dozens.
+    private static final java.time.Duration CORPUS_BACKFILL_BUDGET = java.time.Duration.ofSeconds(
+            java.awt.GraphicsEnvironment.isHeadless() ? 60 : 20);
 
     /**
      * Hard cap on how many players the character backfill pass after a team download may look up
@@ -470,29 +488,43 @@ public final class TransferListingResolver {
 
 
     /**
-     * Whether one player's lookup produced a price, and whether it answered at all.
+     * How many listings one player's lookup priced, and whether it answered at all.
      * <p>
-     * {@code failed} is not {@code !resolved}: "he did not sell" is an answer and consumes the
+     * {@code failed} is not {@code sales == 0}: "he did not sell" is an answer and consumes the
      * question, while "the call threw" leaves it open and must not let the sale watermark move past
      * him.
      */
-    private record Outcome(boolean resolved, boolean failed) {}
+    private record Outcome(int sales, boolean failed) {}
 
     /**
-     * Fill in what this player's expired listing sold for.
+     * Fill in what this player's expired listings sold for - every one of them, not only the one
+     * at {@code deadline}.
      * <p>
-     * Local first, always: HO's own TRANSFER table may already hold the very transfer being asked
+     * One {@code transfersPlayer} answer is his whole history, and the stamp at the end marks every
+     * expired unsold listing of his as looked-at. Matching only the asked deadline lost the sale of
+     * any other listing of the same player - a relisted or flipped player - although it was right
+     * there in the answer.
+     * <p>
+     * Local first, always: HO's own TRANSFER table may already hold the very transfers being asked
      * about - certainly so if we won the auction, since a team download stores our own transfers,
-     * and also whenever an earlier pass fetched this player's history. Spending a CHPP call on a
-     * sale already sitting in the database is exactly the waste worth avoiding, and it would hit
-     * hardest on the players we actually bought.
+     * and also whenever an earlier pass fetched this player's history. The call is skipped only
+     * when the local table accounts for every deadline.
      */
     private static Outcome resolvePlayer(int playerId, HODateTime deadline, HODateTime now) {
-        final var known = saleAt(DBManager.instance().getTransfers(playerId, true), deadline);
-        if (known != null) {
-            applySale(playerId, known);
-            DBManager.instance().markTransferListingResolveAttempted(playerId, now);
-            return new Outcome(true, false);
+        // Settled only: a listing inside SALE_SETTLE has no sale recorded yet, and stamping it
+        // here would lose it for good. The same cut-off goes to the stamp below.
+        final var settled = settled(now);
+        final var deadlines = new ArrayList<>(
+                DBManager.instance().loadTransferListingUnsoldDeadlines(playerId, settled));
+        if (!deadlines.contains(deadline)) {
+            deadlines.add(deadline);      // a scout entry's deadline need not be in the corpus
+        }
+
+        final var known = salesAt(DBManager.instance().getTransfers(playerId, true), deadlines);
+        if (known.size() == deadlines.size()) {
+            known.forEach(sale -> applySale(playerId, sale));
+            DBManager.instance().markTransferListingResolveAttempted(playerId, settled);
+            return new Outcome(known.size(), false);
         }
 
         final List<module.transfer.PlayerTransfer> fetched;
@@ -502,16 +534,27 @@ public final class TransferListingResolver {
             // The lookup failed rather than answered - leave the rows alone so a network blip does
             // not burn their one attempt.
             HOLogger.instance().error(TransferListingResolver.class, e);
-            return new Outcome(false, true);
+            return new Outcome(0, true);
         }
-        final var sale = saleAt(fetched, deadline);
-        if (sale != null) {
-            applySale(playerId, sale);
-        }
+        final var sales = salesAt(fetched, deadlines);
+        sales.forEach(sale -> applySale(playerId, sale));
         // The call answered. Whatever it did not account for - a listing that was withdrawn, or
         // expired with no bidder - is marked looked-at so it is never asked about again.
-        DBManager.instance().markTransferListingResolveAttempted(playerId, now);
-        return new Outcome(sale != null, false);
+        DBManager.instance().markTransferListingResolveAttempted(playerId, settled);
+        return new Outcome(sales.size(), false);
+    }
+
+    /** The sale behind each of these deadlines that has one, each transfer once, in deadline order. */
+    static List<module.transfer.PlayerTransfer> salesAt(
+            List<module.transfer.PlayerTransfer> transfers, List<HODateTime> deadlines) {
+        final var sales = new ArrayList<module.transfer.PlayerTransfer>();
+        deadlines.stream().sorted().forEach(d -> {
+            final var sale = saleAt(transfers, d);
+            if (sale != null && sales.stream().noneMatch(s -> s == sale)) {
+                sales.add(sale);
+            }
+        });
+        return sales;
     }
 
     /**
