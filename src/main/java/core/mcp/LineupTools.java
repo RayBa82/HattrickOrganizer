@@ -106,9 +106,13 @@ public final class LineupTools {
         }
         final var model = McpJson.model();
         final var benchRoleIds = new ArrayList<Integer>();
+        final var lineupMatchId = new java.util.concurrent.atomic.AtomicInteger();
         // apply_lineup mutates the live Lineup on the EDT, so serialise it there too.
         final var orderString = onEdt(() -> {
-            final var lineup = model.getCurrentLineup();
+            final var team = model.getCurrentLineupTeam();
+            final var lineup = team.getLineup();
+            requireFieldPlayers(lineup);
+            lineupMatchId.set(team.getMatchId());
             final var wrapper = new JsonObject();
             wrapper.addProperty("order", lineup.toJson());
             // toJson sends the bench sorted by roleId; the echo names the slots in that order.
@@ -121,6 +125,10 @@ public final class LineupTools {
 
         final var out = new JsonObject();
         out.addProperty("matchId", matchId);
+        final var mismatch = matchMismatch(lineupMatchId.get(), matchId);
+        if (mismatch != null) {
+            out.addProperty("warning", mismatch);
+        }
         try {
             ChppWriteService.instance().sendMatchOrderForAgent(matchId, matchType, orderString);
         } catch (ChppWriteService.SupporterRequiredException e) {
@@ -139,6 +147,24 @@ public final class LineupTools {
         out.addProperty("sent", true);
         out.add("order", echo);
         return out;
+    }
+
+    /** An order without field players would wipe the one Hattrick holds, so it never leaves. */
+    static void requireFieldPlayers(Lineup lineup) throws McpToolException {
+        if (lineup.getFieldPositions().stream().noneMatch(p -> p.getPlayerId() > 0)) {
+            throw new McpToolException("Empty lineup, nothing sent: HO holds no field players. "
+                    + "Build the lineup with apply_lineup, check it with get_lineup, then send.");
+        }
+    }
+
+    /** Null when the lineup HO holds was stored for matchId, else the warning sent with the order. */
+    static @Nullable String matchMismatch(int lineupMatchId, int matchId) {
+        if (lineupMatchId == matchId) {
+            return null;
+        }
+        return "The lineup HO holds belongs to "
+                + (lineupMatchId > 0 ? "match " + lineupMatchId : "no match")
+                + ", not " + matchId + ". Check get_lineup's lineupMatchId and nextMatch.";
     }
 
     static JsonObject lineupSchema() {
@@ -314,8 +340,35 @@ public final class LineupTools {
     private static JsonObject currentLineup() throws McpToolException {
         final var model = McpJson.model();
         final var ratingModel = McpJson.privateRatingModel();
+        final var next = DBManager.instance().getNextMatchesKurzInfo(model.getBasics().getTeamId());
         // apply_lineup mutates the live Lineup on the EDT, so read it there too.
-        return onEdt(() -> describe(model.getCurrentLineup(), ratingModel));
+        return onEdt(() -> {
+            final var team = model.getCurrentLineupTeam();
+            final var json = describe(team.getLineup(), ratingModel);
+            addLineupMatch(json, team, next);
+            return json;
+        });
+    }
+
+    /**
+     * HO stores a lineup per match and, on start, loads the one of the next upcoming match - an
+     * empty one if that match has none yet. Naming both makes a lineup left on an earlier match,
+     * or never stored, show at once.
+     */
+    static void addLineupMatch(JsonObject json, core.model.match.MatchLineupTeam team,
+                               @Nullable core.model.match.MatchKurzInfo next) {
+        final var matchId = team.getMatchId();
+        json.add("lineupMatchId", matchId > 0 ? new com.google.gson.JsonPrimitive(matchId) : com.google.gson.JsonNull.INSTANCE);
+        json.add("matchType", matchId > 0 ? new com.google.gson.JsonPrimitive(team.getMatchType().getId()) : com.google.gson.JsonNull.INSTANCE);
+        if (next == null) {
+            json.add("nextMatch", com.google.gson.JsonNull.INSTANCE);
+            return;
+        }
+        final var nextJson = new JsonObject();
+        nextJson.addProperty("matchId", next.getMatchID());
+        nextJson.addProperty("matchType", next.getMatchType().getId());
+        nextJson.addProperty("date", next.getMatchSchedule() == null ? null : next.getMatchSchedule().toHT());
+        json.add("nextMatch", nextJson);
     }
 
     private static JsonObject apply(JsonObject spec) throws McpToolException {

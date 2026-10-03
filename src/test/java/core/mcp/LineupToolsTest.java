@@ -40,6 +40,52 @@ class LineupToolsTest {
     }
 
     @Test
+    void requireFieldPlayers_refusesALineupWithoutFieldPlayers() throws McpToolException {
+        final var empty = new module.lineup.Lineup();
+        assertThatExceptionOfType(McpToolException.class)
+                .isThrownBy(() -> LineupTools.requireFieldPlayers(empty))
+                .withMessageContaining("Empty lineup, nothing sent")
+                .withMessageContaining("apply_lineup");
+
+        final var keeperOnly = new module.lineup.Lineup();
+        keeperOnly.setSpielerAtPosition(IMatchRoleID.keeper, 11);
+        LineupTools.requireFieldPlayers(keeperOnly);   // no throw
+    }
+
+    @Test
+    void matchMismatch_warnsOnlyWhenTheLineupBelongsElsewhere() {
+        assertThat(LineupTools.matchMismatch(100, 100)).isNull();
+        assertThat(LineupTools.matchMismatch(100, 200))
+                .contains("match 100").contains("not 200").contains("lineupMatchId");
+        assertThat(LineupTools.matchMismatch(-1, 200)).contains("no match");
+    }
+
+    @Test
+    void lineupMatch_namesTheLineupsMatchAndTheNextOne() {
+        final var team = new core.model.match.MatchLineupTeam(
+                core.model.enums.MatchType.LEAGUE, 100, "", 1, 0);
+        final var next = new core.model.match.MatchKurzInfo();
+        next.setMatchID(200);
+        next.setMatchType(core.model.enums.MatchType.CUP);
+        next.setMatchSchedule(core.util.HODateTime.fromHT("2026-10-07 20:00:00"));
+
+        final var json = new JsonObject();
+        LineupTools.addLineupMatch(json, team, next);
+
+        assertThat(json.get("lineupMatchId").getAsInt()).isEqualTo(100);
+        assertThat(json.get("matchType").getAsInt()).isEqualTo(1);
+        final var nextMatch = json.getAsJsonObject("nextMatch");
+        assertThat(nextMatch.get("matchId").getAsInt()).isEqualTo(200);
+        assertThat(nextMatch.get("matchType").getAsInt()).isEqualTo(3);
+        assertThat(nextMatch.get("date").getAsString()).isEqualTo("2026-10-07 20:00:00");
+
+        final var unstored = new JsonObject();
+        LineupTools.addLineupMatch(unstored, new core.model.match.MatchLineupTeam(), null);
+        assertThat(unstored.get("lineupMatchId").isJsonNull()).isTrue();
+        assertThat(unstored.get("nextMatch").isJsonNull()).isTrue();
+    }
+
+    @Test
     void applySpec_rejectsTheKeeperAsSetPiecesTaker() {
         final var keeperTakes = JsonParser.parseString("""
                 {"positions":[{"roleId":100,"playerId":11},{"roleId":113,"playerId":22}],
