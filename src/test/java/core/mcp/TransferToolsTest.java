@@ -1354,8 +1354,10 @@ class TransferToolsTest {
         final var query = TransferTools.queryFrom(args);
 
         assertThat(query.skillType1()).isEqualTo(TransferSearchQuery.Skill.PLAYMAKING);
-        // The model asks in the user's currency, Hattrick is asked in swedish krona.
-        assertThat(query.priceMax()).isEqualTo(20_000_000);
+        // transfersearch takes its price bounds in the user's currency, unlike every other CHPP
+        // money value: a live search found a 407000 euro bid only with priceMin/Max 40600/40800
+        // while HO still converted them to krona (2026-10-03).
+        assertThat(query.priceMax()).isEqualTo(2_000_000);
         assertThat(query.pageSize()).isEqualTo(100);           // default
     }
 

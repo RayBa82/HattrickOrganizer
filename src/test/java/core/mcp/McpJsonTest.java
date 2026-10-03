@@ -29,7 +29,6 @@ class McpJsonTest {
         assertThat(McpJson.money(268_000L)).isEqualTo(26_800L);
         assertThat(McpJson.money((AmountOfMoney) null)).isZero();
         assertThat(McpJson.swedishKrona(2_000_000)).isEqualTo(20_000_000);
-        assertThat(McpJson.swedishKrona(null)).isNull();
     }
 
     @Test

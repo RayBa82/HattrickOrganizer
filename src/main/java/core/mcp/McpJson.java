@@ -56,16 +56,9 @@ public final class McpJson {
         return AmountOfMoney.Companion.getCurrencyName();
     }
 
-    /** The reverse of {@link #money}: an amount a model passed in, as the krona CHPP expects. */
-    public static Integer swedishKrona(Integer localAmount) {
-        return localAmount == null ? null
-                : BigDecimal.valueOf(localAmount)
-                        .multiply(AmountOfMoney.Companion.getExchangeRate()).intValue();
-    }
-
     /**
-     * {@link #swedishKrona(Integer)} for a long amount. Transfer bids need this: in a weak-currency
-     * league the local number can be larger than the krona value and exceed the int range.
+     * The reverse of {@link #money}: an amount a model passed in, as the krona CHPP expects. A long,
+     * because in a weak-currency league the local number can exceed the int range.
      */
     public static long swedishKrona(long localAmount) {
         return BigDecimal.valueOf(localAmount)

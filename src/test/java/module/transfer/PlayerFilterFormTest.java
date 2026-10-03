@@ -37,6 +37,13 @@ class PlayerFilterFormTest {
     }
 
     @Test
+    void localPriceOrNull_keepsTheUsersCurrencyForTransfersearch() {
+        assertThat(PlayerFilterForm.localPriceOrNull("100000")).isEqualTo(100000);
+        assertThat(PlayerFilterForm.localPriceOrNull(" ")).isNull();
+        assertThat(PlayerFilterForm.localPriceOrNull("no money")).isNull();
+    }
+
+    @Test
     void chppSkillSpan_isClampedWhenMinIsRaisedPastMax() throws Exception {
         final var form = new PlayerFilterForm(true);
         setSkillMin(form, 0, PlayerAbility.OUTSTANDING); // min=10, old max=9 -> max must follow

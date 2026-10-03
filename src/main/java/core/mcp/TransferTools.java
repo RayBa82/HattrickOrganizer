@@ -1942,9 +1942,9 @@ public final class TransferTools {
     }
 
     private static JsonObject previewBid(JsonObject args, int playerId) throws McpToolException {
-        // The model bids in the user's currency; placeBid is sent in swedish krona - the CHPP-wide
-        // money unit HO already converts transfersearch priceMin/priceMax to. Not confirmed against
-        // a captured placeBid request (docs/current.md @ f5c51d0d); adjust if a real response says otherwise.
+        // The model bids in the user's currency; placeBid is sent in swedish krona, as playerdetails
+        // documents ("Bid amount in SEK"). transfersearch's price bounds turned out to be local, so
+        // check the first real bid's echoed amount (docs/current.md @ f5c51d0d).
         final var bidAmountLocal = McpJson.reqLong(args, "bidAmount");
         final Long maxBidAmountLocal = McpJson.optLong(args, "maxBidAmount");
         if (maxBidAmountLocal != null && maxBidAmountLocal < bidAmountLocal) {
@@ -2083,8 +2083,8 @@ public final class TransferTools {
                 "nativeCountryId", McpTool.prop("integer", "native country id"),
                 "tsiMin", McpTool.prop("integer", "minimum TSI"),
                 "tsiMax", McpTool.prop("integer", "maximum TSI"),
-                "priceMin", McpTool.prop("integer", "minimum asking price, in the user's currency"),
-                "priceMax", McpTool.prop("integer", "maximum asking price, in the user's currency"),
+                "priceMin", McpTool.prop("integer", "minimum current price (highest bid once there is one), in the user's currency"),
+                "priceMax", McpTool.prop("integer", "maximum current price (highest bid once there is one), in the user's currency"),
                 "pageSize", McpTool.prop("integer", "results per page, default and maximum 100"),
                 "queries", McpTool.prop("array", "several searches in one call, each shaped like "
                         + "the single-search arguments above; replaces them. Returns results[], "
@@ -2113,9 +2113,10 @@ public final class TransferTools {
                 .nativeCountryId(McpJson.optInteger(args, "nativeCountryId"))
                 .tsiMin(McpJson.optInteger(args, "tsiMin"))
                 .tsiMax(McpJson.optInteger(args, "tsiMax"))
-                // The form takes the user's currency; the CHPP query is in swedish krona.
-                .priceMin(McpJson.swedishKrona(McpJson.optInteger(args, "priceMin")))
-                .priceMax(McpJson.swedishKrona(McpJson.optInteger(args, "priceMax")))
+                // Passed through unconverted: transfersearch reads these in the user's currency,
+                // unlike every other CHPP money value (PlayerFilterForm.maxPriceLocal).
+                .priceMin(McpJson.optInteger(args, "priceMin"))
+                .priceMax(McpJson.optInteger(args, "priceMax"))
                 // Paging is not exposed: ItemCount comes back as -1 once more than 100 players
                 // match, so a second page buys little and would eat the per session cap.
                 .pageSize(Math.min(McpJson.optInt(args, "pageSize", MAX_PAGE_SIZE), MAX_PAGE_SIZE));

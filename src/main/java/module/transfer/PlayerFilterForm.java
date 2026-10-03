@@ -274,8 +274,28 @@ public class PlayerFilterForm extends JPanel {
     }
 
     /**
-     * The price limit of the form, converted from the user's currency into the swedish krona the
-     * CHPP query expects, or null if the field is empty or unreadable.
+     * The price limit as typed, in the user's currency, for {@code transfersearch}: unlike every
+     * other CHPP money value its priceMin/priceMax are read in the user's currency - a 407000 euro
+     * bid only matched 40600-40800 while HO still sent krona (2026-10-03).
+     */
+    public Integer maxPriceLocal() {
+        return localPriceOrNull(maxPrice.getText());
+    }
+
+    static Integer localPriceOrNull(String text) {
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        try {
+            return Helper.getNumberFormat(0).parse(text.trim()).intValue();
+        } catch (ParseException e) {
+            return null;
+        }
+    }
+
+    /**
+     * The price limit of the form, converted from the user's currency into swedish krona for the
+     * local scout filter, or null if the field is empty or unreadable.
      * <p>
      * {@code AmountOfMoney.parse} is deliberately not used: it takes the typed number for swedish
      * krona without applying the exchange rate, and as long as its currency formatter has not been
