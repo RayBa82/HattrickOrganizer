@@ -29,6 +29,27 @@ class TeamToolsTest {
     }
 
     @Test
+    void isOwnUpcoming_keepsOnlyOurFixturesStillToBePlayed() {
+        final var now = core.util.HODateTime.fromHT("2026-10-05 12:00:00");
+        final var ours = new core.model.series.Paarung();
+        ours.setHeimId(600);
+        ours.setGastId(1);
+        ours.setDatum(core.util.HODateTime.fromHT("2026-10-10 18:00:00"));
+        final var played = new core.model.series.Paarung();
+        played.setHeimId(1);
+        played.setGastId(700);
+        played.setDatum(core.util.HODateTime.fromHT("2026-10-03 18:00:00"));
+        final var theirs = new core.model.series.Paarung();
+        theirs.setHeimId(600);
+        theirs.setGastId(700);
+        theirs.setDatum(core.util.HODateTime.fromHT("2026-10-10 18:00:00"));
+
+        assertThat(TeamTools.isOwnUpcoming(ours, 1, now)).isTrue();
+        assertThat(TeamTools.isOwnUpcoming(played, 1, now)).isFalse();
+        assertThat(TeamTools.isOwnUpcoming(theirs, 1, now)).isFalse();
+    }
+
+    @Test
     void fixtureRow_carriesTheStoredForecastOnlyForOurOwnUpcomingMatch() {
         final var pairing = new core.model.series.Paarung();
         pairing.setMatchId(77);
@@ -103,6 +124,8 @@ class TeamToolsTest {
         assertThat(byName).hasSize(2);
         assertThat(byName).allSatisfy(
                 t -> assertThat(t.inputSchema().getAsJsonArray("required")).isEmpty());
+        assertThat(byName.get(0).inputSchema().getAsJsonObject("properties").has("upcomingOnly"))
+                .isTrue();
         // the stadium block reads back a few played home matches, and how many is tunable
         assertThat(byName.get(1).inputSchema().getAsJsonObject("properties").has("homeMatches"))
                 .isTrue();

@@ -104,8 +104,11 @@ public final class TeamTools {
                                 + "eliminated or not yet drawn); cup rows name the cup (cup, cupId). "
                                 + "Our upcoming rows carry the stored weather forecast. As of HO's "
                                 + "last download; get_match_weather refreshes a forecast.",
-                        McpTool.schema(new JsonObject()),
-                        args -> series()),
+                        McpTool.schema(McpTool.properties(
+                                "upcomingOnly", McpTool.prop("boolean",
+                                        "matches: only our own fixtures not yet played (the "
+                                                + "rest unchanged); default false, the whole season"))),
+                        TeamTools::series),
                 new McpTool("get_finances",
                         "The full weekly financial statement with last week's copy beside it, the "
                                 + "fan club, the staff levels that drive the cost line, and the "
@@ -455,7 +458,9 @@ public final class TeamTools {
      * and the current season - not {@code HOModel.getFixtures()}, which is whichever plan was
      * fetched last and can be an old season's series until the next team download.
      */
-    private static JsonObject series() throws McpToolException {
+    private static JsonObject series(JsonObject args) throws McpToolException {
+        final var upcomingOnly = McpJson.optBool(args, "upcomingOnly", false);
+        final var now = HODateTime.now();
         final var model = McpJson.model();
         final var xtra = model.getXtraDaten();
         // The league LEVEL UNIT id, not Basics.getLiga() - that one is the league, not the series.
@@ -471,8 +476,11 @@ public final class TeamTools {
             final var ownUpcoming = new java.util.HashMap<Integer, MatchKurzInfo>();
             DBManager.instance().getMatchesKurzInfo(model.getBasics().getTeamId(), MatchKurzInfo.UPCOMING)
                     .forEach(m -> ownUpcoming.put(m.getMatchID(), m));
+            final var teamId = model.getBasics().getTeamId();
             for (final var pairing : plan.getMatches()) {
-                matches.add(fixtureRow(pairing, ownUpcoming.get(pairing.getMatchId())));
+                if (!upcomingOnly || isOwnUpcoming(pairing, teamId, now)) {
+                    matches.add(fixtureRow(pairing, ownUpcoming.get(pairing.getMatchId())));
+                }
             }
         }
         json.add("matches", matches);
@@ -497,6 +505,12 @@ public final class TeamTools {
         }
         json.add("nextCupMatch", nextCup);
         return json;
+    }
+
+    /** Our fixture, scheduled after {@code now}; an undated one counts as still to come. */
+    static boolean isOwnUpcoming(core.model.series.Paarung pairing, int teamId, HODateTime now) {
+        return (pairing.getHeimId() == teamId || pairing.getGastId() == teamId)
+                && (pairing.getDatum() == null || pairing.getDatum().isAfter(now));
     }
 
     /** One series fixture; {@code ownUpcoming} is our stored match for it, null for any other. */
