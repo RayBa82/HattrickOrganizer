@@ -12,6 +12,27 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class HRFStringBuilderTest {
 
+    /**
+     * Hattrick hides the order shortly before kick-off (MatchData Available=False). That must leave
+     * HO's stored lineup alone: no [lineup] section, so the HRF import never stores an empty one.
+     */
+    @Test
+    void hiddenMatchOrderWritesNoLineupSection() {
+        final var order = core.file.xml.XMLMatchOrderParser.parseMatchOrderFromString("""
+                <?xml version="1.0" encoding="utf-8"?>
+                <HattrickData>
+                  <FileName>matchorders.xml</FileName>
+                  <FetchedDate>2026-10-03 18:06:00</FetchedDate>
+                  <MatchID>123</MatchID>
+                  <MatchData Available="False" />
+                </HattrickData>""");
+
+        final var builder = new HRFStringBuilder();
+        builder.createLineUp("1", 2168446, order);
+
+        assertThat(builder.createHRF().toString()).doesNotContain("[lineup]");
+    }
+
     /** CHPP economy.xml of a real team (SEK). */
     private static final String ECONOMY_XML = """
             <?xml version="1.0" encoding="utf-8"?>

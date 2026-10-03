@@ -1208,6 +1208,9 @@ public class OnlineWorker {
 
 			if (!StringUtils.isEmpty(xml)) {
 				Map<String, String> map = XMLMatchOrderParser.parseMatchOrderFromString(xml);
+				if (XMLMatchOrderParser.isHidden(map)) {
+					return null;    // locked before kick-off: keep the lineup HO has
+				}
 				String trainerID = "-1";
 				try {
 					trainerID = String.valueOf(HOVerwaltung.instance().getModel().getTrainer()

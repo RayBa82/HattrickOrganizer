@@ -345,6 +345,15 @@ if (!map.containsKey("LeftForwardID")) {
 
 	}
 
+	/** Key set in the parsed map when Hattrick did not show the order (MatchData Available=False). */
+	public static final String HIDDEN = "OrdersHidden";
+
+	private static final String AVAILABLE = "Available";
+
+	public static boolean isHidden(java.util.Map<String, String> order) {
+		return order != null && "true".equals(order.get(HIDDEN));
+	}
+
 	/**
 	 * Creates the Matchlineup object
 	 * parsing of xml adapted to version 3.0 of match orders
@@ -370,13 +379,16 @@ if (!map.containsKey("LeftForwardID")) {
 			// change root to Match data
 			root = (Element) root.getElementsByTagName("MatchData").item(0);
 
-			if (!XMLManager.getAttributeValue(root, "Available").trim().equalsIgnoreCase("true")) {
-				return hash;
-			}
+				if (!XMLManager.getAttributeValue(root, AVAILABLE).trim().equalsIgnoreCase("true")) {
+					// Too close to kick-off (or not our match): Hattrick hides the order. Say so, so
+					// callers do not read the missing positions as an empty lineup.
+					hash.put(HIDDEN, "true");
+					return hash;
+				}
 
 			ele = (Element) root.getElementsByTagName("Attitude").item(0);
 
-			if (XMLManager.getAttributeValue(ele, "Available").trim().equalsIgnoreCase("true")) {
+			if (XMLManager.getAttributeValue(ele, AVAILABLE).trim().equalsIgnoreCase("true")) {
 				hash.put("Attitude", XMLManager.getFirstChildNodeValue(ele));
 			} else {
 				// in case attitude is not available TODO: check if this is really mandatory
@@ -386,7 +398,7 @@ if (!map.containsKey("LeftForwardID")) {
 			ele = (Element) root.getElementsByTagName("CoachModifier").item(0);
 
 			// 'coachModifier' is called 'styleOfPlay' in HT
-			if (XMLManager.getAttributeValue(ele, "Available").trim().equalsIgnoreCase("true")) {
+			if (XMLManager.getAttributeValue(ele, AVAILABLE).trim().equalsIgnoreCase("true")) {
 				hash.put("StyleOfPlay", XMLManager.getFirstChildNodeValue(ele));
 			} else {
 				hash.put("StyleOfPlay", "0");

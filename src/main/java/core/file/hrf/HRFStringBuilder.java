@@ -343,6 +343,11 @@ public class HRFStringBuilder {
      * 			map containing the lineup
      */
     public void createLineUp(String trainerId, int teamId, Map<String, String> nextLineup) {
+        if (core.file.xml.XMLMatchOrderParser.isHidden(nextLineup)) {
+            // No section at all: an empty one would replace the stored lineup on import.
+            lineupStringBuilder = null;
+            return;
+        }
         lineupStringBuilder = new StringBuilder("[lineup]\n");
         if (nextLineup != null) {
             var matchId = NumberUtils.toInt(nextLineup.get("MatchID"),0);
