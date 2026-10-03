@@ -100,14 +100,16 @@ public final class TeamTools {
                 new McpTool("get_series",
                         "Our series: table (all eight teams with position, record, points, goals), "
                                 + "matches (the season's fixtures), otherUpcoming (our cup and "
-                                + "friendly matches, soonest first) and nextCupMatch (null = "
-                                + "eliminated or not yet drawn); cup rows name the cup (cup, cupId). "
-                                + "Our upcoming rows carry the stored weather forecast. As of HO's "
-                                + "last download; get_match_weather refreshes a forecast.",
+                                + "friendly matches, soonest first) and nextCupMatchId (its row is in "
+                                + "otherUpcoming; null = eliminated or not yet drawn); cup rows name "
+                                + "the cup. Our upcoming rows carry the stored weather forecast. As of "
+                                + "HO's last download; get_match_weather refreshes a forecast.",
                         McpTool.schema(McpTool.properties(
+                                "include", McpTool.prop("array",
+                                        "any of matches, table, otherUpcoming; default all"),
                                 "upcomingOnly", McpTool.prop("boolean",
-                                        "matches: only our own fixtures not yet played (the "
-                                                + "rest unchanged); default false, the whole season"))),
+                                        "matches: only our own fixtures not yet played; "
+                                                + "default false, the whole season"))),
                         TeamTools::series),
                 new McpTool("get_finances",
                         "The full weekly financial statement with last week's copy beside it, the "
@@ -369,15 +371,7 @@ public final class TeamTools {
 
     /** analyze_opponent: ratings and/or squad (default both), one round trip. */
     private static JsonObject scoutOpponent(JsonObject args) throws McpToolException {
-        final var include = new java.util.HashSet<String>();
-        if (args.has("include") && args.get("include").isJsonArray()) {
-            args.getAsJsonArray("include").forEach(e -> include.add(e.getAsString()));
-        }
-        if (include.isEmpty()) {
-            include.addAll(SCOUT_PARTS);
-        } else if (!SCOUT_PARTS.containsAll(include)) {
-            throw new IllegalArgumentException("include takes ratings and/or squad, had " + include);
-        }
+        final var include = includeParts(args, SCOUT_PARTS);
         final var json = new JsonObject();
         if (include.contains("ratings")) {
             json.add("ratings", MatchTools.opponentRatings(args));
@@ -388,7 +382,23 @@ public final class TeamTools {
         return json;
     }
 
-    private static final java.util.Set<String> SCOUT_PARTS = java.util.Set.of("ratings", "squad");
+    private static final List<String> SCOUT_PARTS = List.of("ratings", "squad");
+    private static final List<String> SERIES_PARTS = List.of("matches", "table", "otherUpcoming");
+
+    /** The include argument: every part when absent or empty, refused when it names an unknown one. */
+    static java.util.Set<String> includeParts(JsonObject args, List<String> allowed) {
+        final var include = new java.util.LinkedHashSet<String>();
+        if (args.has("include") && args.get("include").isJsonArray()) {
+            args.getAsJsonArray("include").forEach(e -> include.add(e.getAsString()));
+        }
+        if (include.isEmpty()) {
+            include.addAll(allowed);
+        } else if (!allowed.containsAll(include)) {
+            throw new IllegalArgumentException("include takes " + String.join(", ", allowed)
+                    + "; had " + include);
+        }
+        return include;
+    }
 
     static JsonObject opponentPlayer(PlayerInfo info, OppPlayerSkillEstimator estimator) {
         final var json = new JsonObject();
@@ -459,52 +469,67 @@ public final class TeamTools {
      * fetched last and can be an old season's series until the next team download.
      */
     private static JsonObject series(JsonObject args) throws McpToolException {
-        final var upcomingOnly = McpJson.optBool(args, "upcomingOnly", false);
-        final var now = HODateTime.now();
+        final var include = includeParts(args, SERIES_PARTS);
         final var model = McpJson.model();
+        final var teamId = model.getBasics().getTeamId();
         final var xtra = model.getXtraDaten();
         // The league LEVEL UNIT id, not Basics.getLiga() - that one is the league, not the series.
         final var plan = xtra == null ? null
                 : DBManager.instance().getSpielplan(xtra.getLeagueLevelUnitID(), model.getBasics().getSeason());
 
         final var json = new JsonObject();
-        final var matches = new JsonArray();
         if (plan != null) {
             json.addProperty("seriesName", plan.getLigaName());
             json.addProperty("leagueLevelUnitId", plan.getLigaId());
             json.addProperty("season", plan.getSaison());
-            final var ownUpcoming = new java.util.HashMap<Integer, MatchKurzInfo>();
-            DBManager.instance().getMatchesKurzInfo(model.getBasics().getTeamId(), MatchKurzInfo.UPCOMING)
-                    .forEach(m -> ownUpcoming.put(m.getMatchID(), m));
-            final var teamId = model.getBasics().getTeamId();
-            for (final var pairing : plan.getMatches()) {
-                if (!upcomingOnly || isOwnUpcoming(pairing, teamId, now)) {
-                    matches.add(fixtureRow(pairing, ownUpcoming.get(pairing.getMatchId())));
-                }
-            }
         }
-        json.add("matches", matches);
-        if (plan == null || plan.getTable() == null) {
-            json.add("table", JsonNull.INSTANCE);
-            json.addProperty("tableNote", "HO has not stored this season's series yet - "
-                    + "download_team fetches it.");
-        } else {
-            json.add("table", tableRows(plan));
+        if (include.contains("matches")) {
+            json.add("matches", fixtures(plan, teamId, McpJson.optBool(args, "upcomingOnly", false)));
+        }
+        if (include.contains("table")) {
+            if (plan == null || plan.getTable() == null) {
+                json.add("table", JsonNull.INSTANCE);
+                json.addProperty("tableNote", "HO has not stored this season's series yet - "
+                        + "download_team fetches it.");
+            } else {
+                json.add("table", tableRows(plan));
+            }
         }
 
-        final var teamId = model.getBasics().getTeamId();
         final var others = ownNonLeagueUpcoming(
                 DBManager.instance().getMatchesKurzInfoUpComing(teamId), teamId);
-        json.add("otherUpcoming", others);
-        JsonElement nextCup = JsonNull.INSTANCE;
-        for (final var m : others) {
-            if ("CUP".equals(m.getAsJsonObject().get("matchType").getAsString())) {
-                nextCup = m;
-                break;
+        if (include.contains("otherUpcoming")) {
+            json.add("otherUpcoming", others);
+        }
+        json.add("nextCupMatchId", nextCupMatchId(others));
+        return json;
+    }
+
+    private static JsonArray fixtures(module.series.MatchFixtures plan, int teamId, boolean upcomingOnly) {
+        final var matches = new JsonArray();
+        if (plan == null) {
+            return matches;
+        }
+        final var ownUpcoming = new java.util.HashMap<Integer, MatchKurzInfo>();
+        DBManager.instance().getMatchesKurzInfo(teamId, MatchKurzInfo.UPCOMING)
+                .forEach(m -> ownUpcoming.put(m.getMatchID(), m));
+        final var now = HODateTime.now();
+        for (final var pairing : plan.getMatches()) {
+            if (!upcomingOnly || isOwnUpcoming(pairing, teamId, now)) {
+                matches.add(fixtureRow(pairing, ownUpcoming.get(pairing.getMatchId())));
             }
         }
-        json.add("nextCupMatch", nextCup);
-        return json;
+        return matches;
+    }
+
+    /** The soonest cup row's matchId, null when none - a pointer, not a second copy of the row. */
+    static JsonElement nextCupMatchId(JsonArray upcoming) {
+        for (final var m : upcoming) {
+            if ("CUP".equals(m.getAsJsonObject().get("matchType").getAsString())) {
+                return m.getAsJsonObject().get("matchId");
+            }
+        }
+        return JsonNull.INSTANCE;
     }
 
     /** Our fixture, scheduled after {@code now}; an undated one counts as still to come. */
@@ -578,7 +603,6 @@ public final class TeamTools {
             row.addProperty("points", entry.getPoints());
             row.addProperty("goalsFor", entry.getGoalsFor());
             row.addProperty("goalsAgainst", entry.getGoalsAgainst());
-            row.addProperty("goalDifference", entry.getGoalsDiff());
             rows.add(row);
         }
         return rows;

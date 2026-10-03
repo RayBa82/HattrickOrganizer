@@ -29,6 +29,31 @@ class TeamToolsTest {
     }
 
     @Test
+    void includeParts_defaultsToAllAndRejectsAnUnknownPart() {
+        final var all = java.util.List.of("matches", "table", "otherUpcoming");
+        assertThat(TeamTools.includeParts(new com.google.gson.JsonObject(), all))
+                .containsExactlyInAnyOrderElementsOf(all);
+        final var some = com.google.gson.JsonParser.parseString("{\"include\":[\"table\"]}")
+                .getAsJsonObject();
+        assertThat(TeamTools.includeParts(some, all)).containsExactly("table");
+        final var bad = com.google.gson.JsonParser.parseString("{\"include\":[\"fixtures\"]}")
+                .getAsJsonObject();
+        org.assertj.core.api.Assertions.assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> TeamTools.includeParts(bad, all))
+                .withMessageContaining("otherUpcoming");
+    }
+
+    @Test
+    void nextCupMatchId_pointsAtTheFirstCupRowInsteadOfCopyingIt() {
+        final var rows = TeamTools.ownNonLeagueUpcoming(java.util.List.of(
+                upcoming(2, core.model.enums.MatchType.CUP, "2026-10-08 18:00:00", 1, 600),
+                upcoming(1, core.model.enums.MatchType.FRIENDLYNORMAL, "2026-10-01 18:00:00", 500, 1)), 1);
+
+        assertThat(TeamTools.nextCupMatchId(rows).getAsInt()).isEqualTo(2);
+        assertThat(TeamTools.nextCupMatchId(new com.google.gson.JsonArray()).isJsonNull()).isTrue();
+    }
+
+    @Test
     void isOwnUpcoming_keepsOnlyOurFixturesStillToBePlayed() {
         final var now = core.util.HODateTime.fromHT("2026-10-05 12:00:00");
         final var ours = new core.model.series.Paarung();
