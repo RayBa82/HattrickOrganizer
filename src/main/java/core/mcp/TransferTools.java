@@ -243,7 +243,18 @@ public final class TransferTools {
                                         "observedWithinDays", McpTool.prop("integer",
                                                 "ignore listings older than this many days, default "
                                                         + DEFAULT_CORPUS_DAYS + " (one Hattrick season)"))),
-                        TransferTools::estimateMarketValue)
+                        TransferTools::estimateMarketValue),
+                new McpTool("market_corpus_stats",
+                        "How much stored market data estimate_market_value has to work with: "
+                                + "listings (one player's spell on the market) by outcome - sold, "
+                                + "open, noSaleFound, awaitingResolve - plus oldest/newest "
+                                + "observation, and for the window: counts by age, position group "
+                                + "and specialty id, each with how many sold. Local read, free.",
+                        McpTool.schema(McpTool.properties(
+                                "observedWithinDays", McpTool.prop("integer",
+                                        "the window, as in estimate_market_value; default "
+                                                + DEFAULT_CORPUS_DAYS))),
+                        TransferTools::marketCorpusStats)
         );
     }
 
@@ -251,6 +262,132 @@ public final class TransferTools {
 
     /** One Hattrick season. Older listings priced a market that has moved on. */
     private static final int DEFAULT_CORPUS_DAYS = 112;
+
+    // ------------------------------------------------------------------ corpus stats
+
+    private static final List<String> AGE_BUCKETS = List.of("17", "18", "19", "20+", "unknown");
+    private static final List<String> POSITION_GROUPS =
+            List.of("keeper", "back_line", "inner_mid", "winger", "forward", "unknown");
+
+    private static JsonObject marketCorpusStats(JsonObject args) {
+        final var days = Math.max(McpJson.optInt(args, "observedWithinDays", DEFAULT_CORPUS_DAYS), 1);
+        // ponytail: loads the whole table, since the position group is a Java heuristic; move the
+        // counts to SQL GROUP BY if the corpus ever gets big enough for this to be slow.
+        return corpusStats(DBManager.instance().loadAllTransferListings(), HODateTime.now(), days);
+    }
+
+    /**
+     * The size of the corpus, per listing rather than per row: a listing seen in four searches is
+     * four observations but one data point. Outcome: sold (a sale price is known), open (deadline
+     * ahead), noSaleFound (looked up after the deadline, no sale), awaitingResolve (deadline passed,
+     * not looked up yet). The window - what a valuation reads - is broken down by the listing's
+     * newest skill-bearing observation; a listing only ever seen through currentbids has no age or
+     * skills and counts as unknown.
+     */
+    static JsonObject corpusStats(List<TransferListing> rows, HODateTime now, int days) {
+        final var since = new HODateTime(now.getInstant().minus(java.time.Duration.ofDays(days)));
+        final var listings = new LinkedHashMap<String, List<TransferListing>>();
+        HODateTime oldest = null;
+        HODateTime newest = null;
+        int windowObservations = 0;
+        for (final var r : rows) {
+            final var deadline = r.getDeadline() == null ? "" : r.getDeadline().toHT();
+            listings.computeIfAbsent(r.getPlayerId() + "@" + deadline, k -> new ArrayList<>()).add(r);
+            final var at = r.getObservedAt();
+            if (at == null) {
+                continue;
+            }
+            if (oldest == null || at.isBefore(oldest)) oldest = at;
+            if (newest == null || newest.isBefore(at)) newest = at;
+            if (!at.isBefore(since)) windowObservations++;
+        }
+
+        final var outcomes = new LinkedHashMap<String, Integer>();
+        List.of("sold", "open", "noSaleFound", "awaitingResolve").forEach(k -> outcomes.put(k, 0));
+        int windowListings = 0;
+        int windowSold = 0;
+        final var byAge = buckets(AGE_BUCKETS);
+        final var byGroup = buckets(POSITION_GROUPS);
+        final var bySpecialty = new JsonObject();
+        final var newestFirst = Comparator.comparing(TransferListing::getObservedAt,
+                Comparator.nullsFirst(Comparator.naturalOrder())).reversed();
+        for (final var observations : listings.values()) {
+            final var outcome = outcome(observations, now);
+            outcomes.merge(outcome, 1, Integer::sum);
+            if (observations.stream().noneMatch(o -> o.getObservedAt() != null && !o.getObservedAt().isBefore(since))) {
+                continue;
+            }
+            final var isSold = outcome.equals("sold");
+            windowListings++;
+            if (isSold) windowSold++;
+            final var rep = observations.stream().filter(o -> o.getPlaymaker() != null).min(newestFirst)
+                    .orElse(observations.stream().min(newestFirst).orElseThrow());
+            count(byAge, ageBucket(rep.getAge()), isSold);
+            final var levels = listingSkillLevels(rep);
+            count(byGroup, levels.containsValue(null) ? "unknown" : derivePositionGroup(levels), isSold);
+            count(bySpecialty, rep.getSpecialty() == null ? "unknown" : rep.getSpecialty().toString(), isSold);
+        }
+
+        final var window = new JsonObject();
+        window.addProperty("days", days);
+        window.addProperty("observations", windowObservations);
+        window.addProperty("listings", windowListings);
+        window.addProperty("sold", windowSold);
+        window.add("byAge", byAge);
+        window.add("byPositionGroup", byGroup);
+        window.add("bySpecialty", bySpecialty);
+
+        final var json = new JsonObject();
+        json.addProperty("observations", rows.size());
+        json.addProperty("listings", listings.size());
+        outcomes.forEach(json::addProperty);
+        json.addProperty("oldestObservedAt", oldest == null ? null : oldest.toHT());
+        json.addProperty("newestObservedAt", newest == null ? null : newest.toHT());
+        json.add("window", window);
+        return json;
+    }
+
+    /** sold, open, noSaleFound or awaitingResolve - see {@link #corpusStats}. */
+    private static String outcome(List<TransferListing> observations, HODateTime now) {
+        if (observations.stream().anyMatch(o -> o.getSalePrice() != null)) {
+            return "sold";
+        }
+        final var deadline = observations.get(0).getDeadline();
+        if (deadline != null && now.isBefore(deadline)) {
+            return "open";
+        }
+        return observations.stream().anyMatch(o -> o.getResolvedAt() != null) ? "noSaleFound" : "awaitingResolve";
+    }
+
+    private static String ageBucket(Integer age) {
+        if (age == null) return "unknown";
+        if (age <= 17) return "17";
+        return age <= 19 ? age.toString() : "20+";
+    }
+
+    private static JsonObject buckets(List<String> keys) {
+        final var json = new JsonObject();
+        for (final var key : keys) {
+            final var bucket = new JsonObject();
+            bucket.addProperty("listings", 0);
+            bucket.addProperty("sold", 0);
+            json.add(key, bucket);
+        }
+        return json;
+    }
+
+
+    private static void count(JsonObject buckets, String key, boolean sold) {
+        if (!buckets.has(key)) {
+            final var bucket = new JsonObject();
+            bucket.addProperty("listings", 0);
+            bucket.addProperty("sold", 0);
+            buckets.add(key, bucket);
+        }
+        final var bucket = buckets.getAsJsonObject(key);
+        bucket.addProperty("listings", bucket.get("listings").getAsInt() + 1);
+        if (sold) bucket.addProperty("sold", bucket.get("sold").getAsInt() + 1);
+    }
 
     /**
      * Below this many resolved sales the observed listings are the better estimate, thin as they

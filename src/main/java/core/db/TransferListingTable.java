@@ -122,6 +122,11 @@ public class TransferListingTable extends AbstractTable {
         return !load(TransferListing.class, connectionManager.executeQuery(sql)).isEmpty();
     }
 
+    /** Every stored observation - for corpus statistics, which group in Java. */
+    public List<TransferListing> loadAll() {
+        return load(TransferListing.class, connectionManager.executeQuery(createSelectStatement("")));
+    }
+
     /** The most recent snapshot of this player's market listing, or null if none was ever seen. */
     public TransferListing loadLatestForPlayer(int playerId) {
         final var sql = createSelectStatement(

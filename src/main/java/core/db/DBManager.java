@@ -1535,6 +1535,10 @@ public class DBManager implements PersistenceManager {
 		return ((TransferListingTable) getTable(TransferListingTable.TABLENAME)).loadUnresolved(max);
 	}
 
+	public List<TransferListing> loadAllTransferListings() {
+		return ((TransferListingTable) getTable(TransferListingTable.TABLENAME)).loadAll();
+	}
+
 	public TransferListing loadLatestTransferListing(int playerId) {
 		return ((TransferListingTable) getTable(TransferListingTable.TABLENAME)).loadLatestForPlayer(playerId);
 	}

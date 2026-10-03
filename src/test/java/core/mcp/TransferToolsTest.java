@@ -425,7 +425,7 @@ class TransferToolsTest {
         assertThat(TransferTools.tools()).extracting(McpTool::name)
                 .containsExactly("search_transfers", "get_team_transfers",
                         "get_player_transfer_history", "place_bid", "get_open_bids", "add_to_scout",
-                        "remove_from_scout", "list_scout", "estimate_market_value");
+                        "remove_from_scout", "list_scout", "estimate_market_value", "market_corpus_stats");
     }
 
     @Test

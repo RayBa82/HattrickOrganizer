@@ -67,6 +67,14 @@ class TransferListingTableTest {
         assertThat(loaded.getSalePrice()).isNull();
     }
 
+    @Test
+    void loadAllReturnsEveryObservation() {
+        table.storeListing(TransferListing.fromHit(hit(818181, details()), HODateTime.fromHT("2026-08-30 14:00:00")));
+        table.storeListing(TransferListing.fromHit(hit(818181, details()), HODateTime.fromHT("2026-08-31 14:00:00")));
+
+        assertThat(table.loadAll()).filteredOn(l -> l.getPlayerId() == 818181).hasSize(2);
+    }
+
     /** Details are null once a deadline has passed - every consumer has to survive that. */
     @Test
     void roundTripsAHitWithoutDetails() {
