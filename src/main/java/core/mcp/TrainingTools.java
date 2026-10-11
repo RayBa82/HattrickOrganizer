@@ -200,6 +200,9 @@ public final class TrainingTools {
                                         "add coverage per player (snapshot dates, gaps, "
                                                 + "daysSinceLastSnapshot); default true for up to "
                                                 + COVERAGE_PLAYERS + " players"),
+                                "weeksAgo", McpTool.prop("integer",
+                                        "end the window this many weeks before now, to page back "
+                                                + "through older history in weeks-long steps; default 0"),
                                 "includeSnapshots", McpTool.prop("boolean",
                                         "add the raw dated series per player; default false, "
                                                 + "because levelUps, derived and coverage answer "
@@ -212,8 +215,9 @@ public final class TrainingTools {
                                                 + "newest overall. Lists changed players only. "
                                                 + "Default false"))),
                         TrainingTools::playerHistory)
-                        .withBudget("Ask for fewer playerIds or a smaller weeks; snapshots, events "
-                                        + "and training weeks are per-player detail, best for 1-5 players.",
+                        .withBudget("Ask for fewer playerIds, or page through time with a smaller "
+                                        + "weeks plus weeksAgo (weeks 4, then weeksAgo 4, 8, ...); "
+                                        + "snapshots, events and training weeks are per-player detail.",
                                 // What came by default goes before what the caller asked for.
                                 McpTool.OptionalSection.perItem("players", "derived", "derived"),
                                 McpTool.OptionalSection.perItem("players", "coverage", "coverage"),
@@ -328,8 +332,10 @@ public final class TrainingTools {
         final var includeTraining = McpJson.optBool(args, "includeTraining", false);
         final var weeks = historyWeeks(args, includeTraining);
         final var includeSnapshots = McpJson.optBool(args, "includeSnapshots", false);
-        final var asOf = HODateTime.now();
+        final var weeksAgo = Math.max(0, McpJson.optInt(args, "weeksAgo", 0));
+        final var asOf = HODateTime.now().minus(weeksAgo * 7, ChronoUnit.DAYS);
         final var since = asOf.minus(weeks * 7, ChronoUnit.DAYS);
+        final var window = new Window(since, asOf);
 
         // What is being trained now, which is the skill a growth rate is worth quoting for. It can
         // have been something else earlier in the window - levelUps shows where the growth went.
@@ -341,6 +347,7 @@ public final class TrainingTools {
         final var json = new JsonObject();
         json.addProperty("asOf", asOf.toHT());
         json.addProperty("weeks", weeks);
+        json.addProperty("weeksAgo", weeksAgo);
         json.addProperty("currency", McpJson.currency());
         json.addProperty("trainedSkill", trained == null ? null : String.valueOf(trained));
         json.addProperty("secondarySkill", weekly == null || weekly.getSecondaryTrainingSkill() == null
@@ -354,15 +361,15 @@ public final class TrainingTools {
                     + "it takes at most " + MAX_EVENT_PLAYERS + " playerIds, had " + ids.size() + ".");
         }
         final var trainingWeeks = includeTraining
-                ? trainingHistory(model, since, new HashSet<>(ids)) : null;
+                ? trainingHistory(model, window, new HashSet<>(ids)) : null;
         final var derivedOn = McpJson.optBool(args, "includeDerived", ids.size() <= DERIVED_PLAYERS);
         final var coverageOn = McpJson.optBool(args, "includeCoverage", ids.size() <= COVERAGE_PLAYERS);
         for (final var playerId : ids) {
-            final var row = history(playerId, since, trained, includeSnapshots);
+            final var row = history(playerId, window, trained, includeSnapshots);
             dropUnless(row, "derived", derivedOn);
             dropUnless(row, "coverage", coverageOn);
             if (includeEvents) {
-                row.add("trainingEvents", eventsSince(trainingEvents(playerId), since));
+                row.add("trainingEvents", eventsIn(trainingEvents(playerId), window));
             }
             if (trainingWeeks != null) {
                 row.add("trainingWeeks", trainingWeeks.players().getOrDefault(playerId, new JsonArray()));
@@ -463,15 +470,26 @@ public final class TrainingTools {
     }
 
     /**
+     * get_player_history's window: {@code weeks} long, ending {@code weeksAgo} weeks before now.
+     * Moving the end back is what makes an older stretch reachable without the newer ones, which
+     * a single player's snapshots need - half a year of them is over the response budget.
+     */
+    record Window(HODateTime since, HODateTime until) {
+        boolean contains(HODateTime date) {
+            return !date.isBefore(since) && !date.isAfter(until);
+        }
+    }
+
+    /**
      * Hattrick returns a player's whole career of training events; only those inside the
      * requested window go out, so a squad-wide call stays readable. An event Hattrick gave no
      * week for is kept - it cannot be placed outside the window either.
      */
-    static JsonObject eventsSince(JsonObject events, HODateTime since) {
+    static JsonObject eventsIn(JsonObject events, Window window) {
         final var kept = new JsonArray();
         for (final var element : events.getAsJsonArray("events")) {
             final var weekStart = element.getAsJsonObject().get("weekStart");
-            if (weekStart == null || !HODateTime.fromHT(weekStart.getAsString()).isBefore(since)) {
+            if (weekStart == null || window.contains(HODateTime.fromHT(weekStart.getAsString()))) {
                 kept.add(element);
             }
         }
@@ -511,11 +529,11 @@ public final class TrainingTools {
         return ids;
     }
 
-    private static JsonObject history(int playerId, HODateTime since, PlayerSkill trained,
+    private static JsonObject history(int playerId, Window window, PlayerSkill trained,
                                       boolean includeSnapshots) {
         // Ordered by date ascending, which everything below relies on.
         final var series = DBManager.instance().loadPlayerHistory(playerId).stream()
-                .filter(p -> p.getHrfDate() != null && !p.getHrfDate().isBefore(since))
+                .filter(p -> p.getHrfDate() != null && window.contains(p.getHrfDate()))
                 .toList();
         return historyOf(playerId, series, trained, includeSnapshots);
     }
@@ -925,13 +943,13 @@ public final class TrainingTools {
      * each player's minutes rebuilt from the stored match lineups - the same arithmetic as
      * currentWeek, applied to weeks already closed. Hattrick itself keeps no such history.
      */
-    private static TrainingHistory trainingHistory(HOModel model, HODateTime since,
+    private static TrainingHistory trainingHistory(HOModel model, Window window,
                                                    Set<Integer> wanted) {
         final var weeks = new JsonArray();
         final var players = new java.util.HashMap<Integer, JsonArray>();
         for (final var week : TrainingManager.instance().getHistoricalTrainings()) {
             final var date = week.getTrainingDate();
-            if (date == null || date.isBefore(since)) {
+            if (date == null || !window.contains(date)) {
                 continue;
             }
             final var weekly = WeeklyTrainingType.instance(week.getTrainingType());

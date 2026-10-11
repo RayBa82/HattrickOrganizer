@@ -312,11 +312,22 @@ class TrainingToolsTest {
                   {"skill":"SCORING","weekStart":"2025-01-01 00:00:00"},
                   {"skill":"WINGER"}]}""").getAsJsonObject();
 
-        final var kept = TrainingTools.eventsSince(events, HODateTime.fromHT("2026-06-01 00:00:00"))
-                .getAsJsonArray("events");
+        final var window = new TrainingTools.Window(HODateTime.fromHT("2026-06-01 00:00:00"),
+                HODateTime.fromHT("2026-10-01 00:00:00"));
+        final var kept = TrainingTools.eventsIn(events, window).getAsJsonArray("events");
 
         assertThat(kept).extracting(e -> e.getAsJsonObject().get("skill").getAsString())
                 .containsExactly("PASSING", "WINGER");
+
+        // A window ending before an event leaves it out: weeksAgo pages back past it.
+        final var older = new TrainingTools.Window(HODateTime.fromHT("2025-06-01 00:00:00"),
+                HODateTime.fromHT("2026-06-01 00:00:00"));
+        final var events2 = com.google.gson.JsonParser.parseString("""
+                {"events":[{"skill":"PASSING","weekStart":"2026-09-01 00:00:00"},
+                           {"skill":"SCORING","weekStart":"2026-01-01 00:00:00"}]}""").getAsJsonObject();
+        assertThat(TrainingTools.eventsIn(events2, older).getAsJsonArray("events"))
+                .extracting(e -> e.getAsJsonObject().get("skill").getAsString())
+                .containsExactly("SCORING");
     }
 
     @Test

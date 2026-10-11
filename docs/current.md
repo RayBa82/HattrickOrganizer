@@ -24,6 +24,12 @@ Defaults reshaped with the hattrick session (field names kept):
   `include: ["matches"]`, 9.9k).
 - `list_scout`: page 20, compact notes cut at 80 chars (`noteCut`).
 
+Nothing is lost, only paged (checked on the DB copy): `get_squad` pages with `limit`/`offset`
+(limit 8 carries every include part, 15 the core with skills); `get_player_history` pages back in
+time with `weeks` + `weeksAgo`, one player's snapshots a week at a time (up to 28 a week there,
+7.6k - a week with more than ~35 downloads would still drop them); `get_training` takes
+`playerIds` for long predictions. Whatever a call drops is named in `droppedForBudget`.
+
 Measured on a copy of the dev DB (29 players, data to late September), default arguments:
 `get_squad` 8.1k, `get_player_history` 8.5k, `list_scout` 6.8k, `get_training` 5.7k,
 `get_series` 4.2k; all other local tools 0.4-6.3k. The CHPP-backed tools were not measured;

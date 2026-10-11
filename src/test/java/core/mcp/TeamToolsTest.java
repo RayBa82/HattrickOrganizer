@@ -162,7 +162,7 @@ class TeamToolsTest {
                 .filter(t -> t.name().equals("get_squad")).findFirst().orElseThrow();
         assertThat(squad.inputSchema().getAsJsonArray("required")).isEmpty();
         assertThat(squad.inputSchema().getAsJsonObject("properties").keySet())
-                .containsExactly("playerIds", "include");
+                .containsExactly("playerIds", "include", "limit", "offset");
 
         final var scout = TeamTools.tools().stream()
                 .filter(t -> t.name().equals("analyze_opponent")).findFirst().orElseThrow();

@@ -75,12 +75,15 @@ public final class TeamTools {
                                 "include", McpTool.prop("array",
                                         "any of " + String.join(", ", SQUAD_PARTS)
                                                 + "; default none, all for up to " + FULL_SQUAD_RECORDS
-                                                + " playerIds"))),
+                                                + " playerIds"),
+                                "limit", McpTool.prop("integer", "page size; default the whole squad"),
+                                "offset", McpTool.prop("integer",
+                                        "how many players to skip; default 0. count is the total"))),
                         TeamTools::squad)
-                        .withBudget("Ask for fewer players with playerIds - a full squad's skills "
-                                        + "take two calls, half the playerIds each - and for "
-                                        + "positionRatings or the other include parts only for the few "
-                                        + "candidates.",
+                        .withBudget("Page with limit/offset (count is the total) - e.g. limit 15 for "
+                                        + "the whole squad with its skills in two pages - or name "
+                                        + "playerIds; ask for positionRatings and the other include parts "
+                                        + "only for the few candidates.",
                                 McpTool.OptionalSection.perItem("players", "positionRatings", "positionRatings"),
                                 McpTool.OptionalSection.perItem("players", "character", CHARACTER_KEYS),
                                 McpTool.OptionalSection.perItem("players", "skills", "skills"),
@@ -321,14 +324,21 @@ public final class TeamTools {
         final var ratingModel = include.contains("positionRatings") || include.contains("penaltyStrength")
                 ? McpJson.privateRatingModel() : null;
 
+        final var selected = new java.util.ArrayList<>(onlyWanted(model.getCurrentPlayers(), wanted,
+                core.model.player.Player::getPlayerId));
+        // Paging, so the whole squad stays reachable whatever its size: count is the total.
+        final var offset = Math.max(McpJson.optInt(args, "offset", 0), 0);
+        final var limit = Math.max(McpJson.optInt(args, "limit", selected.size()), 1);
         final var players = new JsonArray();
-        for (final var player : onlyWanted(model.getCurrentPlayers(), wanted,
-                core.model.player.Player::getPlayerId)) {
+        for (final var player : selected.stream().skip(offset).limit(limit).toList()) {
             final var row = ratingModel == null
                     ? McpJson.player(player) : McpJson.player(player, ratingModel);
             players.add(compactSquadRow(row, include));
         }
         final var json = new JsonObject();
+        json.addProperty("count", selected.size());
+        json.addProperty("offset", offset);
+        json.addProperty("returned", players.size());
         json.add("players", players);
         return json;
     }
