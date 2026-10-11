@@ -16,11 +16,6 @@ import core.util.HOLogger;
 final class McpBudget {
 
     static final int MAX_CHARS = 10_000;
-    /**
-     * Set to true at the top of a result by a tool whose caller asked for bulk: the whole answer
-     * goes out unbudgeted, for a script to read from the file the client saves it to.
-     */
-    static final String BULK = "bulk";
 
     private McpBudget() {
     }
@@ -29,10 +24,6 @@ final class McpBudget {
     static String fit(McpTool tool, JsonObject result) {
         var text = McpHttpServer.GSON.toJson(result);
         if (text.length() <= MAX_CHARS) {
-            return text;
-        }
-        if (result.has(BULK) && result.get(BULK).isJsonPrimitive() && result.get(BULK).getAsBoolean()) {
-            HOLogger.instance().info(McpBudget.class, tool.name() + ": bulk, " + text.length() + " chars");
             return text;
         }
         final var fullChars = text.length();

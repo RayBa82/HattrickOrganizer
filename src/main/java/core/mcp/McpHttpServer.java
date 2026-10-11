@@ -140,6 +140,14 @@ public final class McpHttpServer {
                 respond(exchange, 403, "{\"error\":\"Host not accepted\"}");
                 return;
             }
+            if ("GET".equals(exchange.getRequestMethod())
+                    && exchange.getRequestURI().getPath().startsWith(McpDownloads.PREFIX)) {
+                final var file = McpDownloads.get(exchange.getRequestURI().getPath());
+                respond(exchange, file == null ? 404 : 200, file == null
+                        ? "{\"error\":\"No such download - they are kept in memory, the newest "
+                        + McpDownloads.KEPT + " only; call the tool again\"}" : file);
+                return;
+            }
             if (!"POST".equals(exchange.getRequestMethod())) {
                 respond(exchange, 405, "{\"error\":\"POST only\"}");
                 return;

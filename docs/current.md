@@ -39,9 +39,10 @@ Defaults reshaped with the hattrick session (field names kept):
   itemCount/hitCount/error. estimate_market_value's `liveSearch` is now that summary plus a
   resultId instead of up to 100 full hits. Before, over-budget searches came back as the bare
   envelope - the hattrick screening script read Claude Code's saved oversize-result file.
-  `bulk: true` (agreed with hattrick, P1 only) returns every hit compact past the budget,
-  small part first (resultId, count, hitFields, 3-hit preview), so the client saves it to a
-  file for the script again. AGENTS.md has the bulk rule; no other tool has bulk yet
+  `bulk: true` (agreed with hattrick) puts every hit, compact and sorted, into a download
+  (`McpDownloads`, `GET /mcp/download/<id>` on the MCP port, newest 20 in memory); the answer
+  keeps resultId, count, hitFields, a 3-hit preview and the path. The user ruled out relying on
+  Claude Code's saved oversize-result file. AGENTS.md has the rule; no other tool has bulk yet
   (candidates if a script needs them: list_scout full, get_player_history long histories).
 
 Nothing is lost, only paged (checked on the DB copy): `get_squad` pages with `limit`/`offset`

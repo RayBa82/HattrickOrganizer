@@ -1519,7 +1519,7 @@ class TransferToolsTest {
     }
 
     @Test
-    void bulk_returnsEveryHitSortedWithTheSmallPartFirst() {
+    void bulk_putsEveryHitSortedIntoADownloadAndKeepsTheAnswerSmall() {
         final var hits = new java.util.ArrayList<core.file.xml.XMLTransferSearchParser.Hit>();
         for (int i = 1; i <= 120; i++) {
             hits.add(hit(i, 17, 120 - i, "2026-10-12 10:00:00", true));
@@ -1529,10 +1529,18 @@ class TransferToolsTest {
         TransferTools.addHitPage(json, "s9", hits,
                 JsonParser.parseString("{\"bulk\":true,\"sort\":\"age\",\"limit\":5}").getAsJsonObject());
 
-        assertThat(json.keySet()).containsExactly("bulk", "resultId", "count", "hitFields", "preview", "hits");
-        assertThat(json.getAsJsonArray("hits")).hasSize(120);
+        assertThat(json.has("hits")).isFalse();
         assertThat(json.getAsJsonArray("preview")).hasSize(TransferTools.BULK_PREVIEW);
         // Youngest first: hit 120 has ageDays 0.
         assertThat(json.getAsJsonArray("preview").get(0).getAsJsonArray().get(0).getAsInt()).isEqualTo(120);
+        assertThat(McpHttpServer.GSON.toJson(json).length()).isLessThan(McpBudget.MAX_CHARS);
+
+        final var file = JsonParser.parseString(McpDownloads.get(json.get("download").getAsString()))
+                .getAsJsonObject();
+        assertThat(file.getAsJsonArray("hits")).hasSize(120);
+        assertThat(file.get("resultId").getAsString()).isEqualTo("s9");
+        assertThat(file.getAsJsonArray("hits").get(0).getAsJsonArray().get(0).getAsInt()).isEqualTo(120);
+        assertThat(json.get("downloadChars").getAsInt()).isEqualTo(McpDownloads.get(json.get("download").getAsString()).length());
+        assertThat(McpDownloads.get("/mcp/download/unknown")).isNull();
     }
 }

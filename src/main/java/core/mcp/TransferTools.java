@@ -2154,9 +2154,9 @@ public final class TransferTools {
                         + "leading - for descending. Default Hattrick's order"),
                 "full", McpTool.prop("boolean", "each hit as an object with seller and bidder; default "
                         + "false: arrays in hitFields order"),
-                "bulk", McpTool.prop("boolean", "for scripts: every hit, compact, past the response "
-                        + "budget - the client saves a large answer to a file. resultId, count, "
-                        + "hitFields and a 3-hit preview come first. Default false"),
+                "bulk", McpTool.prop("boolean", "for scripts: every hit, compact, as a JSON file to "
+                        + "download (HTTP GET of the returned download path on the MCP endpoint); "
+                        + "the answer keeps resultId, count, hitFields and a 3-hit preview. Default false"),
                 "queries", McpTool.prop("array", "several searches in one call, each shaped like "
                         + "the single-search arguments above; replaces them. Returns results[], "
                         + "each echoing its query; a failed one carries its own error"));
@@ -2306,7 +2306,7 @@ public final class TransferTools {
     /** resultId, count, the sorted page of hits (compact unless full) and its offset. */
     static void addHitPage(JsonObject json, String resultId, List<XMLTransferSearchParser.Hit> all,
                            JsonObject args) {
-        if (McpJson.optBool(args, McpBudget.BULK, false)) {
+        if (McpJson.optBool(args, "bulk", false)) {
             addBulkHits(json, resultId, all, args);
             return;
         }
@@ -2335,10 +2335,9 @@ public final class TransferTools {
     }
 
     /**
-     * bulk: every hit, compact and sorted, past the response budget - for a script that reads
-     * the file the client saves a large answer to. The small part first (resultId, count,
-     * hitFields, a 3-hit preview), so the client's preview of the file is all that reaches the
-     * caller's context.
+     * bulk: every hit, compact and sorted, as a file to download ({@link McpDownloads}) - for a
+     * script, which reads it whole without it ever entering a model's context. The answer itself
+     * stays small: resultId, count, hitFields, a 3-hit preview and the download path.
      */
     private static void addBulkHits(JsonObject json, String resultId, List<XMLTransferSearchParser.Hit> all,
                                     JsonObject args) {
@@ -2347,23 +2346,31 @@ public final class TransferTools {
         if (!sort.isEmpty()) {
             sorted.sort(hitOrder(sort));
         }
-        json.addProperty(McpBudget.BULK, true);
-        json.addProperty("resultId", resultId);
-        json.addProperty("count", all.size());
         final var fields = new JsonArray();
         HIT_FIELDS.forEach(fields::add);
+        final var hits = new JsonArray();
+        sorted.forEach(hit -> hits.add(compactHit(hit)));
+        final var file = new JsonObject();
+        file.addProperty("currency", McpJson.currency());
+        file.addProperty("resultId", resultId);
+        file.addProperty("count", all.size());
+        file.add("hitFields", fields);
+        file.add("hits", hits);
+        final var text = McpHttpServer.GSON.toJson(file);
+
+        json.addProperty("resultId", resultId);
+        json.addProperty("count", all.size());
         json.add("hitFields", fields);
         final var preview = new JsonArray();
-        final var hits = new JsonArray();
-        for (final var hit : sorted) {
-            final var row = compactHit(hit);
-            if (preview.size() < BULK_PREVIEW) {
-                preview.add(row);
-            }
-            hits.add(row);
+        for (int i = 0; i < Math.min(BULK_PREVIEW, hits.size()); i++) {
+            preview.add(hits.get(i));
         }
         json.add("preview", preview);
-        json.add("hits", hits);
+        json.addProperty("download", McpDownloads.put(text));
+        json.addProperty("downloadChars", text.length());
+        json.addProperty("downloadNote", "HTTP GET this path on the MCP endpoint's host and port "
+                + "(e.g. curl http://localhost:8765/mcp/download/...); the newest " + McpDownloads.KEPT
+                + " downloads are kept in memory");
     }
 
     static final int BULK_PREVIEW = 3;

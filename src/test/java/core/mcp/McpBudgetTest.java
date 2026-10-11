@@ -68,17 +68,6 @@ class McpBudgetTest {
         assertThat(json.get("hint").getAsString()).contains("playerIds");
     }
 
-    /** A caller's explicit bulk request, marked by the tool, goes out whole and unbudgeted. */
-    @Test
-    void aBulkAnswerGoesOutWholePastTheBudget() {
-        final var full = squad(400, 0);
-        full.addProperty(McpBudget.BULK, true);
-        final var expected = McpHttpServer.GSON.toJson(full);
-
-        assertThat(McpBudget.fit(tool(), full)).isEqualTo(expected);
-        assertThat(expected.length()).isGreaterThan(McpBudget.MAX_CHARS);
-    }
-
     @Test
     void aToolWithoutItsOwnHintNamesItsArguments() {
         final var plain = new McpTool("t", "test", McpTool.schema(McpTool.properties(
