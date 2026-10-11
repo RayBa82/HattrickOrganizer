@@ -1212,7 +1212,7 @@ public class OnlineWorker {
 					return null;    // locked before kick-off: keep the lineup HO has
 				}
 				return lineupFromOrder(map, teamId);
-				}
+			}
 		} catch (Exception e) {
 			String msg = getLangString("Downloadfehler") + " : Error fetching Matchorder :";
 			setInfoMsg(msg, InfoPanel.FEHLERFARBE);

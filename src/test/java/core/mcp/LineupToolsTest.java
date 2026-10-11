@@ -77,7 +77,7 @@ class LineupToolsTest {
                               {"roleId":109,"playerId":12,"behaviour":0}],
                  "bench":[],"tactic":0,"attitude":0,"captainId":12}""").getAsJsonObject();
 
-        assertThat(LineupTools.orderDifferences(sent, held)).extracting(e -> e.getAsString())
+        assertThat(LineupTools.orderDifferences(sent, held)).extracting(com.google.gson.JsonElement::getAsString)
                 .containsExactly(
                         "positions roleId 101: sent player 12 behaviour 1, Hattrick holds nobody",
                         "positions roleId 109: sent nobody, Hattrick holds player 12 behaviour 0",
@@ -96,9 +96,9 @@ class LineupToolsTest {
         final var copy = LineupTools.copyOf(source);
 
         assertThat(copy).isNotSameAs(source);
-        assertThat(copy.getPositionById(IMatchRoleID.rightBack).getPlayerId()).isEqualTo(12);
-        assertThat(copy.getPositionById(IMatchRoleID.rightBack).getBehaviour())
-                .isEqualTo(IMatchRoleID.OFFENSIVE);
+        final var rightBack = java.util.Objects.requireNonNull(copy.getPositionById(IMatchRoleID.rightBack));
+        assertThat(rightBack.getPlayerId()).isEqualTo(12);
+        assertThat(rightBack.getBehaviour()).isEqualTo(IMatchRoleID.OFFENSIVE);
         assertThat(copy.getTacticType()).isEqualTo(2);
         assertThat(copy.getAttitude()).isEqualTo(1);
         assertThat(copy.getCoachModifier()).isEqualTo(3);

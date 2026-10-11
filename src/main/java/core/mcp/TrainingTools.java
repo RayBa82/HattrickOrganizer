@@ -12,6 +12,7 @@ import core.model.match.Matchdetails;
 import core.model.player.Player;
 import core.net.ChppWriteService;
 import core.training.FutureTrainingManager;
+import core.training.TrainingManager;
 import core.training.TrainingPerWeek;
 import core.training.WeeklyTrainingType;
 import core.util.HODateTime;
@@ -36,7 +37,10 @@ public final class TrainingTools {
 
     /** How far back {@code get_player_history} looks when the caller does not say. */
     private static final int DEFAULT_HISTORY_WEEKS = 26;
-    static final int MAX_EVENT_PLAYERS = 5;
+    /** The default window when get_player_history includes the weekly training minutes. */
+    private static final int DEFAULT_TRAINING_WEEKS = 4;
+    // A whole squad; events are cut to the weeks window, so the payload stays small.
+    static final int MAX_EVENT_PLAYERS = 30;
 
     /** A Hattrick year, which is what a growth rate is quoted per. */
     private static final int HT_WEEKS_PER_YEAR = 16;
@@ -172,7 +176,16 @@ public final class TrainingTools {
                                                 + "dayNumber, weekStart), which date level-ups a "
                                                 + "download gap hides. One CHPP request per player, "
                                                 + "at most " + MAX_EVENT_PLAYERS + " playerIds; "
-                                                + "empty while the player is in a match. Default false"),
+                                                + "empty while the player is in a match. Only events "
+                                                + "inside weeks; raise weeks for the whole career. "
+                                                + "Default false"),
+                                "includeTraining", McpTool.prop("boolean",
+                                        "add trainingWeeks: every stored training week in the "
+                                                + "window (type, intensity, staminaShare, coach and "
+                                                + "assistants levels) and per player the minutes each "
+                                                + "week banked (full/partly/played, maxedForWeek), "
+                                                + "rebuilt from stored lineups. Local. weeks defaults "
+                                                + "to " + DEFAULT_TRAINING_WEEKS + " with it. Default false"),
                                 "includeSnapshots", McpTool.prop("boolean",
                                         "add the raw dated series per player; default false, "
                                                 + "because levelUps, derived and coverage answer "
@@ -284,7 +297,8 @@ public final class TrainingTools {
         if (McpJson.optBool(args, "sinceLastTraining", false)) {
             return sinceLastTraining(model, historyPlayerIds(args, model));
         }
-        final var weeks = Math.max(1, McpJson.optInt(args, "weeks", DEFAULT_HISTORY_WEEKS));
+        final var includeTraining = McpJson.optBool(args, "includeTraining", false);
+        final var weeks = historyWeeks(args, includeTraining);
         final var includeSnapshots = McpJson.optBool(args, "includeSnapshots", false);
         final var asOf = HODateTime.now();
         final var since = asOf.minus(weeks * 7, ChronoUnit.DAYS);
@@ -311,12 +325,20 @@ public final class TrainingTools {
             throw new IllegalArgumentException("includeEvents costs one CHPP request per player, so "
                     + "it takes at most " + MAX_EVENT_PLAYERS + " playerIds, had " + ids.size() + ".");
         }
+        final var trainingWeeks = includeTraining
+                ? trainingHistory(model, since, new HashSet<>(ids)) : null;
         for (final var playerId : ids) {
             final var row = history(playerId, since, trained, includeSnapshots);
             if (includeEvents) {
-                row.add("trainingEvents", trainingEvents(playerId));
+                row.add("trainingEvents", eventsSince(trainingEvents(playerId), since));
+            }
+            if (trainingWeeks != null) {
+                row.add("trainingWeeks", trainingWeeks.players().getOrDefault(playerId, new JsonArray()));
             }
             players.add(row);
+        }
+        if (trainingWeeks != null) {
+            json.add("trainingWeeks", trainingWeeks.weeks());
         }
         json.add("players", players);
         json.addProperty("note", "levelsPerHtYear is the trained skill's sub-skill-inclusive gain "
@@ -406,6 +428,32 @@ public final class TrainingTools {
             json.add("levelUps", levelUps(List.of(baseline, latest)));
         }
         return json;
+    }
+
+    /**
+     * Hattrick returns a player's whole career of training events; only those inside the
+     * requested window go out, so a squad-wide call stays readable. An event Hattrick gave no
+     * week for is kept - it cannot be placed outside the window either.
+     */
+    static JsonObject eventsSince(JsonObject events, HODateTime since) {
+        final var kept = new JsonArray();
+        for (final var element : events.getAsJsonArray("events")) {
+            final var weekStart = element.getAsJsonObject().get("weekStart");
+            if (weekStart == null || !HODateTime.fromHT(weekStart.getAsString()).isBefore(since)) {
+                kept.add(element);
+            }
+        }
+        events.add("events", kept);
+        return events;
+    }
+
+    /**
+     * Weekly minutes are one row per player per week, so a shorter default keeps a squad-wide
+     * includeTraining call inside the response budget. An explicit weeks still wins.
+     */
+    private static int historyWeeks(JsonObject args, boolean includeTraining) {
+        final var fallback = includeTraining ? DEFAULT_TRAINING_WEEKS : DEFAULT_HISTORY_WEEKS;
+        return Math.max(1, McpJson.optInt(args, "weeks", fallback));
     }
 
     /** The explicit ids in the caller's order, else every non-coach in the current squad. */
@@ -752,34 +800,9 @@ public final class TrainingTools {
         json.addProperty("weekEnd", weekEnd.toHT());
         json.add("fullTrainingRoleIds", roleIds(weekly.getTrainingSkillPositions()));
 
-        final var teamId = model.getBasics().getTeamId();
         final var banked = new LinkedHashMap<Integer, WeekMinutes>();
         final var fixtures = new JsonArray();
-        var missingLineups = 0;
-        for (final var match : week.getMatches()) {
-            final var played = match.getMatchStatus() == MatchKurzInfo.FINISHED;
-            final var details = played ? match.getMatchdetails() : null;
-            final var lineup = details == null ? null : details.getOwnTeamLineup();
-
-            final var fixture = new JsonObject();
-            fixture.addProperty("matchId", match.getMatchID());
-            fixture.addProperty("matchType",
-                    match.getMatchType() == null ? null : match.getMatchType().name());
-            fixture.addProperty("date",
-                    match.getMatchSchedule() == null ? null : match.getMatchSchedule().toHT());
-            fixture.addProperty("opponent", match.getOpponentTeamName());
-            fixture.addProperty("played", played);
-            fixture.addProperty("lineupAvailable", lineup != null);
-            fixtures.add(fixture);
-
-            if (lineup == null) {
-                if (played) {
-                    missingLineups++;
-                }
-                continue;
-            }
-            addMatchMinutes(model, wanted, banked, match, details, lineup, weekly, teamId);
-        }
+        final var missingLineups = bankWeek(model, wanted, week, weekly, banked, fixtures);
         json.add("fixtures", fixtures);
         if (everyone) {
             for (final var player : model.getCurrentPlayers()) {
@@ -805,6 +828,94 @@ public final class TrainingTools {
                 + "an already maxed player will look available. Download the fixtures marked "
                 + "lineupAvailable:false before building a lineup on this.");
         return json;
+    }
+
+    /**
+     * Banks every match of a training week into the per-player totals.
+     *
+     * @param fixtures receives one row per match, or null to skip them
+     * @return how many played matches have no downloaded lineup, so their minutes are missing
+     */
+    private static int bankWeek(HOModel model, Set<Integer> wanted, TrainingPerWeek week,
+            WeeklyTrainingType weekly, Map<Integer, WeekMinutes> banked, JsonArray fixtures) {
+        final var teamId = model.getBasics().getTeamId();
+        var missingLineups = 0;
+        for (final var match : week.getMatches()) {
+            final var played = match.getMatchStatus() == MatchKurzInfo.FINISHED;
+            final var details = played ? match.getMatchdetails() : null;
+            final var lineup = details == null ? null : details.getOwnTeamLineup();
+
+            if (fixtures != null) {
+                fixtures.add(fixture(match, played, lineup != null));
+            }
+
+            if (lineup == null) {
+                if (played) {
+                    missingLineups++;
+                }
+                continue;
+            }
+            addMatchMinutes(model, wanted, banked, match, details, lineup, weekly, teamId);
+        }
+        return missingLineups;
+    }
+
+    private static JsonObject fixture(MatchKurzInfo match, boolean played, boolean lineupAvailable) {
+        final var fixture = new JsonObject();
+        fixture.addProperty("matchId", match.getMatchID());
+        fixture.addProperty("matchType",
+                match.getMatchType() == null ? null : match.getMatchType().name());
+        fixture.addProperty("date",
+                match.getMatchSchedule() == null ? null : match.getMatchSchedule().toHT());
+        fixture.addProperty("opponent", match.getOpponentTeamName());
+        fixture.addProperty("played", played);
+        fixture.addProperty("lineupAvailable", lineupAvailable);
+        return fixture;
+    }
+
+    /** The past training weeks inside the window, and per player the minutes each one banked. */
+    private record TrainingHistory(JsonArray weeks, Map<Integer, JsonArray> players) {
+    }
+
+    /**
+     * get_player_history includeTraining: HO's stored training weeks (settings as downloaded) with
+     * each player's minutes rebuilt from the stored match lineups - the same arithmetic as
+     * currentWeek, applied to weeks already closed. Hattrick itself keeps no such history.
+     */
+    private static TrainingHistory trainingHistory(HOModel model, HODateTime since,
+                                                   Set<Integer> wanted) {
+        final var weeks = new JsonArray();
+        final var players = new java.util.HashMap<Integer, JsonArray>();
+        for (final var week : TrainingManager.instance().getHistoricalTrainings()) {
+            final var date = week.getTrainingDate();
+            if (date == null || date.isBefore(since)) {
+                continue;
+            }
+            final var weekly = WeeklyTrainingType.instance(week.getTrainingType());
+            final var row = new JsonObject();
+            row.addProperty("trainingDate", date.toHT());
+            row.addProperty("trainingType", week.getTrainingType());
+            row.addProperty("trainingName", weekly == null ? null : weekly.getName());
+            row.addProperty("intensity", week.getTrainingIntensity());
+            row.addProperty("staminaShare", week.getStaminaShare());
+            row.addProperty("coachLevel", week.getCoachLevel());
+            row.addProperty("assistantsLevel", week.getTrainingAssistantsLevel());
+            final var banked = new LinkedHashMap<Integer, WeekMinutes>();
+            final var missing = weekly == null ? 0 : bankWeek(model, wanted, week, weekly, banked, null);
+            row.addProperty("lineupDataComplete", missing == 0);
+            weeks.add(row);
+            for (final var entry : banked.entrySet()) {
+                final var minutes = entry.getValue().toJson(entry.getKey());
+                minutes.remove("playerId");
+                minutes.remove("name");
+                // Kept compact: the match ids and start positions are what currentWeek is for.
+                minutes.remove("matchIds");
+                minutes.remove("startRoleIds");
+                minutes.addProperty("trainingDate", date.toHT());
+                players.computeIfAbsent(entry.getKey(), k -> new JsonArray()).add(minutes);
+            }
+        }
+        return new TrainingHistory(weeks, players);
     }
 
     /** Adds one match's minutes to the running per-player totals. */

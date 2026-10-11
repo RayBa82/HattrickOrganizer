@@ -15,11 +15,21 @@ hint naming its own paging/filter arguments. The rule is documented but not impl
   tool supplies its own hint.
 - Then audit every tool's defaults against it, starting with the list-shaped ones. Today only
   `list_scout` pages (it was ~260k chars before paging).
+- Measured 2026-10-11 on a copy of the dev DB (headless, default arguments, local tools only):
+  over budget are `get_squad` 31k, `list_scout` 20k (even paged), `get_player_history` 22k
+  (`includeSnapshots` 766k), `get_series` 11.4k, `get_training` 11.1k. Under: `get_team` 1k,
+  `get_finances` 2.3k, `get_team_transfers` 5.8k, `get_lineup` 2k, `get_matches` 2.8k,
+  `simulate_lineup` 0.4k, `get_training wholeSquadWeek` 6.3k, `sinceLastTraining` 1.6k.
+  `includeTraining` adds ~2.3k at its 4-week default, ~17k over 26 weeks. Enforcing the
+  envelope first would turn the five over-budget defaults into hints on the live server, so the
+  defaults have to shrink in the same change. The CHPP-backed tools were not measured.
 
 ## MCP requests from the hattrick session (2026-10-11)
 
-Five tool requests, all on `lineup-tv-view`, unit-tested (`core.mcp.*` green), not yet run
-against live CHPP or deployed to the server (needs `./gradlew dockerPush` + `docker compose pull`).
+Six tool requests, all on `lineup-tv-view`, unit-tested (`core.mcp.*` green), pushed with
+`./gradlew dockerPush`; the server picks them up with `docker compose pull && docker compose up -d`.
+Not yet run against live CHPP: the send_match_order read-back can still report differences
+Hattrick normalises away (team orders and penalty takers are untested).
 
 1. `get_match_order(matchId, matchType)` reads the order Hattrick holds (matchorders view, through
    `OnlineWorker.lineupFromOrder`, the download's own HRF route) in send_match_order's echo shape.
@@ -32,9 +42,16 @@ against live CHPP or deployed to the server (needs `./gradlew dockerPush` + `doc
    update against the newest overall; changed players only, `unconfirmed` for missing sides.
 4. `simulate_lineup` takes matchId/weather without positions: scores a copy of the live lineup.
 5. `get_training wholeSquadWeek`: every squad player in `currentWeek.players`, ignoring playerIds.
-
-Open: request 6 (multi-week training history per player: minutes, maxed, resulting change) -
-scope not yet confirmed by the user.
+6. "All training data per player reachable": `get_player_history includeTraining`
+   adds the stored training weeks (TRAININGS: type, intensity, stamina share, coach/assistant
+   levels) and per player the minutes each week banked, rebuilt from stored lineups like
+   currentWeek; `weeks` defaults to 4 with it to stay inside the budget. includeEvents now
+   covers up to 30 players, events cut to the `weeks` window.
+   Not available anywhere: Hattrick keeps no per-player training-minutes history and no past
+   training settings beyond the last week (training.xml LastTraining*); sub-skills are HO's
+   estimate, never Hattrick data; minutes exist only for current squad players and only for
+   matches whose lineup HO downloaded. Not yet exposed: training.xml SpecialTraining (stamina
+   special training, at most 3 players) - HO does not parse it.
 
 ## Headless finances (2026-10-03)
 

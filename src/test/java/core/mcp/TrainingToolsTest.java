@@ -305,6 +305,21 @@ class TrainingToolsTest {
     }
 
     @Test
+    void eventsSince_keepsTheWindowAndEventsWithoutAWeek() {
+        final var events = com.google.gson.JsonParser.parseString("""
+                {"playerId":1,"available":true,"events":[
+                  {"skill":"PASSING","weekStart":"2026-09-01 00:00:00"},
+                  {"skill":"SCORING","weekStart":"2025-01-01 00:00:00"},
+                  {"skill":"WINGER"}]}""").getAsJsonObject();
+
+        final var kept = TrainingTools.eventsSince(events, HODateTime.fromHT("2026-06-01 00:00:00"))
+                .getAsJsonArray("events");
+
+        assertThat(kept).extracting(e -> e.getAsJsonObject().get("skill").getAsString())
+                .containsExactly("PASSING", "WINGER");
+    }
+
+    @Test
     void trainingDiff_namesTheMissingSide() {
         final var lastTraining = HODateTime.fromHT("2026-03-05 08:00:00");
         final var before = snapshot("2026-03-01 12:00:00", 30, 9, 0.9, 5000, 9000);
