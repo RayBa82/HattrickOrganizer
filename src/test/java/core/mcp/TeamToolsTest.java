@@ -472,15 +472,20 @@ class TeamToolsTest {
     }
 
     @Test
-    void compactSquadRow_keepsTheAvailabilityCoreAndDropsWhatWasNotAskedFor() {
+    void compactSquadRow_keepsTheAvailabilityCoreAndTheSkillsAsOneArray() {
         final var row = com.google.gson.JsonParser.parseString("""
-                {"playerId":1,"injuryWeeks":0,"available":true,"skillsWithSublevel":{},
+                {"playerId":1,"injuryWeeks":0,"available":true,"specialty":4,"suspended":false,
+                 "skillsWithSublevel":{"keeper":1.0,"defending":3.25,"playmaking":10.97,"winger":4.0,
+                   "passing":6.04,"scoring":3.0,"setPieces":3.5,"experience":2.0},
                  "skills":{},"leadership":3,"honesty":2,"loyalty":10,"motherclub":false,
                  "positionRatings":{},"penaltyStrength":4.2}""").getAsJsonObject();
 
         TeamTools.compactSquadRow(row, java.util.Set.of("penaltyStrength"));
 
         assertThat(row.keySet()).containsExactlyInAnyOrder(
-                "playerId", "injuryWeeks", "available", "skillsWithSublevel", "penaltyStrength");
+                "playerId", "injuryWeeks", "available", "skills", "penaltyStrength");
+        // In SKILL_ORDER, sub-level to one decimal.
+        assertThat(row.getAsJsonArray("skills")).extracting(com.google.gson.JsonElement::getAsDouble)
+                .containsExactly(1.0, 3.3, 11.0, 4.0, 6.0, 3.0, 3.5, 2.0);
     }
 }

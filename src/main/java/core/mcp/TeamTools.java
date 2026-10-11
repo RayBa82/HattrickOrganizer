@@ -62,12 +62,12 @@ public final class TeamTools {
                         McpTool.schema(new JsonObject()),
                         args -> team()),
                 new McpTool("get_squad",
-                        "Every player in the squad: skillsWithSublevel, form, stamina, specialty, "
-                                + "group, TSI, wage, and the availability check (injuryWeeks, cards, "
-                                + "suspended, available, transferListed). include adds the integer "
-                                + "skills, character traits, loyalty, penaltyStrength and positionRatings "
-                                + "(his worth in each field slot 100-113). Up to " + FULL_SQUAD_RECORDS
-                                + " playerIds get everything.",
+                        "Every player in the squad: skills (8 values with sub-level, in skillOrder), "
+                                + "form, stamina, specialtyName, group, TSI, wage, and the availability "
+                                + "check (injuryWeeks, cards, available - false without injury means "
+                                + "suspended - transferListed). include adds character traits, loyalty, "
+                                + "penaltyStrength and positionRatings (his worth in each field slot "
+                                + "100-113). Up to " + FULL_SQUAD_RECORDS + " playerIds get everything.",
                         McpTool.schema(McpTool.properties(
                                 "playerIds", McpTool.prop("array",
                                         "only these players; the whole squad if omitted. An id not "
@@ -80,17 +80,13 @@ public final class TeamTools {
                                 "offset", McpTool.prop("integer",
                                         "how many players to skip; default 0. count is the total"))),
                         TeamTools::squad)
-                        .withBudget("Page with limit/offset (count is the total) - e.g. limit 15 for "
-                                        + "the whole squad with its skills in two pages - or name "
-                                        + "playerIds; ask for positionRatings and the other include parts "
-                                        + "only for the few candidates.",
+                        .withBudget("Page with limit/offset (count is the total) or name playerIds; "
+                                        + "ask for positionRatings and the other include parts only for "
+                                        + "the few candidates.",
                                 McpTool.OptionalSection.perItem("players", "positionRatings", "positionRatings"),
                                 McpTool.OptionalSection.perItem("players", "character", CHARACTER_KEYS),
-                                McpTool.OptionalSection.perItem("players", "skills", "skills"),
                                 McpTool.OptionalSection.perItem("players", "loyalty", "loyalty", "motherclub"),
-                                McpTool.OptionalSection.perItem("players", "penaltyStrength", "penaltyStrength"),
-                                // Last: the availability check must arrive for the whole squad.
-                                McpTool.OptionalSection.perItem("players", "skillsWithSublevel", "skillsWithSublevel")),
+                                McpTool.OptionalSection.perItem("players", "penaltyStrength", "penaltyStrength")),
                 new McpTool("analyze_opponent",
                         "Pre-match scouting of another team. ratings: the sector ratings it earned "
                                 + "in recent matches, averaged and named as simulate_lineup wants "
@@ -336,6 +332,9 @@ public final class TeamTools {
             players.add(compactSquadRow(row, include));
         }
         final var json = new JsonObject();
+        final var skillOrder = new JsonArray();
+        SKILL_ORDER.forEach(skillOrder::add);
+        json.add("skillOrder", skillOrder);
         json.addProperty("count", selected.size());
         json.addProperty("offset", offset);
         json.addProperty("returned", players.size());
@@ -359,11 +358,24 @@ public final class TeamTools {
         return include;
     }
 
-    /** Strips a get_squad row down to its core plus the include parts asked for. */
+    /**
+     * Strips a get_squad row down to its core plus the include parts asked for. The skills become
+     * one array in {@link #SKILL_ORDER}, sub-level to one decimal: keyed, they were a quarter of
+     * the row, and the whole squad's skills have to fit one call.
+     */
     static JsonObject compactSquadRow(JsonObject row, java.util.Set<String> include) {
-        if (!include.contains("skills")) {
-            row.remove("skills");
+        row.remove("skills");
+        final var precise = row.remove("skillsWithSublevel");
+        if (precise != null) {
+            final var skills = new JsonArray();
+            for (final var name : SKILL_ORDER) {
+                skills.add(Math.round(precise.getAsJsonObject().get(name).getAsDouble() * 10) / 10.0);
+            }
+            row.add("skills", skills);
         }
+        // specialtyName says it; available false with no injury says suspended.
+        row.remove("specialty");
+        row.remove("suspended");
         if (!include.contains("character")) {
             for (final var key : CHARACTER_KEYS) {
                 row.remove(key);
@@ -383,8 +395,11 @@ public final class TeamTools {
     }
 
     /** get_squad's optional parts; the rest of a row is what every lineup and squad check reads. */
-    static final List<String> SQUAD_PARTS = List.of("skills", "character", "loyalty",
-            "penaltyStrength", "positionRatings");
+    static final List<String> SQUAD_PARTS = List.of("character", "loyalty", "penaltyStrength",
+            "positionRatings");
+    /** The order of get_squad's skills array, sent once as skillOrder. */
+    static final List<String> SKILL_ORDER = List.of("keeper", "defending", "playmaking", "winger",
+            "passing", "scoring", "setPieces", "experience");
     private static final String[] CHARACTER_KEYS = {"leadership", "agreeability", "aggressiveness",
             "honesty"};
     /** Up to this many named players, get_squad returns the whole record without being asked. */
