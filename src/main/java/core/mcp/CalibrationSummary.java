@@ -24,9 +24,9 @@ final class CalibrationSummary {
     private CalibrationSummary() {
     }
 
-    /** What filters the statistics and pages the rows. Empty matchTypes means all. */
-    record Query(Set<Integer> matchTypes, double maxSnapshotAgeDays, boolean includeConfounded,
-                 int limit, int offset) {
+    /** What filters the statistics and pages the rows. Empty matchTypes, null attitude: all. */
+    record Query(Set<Integer> matchTypes, Integer attitude, double maxSnapshotAgeDays,
+                 boolean includeConfounded, int limit, int offset) {
     }
 
     /** The key a sector goes by in tool results, matching get_match. */
@@ -45,6 +45,7 @@ final class CalibrationSummary {
     static JsonObject summarize(List<RatingCalibrationRow> stored, Query q) {
         final var rows = stored.stream()
                 .filter(r -> q.matchTypes().isEmpty() || q.matchTypes().contains(r.getMatchType()))
+                .filter(r -> q.attitude() == null || q.attitude() == r.getAttitude())
                 .sorted(Comparator.comparing(RatingCalibrationRow::getMatchDate,
                         Comparator.nullsLast(Comparator.naturalOrder())).reversed())
                 .toList();
@@ -132,6 +133,7 @@ final class CalibrationSummary {
         json.addProperty("date", r.getMatchDate() == null ? null : day(r.getMatchDate()));
         json.addProperty("matchType", r.getMatchType());
         json.addProperty("location", location(r.getLocation()));
+        json.addProperty("attitude", r.getAttitude());
         json.addProperty("ageDays", Math.round(r.getSnapshotAgeDays() * 10) / 10.0);
         if (r.isConfounded()) {
             json.addProperty("confounded", r.getConfoundedReason());
@@ -161,6 +163,22 @@ final class CalibrationSummary {
     /** Real level minus the predicted one; the model's level is its raw tactic rating + 1. */
     private static double tacticResidual(RatingCalibrationRow r) {
         return r.getRealTactic() - (r.getPredictedTactic() + 1);
+    }
+
+    /**
+     * The starters' behaviours as one string over the slots 100-113: a digit per filled slot
+     * (0 normal, 1 offensive, 2 defensive, 3 towards middle, 4 towards wing), '.' for an empty one.
+     */
+    static String behaviours(List<core.model.match.MatchLineupPosition> played) {
+        final var slots = new char[14];
+        java.util.Arrays.fill(slots, '.');
+        for (final var p : played) {
+            final int slot = p.getStartPosition() - 100;
+            if (slot >= 0 && slot < slots.length) {
+                slots[slot] = Character.forDigit(p.getStartBehavior(), 10);
+            }
+        }
+        return new String(slots);
     }
 
     /** IMatchDetails' location codes, named: away 0, home 1, derby 2, tournament 3, neutral 4. */

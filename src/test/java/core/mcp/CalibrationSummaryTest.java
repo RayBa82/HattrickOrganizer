@@ -14,7 +14,7 @@ import static org.assertj.core.api.Assertions.within;
 class CalibrationSummaryTest {
 
     private static final CalibrationSummary.Query ALL =
-            new CalibrationSummary.Query(Set.of(), 7.0, false, 20, 0);
+            new CalibrationSummary.Query(Set.of(), null, 7.0, false, 20, 0);
 
     private static RatingCalibrationRow row(int matchId, int matchType, String day, boolean confounded,
                                             double residual) {
@@ -54,7 +54,7 @@ class CalibrationSummaryTest {
         final var with = CalibrationSummary.summarize(List.of(
                 row(1, 1, "2026-09-01", false, 1.0),
                 row(3, 1, "2026-09-15", true, 100.0)),
-                new CalibrationSummary.Query(Set.of(), 7.0, true, 20, 0));
+                new CalibrationSummary.Query(Set.of(), null, 7.0, true, 20, 0));
         assertThat(with.getAsJsonObject("stats").get("n").getAsInt()).isEqualTo(2);
     }
 
@@ -67,7 +67,7 @@ class CalibrationSummaryTest {
         final var friendly = row(3, 4, "2026-09-10", false, 5.0);
 
         final var json = CalibrationSummary.summarize(List.of(old, fresh, friendly),
-                new CalibrationSummary.Query(Set.of(1), 7.0, false, 20, 0));
+                new CalibrationSummary.Query(Set.of(1), null, 7.0, false, 20, 0));
 
         assertThat(json.get("leftOutSnapshotTooOld").getAsInt()).isEqualTo(1);
         assertThat(json.getAsJsonObject("stats").get("n").getAsInt()).isEqualTo(1);
@@ -81,7 +81,7 @@ class CalibrationSummaryTest {
                 row(1, 1, "2026-09-01", false, 1.0),
                 row(2, 1, "2026-09-08", false, 2.0),
                 row(3, 1, "2026-09-15", false, 3.0)),
-                new CalibrationSummary.Query(Set.of(), 7.0, false, 1, 1));
+                new CalibrationSummary.Query(Set.of(), null, 7.0, false, 1, 1));
 
         assertThat(json.get("returned").getAsInt()).isEqualTo(1);
         assertThat(json.getAsJsonArray("rows").get(0).getAsJsonObject().get("matchId").getAsInt()).isEqualTo(2);
@@ -90,6 +90,35 @@ class CalibrationSummaryTest {
         assertThat(one.getAsJsonArray("sd").get(0).isJsonNull()).isTrue();
         assertThat(one.getAsJsonObject("tactic").get("n").getAsInt()).isZero();
         assertThat(one.getAsJsonObject("tactic").get("mean").isJsonNull()).isTrue();
+    }
+
+    @Test
+    void attitudeFiltersStatsAndRows() {
+        final var mots = row(1, 1, "2026-10-10", false, -0.8);
+        mots.setAttitude(1);
+        final var normal = row(2, 1, "2026-09-26", false, 0.2);
+
+        final var json = CalibrationSummary.summarize(List.of(mots, normal),
+                new CalibrationSummary.Query(Set.of(), 1, 7.0, false, 20, 0));
+
+        assertThat(json.getAsJsonObject("stats").getAsJsonArray("mean").get(0).getAsDouble()).isEqualTo(-0.8);
+        assertThat(json.get("count").getAsInt()).isEqualTo(1);
+        assertThat(json.getAsJsonArray("rows").get(0).getAsJsonObject().get("attitude").getAsInt()).isEqualTo(1);
+    }
+
+    @Test
+    void behavioursAreADigitPerStartingSlotAndADotForAnEmptyOne() {
+        final var keeper = new core.model.match.MatchLineupPosition();
+        keeper.setStartPosition(100);
+        keeper.setStartBehavior(0);
+        final var winger = new core.model.match.MatchLineupPosition();
+        winger.setStartPosition(106);
+        winger.setStartBehavior(1);
+        final var bench = new core.model.match.MatchLineupPosition();
+        bench.setStartPosition(200);
+        bench.setStartBehavior(2);
+
+        assertThat(CalibrationSummary.behaviours(List.of(keeper, winger, bench))).isEqualTo("0.....1.......");
     }
 
     @Test

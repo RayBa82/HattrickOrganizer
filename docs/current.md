@@ -55,8 +55,10 @@ download (`RatingCalibration.calibrateAndStore`); only the tool had been retired
 - stats over non-confounded rows with a snapshot at most `maxSnapshotAgeDays` (7) old: n, date
   range, mean/sd of real minus predicted per sector in `sectorOrder`, and the same for the
   tactic level. `includeConfounded`, `matchTypes` filter stats and rows.
-- rows: paged (20, max 40), newest first, pred/resid arrays, `tactic` [predicted, real],
-  `confounded` reason only when set. 20 rows 4.6k, 40 rows 8.0k on the dev DB copy.
+- rows: paged (20, max 30), newest first, pred/resid arrays, `tactic` [predicted, real],
+  `attitude`, `behaviours` (a char per slot 100-113, read per page row from the stored match
+  lineup, so no column), `confounded` reason only when set. `attitude` filters stats and rows.
+  20 rows 5.5k, 40 rows were 9.7k on the dev DB copy.
 - `backfill` rates stored matches without a row; with `recompute` it redoes all of them.
 - DB 1008 adds PRED_TACTIC (the raw tactic rating; level = rating + 1) and REAL_TACTIC
   (Hattrick's tacticSkill). Rows from before stay null until a `backfill` + `recompute`.

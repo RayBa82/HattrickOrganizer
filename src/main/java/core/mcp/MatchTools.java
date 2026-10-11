@@ -102,16 +102,18 @@ public final class MatchTools {
                                 "matchId"),
                         MatchTools::matchWeather),
                 new McpTool("get_rating_calibration",
-                        "Rating model vs Hattrick on our played matches: the starting eleven rated from "
-                                + "the last snapshot before kick-off against the real ratings. stats: "
-                                + "n, date range, mean and sd of real minus predicted per sector (in "
-                                + "sectorOrder; positive = model too low) and for the tactic level. rows: "
-                                + "per match pred, resid, tactic [pred, real], confounded = lineup changed "
-                                + "mid-match. Newest first.",
+                        "Rating model vs Hattrick on our played matches: starting eleven rated from "
+                                + "the last snapshot before kick-off. stats: n, date range, mean and sd "
+                                + "of real minus predicted per sector (sectorOrder; + = model too low) and "
+                                + "tactic level. rows: pred, resid, tactic [pred, real], attitude, "
+                                + "behaviours (slots 100-113, . empty), confounded = lineup changed mid-match.",
                         McpTool.schema(McpTool.properties(
                                 "matchTypes", McpTool.prop("array",
                                         "only these match type ids (1 league, 3 cup, 4/5/8/9 friendlies, "
                                                 + "as get_matches reports them); default all"),
+                                "attitude", McpTool.prop("integer",
+                                        "only matches played with this attitude: -1 PIC, 0 normal, 1 MOTS; "
+                                                + "default all"),
                                 "maxSnapshotAgeDays", McpTool.prop("number",
                                         "stats leave out rows whose snapshot is older than this many "
                                                 + "days before the match; default 7"),
@@ -857,7 +859,8 @@ public final class MatchTools {
      */
 
     static final int CALIBRATION_PAGE = 20;
-    static final int CALIBRATION_MAX_PAGE = 40;
+    /** 40 rows were 9.7k with behaviours: too close to the budget. */
+    static final int CALIBRATION_MAX_PAGE = 30;
 
     private static JsonObject ratingCalibration(JsonObject args) throws McpToolException {
         McpJson.model();
@@ -878,11 +881,22 @@ public final class MatchTools {
         }
         final var maxAge = args.has("maxSnapshotAgeDays") && !args.get("maxSnapshotAgeDays").isJsonNull()
                 ? args.get("maxSnapshotAgeDays").getAsDouble() : 7.0;
-        final var query = new CalibrationSummary.Query(matchTypes, maxAge,
+        final Integer attitude = args.has("attitude") && !args.get("attitude").isJsonNull()
+                ? args.get("attitude").getAsInt() : null;
+        final var query = new CalibrationSummary.Query(matchTypes, attitude, maxAge,
                 McpJson.optBool(args, "includeConfounded", false),
                 Math.min(Math.max(McpJson.optInt(args, "limit", CALIBRATION_PAGE), 1), CALIBRATION_MAX_PAGE),
                 Math.max(McpJson.optInt(args, "offset", 0), 0));
         final var json = CalibrationSummary.summarize(DBManager.instance().loadRatingCalibrations(), query);
+        // Read per page row from the stored match lineup: not a calibration column, so no migration.
+        final var teamId = McpJson.model().getBasics().getTeamId();
+        for (final var element : json.getAsJsonArray("rows")) {
+            final var row = element.getAsJsonObject();
+            final var matchType = MatchType.getById(row.get("matchType").getAsInt());
+            final var played = DBManager.instance().getMatchLineupPlayers(row.get("matchId").getAsInt(),
+                    matchType, teamId);
+            row.addProperty("behaviours", CalibrationSummary.behaviours(played));
+        }
         if (backfill != null) {
             json.add("backfill", backfill);
         }
