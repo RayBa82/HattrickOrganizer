@@ -330,6 +330,22 @@ class TrainingToolsTest {
                 .containsExactly("SCORING");
     }
 
+    /** The screen is derived and coverage cut to what a many-trainee screen reads, and no more. */
+    @Test
+    void addScreen_copiesTheGrowthAndCoverageSignals() {
+        final var row = TrainingTools.historyOf(1, oneHattrickYear(), PlayerSkill.PASSING, false);
+
+        TrainingTools.addScreen(row);
+
+        final var screen = row.getAsJsonObject("screen");
+        assertThat(screen.keySet()).containsExactlyInAnyOrder("levelsPerHtYear", "rateBasis",
+                "weeksSinceLastLevelUp", "daysSinceLastSnapshot", "gapCount");
+        assertThat(screen.get("levelsPerHtYear"))
+                .isEqualTo(row.getAsJsonObject("derived").get("levelsPerHtYear"));
+        assertThat(screen.get("gapCount").getAsInt())
+                .isEqualTo(row.getAsJsonObject("coverage").getAsJsonArray("gaps").size());
+    }
+
     @Test
     void trainingDiff_namesTheMissingSide() {
         final var lastTraining = HODateTime.fromHT("2026-03-05 08:00:00");

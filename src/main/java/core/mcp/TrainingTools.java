@@ -196,6 +196,11 @@ public final class TrainingTools {
                                 "includeDerived", McpTool.prop("boolean",
                                         "add derived per player (growth rate, TSI and wage drift); "
                                                 + "default true for up to " + DERIVED_PLAYERS + " players"),
+                                "includeScreen", McpTool.prop("boolean",
+                                        "add screen per player: levelsPerHtYear, rateBasis, "
+                                                + "weeksSinceLastLevelUp, daysSinceLastSnapshot, gapCount - "
+                                                + "the trainee screen for many players; default true "
+                                                + "where derived is left out"),
                                 "includeCoverage", McpTool.prop("boolean",
                                         "add coverage per player (snapshot dates, gaps, "
                                                 + "daysSinceLastSnapshot); default true for up to "
@@ -222,6 +227,7 @@ public final class TrainingTools {
                                 McpTool.OptionalSection.perItem("players", "derived", "derived"),
                                 McpTool.OptionalSection.perItem("players", "coverage", "coverage"),
                                 McpTool.OptionalSection.perItem("players", "latestSkills", "latestSkills"),
+                                McpTool.OptionalSection.perItem("players", "screen", "screen"),
                                 McpTool.OptionalSection.perItem("players", "snapshots", "snapshots"),
                                 McpTool.OptionalSection.perItem("players", "trainingEvents", "trainingEvents"),
                                 McpTool.OptionalSection.perItem("players", "trainingWeeks", "trainingWeeks"),
@@ -364,10 +370,10 @@ public final class TrainingTools {
                 ? trainingHistory(model, window, new HashSet<>(ids)) : null;
         final var derivedOn = McpJson.optBool(args, "includeDerived", ids.size() <= DERIVED_PLAYERS);
         final var coverageOn = McpJson.optBool(args, "includeCoverage", ids.size() <= COVERAGE_PLAYERS);
+        final var screenOn = McpJson.optBool(args, "includeScreen", !derivedOn);
         for (final var playerId : ids) {
             final var row = history(playerId, window, trained, includeSnapshots);
-            dropUnless(row, "derived", derivedOn);
-            dropUnless(row, "coverage", coverageOn);
+            shapeRow(row, screenOn, derivedOn, coverageOn);
             if (includeEvents) {
                 row.add("trainingEvents", eventsIn(trainingEvents(playerId), window));
             }
@@ -497,9 +503,41 @@ public final class TrainingTools {
         return events;
     }
 
-    private static void dropUnless(JsonObject row, String key, boolean keep) {
-        if (!keep) {
-            row.remove(key);
+    /**
+     * The trainee screen in one small block: whether a player is still growing, and whether the
+     * series can tell. Copied from derived and coverage, so a screen over many players costs a
+     * fraction of the two and says nothing they would not.
+     */
+    static void addScreen(JsonObject row) {
+        final var screen = new JsonObject();
+        final var derived = row.getAsJsonObject("derived");
+        if (derived != null) {
+            for (final var key : List.of("levelsPerHtYear", "rateBasis", "weeksSinceLastLevelUp")) {
+                if (derived.has(key)) {
+                    screen.add(key, derived.get(key));
+                }
+            }
+        }
+        final var coverage = row.getAsJsonObject("coverage");
+        if (coverage != null) {
+            screen.add("daysSinceLastSnapshot", coverage.get("daysSinceLastSnapshot"));
+            screen.addProperty("gapCount", coverage.getAsJsonArray("gaps").size());
+        }
+        if (!screen.isEmpty()) {
+            row.add("screen", screen);
+        }
+    }
+
+    /** Screen first - it is copied from derived and coverage - then drop what was not asked for. */
+    private static void shapeRow(JsonObject row, boolean screen, boolean derived, boolean coverage) {
+        if (screen) {
+            addScreen(row);
+        }
+        if (!derived) {
+            row.remove("derived");
+        }
+        if (!coverage) {
+            row.remove("coverage");
         }
     }
 

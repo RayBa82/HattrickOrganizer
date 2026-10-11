@@ -18,7 +18,10 @@ Defaults reshaped with the hattrick session (field names kept):
   decimals, and it is the last optional section: a 29-man squad's core is 12k with it, 8.1k
   without, so squad-wide skills take two calls.
 - `get_player_history`: `latestSkills` added; `derived` by default for up to 2 players,
-  `coverage` up to 5 (`includeDerived`/`includeCoverage` override).
+  `coverage` up to 5 (`includeDerived`/`includeCoverage` override). Above 2 players a compact
+  `screen` (levelsPerHtYear, rateBasis, weeksSinceLastLevelUp, daysSinceLastSnapshot, gapCount)
+  replaces them for the hattrick trainee screen: 14 players 8.5k complete, 20 keep it, the
+  whole 29-man squad drops it - full derived+coverage fit only 8 players a call.
 - `get_training`: `weeks` default 1, predictions dated on or before the last update dropped.
 - `get_series`: `matches` holds our fixtures; `allTeams` the whole series (fits only with
   `include: ["matches"]`, 9.9k).
