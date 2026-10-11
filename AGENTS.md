@@ -15,7 +15,9 @@ lineup rating, transfer scouting, statistics, …) on top of that local history.
   blocked and why, and what comes next. **Read it first when picking work back up, and update
   it when you finish or block a piece of work.** It covers only the last one or two pieces of work,
   not a history. When you add a new piece, delete the oldest (git keeps it). A finding that must
-  outlive its task belongs in a code comment, AGENTS.md or a topic doc, not here. `docs/chpp_files.md` lists the CHPP files HO uses;
+  outlive its task belongs in a code comment, AGENTS.md or a topic doc, not here. `docs/roadmap.md`
+  holds decided work waiting for a trigger (e.g. enough matches for a rating-model review); check it
+  when picking work up. `docs/chpp_files.md` lists the CHPP files HO uses;
   `docs/raw/chpp/` holds the full CHPP docs (inputs, output trees, data types) for every file.
 - Java 17 source/target, Kotlin JVM toolchain 17, Gradle 8.13 wrapper. CI builds on Temurin 17.
   Newer local JDKs work for running, but do not raise the language level.
