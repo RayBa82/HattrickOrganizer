@@ -218,7 +218,9 @@ public final class TransferTools {
                                                         + "explicitly) a used-up search cap is reported "
                                                         + "as liveSearchSkipped instead of failing the "
                                                         + "call; passed explicitly, it fails the call "
-                                                        + "as before."),
+                                                        + "as before. liveSearch reports itemCount, "
+                                                        + "hitCount and a resultId: page the hits with "
+                                                        + "search_transfers resultId."),
                                         "specialtyFilter", McpTool.prop("boolean",
                                                 "hard-filter the corpus to the target's exact specialty "
                                                         + "(the old behaviour; thin cells). Default false: "
@@ -2143,7 +2145,8 @@ public final class TransferTools {
                 "priceMin", McpTool.prop("integer", "minimum current price (highest bid, else asking price), in the user's currency"),
                 "priceMax", McpTool.prop("integer", "maximum current price (highest bid, else asking price), in the user's currency"),
                 "pageSize", McpTool.prop("integer", "hits Hattrick returns per search, default and "
-                        + "maximum 100"),
+                        + "maximum 100. itemCount is the market total, -1 above 100 - narrow the "
+                        + "search then, there is no exact total"),
                 "resultId", McpTool.prop("string", "page or re-sort the hits of an earlier call instead "
                         + "of searching: no CHPP request, not counted against the cap. Last "
                         + KEPT_RESULTS + " kept"),
@@ -2242,6 +2245,12 @@ public final class TransferTools {
      * without a new CHPP search - those count against the per-session cap, pages do not.
      */
     private static JsonObject searchTool(JsonObject args) throws McpToolException {
+        // A bad sort is refused before the search: after it, the search would be spent and its
+        // resultId lost with the error.
+        final var sort = McpJson.optString(args, "sort", "");
+        if (!sort.isEmpty()) {
+            hitOrder(sort);
+        }
         if (args.has("resultId")) {
             final var id = McpJson.reqString(args, "resultId");
             final List<XMLTransferSearchParser.Hit> hits;
@@ -2264,6 +2273,7 @@ public final class TransferTools {
             json.add("results", searchBatch(McpJson.reqArray(args, "queries"), hits));
         } else {
             final var page = search(queryFrom(args));
+            // -1 means "more than 100", Hattrick's analogy to "many"
             json.addProperty("itemCount", page.itemCount());
             json.addProperty("pageSize", page.pageSize());
             hits.addAll(page.hits());
@@ -2471,7 +2481,6 @@ public final class TransferTools {
         }
         return results;
     }
-
 
     private static JsonObject teamTransfers(JsonObject args) throws McpToolException {
         final var teamId = McpJson.model().getBasics().getTeamId();
