@@ -20,6 +20,9 @@ Defaults reshaped with the hattrick session (field names kept):
   (`available` false without injury). `include` takes only positionRatings (old part names
   still accepted); up to 5 `playerIds` get it unasked. 30 players 9.3k, ~300 a row; over
   budget positionRatings, tsi+wage, penaltyStrength, loyalty, character drop in that order.
+  `only: "positionRatings"` returns just the slot matrix for set-lineup (hattrick's choice):
+  `slotOrder` once, per player `{playerId, r:[14, 1 decimal]}`, unavailable players too;
+  30 players 2.7k.
 - `get_player_history`: `latestSkills` added; `derived` by default for up to 2 players,
   `coverage` up to 5 (`includeDerived`/`includeCoverage` override). Above 2 players a compact
   `screen` (levelsPerHtYear, rateBasis, weeksSinceLastLevelUp, daysSinceLastSnapshot, gapCount)

@@ -78,7 +78,10 @@ public final class TeamTools {
                                                 + " playerIds"),
                                 "limit", McpTool.prop("integer", "page size; default the whole squad"),
                                 "offset", McpTool.prop("integer",
-                                        "how many players to skip; default 0. count is the total"))),
+                                        "how many players to skip; default 0. count is the total"),
+                                "only", McpTool.prop("string",
+                                        "positionRatings: just the slot matrix, per player playerId and "
+                                                + "r (ratings in slotOrder, every player incl. unavailable)"))),
                         TeamTools::squad)
                         .withBudget("Page with limit/offset (count is the total) or name playerIds; "
                                         + "ask for positionRatings only for the few candidates.",
@@ -325,25 +328,49 @@ public final class TeamTools {
         // Paging, so the whole squad stays reachable whatever its size: count is the total.
         final var offset = Math.max(McpJson.optInt(args, "offset", 0), 0);
         final var limit = Math.max(McpJson.optInt(args, "limit", selected.size()), 1);
+        // only positionRatings: the slot matrix lineup work reads squad-wide, ~90 chars a player.
+        final var ratingsOnly = "positionRatings".equals(McpJson.optString(args, "only", ""));
         final var players = new JsonArray();
         for (final var player : selected.stream().skip(offset).limit(limit).toList()) {
-            players.add(compactSquadRow(McpJson.player(player, ratingModel), include));
+            final var row = McpJson.player(player, ratingModel);
+            players.add(ratingsOnly ? ratingsRow(row) : compactSquadRow(row, include));
         }
         final var json = new JsonObject();
-        final var skillOrder = new JsonArray();
-        SKILL_ORDER.forEach(skillOrder::add);
-        json.add("skillOrder", skillOrder);
-        final var characterOrder = new JsonArray();
-        CHARACTER_ORDER.forEach(characterOrder::add);
-        json.add("characterOrder", characterOrder);
-        final var specialtyNames = new JsonObject();
-        SPECIALTY_NAMES.forEach((id, name) -> specialtyNames.addProperty(String.valueOf(id), name));
-        json.add("specialtyNames", specialtyNames);
+        if (ratingsOnly) {
+            final var slotOrder = new JsonArray();
+            for (final var roleId : McpJson.FIELD_ROLES) {
+                slotOrder.add(roleId);
+            }
+            json.add("slotOrder", slotOrder);
+        } else {
+            final var skillOrder = new JsonArray();
+            SKILL_ORDER.forEach(skillOrder::add);
+            json.add("skillOrder", skillOrder);
+            final var characterOrder = new JsonArray();
+            CHARACTER_ORDER.forEach(characterOrder::add);
+            json.add("characterOrder", characterOrder);
+            final var specialtyNames = new JsonObject();
+            SPECIALTY_NAMES.forEach((id, name) -> specialtyNames.addProperty(String.valueOf(id), name));
+            json.add("specialtyNames", specialtyNames);
+        }
         json.addProperty("count", selected.size());
         json.addProperty("offset", offset);
         json.addProperty("returned", players.size());
         json.add("players", players);
         return json;
+    }
+
+    /** A get_squad only-positionRatings row: playerId and the ratings in FIELD_ROLES order, 1 decimal. */
+    static JsonObject ratingsRow(JsonObject player) {
+        final var ratings = player.getAsJsonObject("positionRatings");
+        final var r = new JsonArray();
+        for (final var roleId : McpJson.FIELD_ROLES) {
+            r.add(Math.round(ratings.get(String.valueOf(roleId)).getAsDouble() * 10) / 10.0);
+        }
+        final var row = new JsonObject();
+        row.add("playerId", player.get("playerId"));
+        row.add("r", r);
+        return row;
     }
 
     /** get_squad's include parts; none by default, all of them for a handful of named players. */

@@ -162,7 +162,7 @@ class TeamToolsTest {
                 .filter(t -> t.name().equals("get_squad")).findFirst().orElseThrow();
         assertThat(squad.inputSchema().getAsJsonArray("required")).isEmpty();
         assertThat(squad.inputSchema().getAsJsonObject("properties").keySet())
-                .containsExactly("playerIds", "include", "limit", "offset");
+                .containsExactly("playerIds", "include", "limit", "offset", "only");
 
         final var scout = TeamTools.tools().stream()
                 .filter(t -> t.name().equals("analyze_opponent")).findFirst().orElseThrow();
@@ -493,5 +493,24 @@ class TeamToolsTest {
         assertThat(row.getAsJsonArray("character")).extracting(com.google.gson.JsonElement::getAsInt)
                 .containsExactly(3, 1, 4, 2);
         assertThat(row.get("penaltyStrength").getAsDouble()).isEqualTo(4.3);
+    }
+
+    @Test
+    void ratingsRow_isThePlayerIdAndTheRatingsInSlotOrder() {
+        final var ratings = new com.google.gson.JsonObject();
+        for (final var roleId : McpJson.FIELD_ROLES) {
+            ratings.addProperty(String.valueOf(roleId), roleId / 10.0 + 0.04);
+        }
+        final var player = new com.google.gson.JsonObject();
+        player.addProperty("playerId", 7);
+        player.addProperty("name", "x");
+        player.add("positionRatings", ratings);
+
+        final var row = TeamTools.ratingsRow(player);
+
+        assertThat(row.keySet()).containsExactly("playerId", "r");
+        assertThat(row.getAsJsonArray("r")).hasSize(McpJson.FIELD_ROLES.length)
+                .first().extracting(com.google.gson.JsonElement::getAsDouble).isEqualTo(10.0);
+        assertThat(row.getAsJsonArray("r").get(13).getAsDouble()).isEqualTo(11.3);
     }
 }
