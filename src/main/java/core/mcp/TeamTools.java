@@ -62,12 +62,12 @@ public final class TeamTools {
                         McpTool.schema(new JsonObject()),
                         args -> team()),
                 new McpTool("get_squad",
-                        "Every player in the squad: skills (8 values with sub-level, in skillOrder), "
-                                + "form, stamina, specialtyName, group, TSI, wage, and the availability "
-                                + "check (injuryWeeks, cards, available - false without injury means "
-                                + "suspended - transferListed). include adds character traits, loyalty, "
-                                + "penaltyStrength and positionRatings (his worth in each field slot "
-                                + "100-113). Up to " + FULL_SQUAD_RECORDS + " playerIds get everything.",
+                        "The squad, one row each: skills, character, specialty as arrays/numbers "
+                                + "keyed by skillOrder, characterOrder, specialtyNames; loyalty, "
+                                + "motherclub (if true), penaltyStrength, form, stamina, group, tsi, "
+                                + "wage; availability: injuryWeeks, cards, available (false without "
+                                + "injury = suspended), transferListed (if true). include adds positionRatings "
+                                + "(slots 100-113), unasked for up to " + FULL_SQUAD_RECORDS + " playerIds.",
                         McpTool.schema(McpTool.properties(
                                 "playerIds", McpTool.prop("array",
                                         "only these players; the whole squad if omitted. An id not "
@@ -81,12 +81,12 @@ public final class TeamTools {
                                         "how many players to skip; default 0. count is the total"))),
                         TeamTools::squad)
                         .withBudget("Page with limit/offset (count is the total) or name playerIds; "
-                                        + "ask for positionRatings and the other include parts only for "
-                                        + "the few candidates.",
+                                        + "ask for positionRatings only for the few candidates.",
                                 McpTool.OptionalSection.perItem("players", "positionRatings", "positionRatings"),
-                                McpTool.OptionalSection.perItem("players", "character", CHARACTER_KEYS),
+                                McpTool.OptionalSection.perItem("players", "tsiAndWage", "tsi", "wage"),
+                                McpTool.OptionalSection.perItem("players", "penaltyStrength", "penaltyStrength"),
                                 McpTool.OptionalSection.perItem("players", "loyalty", "loyalty", "motherclub"),
-                                McpTool.OptionalSection.perItem("players", "penaltyStrength", "penaltyStrength")),
+                                McpTool.OptionalSection.perItem("players", "character", "character")),
                 new McpTool("analyze_opponent",
                         "Pre-match scouting of another team. ratings: the sector ratings it earned "
                                 + "in recent matches, averaged and named as simulate_lineup wants "
@@ -317,8 +317,8 @@ public final class TeamTools {
             args.getAsJsonArray("playerIds").forEach(e -> wanted.add(e.getAsInt()));
         }
         final var include = squadParts(args, wanted.size());
-        final var ratingModel = include.contains("positionRatings") || include.contains("penaltyStrength")
-                ? McpJson.privateRatingModel() : null;
+        // Always: penaltyStrength is in every row.
+        final var ratingModel = McpJson.privateRatingModel();
 
         final var selected = new java.util.ArrayList<>(onlyWanted(model.getCurrentPlayers(), wanted,
                 core.model.player.Player::getPlayerId));
@@ -327,14 +327,18 @@ public final class TeamTools {
         final var limit = Math.max(McpJson.optInt(args, "limit", selected.size()), 1);
         final var players = new JsonArray();
         for (final var player : selected.stream().skip(offset).limit(limit).toList()) {
-            final var row = ratingModel == null
-                    ? McpJson.player(player) : McpJson.player(player, ratingModel);
-            players.add(compactSquadRow(row, include));
+            players.add(compactSquadRow(McpJson.player(player, ratingModel), include));
         }
         final var json = new JsonObject();
         final var skillOrder = new JsonArray();
         SKILL_ORDER.forEach(skillOrder::add);
         json.add("skillOrder", skillOrder);
+        final var characterOrder = new JsonArray();
+        CHARACTER_ORDER.forEach(characterOrder::add);
+        json.add("characterOrder", characterOrder);
+        final var specialtyNames = new JsonObject();
+        SPECIALTY_NAMES.forEach((id, name) -> specialtyNames.addProperty(String.valueOf(id), name));
+        json.add("specialtyNames", specialtyNames);
         json.addProperty("count", selected.size());
         json.addProperty("offset", offset);
         json.addProperty("returned", players.size());
@@ -348,6 +352,7 @@ public final class TeamTools {
         if (args.has("include") && args.get("include").isJsonArray()) {
             args.getAsJsonArray("include").forEach(e -> include.add(e.getAsString()));
         }
+        ALWAYS_IN_ROW.forEach(include::remove);
         if (!java.util.Set.copyOf(SQUAD_PARTS).containsAll(include)) {
             throw new IllegalArgumentException("include takes " + String.join(", ", SQUAD_PARTS)
                     + "; had " + include);
@@ -359,9 +364,10 @@ public final class TeamTools {
     }
 
     /**
-     * Strips a get_squad row down to its core plus the include parts asked for. The skills become
-     * one array in {@link #SKILL_ORDER}, sub-level to one decimal: keyed, they were a quarter of
-     * the row, and the whole squad's skills have to fit one call.
+     * Strips a get_squad row down to its compact shape. Skills and character become arrays in
+     * {@link #SKILL_ORDER} and {@link #CHARACTER_ORDER} (skills to one decimal): keyed, they were
+     * a third of the row, and the whole squad has to fit one call. motherclub and transferListed
+     * only when true.
      */
     static JsonObject compactSquadRow(JsonObject row, java.util.Set<String> include) {
         row.remove("skills");
@@ -373,35 +379,47 @@ public final class TeamTools {
             }
             row.add("skills", skills);
         }
-        // specialtyName says it; available false with no injury says suspended.
-        row.remove("specialty");
-        row.remove("suspended");
-        if (!include.contains("character")) {
-            for (final var key : CHARACTER_KEYS) {
-                row.remove(key);
+        if (row.has(CHARACTER_ORDER.get(0))) {
+            final var character = new JsonArray();
+            for (final var name : CHARACTER_ORDER) {
+                character.add(row.remove(name));
+            }
+            row.add("character", character);
+        }
+        for (final var flag : new String[]{"motherclub", "transferListed"}) {
+            final var value = row.remove(flag);
+            if (value != null && value.getAsBoolean()) {
+                row.addProperty(flag, true);
             }
         }
-        if (!include.contains("loyalty")) {
-            row.remove("loyalty");
-            row.remove("motherclub");
+        final var penalty = row.get("penaltyStrength");
+        if (penalty != null) {
+            row.addProperty("penaltyStrength", Math.round(penalty.getAsDouble() * 10) / 10.0);
         }
+        // specialty as its number, named once in specialtyNames; available false with no injury
+        // says suspended.
+        row.remove("specialtyName");
+        row.remove("suspended");
         if (!include.contains("positionRatings")) {
             row.remove("positionRatings");
-        }
-        if (!include.contains("penaltyStrength")) {
-            row.remove("penaltyStrength");
         }
         return row;
     }
 
-    /** get_squad's optional parts; the rest of a row is what every lineup and squad check reads. */
-    static final List<String> SQUAD_PARTS = List.of("character", "loyalty", "penaltyStrength",
-            "positionRatings");
+    /** get_squad's include parts: the only part kept out of the default row. */
+    static final List<String> SQUAD_PARTS = List.of("positionRatings");
+    /** Former include parts, now in every row; still accepted so older callers keep working. */
+    private static final List<String> ALWAYS_IN_ROW = List.of("character", "loyalty", "penaltyStrength");
+    /** The order of get_squad's character array, sent once as characterOrder. */
+    static final List<String> CHARACTER_ORDER = List.of("leadership", "agreeability", "aggressiveness",
+            "honesty");
+    /** get_squad's specialtyNames: Hattrick's English names for {@link core.model.player.Specialty}. */
+    static final java.util.Map<Integer, String> SPECIALTY_NAMES = new java.util.TreeMap<>(java.util.Map.of(
+            0, "", 1, "Technical", 2, "Quick", 3, "Powerful", 4, "Unpredictable", 5, "Head",
+            6, "Resilient", 8, "Support"));
     /** The order of get_squad's skills array, sent once as skillOrder. */
     static final List<String> SKILL_ORDER = List.of("keeper", "defending", "playmaking", "winger",
             "passing", "scoring", "setPieces", "experience");
-    private static final String[] CHARACTER_KEYS = {"leadership", "agreeability", "aggressiveness",
-            "honesty"};
     /** Up to this many named players, get_squad returns the whole record without being asked. */
     static final int FULL_SQUAD_RECORDS = 5;
 

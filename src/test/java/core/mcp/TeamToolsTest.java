@@ -461,8 +461,9 @@ class TeamToolsTest {
         assertThat(TeamTools.squadParts(none, TeamTools.FULL_SQUAD_RECORDS))
                 .containsExactlyInAnyOrderElementsOf(TeamTools.SQUAD_PARTS);
 
-        final var args = com.google.gson.JsonParser.parseString("{\"include\":[\"positionRatings\"]}")
-                .getAsJsonObject();
+        final var args = com.google.gson.JsonParser.parseString(
+                "{\"include\":[\"positionRatings\",\"character\"]}").getAsJsonObject();
+        // character is in every row now; still accepted, so older callers keep working.
         assertThat(TeamTools.squadParts(args, 0)).containsExactly("positionRatings");
 
         final var bad = com.google.gson.JsonParser.parseString("{\"include\":[\"nope\"]}")
@@ -474,18 +475,23 @@ class TeamToolsTest {
     @Test
     void compactSquadRow_keepsTheAvailabilityCoreAndTheSkillsAsOneArray() {
         final var row = com.google.gson.JsonParser.parseString("""
-                {"playerId":1,"injuryWeeks":0,"available":true,"specialty":4,"suspended":false,
+                {"playerId":1,"injuryWeeks":0,"available":true,"specialty":4,"specialtyName":"x","suspended":false,"transferListed":true,
                  "skillsWithSublevel":{"keeper":1.0,"defending":3.25,"playmaking":10.97,"winger":4.0,
                    "passing":6.04,"scoring":3.0,"setPieces":3.5,"experience":2.0},
-                 "skills":{},"leadership":3,"honesty":2,"loyalty":10,"motherclub":false,
-                 "positionRatings":{},"penaltyStrength":4.2}""").getAsJsonObject();
+                 "skills":{},"leadership":3,"agreeability":1,"aggressiveness":4,"honesty":2,
+                 "loyalty":10,"motherclub":false,"positionRatings":{},"penaltyStrength":4.26}""")
+                .getAsJsonObject();
 
-        TeamTools.compactSquadRow(row, java.util.Set.of("penaltyStrength"));
+        TeamTools.compactSquadRow(row, java.util.Set.of());
 
         assertThat(row.keySet()).containsExactlyInAnyOrder(
-                "playerId", "injuryWeeks", "available", "skills", "penaltyStrength");
+                "playerId", "injuryWeeks", "available", "specialty", "skills", "character", "loyalty",
+                "penaltyStrength", "transferListed");
         // In SKILL_ORDER, sub-level to one decimal.
         assertThat(row.getAsJsonArray("skills")).extracting(com.google.gson.JsonElement::getAsDouble)
                 .containsExactly(1.0, 3.3, 11.0, 4.0, 6.0, 3.0, 3.5, 2.0);
+        assertThat(row.getAsJsonArray("character")).extracting(com.google.gson.JsonElement::getAsInt)
+                .containsExactly(3, 1, 4, 2);
+        assertThat(row.get("penaltyStrength").getAsDouble()).isEqualTo(4.3);
     }
 }

@@ -13,11 +13,13 @@ AGENTS.md's earlier all-or-nothing, at the hattrick session's request: squad ava
 the current training week must always arrive.
 
 Defaults reshaped with the hattrick session (field names kept):
-- `get_squad`: compact rows with the skills in the core, as one array in `skillOrder`
-  (sub-level to 1 decimal) - the user needs them squad-wide in one call. `specialty` (number)
-  and `suspended` left the row (`specialtyName`; `available` false without injury). `include`
-  adds character, loyalty, penaltyStrength, positionRatings; up to 5 `playerIds` get
-  everything. 30 players 8.3k, ~270 a row, so up to ~36 players fit one call.
+- `get_squad`: compact rows, everything but positionRatings squad-wide in one call (user
+  request via hattrick): skills as an array in `skillOrder` (1 decimal), `character` in
+  `characterOrder`, `specialty` as its number named once in `specialtyNames`, loyalty,
+  penaltyStrength (1 decimal); `motherclub`/`transferListed` only when true, `suspended` gone
+  (`available` false without injury). `include` takes only positionRatings (old part names
+  still accepted); up to 5 `playerIds` get it unasked. 30 players 9.3k, ~300 a row; over
+  budget positionRatings, tsi+wage, penaltyStrength, loyalty, character drop in that order.
 - `get_player_history`: `latestSkills` added; `derived` by default for up to 2 players,
   `coverage` up to 5 (`includeDerived`/`includeCoverage` override). Above 2 players a compact
   `screen` (levelsPerHtYear, rateBasis, weeksSinceLastLevelUp, daysSinceLastSnapshot, gapCount)
