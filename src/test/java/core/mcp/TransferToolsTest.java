@@ -1454,4 +1454,19 @@ class TransferToolsTest {
                 .isThrownBy(() -> TransferTools.queryFrom(args))
                 .withMessageContaining("DRIBBLING");
     }
+
+    @Test
+    void compactNote_cutsALongNoteAndSaysSo() {
+        final var row = new JsonObject();
+        row.addProperty("note", "x".repeat(TransferTools.COMPACT_NOTE_CHARS + 20));
+        TransferTools.compactNote(row);
+        assertThat(row.get("note").getAsString()).hasSize(TransferTools.COMPACT_NOTE_CHARS + 3);
+        assertThat(row.get("noteCut").getAsBoolean()).isTrue();
+
+        final var shortNote = new JsonObject();
+        shortNote.addProperty("note", "target");
+        TransferTools.compactNote(shortNote);
+        assertThat(shortNote.get("note").getAsString()).isEqualTo("target");
+        assertThat(shortNote.has("noteCut")).isFalse();
+    }
 }

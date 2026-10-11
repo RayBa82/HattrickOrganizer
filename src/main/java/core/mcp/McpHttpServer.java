@@ -261,7 +261,7 @@ public final class McpHttpServer {
                 ? params.getAsJsonObject("arguments")
                 : new JsonObject();
         try {
-            return result(id, toolResult(GSON.toJson(tool.handler().call(arguments)), false));
+            return result(id, toolResult(McpBudget.fit(tool, tool.handler().call(arguments)), false));
         } catch (McpToolException e) {
             return result(id, toolResult(e.getMessage(), true));
         } catch (IllegalArgumentException e) {

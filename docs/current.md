@@ -4,26 +4,32 @@ Only the last one or two pieces of work live here. Older notes are dropped rathe
 accumulated; git keeps them (`git log -p -- docs/current.md`; the full history file as of
 2026-09-26 is `git show f5c51d0d:docs/current.md`).
 
-## Next up: enforce the MCP token budget
+## MCP token budget enforced (2026-10-11)
 
-The rule is in AGENTS.md, "MCP server". Every tool response must fit 10,000 characters of
-serialized JSON, all or nothing. Over budget, the tool returns only a `truncated` envelope with a
-hint naming its own paging/filter arguments. The rule is documented but not implemented.
+AGENTS.md, "MCP server", has the rule as built: `McpBudget.fit` in `toolsCall` sheds a tool's
+declared optional sections first (`droppedForBudget`), and only a core still over 10,000
+characters becomes the `{truncated, wouldBeChars, hint}` envelope. The user chose that over
+AGENTS.md's earlier all-or-nothing, at the hattrick session's request: squad availability and
+the current training week must always arrive.
 
-- The natural choke point is `McpHttpServer.toolsCall`, where every result is serialized
-  (`GSON.toJson(tool.handler().call(arguments))`). Measure there and swap in the envelope; each
-  tool supplies its own hint.
-- Then audit every tool's defaults against it, starting with the list-shaped ones. Today only
-  `list_scout` pages (it was ~260k chars before paging).
-- Measured 2026-10-11 on a copy of the dev DB (headless, default arguments, local tools only):
-  over budget are `get_squad` 31k, `list_scout` 20k (even paged), `get_player_history` 22k
-  (`includeSnapshots` 766k), `get_series` 11.4k, `get_training` 11.1k. Under: `get_team` 1k,
-  `get_finances` 2.3k, `get_team_transfers` 5.8k, `get_lineup` 2k, `get_matches` 2.8k,
-  `simulate_lineup` 0.4k, `get_training wholeSquadWeek` 6.3k, `sinceLastTraining` 1.6k.
-  `includeTraining` adds ~2.3k at its 4-week default, ~17k over 26 weeks. Enforcing the
-  envelope first would turn the five over-budget defaults into hints on the live server, so the
-  defaults have to shrink in the same change. The CHPP-backed tools were not measured.
+Defaults reshaped with the hattrick session (field names kept):
+- `get_squad`: compact rows; `include` adds skills, character, loyalty, penaltyStrength,
+  positionRatings; up to 5 `playerIds` get everything. `skillsWithSublevel` rounded to 2
+  decimals, and it is the last optional section: a 29-man squad's core is 12k with it, 8.1k
+  without, so squad-wide skills take two calls.
+- `get_player_history`: `latestSkills` added; `derived` by default for up to 2 players,
+  `coverage` up to 5 (`includeDerived`/`includeCoverage` override).
+- `get_training`: `weeks` default 1, predictions dated on or before the last update dropped.
+- `get_series`: `matches` holds our fixtures; `allTeams` the whole series (fits only with
+  `include: ["matches"]`, 9.9k).
+- `list_scout`: page 20, compact notes cut at 80 chars (`noteCut`).
 
+Measured on a copy of the dev DB (29 players, data to late September), default arguments:
+`get_squad` 8.1k, `get_player_history` 8.5k, `list_scout` 6.8k, `get_training` 5.7k,
+`get_series` 4.2k; all other local tools 0.4-6.3k. The CHPP-backed tools were not measured;
+they only pass through the same budget step. Measure with the headless server on a DB copy:
+`java -Djava.awt.headless=true -Dho.dbParentFolder=<copy> -cp HO.jar core.HeadlessMain --port 18765`
+from `build/install/XXX`, then `tools/call` each tool.
 ## MCP requests from the hattrick session (2026-10-11)
 
 Six tool requests, all on `lineup-tv-view`, unit-tested (`core.mcp.*` green), pushed with
@@ -53,18 +59,3 @@ Hattrick normalises away (team orders and penalty takers are untested).
    matches whose lineup HO downloaded. Not yet exposed: training.xml SpecialTraining (stamina
    special training, at most 3 players) - HO does not parse it.
 
-## Headless finances (2026-10-03)
-
-Reported by the hattrick session: `get_finances` after a headless `download_team` was wrong. Three
-bugs in the economy path, all also hitting desktop HO, fixed and verified on the live server
-(HRF 159: every cost line adds up to `costsSum` for both weeks):
-
-- `AmountOfMoney.parse` returned 0 while no currency formatter existed yet - always so headless,
-  so every ECONOMY field was stored as 0 (`adc77098`).
-- `HRFStringBuilder` wrote `LastCostsStaff` under the pre-v500 key `lastCostsPersonal` (`96423bb3`).
-- `XMLEconomyParser` never read CHPP's `CostsTemporary`/`LastCostsTemporary`; the HRF stored bought
-  players + arena building in their place, which `FinancePanel` then showed twice (`fd6a672a`).
-  `get_finances` now reports `costsTemporary`.
-
-`HRFStringBuilderTest` round-trips a real economy.xml through parser, HRF and `Economy`. ECONOMY rows
-from before these fixes keep their wrong values; only new downloads are right.

@@ -159,13 +159,17 @@ public final class TransferTools {
                                         "only players still on the market: no sale recorded and "
                                                 + "deadline not passed; default false"),
                                 "full", McpTool.prop("boolean",
-                                        "every stored field per player; default false"),
+                                        "every stored field per player and the whole note; "
+                                                + "default false, notes cut to " + COMPACT_NOTE_CHARS
+                                                + " chars"),
                                 "limit", McpTool.prop("integer", "page size, default "
                                         + DEFAULT_SCOUT_PAGE + ", max " + MAX_SCOUT_PAGE),
                                 "offset", McpTool.prop("integer",
                                         "how many matching entries to skip, in shortlist order; "
                                                 + "default 0"))),
-                        TransferTools::listScout),
+                        TransferTools::listScout)
+                        .withBudget("Page with a smaller limit and offset, filter with skills, "
+                                + "ageMin/ageMax, specialty or onlyOpen; pass full only with a small limit."),
                 new McpTool("estimate_market_value",
                         "Value one of your players, or via profile a player outside the squad, "
                                 + "against stored transfer listings. Returns the matching listings; "
@@ -1616,6 +1620,7 @@ public final class TransferTools {
                 final var player = element.getAsJsonObject();
                 final var row = new JsonObject();
                 keys.stream().filter(player::has).forEach(k -> row.add(k, player.get(k)));
+                compactNote(row);
                 compact.add(row);
             }
             out.add("players", compact);
@@ -1627,7 +1632,21 @@ public final class TransferTools {
     private static final List<String> COMPACT_SCOUT_KEYS = List.of("playerId", "playerName", "note",
             "age", "specialty", "price", "deadline", "askingPrice", "highestBid", "observedAt",
             "salePrice", "soldAt");
-    private static final int DEFAULT_SCOUT_PAGE = 50;
+    private static final int DEFAULT_SCOUT_PAGE = 20;
+    /** A compact row's note is cut here; full returns it whole. */
+    static final int COMPACT_NOTE_CHARS = 80;
+
+    /** Cuts a long note for a compact row and says so, so a cut note is never read as the whole. */
+    static void compactNote(JsonObject row) {
+        if (!row.has("note") || !row.get("note").isJsonPrimitive()) {
+            return;
+        }
+        final var note = row.get("note").getAsString();
+        if (note.length() > COMPACT_NOTE_CHARS) {
+            row.addProperty("note", note.substring(0, COMPACT_NOTE_CHARS) + "...");
+            row.addProperty("noteCut", true);
+        }
+    }
     private static final int MAX_SCOUT_PAGE = 200;
 
     /** One list_scout skill filter; a null bound is open. */

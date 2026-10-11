@@ -62,17 +62,32 @@ public final class TeamTools {
                         McpTool.schema(new JsonObject()),
                         args -> team()),
                 new McpTool("get_squad",
-                        "Every player in the squad with skills, form, stamina, loyalty, TSI, wage, "
-                                + "specialty, injuries, cards, squad group and the three character "
-                                + "traits (0-5), plus a positionRatings map giving what he is worth "
-                                + "in each of the fourteen field slots (100 keeper through 113 left "
-                                + "forward) at normal behaviour. penaltyStrength: 1.5 experience + "
-                                + "0.7 set pieces + 0.3 scoring (form+loyalty), x1.1 Technical.",
+                        "Every player in the squad: skillsWithSublevel, form, stamina, specialty, "
+                                + "group, TSI, wage, and the availability check (injuryWeeks, cards, "
+                                + "suspended, available, transferListed). include adds the integer "
+                                + "skills, character traits, loyalty, penaltyStrength and positionRatings "
+                                + "(his worth in each field slot 100-113). Up to " + FULL_SQUAD_RECORDS
+                                + " playerIds get everything.",
                         McpTool.schema(McpTool.properties(
                                 "playerIds", McpTool.prop("array",
                                         "only these players; the whole squad if omitted. An id not "
-                                                + "in the squad is an error"))),
-                        TeamTools::squad),
+                                                + "in the squad is an error"),
+                                "include", McpTool.prop("array",
+                                        "any of " + String.join(", ", SQUAD_PARTS)
+                                                + "; default none, all for up to " + FULL_SQUAD_RECORDS
+                                                + " playerIds"))),
+                        TeamTools::squad)
+                        .withBudget("Ask for fewer players with playerIds - a full squad's skills "
+                                        + "take two calls, half the playerIds each - and for "
+                                        + "positionRatings or the other include parts only for the few "
+                                        + "candidates.",
+                                McpTool.OptionalSection.perItem("players", "positionRatings", "positionRatings"),
+                                McpTool.OptionalSection.perItem("players", "character", CHARACTER_KEYS),
+                                McpTool.OptionalSection.perItem("players", "skills", "skills"),
+                                McpTool.OptionalSection.perItem("players", "loyalty", "loyalty", "motherclub"),
+                                McpTool.OptionalSection.perItem("players", "penaltyStrength", "penaltyStrength"),
+                                // Last: the availability check must arrive for the whole squad.
+                                McpTool.OptionalSection.perItem("players", "skillsWithSublevel", "skillsWithSublevel")),
                 new McpTool("analyze_opponent",
                         "Pre-match scouting of another team. ratings: the sector ratings it earned "
                                 + "in recent matches, averaged and named as simulate_lineup wants "
@@ -99,7 +114,8 @@ public final class TeamTools {
                         TeamTools::scoutOpponent),
                 new McpTool("get_series",
                         "Our series: table (all eight teams with position, record, points, goals), "
-                                + "matches (the season's fixtures), otherUpcoming (our cup and "
+                                + "matches (ours; allTeams for all), "
+                                + "otherUpcoming (our cup and "
                                 + "friendly matches, soonest first) and nextCupMatchId (its row is in "
                                 + "otherUpcoming; null = eliminated or not yet drawn); cup rows name "
                                 + "the cup. Our upcoming rows carry the stored weather forecast. As of "
@@ -109,8 +125,13 @@ public final class TeamTools {
                                         "any of matches, table, otherUpcoming; default all"),
                                 "upcomingOnly", McpTool.prop("boolean",
                                         "matches: only our own fixtures not yet played; "
-                                                + "default false, the whole season"))),
-                        TeamTools::series),
+                                                + "default false, the whole season"),
+                                "allTeams", McpTool.prop("boolean",
+                                        "matches: every pairing of the series, not only ours - to "
+                                                + "look up another team's fixtures; default false"))),
+                        TeamTools::series)
+                        .withBudget("With allTeams pass include [\"matches\"] alone; otherwise set "
+                                + "upcomingOnly or include only the parts you read (table, otherUpcoming)."),
                 new McpTool("get_finances",
                         "The full weekly financial statement with last week's copy beside it, the "
                                 + "fan club, the staff levels that drive the cost line, and the "
@@ -292,21 +313,72 @@ public final class TeamTools {
 
     private static JsonObject squad(JsonObject args) throws McpToolException {
         final var model = McpJson.model();
-        final var ratingModel = McpJson.privateRatingModel();
         final var wanted = new java.util.LinkedHashSet<Integer>();
         if (args.has("playerIds") && args.get("playerIds").isJsonArray()) {
             args.getAsJsonArray("playerIds").forEach(e -> wanted.add(e.getAsInt()));
         }
+        final var include = squadParts(args, wanted.size());
+        final var ratingModel = include.contains("positionRatings") || include.contains("penaltyStrength")
+                ? McpJson.privateRatingModel() : null;
 
         final var players = new JsonArray();
         for (final var player : onlyWanted(model.getCurrentPlayers(), wanted,
                 core.model.player.Player::getPlayerId)) {
-            players.add(McpJson.player(player, ratingModel));
+            final var row = ratingModel == null
+                    ? McpJson.player(player) : McpJson.player(player, ratingModel);
+            players.add(compactSquadRow(row, include));
         }
         final var json = new JsonObject();
         json.add("players", players);
         return json;
     }
+
+    /** get_squad's include parts; none by default, all of them for a handful of named players. */
+    static java.util.Set<String> squadParts(JsonObject args, int wantedPlayers) {
+        final var include = new java.util.HashSet<String>();
+        if (args.has("include") && args.get("include").isJsonArray()) {
+            args.getAsJsonArray("include").forEach(e -> include.add(e.getAsString()));
+        }
+        if (!java.util.Set.copyOf(SQUAD_PARTS).containsAll(include)) {
+            throw new IllegalArgumentException("include takes " + String.join(", ", SQUAD_PARTS)
+                    + "; had " + include);
+        }
+        if (wantedPlayers > 0 && wantedPlayers <= FULL_SQUAD_RECORDS) {
+            include.addAll(SQUAD_PARTS);
+        }
+        return include;
+    }
+
+    /** Strips a get_squad row down to its core plus the include parts asked for. */
+    static JsonObject compactSquadRow(JsonObject row, java.util.Set<String> include) {
+        if (!include.contains("skills")) {
+            row.remove("skills");
+        }
+        if (!include.contains("character")) {
+            for (final var key : CHARACTER_KEYS) {
+                row.remove(key);
+            }
+        }
+        if (!include.contains("loyalty")) {
+            row.remove("loyalty");
+            row.remove("motherclub");
+        }
+        if (!include.contains("positionRatings")) {
+            row.remove("positionRatings");
+        }
+        if (!include.contains("penaltyStrength")) {
+            row.remove("penaltyStrength");
+        }
+        return row;
+    }
+
+    /** get_squad's optional parts; the rest of a row is what every lineup and squad check reads. */
+    static final List<String> SQUAD_PARTS = List.of("skills", "character", "loyalty",
+            "penaltyStrength", "positionRatings");
+    private static final String[] CHARACTER_KEYS = {"leadership", "agreeability", "aggressiveness",
+            "honesty"};
+    /** Up to this many named players, get_squad returns the whole record without being asked. */
+    static final int FULL_SQUAD_RECORDS = 5;
 
     /**
      * The players whose id is in {@code wanted}, in squad order - all of them when it is empty.
@@ -484,7 +556,8 @@ public final class TeamTools {
             json.addProperty("season", plan.getSaison());
         }
         if (include.contains("matches")) {
-            json.add("matches", fixtures(plan, teamId, McpJson.optBool(args, "upcomingOnly", false)));
+            json.add("matches", fixtures(plan, teamId, McpJson.optBool(args, "upcomingOnly", false),
+                    McpJson.optBool(args, "allTeams", false)));
         }
         if (include.contains("table")) {
             if (plan == null || plan.getTable() == null) {
@@ -505,7 +578,8 @@ public final class TeamTools {
         return json;
     }
 
-    private static JsonArray fixtures(module.series.MatchFixtures plan, int teamId, boolean upcomingOnly) {
+    private static JsonArray fixtures(module.series.MatchFixtures plan, int teamId, boolean upcomingOnly,
+                                      boolean allTeams) {
         final var matches = new JsonArray();
         if (plan == null) {
             return matches;
@@ -515,7 +589,8 @@ public final class TeamTools {
                 .forEach(m -> ownUpcoming.put(m.getMatchID(), m));
         final var now = HODateTime.now();
         for (final var pairing : plan.getMatches()) {
-            if (!upcomingOnly || isOwnUpcoming(pairing, teamId, now)) {
+            final var own = pairing.getHeimId() == teamId || pairing.getGastId() == teamId;
+            if (upcomingOnly ? isOwnUpcoming(pairing, teamId, now) : own || allTeams) {
                 matches.add(fixtureRow(pairing, ownUpcoming.get(pairing.getMatchId())));
             }
         }

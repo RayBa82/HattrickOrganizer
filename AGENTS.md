@@ -220,17 +220,25 @@ works if no single call floods its context.
   and a sane default and maximum, and report `count`/`returned`/`offset`.
 - **Budget: 10,000 characters per tool response**, measured on the serialized JSON text a tool
   call returns (roughly 2.5k tokens). Design defaults so a normal call stays well under it.
-- **All or nothing when over budget.** A response larger than the per-call budget is never cut
-  off partway: no half lists, no clipped strings, no JSON truncated mid-structure. Either the
-  whole payload goes out, or none of it does.
-- **Over budget, return next to nothing plus a hint.** Replace the payload with a minimal
-  envelope: `truncated: true`, how big the answer would have been, and a `hint` naming the exact
-  arguments of *this* tool that get the data efficiently. Example:
+- **Enforced in one place.** `McpHttpServer.toolsCall` passes every result through
+  `McpBudget.fit`. A tool declares its hint and its optional sections with
+  `McpTool.withBudget(hint, OptionalSection...)`; without one, the hint lists its arguments.
+- **Never cut off partway.** No half lists, no clipped strings, no JSON truncated
+  mid-structure. What goes out is always whole.
+- **Over budget, optional sections go first.** `McpBudget` drops the tool's declared optional
+  sections in order (whole sections, from every row of a list) until the answer fits, and names
+  them in `droppedForBudget` with a `budgetNote`. Declare what came by default before what the
+  caller asked for, and keep the core an everyday call depends on (get_squad's availability,
+  get_training's currentWeek) out of the list.
+- **Core still over budget, return next to nothing plus a hint.** Replace the payload with a
+  minimal envelope: `truncated: true`, how big the answer would have been, and a `hint` naming
+  the exact arguments of *this* tool that get the data efficiently. Example:
   `{"truncated": true, "wouldBeChars": 262144, "hint": "page with limit/offset (max 200) or
   filter by skills/ageMin/ageMax/specialty/onlyOpen; pass full only for a few rows"}`.
-  A generic "too large" is not a hint.
-- **New or changed tools** ship with a test for the over-budget path: the envelope comes back,
-  nothing partial leaks through, and the hint names real arguments of that tool.
+  A generic "too large" is not a hint; `McpServerToolsTest` checks every hint names an argument.
+- **New or changed tools** declare their budget and are measured against a real database (the
+  headless server on a copy of the dev DB, default arguments) before they ship. `McpBudgetTest`
+  covers the mechanism: dropped sections, the envelope, nothing partial leaking through.
 
 #### Headless server
 

@@ -33,10 +33,14 @@ import java.util.Set;
 public final class TrainingTools {
 
     /** How many weeks ahead to predict when the caller does not say. */
-    private static final int DEFAULT_WEEKS = 8;
+    private static final int DEFAULT_WEEKS = 1;
 
     /** How far back {@code get_player_history} looks when the caller does not say. */
     private static final int DEFAULT_HISTORY_WEEKS = 26;
+    /** get_player_history sends derived / coverage by default only up to this many players. */
+    private static final int DERIVED_PLAYERS = 2;
+    private static final int COVERAGE_PLAYERS = 5;
+
     /** The default window when get_player_history includes the weekly training minutes. */
     private static final int DEFAULT_TRAINING_WEEKS = 4;
     // A whole squad; events are cut to the weeks window, so the payload stays small.
@@ -154,7 +158,10 @@ public final class TrainingTools {
                                         "list every squad player in currentWeek.players, nothing "
                                                 + "banked included, ignoring playerIds. With "
                                                 + "playerIds [] it skips the predictions. Default false"))),
-                        TrainingTools::training),
+                        TrainingTools::training)
+                        .withBudget("Pass playerIds for the predictions you need, or a smaller weeks; "
+                                        + "wholeSquadWeek with playerIds [] returns the current week alone.",
+                                McpTool.OptionalSection.top("players")),
                 new McpTool("get_player_history",
                         "What training has already done to a player, from HO's own snapshot "
                                 + "history - a dated skill series no CHPP file gives you. Per "
@@ -186,6 +193,13 @@ public final class TrainingTools {
                                                 + "week banked (full/partly/played, maxedForWeek), "
                                                 + "rebuilt from stored lineups. Local. weeks defaults "
                                                 + "to " + DEFAULT_TRAINING_WEEKS + " with it. Default false"),
+                                "includeDerived", McpTool.prop("boolean",
+                                        "add derived per player (growth rate, TSI and wage drift); "
+                                                + "default true for up to " + DERIVED_PLAYERS + " players"),
+                                "includeCoverage", McpTool.prop("boolean",
+                                        "add coverage per player (snapshot dates, gaps, "
+                                                + "daysSinceLastSnapshot); default true for up to "
+                                                + COVERAGE_PLAYERS + " players"),
                                 "includeSnapshots", McpTool.prop("boolean",
                                         "add the raw dated series per player; default false, "
                                                 + "because levelUps, derived and coverage answer "
@@ -197,7 +211,17 @@ public final class TrainingTools {
                                                 + "player the newest snapshot before it against the "
                                                 + "newest overall. Lists changed players only. "
                                                 + "Default false"))),
-                        TrainingTools::playerHistory),
+                        TrainingTools::playerHistory)
+                        .withBudget("Ask for fewer playerIds or a smaller weeks; snapshots, events "
+                                        + "and training weeks are per-player detail, best for 1-5 players.",
+                                // What came by default goes before what the caller asked for.
+                                McpTool.OptionalSection.perItem("players", "derived", "derived"),
+                                McpTool.OptionalSection.perItem("players", "coverage", "coverage"),
+                                McpTool.OptionalSection.perItem("players", "latestSkills", "latestSkills"),
+                                McpTool.OptionalSection.perItem("players", "snapshots", "snapshots"),
+                                McpTool.OptionalSection.perItem("players", "trainingEvents", "trainingEvents"),
+                                McpTool.OptionalSection.perItem("players", "trainingWeeks", "trainingWeeks"),
+                                McpTool.OptionalSection.top("trainingWeeks")),
                 new McpTool("set_training",
                         "Set the senior team's training. Call get_training first for the current "
                                 + "values and for what each trainingType id trains. This leaves the "
@@ -270,6 +294,10 @@ public final class TrainingTools {
         }
         json.addProperty("status", "ok");
 
+        // A change dated on or before the last update is a stale projection, not a result - it
+        // shows up when the plan was built before HO's newest download. Never worth sending.
+        final var xtra = model.getXtraDaten();
+        final var lastTraining = xtra == null ? null : xtra.getTrainingDateAfterWeeks(-1);
         final var players = new JsonArray();
         for (final var player : model.getCurrentPlayers()) {
             if (player.isCoach()) {
@@ -278,7 +306,7 @@ public final class TrainingTools {
             if (wanted != null && !wanted.contains(player.getPlayerId())) {
                 continue;
             }
-            players.add(prediction(player, plan, weeks));
+            players.add(prediction(player, plan, weeks, lastTraining));
         }
         json.add("players", players);
         return json;
@@ -327,8 +355,12 @@ public final class TrainingTools {
         }
         final var trainingWeeks = includeTraining
                 ? trainingHistory(model, since, new HashSet<>(ids)) : null;
+        final var derivedOn = McpJson.optBool(args, "includeDerived", ids.size() <= DERIVED_PLAYERS);
+        final var coverageOn = McpJson.optBool(args, "includeCoverage", ids.size() <= COVERAGE_PLAYERS);
         for (final var playerId : ids) {
             final var row = history(playerId, since, trained, includeSnapshots);
+            dropUnless(row, "derived", derivedOn);
+            dropUnless(row, "coverage", coverageOn);
             if (includeEvents) {
                 row.add("trainingEvents", eventsSince(trainingEvents(playerId), since));
             }
@@ -447,6 +479,12 @@ public final class TrainingTools {
         return events;
     }
 
+    private static void dropUnless(JsonObject row, String key, boolean keep) {
+        if (!keep) {
+            row.remove(key);
+        }
+    }
+
     /**
      * Weekly minutes are one row per player per week, so a shorter default keeps a squad-wide
      * includeTraining call inside the response budget. An explicit weeks still wins.
@@ -509,6 +547,11 @@ public final class TrainingTools {
         json.addProperty("ageDays", last.getAgeDays());
 
         json.add("levelUps", levelUps(series));
+        final var latestSkills = new JsonObject();
+        for (final var skill : TRACKED_SKILLS) {
+            latestSkills.addProperty(String.valueOf(skill), round2(precise(last, skill)));
+        }
+        json.add("latestSkills", latestSkills);
         json.add("derived", derived(series, trained, observedWeeks));
         json.add("coverage", coverage(series, first, last, observedWeeks));
         if (includeSnapshots) {
@@ -995,7 +1038,8 @@ public final class TrainingTools {
      * window; when the stored plan is shorter than that it logs a warning and changes nothing, so
      * the second preview below is what the numbers come from.
      */
-    private static JsonObject prediction(Player player, List<TrainingPerWeek> plan, int weeks) {
+    private static JsonObject prediction(Player player, List<TrainingPerWeek> plan, int weeks,
+                                         HODateTime lastTraining) {
         final var manager = new FutureTrainingManager(player, plan);
         manager.previewPlayer(weeks);
 
@@ -1006,6 +1050,10 @@ public final class TrainingTools {
 
         final var changes = new JsonArray();
         for (final var change : manager.getFutureSkillChanges()) {
+            if (lastTraining != null && change.getDate() != null
+                    && !change.getDate().isAfter(lastTraining)) {
+                continue;
+            }
             final var changeJson = new JsonObject();
             changeJson.addProperty("date", change.getDate() == null ? null : change.getDate().toHT());
             changeJson.addProperty("skill", String.valueOf(change.getType()));

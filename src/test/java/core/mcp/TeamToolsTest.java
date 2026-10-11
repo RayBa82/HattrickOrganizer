@@ -162,7 +162,7 @@ class TeamToolsTest {
                 .filter(t -> t.name().equals("get_squad")).findFirst().orElseThrow();
         assertThat(squad.inputSchema().getAsJsonArray("required")).isEmpty();
         assertThat(squad.inputSchema().getAsJsonObject("properties").keySet())
-                .containsExactly("playerIds");
+                .containsExactly("playerIds", "include");
 
         final var scout = TeamTools.tools().stream()
                 .filter(t -> t.name().equals("analyze_opponent")).findFirst().orElseThrow();
@@ -450,5 +450,37 @@ class TeamToolsTest {
         assertThat(failed.get("status").getAsString()).isEqualTo("failed");
         assertThat(failed.get("error").getAsString()).isEqualTo("CHPP login expired");
         assertThat(failed.has("result")).isFalse();
+    }
+
+    /** A squad-wide get_squad is the core every lineup reads; a handful of named players get it all. */
+    @Test
+    void squadParts_noneByDefaultAllForAFewNamedPlayers() {
+        final var none = new com.google.gson.JsonObject();
+        assertThat(TeamTools.squadParts(none, 0)).isEmpty();
+        assertThat(TeamTools.squadParts(none, 30)).isEmpty();
+        assertThat(TeamTools.squadParts(none, TeamTools.FULL_SQUAD_RECORDS))
+                .containsExactlyInAnyOrderElementsOf(TeamTools.SQUAD_PARTS);
+
+        final var args = com.google.gson.JsonParser.parseString("{\"include\":[\"positionRatings\"]}")
+                .getAsJsonObject();
+        assertThat(TeamTools.squadParts(args, 0)).containsExactly("positionRatings");
+
+        final var bad = com.google.gson.JsonParser.parseString("{\"include\":[\"nope\"]}")
+                .getAsJsonObject();
+        org.assertj.core.api.Assertions.assertThatIllegalArgumentException()
+                .isThrownBy(() -> TeamTools.squadParts(bad, 0)).withMessageContaining("positionRatings");
+    }
+
+    @Test
+    void compactSquadRow_keepsTheAvailabilityCoreAndDropsWhatWasNotAskedFor() {
+        final var row = com.google.gson.JsonParser.parseString("""
+                {"playerId":1,"injuryWeeks":0,"available":true,"skillsWithSublevel":{},
+                 "skills":{},"leadership":3,"honesty":2,"loyalty":10,"motherclub":false,
+                 "positionRatings":{},"penaltyStrength":4.2}""").getAsJsonObject();
+
+        TeamTools.compactSquadRow(row, java.util.Set.of("penaltyStrength"));
+
+        assertThat(row.keySet()).containsExactlyInAnyOrder(
+                "playerId", "injuryWeeks", "available", "skillsWithSublevel", "penaltyStrength");
     }
 }

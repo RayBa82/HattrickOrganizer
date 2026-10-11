@@ -52,6 +52,31 @@ class McpServerToolsTest {
     }
 
     /**
+     * An over-budget answer is only as useful as its hint, and AGENTS.md wants the hint to name
+     * the tool's own arguments - a generic "too large" leaves the model nothing to do next.
+     */
+    @Test
+    void everyBudgetHintNamesAnArgumentOfItsOwnTool() {
+        final var tools = new java.util.ArrayList<McpTool>();
+        tools.addAll(TeamTools.tools());
+        tools.addAll(TransferTools.tools());
+        tools.addAll(LineupTools.tools());
+        tools.addAll(TrainingTools.tools());
+        tools.addAll(MatchTools.tools());
+        tools.addAll(BackupTools.tools());
+
+        assertThat(tools).allSatisfy(tool -> {
+            final var arguments = tool.inputSchema().getAsJsonObject("properties").keySet();
+            if (arguments.isEmpty()) {
+                assertThat(tool.hint()).as(tool.name()).contains("no arguments");
+            } else {
+                assertThat(arguments).as("hint of %s: %s", tool.name(), tool.hint())
+                        .anyMatch(tool.hint()::contains);
+            }
+        });
+    }
+
+    /**
      * A null field has to reach the client as an explicit null, not vanish. Gson drops nulls by
      * default, and an absent key is indistinguishable from a field the build does not have - which
      * has already been misread that way once.

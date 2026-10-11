@@ -147,7 +147,9 @@ public final class McpJson {
         final var precise = new JsonObject();
         for (int i = 0; i < SKILLS.length; i++) {
             skills.addProperty(SKILL_NAMES[i], p.getValue4Skill(SKILLS[i]));
-            precise.addProperty(SKILL_NAMES[i], p.getValue4Skill(SKILLS[i]) + p.getSub4Skill(SKILLS[i]));
+            // Two decimals say how close a skill is to popping; the full double only adds length.
+            precise.addProperty(SKILL_NAMES[i],
+                    Math.round((p.getValue4Skill(SKILLS[i]) + p.getSub4Skill(SKILLS[i])) * 100) / 100.0);
         }
         json.add("skills", skills);
         json.add("skillsWithSublevel", precise);
