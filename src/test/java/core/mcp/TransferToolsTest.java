@@ -1517,4 +1517,22 @@ class TransferToolsTest {
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> TransferTools.hitOrder("name"));
     }
+
+    @Test
+    void bulk_returnsEveryHitSortedWithTheSmallPartFirst() {
+        final var hits = new java.util.ArrayList<core.file.xml.XMLTransferSearchParser.Hit>();
+        for (int i = 1; i <= 120; i++) {
+            hits.add(hit(i, 17, 120 - i, "2026-10-12 10:00:00", true));
+        }
+        final var json = new JsonObject();
+
+        TransferTools.addHitPage(json, "s9", hits,
+                JsonParser.parseString("{\"bulk\":true,\"sort\":\"age\",\"limit\":5}").getAsJsonObject());
+
+        assertThat(json.keySet()).containsExactly("bulk", "resultId", "count", "hitFields", "preview", "hits");
+        assertThat(json.getAsJsonArray("hits")).hasSize(120);
+        assertThat(json.getAsJsonArray("preview")).hasSize(TransferTools.BULK_PREVIEW);
+        // Youngest first: hit 120 has ageDays 0.
+        assertThat(json.getAsJsonArray("preview").get(0).getAsJsonArray().get(0).getAsInt()).isEqualTo(120);
+    }
 }

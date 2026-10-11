@@ -238,6 +238,12 @@ works if no single call floods its context.
   `{"truncated": true, "wouldBeChars": 262144, "hint": "page with limit/offset (max 200) or
   filter by skills/ageMin/ageMax/specialty/onlyOpen; pass full only for a few rows"}`.
   A generic "too large" is not a hint; `McpServerToolsTest` checks every hint names an argument.
+- **Bulk, only on explicit request and only where a script needs it.** A tool may take a `bulk`
+  argument and mark its result `bulk: true` (`McpBudget.BULK`): that answer goes out whole, past
+  the budget, because Claude Code saves a large tool result to a file a script then reads -
+  `search_transfers` for the hattrick screening script. Small part first (resultId, count, the
+  field legend, a short preview), the full data after. Never add it speculatively: losing data
+  is worse than paging, but bulk in a model's context is worse than both.
 - **New or changed tools** declare their budget and are measured against a real database (the
   headless server on a copy of the dev DB, default arguments) before they ship. `McpBudgetTest`
   covers the mechanism: dropped sections, the envelope, nothing partial leaking through.
