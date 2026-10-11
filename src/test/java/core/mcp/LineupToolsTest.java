@@ -14,7 +14,94 @@ class LineupToolsTest {
     void tools_areTheLineupTools() {
         assertThat(LineupTools.tools()).extracting(McpTool::name)
                 .containsExactly("get_lineup", "apply_lineup",
-                        "set_player_group", "send_match_order");
+                        "set_player_group", "send_match_order", "get_match_order");
+    }
+
+    /**
+     * What send_match_order sends and what Hattrick's matchorders answer reads back as must come
+     * out identical for the same order, or every verified send would report phantom differences.
+     */
+    @Test
+    void heldOrder_readsBackTheSameShapeThatWasSent() throws Exception {
+        final var sentLineup = new module.lineup.Lineup();
+        sentLineup.setSpielerAtPosition(IMatchRoleID.keeper, 11);
+        sentLineup.setSpielerAtPosition(IMatchRoleID.rightBack, 12, IMatchRoleID.OFFENSIVE);
+        sentLineup.setSpielerAtPosition(IMatchRoleID.substCD1, 13);
+        sentLineup.setCaptain(12);
+        sentLineup.setKicker(12);
+        sentLineup.setTacticType(1);
+        sentLineup.setAttitude(1);
+        final var sent = LineupTools.orderOf(sentLineup);
+
+        final var order = core.file.xml.XMLMatchOrderParser.parseMatchOrderFromString("""
+                <?xml version="1.0" encoding="utf-8"?>
+                <HattrickData>
+                  <FileName>matchorders.xml</FileName>
+                  <FetchedDate>2026-10-11 10:00:00</FetchedDate>
+                  <MatchID>771815754</MatchID>
+                  <MatchData Available="True">
+                    <HomeTeamID>1</HomeTeamID><HomeTeamName>A</HomeTeamName>
+                    <AwayTeamID>2</AwayTeamID><AwayTeamName>B</AwayTeamName>
+                    <MatchDate>2026-10-12 20:00:00</MatchDate><MatchType>4</MatchType>
+                    <ArenaID>3</ArenaID><ArenaName>C</ArenaName>
+                    <Attitude Available="True">1</Attitude>
+                    <CoachModifier Available="True">0</CoachModifier>
+                    <TacticType>1</TacticType>
+                    <Positions>
+                      <Player><PlayerID>11</PlayerID><RoleID>100</RoleID><LastName>K</LastName></Player>
+                      <Player><PlayerID>12</PlayerID><RoleID>101</RoleID><LastName>R</LastName><Behaviour>1</Behaviour></Player>
+                    </Positions>
+                    <Bench>
+                      <Player><PlayerID>13</PlayerID><RoleID>201</RoleID><LastName>S</LastName></Player>
+                    </Bench>
+                    <Kickers></Kickers>
+                    <SetPieces><PlayerID>12</PlayerID><LastName>R</LastName></SetPieces>
+                    <Captain><PlayerID>12</PlayerID><LastName>R</LastName></Captain>
+                    <PlayerOrders></PlayerOrders>
+                  </MatchData>
+                </HattrickData>""");
+        final var held = LineupTools.orderOf(
+                core.net.OnlineWorker.lineupFromOrder(order, 2).getLineup());
+
+        assertThat(LineupTools.orderDifferences(sent, held)).isEmpty();
+    }
+
+    @Test
+    void orderDifferences_namesEverySlotAndSettingThatDiffers() {
+        final var sent = JsonParser.parseString("""
+                {"positions":[{"roleId":100,"playerId":11,"behaviour":0},
+                              {"roleId":101,"playerId":12,"behaviour":1}],
+                 "bench":[],"tactic":1,"attitude":0,"captainId":12}""").getAsJsonObject();
+        final var held = JsonParser.parseString("""
+                {"positions":[{"roleId":100,"playerId":11,"behaviour":0},
+                              {"roleId":109,"playerId":12,"behaviour":0}],
+                 "bench":[],"tactic":0,"attitude":0,"captainId":12}""").getAsJsonObject();
+
+        assertThat(LineupTools.orderDifferences(sent, held)).extracting(e -> e.getAsString())
+                .containsExactly(
+                        "positions roleId 101: sent player 12 behaviour 1, Hattrick holds nobody",
+                        "positions roleId 109: sent nobody, Hattrick holds player 12 behaviour 0",
+                        "tactic: sent 1, Hattrick holds 0");
+    }
+
+    @Test
+    void copyOf_keepsWhatMovesARating() {
+        final var source = new module.lineup.Lineup();
+        source.setSpielerAtPosition(IMatchRoleID.keeper, 11);
+        source.setSpielerAtPosition(IMatchRoleID.rightBack, 12, IMatchRoleID.OFFENSIVE);
+        source.setTacticType(2);
+        source.setAttitude(1);
+        source.setStyleOfPlay(3);
+
+        final var copy = LineupTools.copyOf(source);
+
+        assertThat(copy).isNotSameAs(source);
+        assertThat(copy.getPositionById(IMatchRoleID.rightBack).getPlayerId()).isEqualTo(12);
+        assertThat(copy.getPositionById(IMatchRoleID.rightBack).getBehaviour())
+                .isEqualTo(IMatchRoleID.OFFENSIVE);
+        assertThat(copy.getTacticType()).isEqualTo(2);
+        assertThat(copy.getAttitude()).isEqualTo(1);
+        assertThat(copy.getCoachModifier()).isEqualTo(3);
     }
 
     @Test

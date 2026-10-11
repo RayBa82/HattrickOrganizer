@@ -144,7 +144,12 @@ public final class TrainingTools {
                                         "how many weeks to predict, default " + DEFAULT_WEEKS
                                                 + "; capped at the number of future weeks HO has planned"),
                                 "playerIds", McpTool.prop("array",
-                                        "restrict the prediction to these player ids; the whole squad if omitted"))),
+                                        "restrict the prediction to these player ids; the whole squad if omitted. "
+                                                + "Also filters currentWeek.players unless wholeSquadWeek"),
+                                "wholeSquadWeek", McpTool.prop("boolean",
+                                        "list every squad player in currentWeek.players, nothing "
+                                                + "banked included, ignoring playerIds. With "
+                                                + "playerIds [] it skips the predictions. Default false"))),
                         TrainingTools::training),
                 new McpTool("get_player_history",
                         "What training has already done to a player, from HO's own snapshot "
@@ -172,7 +177,13 @@ public final class TrainingTools {
                                         "add the raw dated series per player; default false, "
                                                 + "because levelUps, derived and coverage answer "
                                                 + "the growth question on their own and the series "
-                                                + "is a wall of numbers"))),
+                                                + "is a wall of numbers"),
+                                "sinceLastTraining", McpTool.prop("boolean",
+                                        "instead of the history: the confirmed skill changes of "
+                                                + "the last training update, drops included - per "
+                                                + "player the newest snapshot before it against the "
+                                                + "newest overall. Lists changed players only. "
+                                                + "Default false"))),
                         TrainingTools::playerHistory),
                 new McpTool("set_training",
                         "Set the senior team's training. Call get_training first for the current "
@@ -230,7 +241,8 @@ public final class TrainingTools {
         final var json = new JsonObject();
         final var wanted = wantedPlayerIds(args);
         json.add("current", current(model));
-        json.add("currentWeek", currentWeek(model, wanted));
+        final var wholeSquad = McpJson.optBool(args, "wholeSquadWeek", false);
+        json.add("currentWeek", currentWeek(model, wholeSquad ? null : wanted, wholeSquad));
 
         // The future training plan is what the Training tab edits; it is empty until the user has
         // opened that tab once, and then predictions are simply unavailable.
@@ -269,6 +281,9 @@ public final class TrainingTools {
      */
     private static JsonObject playerHistory(JsonObject args) throws McpToolException {
         final var model = McpJson.model();
+        if (McpJson.optBool(args, "sinceLastTraining", false)) {
+            return sinceLastTraining(model, historyPlayerIds(args, model));
+        }
         final var weeks = Math.max(1, McpJson.optInt(args, "weeks", DEFAULT_HISTORY_WEEKS));
         final var includeSnapshots = McpJson.optBool(args, "includeSnapshots", false);
         final var asOf = HODateTime.now();
@@ -317,6 +332,79 @@ public final class TrainingTools {
                 + "calling a player stalled. An empty levelUps over a long observedWeeks is the "
                 + "real 'growth has stopped' signal; an empty one next to a short span, or one "
                 + "with gaps, means it cannot be told.");
+        return json;
+    }
+
+    /**
+     * get_player_history sinceLastTraining: what the last training update really did. Per player,
+     * the newest snapshot from before it against the newest one overall - observed changes, where
+     * get_training's skillChanges are predictions.
+     */
+    private static JsonObject sinceLastTraining(HOModel model, List<Integer> ids) {
+        final var json = new JsonObject();
+        final var xtra = model.getXtraDaten();
+        final var lastTraining = xtra == null ? null : xtra.getTrainingDateAfterWeeks(-1);
+        if (lastTraining == null) {
+            json.addProperty("status", "no_training_date");
+            json.addProperty("note", "The current snapshot has no training date.");
+            return json;
+        }
+        json.addProperty("status", "ok");
+        json.addProperty("lastTraining", lastTraining.toHT());
+        final var changed = new JsonArray();
+        final var unconfirmed = new JsonArray();
+        var unchanged = 0;
+        for (final var playerId : ids) {
+            final var row = trainingDiff(playerId, DBManager.instance().loadPlayerHistory(playerId),
+                    lastTraining);
+            if (row.has("reason")) {
+                unconfirmed.add(row);
+            } else if (!row.getAsJsonArray("levelUps").isEmpty()) {
+                changed.add(row);
+            } else {
+                unchanged++;
+            }
+        }
+        json.add("players", changed);
+        json.addProperty("unchanged", unchanged);
+        json.add("unconfirmed", unconfirmed);
+        json.addProperty("note", "players lists only those whose skills changed, drops included; "
+                + "unchanged counts the rest. unconfirmed players lack a snapshot on one side of "
+                + "lastTraining - download the team to confirm them.");
+        return json;
+    }
+
+    /**
+     * One player's changes across the training update at lastTraining: the newest snapshot before
+     * it against the newest overall. A row with a reason when either side is missing.
+     *
+     * @param series the player's snapshots, oldest first
+     */
+    static JsonObject trainingDiff(int playerId, List<Player> series, HODateTime lastTraining) {
+        final var json = new JsonObject();
+        json.addProperty("playerId", playerId);
+        final var dated = series.stream().filter(p -> p.getHrfDate() != null).toList();
+        if (dated.isEmpty()) {
+            json.addProperty("reason", "no snapshot");
+            return json;
+        }
+        final var latest = dated.get(dated.size() - 1);
+        json.addProperty("name", latest.getFullName());
+        Player baseline = null;
+        for (final var snapshot : dated) {
+            if (snapshot.getHrfDate().isBefore(lastTraining)) {
+                baseline = snapshot;
+            }
+        }
+        if (latest.getHrfDate().isBefore(lastTraining)) {
+            json.addProperty("reason", "no snapshot since the last training");
+        } else if (baseline == null) {
+            json.addProperty("reason", "no snapshot from before the last training");
+        } else {
+            json.addProperty("baselineDate", baseline.getHrfDate().toHT());
+            json.addProperty("latestDate", latest.getHrfDate().toHT());
+            json.add("levelUps", levelUps(List.of(baseline, latest)));
+        }
         return json;
     }
 
@@ -637,7 +725,7 @@ public final class TrainingTools {
      * ({@code MatchLineupTeam.getTrainingMinutesPlayedInSectors}), so substitutions, position
      * swaps and red cards are accounted for rather than approximated from the starting eleven.
      */
-    private static JsonObject currentWeek(HOModel model, Set<Integer> wanted) {
+    private static JsonObject currentWeek(HOModel model, Set<Integer> wanted, boolean everyone) {
         final var json = new JsonObject();
         final var xtra = model.getXtraDaten();
         final var team = model.getTeam();
@@ -693,6 +781,13 @@ public final class TrainingTools {
             addMatchMinutes(model, wanted, banked, match, details, lineup, weekly, teamId);
         }
         json.add("fixtures", fixtures);
+        if (everyone) {
+            for (final var player : model.getCurrentPlayers()) {
+                if (!player.isCoach()) {
+                    banked.putIfAbsent(player.getPlayerId(), new WeekMinutes(player.getFullName()));
+                }
+            }
+        }
 
         final var players = new JsonArray();
         for (final var entry : banked.entrySet()) {

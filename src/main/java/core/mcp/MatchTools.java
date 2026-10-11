@@ -106,8 +106,8 @@ public final class MatchTools {
                                 + "all seven opponent sector ratings (copy them from "
                                 + "analyze_opponent's ratings) for a Monte Carlo win/draw/loss forecast; "
                                 + "omit them for sector ratings alone. Weather is the next match's "
-                                + "stored forecast unless matchId or weather says otherwise. These "
-                                + "and teamOrders (scored) need positions. Changes nothing in HO.",
+                                + "stored forecast unless matchId or weather says otherwise. "
+                                + "teamOrders (scored) need positions. Changes nothing in HO.",
                         McpTool.schema(
                                 opponentProperties(LineupTools.lineupSchema().getAsJsonObject("properties"))),
                         MatchTools::simulateLineup),
@@ -852,16 +852,21 @@ public final class MatchTools {
                     + "exactly these names.");
         }
 
-        if (!args.has("positions") && (args.has("weather") || args.has("matchId")
-                || args.has(LineupOrders.TEAM_ORDERS))) {
-            throw new IllegalArgumentException("weather, matchId and teamOrders need positions: "
-                    + "without them HO's live lineup is scored as it is (its own team orders "
-                    + "included), and a simulation never changes it. Copy the positions from "
-                    + "get_lineup.");
+        if (!args.has("positions") && args.has(LineupOrders.TEAM_ORDERS)) {
+            throw new IllegalArgumentException("teamOrders need positions: without them HO's live "
+                    + "lineup is scored as it is (its own team orders included), and a simulation "
+                    + "never changes it. Copy the positions from get_lineup.");
         }
-        final var lineup = args.has("positions")
-                ? LineupTools.scratchLineup(args)
-                : McpJson.model().getCurrentLineup();
+        final Lineup lineup;
+        if (args.has("positions")) {
+            lineup = LineupTools.scratchLineup(args);
+        } else if (args.has("weather") || args.has("matchId")) {
+            // The live lineup under another fixture: scored on a copy, so it stays as it is.
+            lineup = LineupTools.copyOf(McpJson.model().getCurrentLineup());
+            LineupTools.applyFixture(lineup, args);
+        } else {
+            lineup = McpJson.model().getCurrentLineup();
+        }
         if (!missing.isEmpty()) {
             // No opponent: score the lineup on its own, on a private model like the simulation does.
             return McpJson.ratings(McpJson.privateRatingModel(), lineup);

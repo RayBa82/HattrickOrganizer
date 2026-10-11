@@ -284,6 +284,40 @@ class TrainingToolsTest {
                 .getAsJsonObject("derived").get("trainedSkillLevelUps").getAsInt()).isEqualTo(1);
     }
 
+    /** The newest snapshot before the training against the newest one; older changes do not count. */
+    @Test
+    void trainingDiff_comparesAcrossTheLastTrainingOnly() {
+        final var lastTraining = HODateTime.fromHT("2026-03-05 08:00:00");
+        final var series = List.of(
+                snapshot("2026-02-20 12:00:00", 30, 8, 0.9, 5000, 9000),
+                snapshot("2026-03-01 12:00:00", 30, 9, 0.9, 5000, 9000),
+                snapshot("2026-03-04 12:00:00", 30, 9, 0.95, 5000, 9000),
+                snapshot("2026-03-06 12:00:00", 30, 10, 0.1, 5200, 9400));
+
+        final var row = TrainingTools.trainingDiff(1, series, lastTraining);
+
+        assertThat(row.has("reason")).isFalse();
+        assertThat(row.get("baselineDate").getAsString()).startsWith("2026-03-04");
+        final var levelUps = row.getAsJsonArray("levelUps");
+        assertThat(levelUps).hasSize(1);
+        assertThat(levelUps.get(0).getAsJsonObject().get("from").getAsInt()).isEqualTo(9);
+        assertThat(levelUps.get(0).getAsJsonObject().get("to").getAsInt()).isEqualTo(10);
+    }
+
+    @Test
+    void trainingDiff_namesTheMissingSide() {
+        final var lastTraining = HODateTime.fromHT("2026-03-05 08:00:00");
+        final var before = snapshot("2026-03-01 12:00:00", 30, 9, 0.9, 5000, 9000);
+        final var after = snapshot("2026-03-06 12:00:00", 30, 9, 0.9, 5000, 9000);
+
+        assertThat(TrainingTools.trainingDiff(1, List.of(before), lastTraining)
+                .get("reason").getAsString()).isEqualTo("no snapshot since the last training");
+        assertThat(TrainingTools.trainingDiff(1, List.of(after), lastTraining)
+                .get("reason").getAsString()).isEqualTo("no snapshot from before the last training");
+        assertThat(TrainingTools.trainingDiff(1, List.of(), lastTraining)
+                .get("reason").getAsString()).isEqualTo("no snapshot");
+    }
+
     /**
      * The load-bearing case. A fortnight with no download hides a training update, so the caller
      * has to be able to see the hole rather than read a confident rate off it.

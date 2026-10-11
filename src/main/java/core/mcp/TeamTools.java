@@ -148,7 +148,7 @@ public final class TeamTools {
                                 + "if any). Call again with taskId until status is done or failed; "
                                 + "done carries runtimeSeconds and the result. Not a routine refresh. "
                                 + "It replaces HO's stored lineup with Hattrick's match order: check "
-                                + "result.lineupReplaced.",
+                                + "result.lineupReplaced, previousLineup and storedLineup.",
                         McpTool.schema(McpTool.properties(
                                 TASK_ID, McpTool.prop("string", "a taskId this tool returned: "
                                         + "report that download's status instead of starting one"))),
@@ -1107,14 +1107,13 @@ public final class TeamTools {
                 //
                 // No becameCurrent guard any more. Both snapshots read the stored row rather than
                 // the live model (see lineupSnapshot), and storeModel writes that row whether or
-                // not the model swap happened - so the case that used to report null, "HO cannot
-                // tell", is now answerable. Still null when there was nothing stored to compare
-                // against, which is a fresh install rather than an unknown.
-                Boolean lineupReplaced = null;
-                if (before != null) {
-                    final var after = lineupSnapshot();
-                    lineupReplaced = after != null && !before.equals(after);
-                }
+                // not the model swap happened. A lineup stored where there was none before - the
+                // next match had no order yet, and the download brought in Hattrick's default -
+                // counts as replaced too: that is exactly the case an agent has to hear about.
+                // Null only when there is nothing stored either side.
+                final var after = lineupSnapshot();
+                final Boolean lineupReplaced = before == null && after == null ? null
+                        : !java.util.Objects.equals(before, after);
 
                 final var model = HOVerwaltung.instance().getModel();
                 final var sections = new JsonObject();
@@ -1191,7 +1190,9 @@ public final class TeamTools {
                         + "answer. Ask the user to run HO's own Download for those.");
                 json.addProperty("lineupReplaced", lineupReplaced);
                 json.add("previousLineup",
-                        Boolean.TRUE.equals(lineupReplaced) ? before : JsonNull.INSTANCE);
+                        Boolean.TRUE.equals(lineupReplaced) && before != null ? before : JsonNull.INSTANCE);
+                json.add("storedLineup",
+                        Boolean.TRUE.equals(lineupReplaced) && after != null ? after : JsonNull.INSTANCE);
                 return json;
             } finally {
                 Connector.instance().setSilentDownload(wasSilent);
@@ -1257,7 +1258,10 @@ public final class TeamTools {
         if (stored == null || stored.getLineup() == null) {
             return null;
         }
-        return LineupTools.describe(stored.getLineup(), null);
+        final var json = LineupTools.describe(stored.getLineup(), null);
+        // The next match can change with the download; a lineup moved to another match is news.
+        json.addProperty("matchId", stored.getMatchId());
+        return json;
     }
 
     /** What the agent is told about a failed download, and whether trying again could help. */

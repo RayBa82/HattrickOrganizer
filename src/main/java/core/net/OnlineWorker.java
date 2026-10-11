@@ -1211,18 +1211,8 @@ public class OnlineWorker {
 				if (XMLMatchOrderParser.isHidden(map)) {
 					return null;    // locked before kick-off: keep the lineup HO has
 				}
-				String trainerID = "-1";
-				try {
-					trainerID = String.valueOf(HOVerwaltung.instance().getModel().getTrainer()
-							.getPlayerId());
-
-				} catch (Exception e) {
-					//It is possible that NTs struggle here.
+				return lineupFromOrder(map, teamId);
 				}
-				var hrfStringBuilder = new HRFStringBuilder();
-				hrfStringBuilder.createLineUp(trainerID, teamId, map);
-				return new MatchLineupTeam(getProperties(hrfStringBuilder.createHRF().toString()));
-			}
 		} catch (Exception e) {
 			String msg = getLangString("Downloadfehler") + " : Error fetching Matchorder :";
 			setInfoMsg(msg, InfoPanel.FEHLERFARBE);
@@ -1232,6 +1222,22 @@ public class OnlineWorker {
 		}
 
 		return null;
+	}
+
+	/**
+	 * A parsed matchorders answer as a lineup, through the same HRF route the download takes.
+	 * Shows no dialog, so the MCP tools can use it headless.
+	 */
+	public static MatchLineupTeam lineupFromOrder(Map<String, String> order, int teamId) throws IOException {
+		String trainerID = "-1";
+		try {
+			trainerID = String.valueOf(HOVerwaltung.instance().getModel().getTrainer().getPlayerId());
+		} catch (Exception e) {
+			//It is possible that NTs struggle here.
+		}
+		var hrfStringBuilder = new HRFStringBuilder();
+		hrfStringBuilder.createLineUp(trainerID, teamId, order);
+		return new MatchLineupTeam(getProperties(hrfStringBuilder.createHRF().toString()));
 	}
 
 	public static Regiondetails getRegionDetails(int regionId)

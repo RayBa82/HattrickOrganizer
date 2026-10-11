@@ -10,7 +10,11 @@ import core.model.match.MatchLineupPosition;
 import core.model.match.Weather;
 import core.model.player.IMatchRoleID;
 import core.model.player.Player;
+import core.file.xml.XMLCHPPPreParser;
+import core.file.xml.XMLMatchOrderParser;
 import core.net.ChppWriteService;
+import core.net.Connector;
+import core.net.OnlineWorker;
 import module.lineup.Lineup;
 import org.jetbrains.annotations.Nullable;
 
@@ -82,46 +86,50 @@ public final class LineupTools {
                 new McpTool("send_match_order",
                         "Send THE LINEUP CURRENTLY SET IN HO to Hattrick as the match order. This "
                                 + "leaves the machine and OVERWRITES the order Hattrick holds for "
-                                + "that match. Build it with apply_lineup and re-read it with "
-                                + "get_lineup first. League matches are matchType 1; take other ids "
-                                + "from get_matches. Returns the order as sent. Without Hattrick "
-                                + "Supporter: status supporterRequired, nothing sent, wouldSend to "
-                                + "enter by hand.",
-                        McpTool.schema(McpTool.properties(
-                                        "matchId", McpTool.prop("integer", "the Hattrick match id"),
-                                        "matchType", McpTool.prop("integer",
-                                                "match type id (league = 1; from get_matches for others)")),
-                                "matchId", "matchType"),
-                        LineupTools::sendMatchOrder)
+                                + "that match. Check it with get_lineup first. "
+                                + "League matches are matchType 1; take other ids "
+                                + "from get_matches. Returns the order as sent, re-read from "
+                                + "Hattrick: verified false lists the differences. Without "
+                                + "Supporter: status supporterRequired, nothing sent.",
+                        matchOrderSchema(),
+                        LineupTools::sendMatchOrder),
+                new McpTool("get_match_order",
+                        "The match order Hattrick holds for a match, read from Hattrick (not HO's "
+                                + "lineup), in send_match_order's order shape. Use it to check what "
+                                + "a send left at Hattrick. status hidden: Hattrick no longer shows "
+                                + "the order shortly before kick-off.",
+                        matchOrderSchema(),
+                        LineupTools::getMatchOrder)
         );
+    }
+
+    private static JsonObject matchOrderSchema() {
+        return McpTool.schema(McpTool.properties(
+                        "matchId", McpTool.prop("integer", "the Hattrick match id"),
+                        "matchType", McpTool.prop("integer",
+                                "match type id (league = 1; from get_matches for others)")),
+                "matchId", "matchType");
     }
 
     private static JsonObject sendMatchOrder(JsonObject args) throws McpToolException {
         final var matchId = McpJson.reqInt(args, "matchId");
-        final var matchTypeId = McpJson.reqInt(args, "matchType");
-        final var matchType = core.model.enums.MatchType.getById(matchTypeId);
-        if (matchType == null) {
-            throw new IllegalArgumentException("Unknown matchType " + matchTypeId
-                    + "; take the matchType id from get_matches (league matches are 1).");
-        }
+        final var matchType = matchType(McpJson.reqInt(args, "matchType"));
         final var model = McpJson.model();
-        final var benchRoleIds = new ArrayList<Integer>();
         final var lineupMatchId = new java.util.concurrent.atomic.AtomicInteger();
         // apply_lineup mutates the live Lineup on the EDT, so serialise it there too.
-        final var orderString = onEdt(() -> {
+        final var sentOrder = onEdt(() -> {
             final var team = model.getCurrentLineupTeam();
             final var lineup = team.getLineup();
             requireFieldPlayers(lineup);
             lineupMatchId.set(team.getMatchId());
             final var wrapper = new JsonObject();
-            wrapper.addProperty("order", lineup.toJson());
-            // toJson sends the bench sorted by roleId; the echo names the slots in that order.
-            lineup.getAllPositions().stream().map(MatchLineupPosition::getRoleId)
-                    .filter(r -> r >= IMatchRoleID.startReserves && r <= IMatchRoleID.substXT2)
-                    .sorted().forEach(benchRoleIds::add);
+            final var orderString = lineup.toJson();
+            wrapper.addProperty("order", orderString);
+            wrapper.add("echo", LineupOrders.echo(orderString, benchRoleIds(lineup)));
             return wrapper;
-        }).get("order").getAsString();
-        final var echo = LineupOrders.echo(orderString, benchRoleIds);
+        });
+        final var orderString = sentOrder.get("order").getAsString();
+        final var echo = sentOrder.getAsJsonObject("echo");
 
         final var out = new JsonObject();
         out.addProperty("matchId", matchId);
@@ -146,7 +154,157 @@ public final class LineupTools {
         out.addProperty("status", "ok");
         out.addProperty("sent", true);
         out.add("order", echo);
+        addReadBack(out, echo, matchId, matchType);
         return out;
+    }
+
+    /**
+     * Hattrick answers a setmatchorder with success even when the order does not end up where it
+     * was meant to, so the send re-reads what Hattrick holds and names every difference. A failed
+     * re-read is reported, not thrown: the order did go out.
+     */
+    private static void addReadBack(JsonObject out, JsonObject sent, int matchId,
+                                    core.model.enums.MatchType matchType) {
+        try {
+            final var held = heldOrder(matchId, matchType);
+            if (held == null) {
+                out.addProperty("verified", "hidden");
+                out.addProperty("verifyMessage", HIDDEN);
+                return;
+            }
+            final var differences = orderDifferences(sent, held);
+            out.addProperty("verified", differences.isEmpty());
+            if (!differences.isEmpty()) {
+                out.add("differences", differences);
+                out.addProperty("verifyMessage", "Hattrick holds a different order than the one sent. "
+                        + "Do not report it as set; get_match_order shows what Hattrick holds.");
+            }
+        } catch (McpToolException | RuntimeException e) {
+            out.addProperty("verified", "failed");
+            out.addProperty("verifyMessage", "Sent, but the read-back failed: " + e.getMessage()
+                    + " Check it with get_match_order.");
+        }
+    }
+
+    private static final String HIDDEN = "Hattrick no longer shows this order - it hides it "
+            + "shortly before kick-off - so it cannot be read back.";
+
+    private static JsonObject getMatchOrder(JsonObject args) throws McpToolException {
+        final var matchId = McpJson.reqInt(args, "matchId");
+        final var matchType = matchType(McpJson.reqInt(args, "matchType"));
+        final var out = new JsonObject();
+        out.addProperty("matchId", matchId);
+        final var held = heldOrder(matchId, matchType);
+        if (held == null) {
+            out.addProperty("status", "hidden");
+            out.addProperty("message", HIDDEN);
+        } else {
+            out.addProperty("status", "ok");
+            out.add("order", held);
+        }
+        return out;
+    }
+
+    private static core.model.enums.MatchType matchType(int matchTypeId) {
+        final var matchType = core.model.enums.MatchType.getById(matchTypeId);
+        if (matchType == null) {
+            throw new IllegalArgumentException("Unknown matchType " + matchTypeId
+                    + "; take the matchType id from get_matches (league matches are 1).");
+        }
+        return matchType;
+    }
+
+    /**
+     * The order Hattrick holds for the match, in send_match_order's order shape, or null when
+     * Hattrick hides it before kick-off. Read from Hattrick, never from HO's database.
+     */
+    static @Nullable JsonObject heldOrder(int matchId, core.model.enums.MatchType matchType)
+            throws McpToolException {
+        final var teamId = McpJson.model().getBasics().getTeamId();
+        final var connector = Connector.instance();
+        final var wasSilent = connector.setSilentDownload(true);
+        final String xml;
+        try {
+            xml = connector.downloadMatchOrder(matchId, matchType, teamId);
+        } finally {
+            connector.setSilentDownload(wasSilent);
+        }
+        if (xml == null || xml.isEmpty()) {
+            throw new McpToolException("Hattrick did not return the match order"
+                    + (connector.lastError() != null ? ": " + connector.lastError() : "."));
+        }
+        final var error = XMLCHPPPreParser.getError(xml);
+        if (!error.isEmpty()) {
+            throw new McpToolException("Hattrick refused to show the match order: " + error);
+        }
+        final var parsed = XMLMatchOrderParser.parseMatchOrderFromString(xml);
+        if (XMLMatchOrderParser.isHidden(parsed)) {
+            return null;
+        }
+        try {
+            return orderOf(OnlineWorker.lineupFromOrder(parsed, teamId).getLineup());
+        } catch (java.io.IOException e) {
+            throw new McpToolException("HO could not read the match order Hattrick sent: "
+                    + e.getMessage());
+        }
+    }
+
+    /** A lineup in the order shape send_match_order echoes, built the way it is sent. */
+    static JsonObject orderOf(Lineup lineup) {
+        final var orderString = lineup.toJson();
+        return LineupOrders.echo(orderString, benchRoleIds(lineup));
+    }
+
+    /** toJson sends the bench sorted by roleId; the echo names the slots in that order. */
+    private static List<Integer> benchRoleIds(Lineup lineup) {
+        return lineup.getAllPositions().stream().map(MatchLineupPosition::getRoleId)
+                .filter(r -> r >= IMatchRoleID.startReserves && r <= IMatchRoleID.substXT2)
+                .sorted().toList();
+    }
+
+    /** Every way the order Hattrick holds differs from the one sent; empty when they agree. */
+    static JsonArray orderDifferences(JsonObject sent, JsonObject held) {
+        final var differences = new JsonArray();
+        for (final var key : List.of("positions", "bench")) {
+            final var sentSlots = byRole(sent.getAsJsonArray(key));
+            final var heldSlots = byRole(held.getAsJsonArray(key));
+            final var roles = new java.util.TreeSet<>(sentSlots.keySet());
+            roles.addAll(heldSlots.keySet());
+            for (final var role : roles) {
+                final var a = sentSlots.get(role);
+                final var b = heldSlots.get(role);
+                if (!java.util.Objects.equals(a, b)) {
+                    differences.add(key + " roleId " + role + ": sent " + slot(a)
+                            + ", Hattrick holds " + slot(b));
+                }
+            }
+        }
+        for (final var key : List.of("tactic", "attitude", "styleOfPlay", "captainId",
+                "setPiecesTakerId", LineupOrders.PENALTY_TAKERS, LineupOrders.TEAM_ORDERS)) {
+            if (!java.util.Objects.equals(sent.get(key), held.get(key))) {
+                differences.add(key + ": sent " + sent.get(key) + ", Hattrick holds " + held.get(key));
+            }
+        }
+        return differences;
+    }
+
+    private static java.util.Map<Integer, JsonObject> byRole(@Nullable JsonArray slots) {
+        final var map = new java.util.HashMap<Integer, JsonObject>();
+        if (slots != null) {
+            for (final var element : slots) {
+                final var slot = element.getAsJsonObject();
+                map.put(slot.get("roleId").getAsInt(), slot);
+            }
+        }
+        return map;
+    }
+
+    private static String slot(@Nullable JsonObject slot) {
+        if (slot == null) {
+            return "nobody";
+        }
+        return "player " + slot.get("playerId").getAsInt()
+                + (slot.has("behaviour") ? " behaviour " + slot.get("behaviour").getAsInt() : "");
     }
 
     /** An order without field players would wipe the one Hattrick holds, so it never leaves. */
@@ -206,6 +364,27 @@ public final class LineupTools {
             lineup.setSubstitionList(orders);
         }
         return lineup;
+    }
+
+    /**
+     * A scratch copy of a lineup with everything that moves a rating: positions, behaviours,
+     * tactic, attitude, style of play, captain, set pieces taker and team orders.
+     */
+    static Lineup copyOf(Lineup source) {
+        final var copy = new Lineup();
+        for (final var position : source.getAllPositions()) {
+            if (copy.getPositionById(position.getRoleId()) != null) {
+                copy.setSpielerAtPosition(position.getRoleId(), position.getPlayerId(),
+                        position.getBehaviour());
+            }
+        }
+        copy.setTacticType(source.getTacticType());
+        copy.setAttitude(source.getAttitude());
+        copy.setStyleOfPlay(source.getCoachModifier());
+        copy.setCaptain(source.getCaptain());
+        copy.setKicker(source.getKicker());
+        copy.setSubstitionList(new ArrayList<>(source.getSubstitutionList()));
+        return copy;
     }
 
     /**
@@ -274,7 +453,7 @@ public final class LineupTools {
      * The optional matchId and weather of a spec. Both are resolved before the lineup is touched,
      * so a bad id leaves apply_lineup's live lineup alone.
      */
-    private static void applyFixture(Lineup lineup, JsonObject spec) throws McpToolException {
+    static void applyFixture(Lineup lineup, JsonObject spec) throws McpToolException {
         final var matchId = McpJson.optInteger(spec, "matchId");
         final var match = matchId == null ? null
                 : DBManager.instance().getMatchesKurzInfoByMatchID(matchId, null);

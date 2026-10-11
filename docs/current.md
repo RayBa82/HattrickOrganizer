@@ -16,6 +16,26 @@ hint naming its own paging/filter arguments. The rule is documented but not impl
 - Then audit every tool's defaults against it, starting with the list-shaped ones. Today only
   `list_scout` pages (it was ~260k chars before paging).
 
+## MCP requests from the hattrick session (2026-10-11)
+
+Five tool requests, all on `lineup-tv-view`, unit-tested (`core.mcp.*` green), not yet run
+against live CHPP or deployed to the server (needs `./gradlew dockerPush` + `docker compose pull`).
+
+1. `get_match_order(matchId, matchType)` reads the order Hattrick holds (matchorders view, through
+   `OnlineWorker.lineupFromOrder`, the download's own HRF route) in send_match_order's echo shape.
+   `send_match_order` re-reads after sending: `verified` true/false/`hidden`/`failed`, plus
+   `differences`. Trigger: the 2026-10-11 friendly (771815754) returned ok twice but never showed.
+2. `download_team`: `lineupReplaced` was null whenever no lineup was stored for the next match
+   before the download - exactly when Hattrick's default order (3-4-2) came in. Now true in that
+   case, with the new lineup as `storedLineup`; snapshots carry `matchId`.
+3. `get_player_history sinceLastTraining`: per player, newest snapshot before the last training
+   update against the newest overall; changed players only, `unconfirmed` for missing sides.
+4. `simulate_lineup` takes matchId/weather without positions: scores a copy of the live lineup.
+5. `get_training wholeSquadWeek`: every squad player in `currentWeek.players`, ignoring playerIds.
+
+Open: request 6 (multi-week training history per player: minutes, maxed, resulting change) -
+scope not yet confirmed by the user.
+
 ## Headless finances (2026-10-03)
 
 Reported by the hattrick session: `get_finances` after a headless `download_team` was wrong. Three
@@ -31,41 +51,3 @@ bugs in the economy path, all also hitting desktop HO, fixed and verified on the
 
 `HRFStringBuilderTest` round-trips a real economy.xml through parser, HRF and `Economy`. ECONOMY rows
 from before these fixes keep their wrong values; only new downloads are right.
-
-## Headless MCP server (2026-09-27, committed 2026-10-03)
-
-**Live since 2026-09-27** on the user's Linux server (Ubuntu 24.04, x86_64), in `~/ho` via
-`docker compose` (Compose v2 plugin; Ubuntu's `docker-compose` v1 cannot talk to the current engine).
-It runs the desktop HO's live DB (history since 2026-04-11), and `~/ho/data` is its only copy. Desktop
-HO on the Mac must stay unused. Committed on `lineup-tv-view` (`ed2f4059`, `742c2ef9`).
-
-Asked by the user: HO on a Linux server with no display, serving only the MCP tools. Documented
-in AGENTS.md, "Headless server". `core.HeadlessMain` reuses `HO.initRuntime` (extracted from
-`HO.main`), then does the non-UI startup steps and starts `McpHttpServer`.
-
-- Verified with `-Djava.awt.headless=true` against a copy of the dev DB: all 29 tools listed, every
-  read tool, `apply_lineup`, `set_player_group`, `list_challenges` (live CHPP) and a full
-  `download_team` (all sections) worked; SIGTERM stops the server and disconnects the DB. On an
-  empty DB, `authorize` creates the database and prints the authorization URL. The PIN exchange
-  itself has not been run end to end yet: it needs a human with a Hattrick login.
-- Not exercised headless: the CHPP writes (`send_match_order`, `place_bid`, `set_training`,
-  `manage_challenge`). Their 401 path now throws under `silentDownload` like the GET path
-  did already, where it used to open `OAuthDialog`.
-- Packaging: `./gradlew headless` (tarball + `ho-headless.sh`) and `./gradlew docker`
-  (image `ho-headless`, Temurin 17 JRE, volume `/data`, `-Dho.mcpBind`). The image was verified on
-  Docker Desktop (arm64) with a copy of the dev DB: tools answer on the host through
-  `-p 127.0.0.1:8765:8765`, `simulate_lineup` (prediction/) and a full `download_team` work, a write
-  survives stop/start, `docker stop` shuts down cleanly, and `authorize` on a fresh volume prints the
-  URL. The `-PdockerPlatform=linux/amd64` image was only started under emulation.
-- `docker-compose.yml` with `./data` bind mount, for moving the live desktop DB (with its history) to the
-  server. Rehearsed with a copy of the live `~/Library/Application Support/HO` data: packed as in the
-  README, served through `docker compose up`, history tools answered (26 weeks). Ownership was
-  simulated with a volume: matching uid works, a wrong owner exits with HO's "Could not write to
-  database" message. A real Linux host has not been tried yet.
-- `./gradlew dockerPush` (buildx, amd64 + arm64, `-PdockerRegistry`, default docker.rayba.de);
-  compose takes `HO_IMAGE`. Pushed to docker.rayba.de on 2026-09-27 (digest sha256:7be84146…); pulled
-  back, both architectures run. That needed the registry's nginx to forward `Host` and
-  `X-Forwarded-Host` as `$http_host`: with `:443` in the upload URLs, Docker sent the upload PUT
-  without credentials (401).
-- The `WorldDetailsTable` CURRENCY_RATE NPE is guarded (`742c2ef9`); players CHPP answers with error
-  56 are marked and no longer re-asked (`e9aaf907`).
