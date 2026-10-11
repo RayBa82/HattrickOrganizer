@@ -329,7 +329,11 @@ public final class TeamTools {
         final var offset = Math.max(McpJson.optInt(args, "offset", 0), 0);
         final var limit = Math.max(McpJson.optInt(args, "limit", selected.size()), 1);
         // only positionRatings: the slot matrix lineup work reads squad-wide, ~90 chars a player.
-        final var ratingsOnly = "positionRatings".equals(McpJson.optString(args, "only", ""));
+        final var only = McpJson.optString(args, "only", "");
+        if (!only.isEmpty() && !"positionRatings".equals(only)) {
+            throw new IllegalArgumentException("only takes positionRatings; had " + only);
+        }
+        final var ratingsOnly = !only.isEmpty();
         final var players = new JsonArray();
         for (final var player : selected.stream().skip(offset).limit(limit).toList()) {
             final var row = McpJson.player(player, ratingModel);
