@@ -163,12 +163,12 @@ public final class TrainingTools {
                                         + "wholeSquadWeek with playerIds [] returns the current week alone.",
                                 McpTool.OptionalSection.top("players")),
                 new McpTool("get_player_history",
-                        "What training has already done to a player, from HO's own snapshot "
-                                + "history - a dated skill series no CHPP file gives you. Per "
-                                + "player: every level-up with its date, a growth rate in levels per "
-                                + "Hattrick year, TSI and wage drift, and the series coverage. Read "
-                                + "coverage before the rate - a download gap means a level-up "
-                                + "inside it cannot be dated. Local unless includeEvents.",
+                        "Training already done, from HO's own snapshots (no CHPP file has it). "
+                                + "Per player: dated level-ups and latestSkills (sub-level); growth "
+                                + "rate, TSI/wage drift (derived) and coverage for a few players, a "
+                                + "compact screen for many - the include flags override. Read coverage "
+                                + "before the rate: a level-up inside a download gap cannot be dated. "
+                                + "Local unless includeEvents.",
                         McpTool.schema(McpTool.properties(
                                 "playerIds", McpTool.prop("array",
                                         "the player ids to report on; the current squad if omitted. "

@@ -62,12 +62,13 @@ public final class TeamTools {
                         McpTool.schema(new JsonObject()),
                         args -> team()),
                 new McpTool("get_squad",
-                        "The squad, one row each: skills, character, specialty as arrays/numbers "
-                                + "keyed by skillOrder, characterOrder, specialtyNames; loyalty, "
-                                + "motherclub (if true), penaltyStrength, form, stamina, group, tsi, "
-                                + "wage; availability: injuryWeeks, cards, available (false without "
-                                + "injury = suspended), transferListed (if true). include adds positionRatings "
-                                + "(slots 100-113), unasked for up to " + FULL_SQUAD_RECORDS + " playerIds.",
+                        "Squad rows: skills (sub-level), character, specialty as arrays/numbers "
+                                + "per skillOrder, characterOrder, specialtyNames; loyalty, "
+                                + "motherclub/transferListed (if true), penaltyStrength, form, stamina, "
+                                + "group, tsi, wage, injuryWeeks, cards, available (false, no injury = "
+                                + "suspended). positionRatings (slots 100-113): only = whole-squad "
+                                + "matrix; include = in rows (unasked for up to " + FULL_SQUAD_RECORDS
+                                + " playerIds).",
                         McpTool.schema(McpTool.properties(
                                 "playerIds", McpTool.prop("array",
                                         "only these players; the whole squad if omitted. An id not "
@@ -84,7 +85,7 @@ public final class TeamTools {
                                                 + "r (ratings in slotOrder, every player incl. unavailable)"))),
                         TeamTools::squad)
                         .withBudget("Page with limit/offset (count is the total) or name playerIds; "
-                                        + "ask for positionRatings only for the few candidates.",
+                                        + "for the whole squad's position ratings pass only positionRatings.",
                                 McpTool.OptionalSection.perItem("players", "positionRatings", "positionRatings"),
                                 McpTool.OptionalSection.perItem("players", "tsiAndWage", "tsi", "wage"),
                                 McpTool.OptionalSection.perItem("players", "penaltyStrength", "penaltyStrength"),
