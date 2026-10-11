@@ -101,6 +101,35 @@ public final class MatchTools {
                                                 "the match type id; optional")),
                                 "matchId"),
                         MatchTools::matchWeather),
+                new McpTool("get_rating_calibration",
+                        "Rating model vs Hattrick on our played matches: the starting eleven rated from "
+                                + "the last snapshot before kick-off against the real ratings. stats: "
+                                + "n, date range, mean and sd of real minus predicted per sector (in "
+                                + "sectorOrder; positive = model too low) and for the tactic level. rows: "
+                                + "per match pred, resid, tactic [pred, real], confounded = lineup changed "
+                                + "mid-match. Newest first.",
+                        McpTool.schema(McpTool.properties(
+                                "matchTypes", McpTool.prop("array",
+                                        "only these match type ids (1 league, 3 cup, 4/5/8/9 friendlies, "
+                                                + "as get_matches reports them); default all"),
+                                "maxSnapshotAgeDays", McpTool.prop("number",
+                                        "stats leave out rows whose snapshot is older than this many "
+                                                + "days before the match; default 7"),
+                                "includeConfounded", McpTool.prop("boolean",
+                                        "stats include matches whose lineup changed mid-match; default false"),
+                                "backfill", McpTool.prop("boolean",
+                                        "first rate every stored match of ours without a row and report "
+                                                + "how many were added; default false"),
+                                "recompute", McpTool.prop("boolean",
+                                        "with backfill: redo existing rows too - after a model change, or "
+                                                + "to fill the tactic level of rows from before it was stored"),
+                                "limit", McpTool.prop("integer", "rows page size, default "
+                                        + CALIBRATION_PAGE + ", max " + CALIBRATION_MAX_PAGE),
+                                "offset", McpTool.prop("integer", "rows to skip; default 0. count is the total"))),
+                        MatchTools::ratingCalibration)
+                        .withBudget("Page the rows with limit/offset (count is the total), or narrow "
+                                        + "them with matchTypes.",
+                                McpTool.OptionalSection.top("rows")),
                 new McpTool("simulate_lineup",
                         "Score a lineup. Omit positions to score the one HO currently holds. Supply "
                                 + "all seven opponent sector ratings (copy them from "
@@ -826,6 +855,39 @@ public final class MatchTools {
      * of seven is a caller who meant to simulate and dropped one, and answering that with ratings
      * would look like a working call.
      */
+
+    static final int CALIBRATION_PAGE = 20;
+    static final int CALIBRATION_MAX_PAGE = 40;
+
+    private static JsonObject ratingCalibration(JsonObject args) throws McpToolException {
+        McpJson.model();
+        JsonObject backfill = null;
+        if (McpJson.optBool(args, "backfill", false)) {
+            final var result = core.rating.RatingCalibration.backfill(McpJson.optBool(args, "recompute", false));
+            backfill = new JsonObject();
+            backfill.addProperty("matchesExamined", result.matches());
+            backfill.addProperty("rowsWritten", result.stored());
+            backfill.addProperty("writtenButConfounded", result.confounded());
+            final var skipped = new JsonObject();
+            result.skipped().forEach(skipped::addProperty);
+            backfill.add("notWritten", skipped);
+        }
+        final var matchTypes = new java.util.HashSet<Integer>();
+        if (args.has("matchTypes") && args.get("matchTypes").isJsonArray()) {
+            args.getAsJsonArray("matchTypes").forEach(e -> matchTypes.add(e.getAsInt()));
+        }
+        final var maxAge = args.has("maxSnapshotAgeDays") && !args.get("maxSnapshotAgeDays").isJsonNull()
+                ? args.get("maxSnapshotAgeDays").getAsDouble() : 7.0;
+        final var query = new CalibrationSummary.Query(matchTypes, maxAge,
+                McpJson.optBool(args, "includeConfounded", false),
+                Math.min(Math.max(McpJson.optInt(args, "limit", CALIBRATION_PAGE), 1), CALIBRATION_MAX_PAGE),
+                Math.max(McpJson.optInt(args, "offset", 0), 0));
+        final var json = CalibrationSummary.summarize(DBManager.instance().loadRatingCalibrations(), query);
+        if (backfill != null) {
+            json.add("backfill", backfill);
+        }
+        return json;
+    }
 
     private static JsonObject simulateLineup(JsonObject args) throws McpToolException {
         final var result = scoreLineup(args);

@@ -103,6 +103,8 @@ final class DBUpdater {
 						case 1006:
 							updateDBv1007(DBVersion);
 						case 1007:
+							updateDBv1008(DBVersion);
+						case 1008:
 				}
 
 			} catch (Exception e) {
@@ -256,6 +258,20 @@ final class DBUpdater {
 			}
 
 			updateDBVersion(dbVersion, 1007);
+		}
+
+		/**
+		 * HO 10.0.8: predicted and real tactic level next to the sector ratings of the rating
+		 * calibration. Older rows stay null until get_rating_calibration recomputes them.
+		 */
+		private void updateDBv1008(int dbVersion) throws SQLException {
+			for (var column : new String[]{"PRED_TACTIC DOUBLE", "REAL_TACTIC INTEGER"}) {
+				if (!columnExistsInTable(column.substring(0, column.indexOf(' ')), RatingCalibrationTable.TABLENAME)) {
+					connectionManager.executeUpdate("ALTER TABLE " + RatingCalibrationTable.TABLENAME + " ADD COLUMN " + column);
+				}
+			}
+
+			updateDBVersion(dbVersion, 1008);
 		}
 
     private void updateDBv901(int dbVersion) throws SQLException {

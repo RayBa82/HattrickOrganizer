@@ -160,6 +160,8 @@ public final class RatingCalibration {
             row.getReal()[i] = (raw - 1) / 4.0 + 1;
             row.getResidual()[i] = row.getReal()[i] - row.getPredicted()[i];
         }
+        row.setPredictedTactic(model.getTacticRating(lineup, 0));
+        row.setRealTactic(home ? details.getHomeTacticSkill() : details.getGuestTacticSkill());
         row.setConfounded(!changes.isEmpty());
         row.setConfoundedReason(changes.isEmpty() ? null : String.join(", ", changes));
         return new Outcome(row, null);

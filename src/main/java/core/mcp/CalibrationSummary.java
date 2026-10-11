@@ -5,23 +5,28 @@ import com.google.gson.JsonObject;
 import core.db.RatingCalibrationRow;
 import core.rating.RatingPredictionModel.RatingSector;
 
+import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
-import java.util.function.Function;
-import java.util.stream.Collectors;
+import java.util.Set;
+import java.util.function.ToDoubleFunction;
 
 /**
- * Residual statistics of the rating-model calibration rows, for the retired {@code get_rating_calibration} MCP tool; re-register it in MatchTools to use this again.
+ * get_rating_calibration's answer over the stored calibration rows: residual statistics per
+ * sector and for the tactic level, and the rows themselves, paged, as compact arrays in
+ * sectorOrder.
  * <p>
- * Pure over the rows so it can be tested without a database. Rows with a mid-match lineup change
- * never enter a statistic; they are only counted and listed.
+ * Pure over the rows so it can be tested without a database.
  */
 final class CalibrationSummary {
 
     private static final RatingSector[] SECTORS = RatingSector.values();
 
     private CalibrationSummary() {
+    }
+
+    /** What filters the statistics and pages the rows. Empty matchTypes means all. */
+    record Query(Set<Integer> matchTypes, double maxSnapshotAgeDays, boolean includeConfounded,
+                 int limit, int offset) {
     }
 
     /** The key a sector goes by in tool results, matching get_match. */
@@ -37,77 +42,144 @@ final class CalibrationSummary {
         };
     }
 
-    /**
-     * @param maxSnapshotAgeDays when not null, rows whose HRF snapshot is older than this are left
-     *                           out too: skills drift between the snapshot and the match
-     */
-    static JsonObject summarize(List<RatingCalibrationRow> rows, Double maxSnapshotAgeDays) {
-        final var clean = rows.stream().filter(r -> !r.isConfounded()).toList();
-        final var used = clean.stream()
-                .filter(r -> maxSnapshotAgeDays == null || r.getSnapshotAgeDays() <= maxSnapshotAgeDays)
+    static JsonObject summarize(List<RatingCalibrationRow> stored, Query q) {
+        final var rows = stored.stream()
+                .filter(r -> q.matchTypes().isEmpty() || q.matchTypes().contains(r.getMatchType()))
+                .sorted(Comparator.comparing(RatingCalibrationRow::getMatchDate,
+                        Comparator.nullsLast(Comparator.naturalOrder())).reversed())
                 .toList();
-        final var json = new JsonObject();
-        json.addProperty("rowsStored", rows.size());
-        json.addProperty("rowsExcluded", rows.size() - clean.size());
-        json.addProperty("rowsSnapshotTooOld", clean.size() - used.size());
-        json.addProperty("rowsUsed", used.size());
-        json.addProperty("residual", "real minus predicted, on the 1-20 rating scale; positive means the "
-                + "model is too low. sd is the sample standard deviation, null below two rows.");
-        json.add("overall", stats(used));
-        json.add("byFormation", grouped(used, r -> r.getFormation() == null ? "unknown" : r.getFormation()));
-        json.add("byLocation", grouped(used, r -> r.isHome() ? "home" : "away"));
+        final var used = rows.stream()
+                .filter(r -> q.includeConfounded() || !r.isConfounded())
+                .filter(r -> r.getSnapshotAgeDays() <= q.maxSnapshotAgeDays())
+                .toList();
 
-        final var age = used.stream().mapToDouble(RatingCalibrationRow::getSnapshotAgeDays).summaryStatistics();
-        if (age.getCount() > 0) {
-            final var a = new JsonObject();
-            a.addProperty("mean", age.getAverage());
-            a.addProperty("max", age.getMax());
-            json.add("snapshotAgeDays", a);
+        final var json = new JsonObject();
+        final var sectorOrder = new JsonArray();
+        for (final var s : SECTORS) {
+            sectorOrder.add(key(s));
         }
+        json.add("sectorOrder", sectorOrder);
+        json.add("stats", stats(used));
+        json.addProperty("leftOutConfounded", q.includeConfounded() ? 0
+                : (int) rows.stream().filter(RatingCalibrationRow::isConfounded).count());
+        json.addProperty("leftOutSnapshotTooOld", (int) rows.stream()
+                .filter(r -> q.includeConfounded() || !r.isConfounded())
+                .filter(r -> r.getSnapshotAgeDays() > q.maxSnapshotAgeDays()).count());
 
-        final var excluded = new JsonArray();
-        rows.stream().filter(RatingCalibrationRow::isConfounded).forEach(r -> {
-            final var e = new JsonObject();
-            e.addProperty("matchId", r.getMatchId());
-            e.addProperty("matchType", r.getMatchType());
-            e.addProperty("reason", r.getConfoundedReason());
-            excluded.add(e);
-        });
-        json.add("excluded", excluded);
+        final var page = new JsonArray();
+        rows.stream().skip(q.offset()).limit(q.limit()).forEach(r -> page.add(row(r)));
+        json.addProperty("count", rows.size());
+        json.addProperty("offset", q.offset());
+        json.addProperty("returned", page.size());
+        json.add("rows", page);
         return json;
     }
 
-    private static JsonObject grouped(List<RatingCalibrationRow> rows, Function<RatingCalibrationRow, String> by) {
-        final Map<String, List<RatingCalibrationRow>> groups = rows.stream()
-                .collect(Collectors.groupingBy(by, TreeMap::new, Collectors.toList()));
-        final var json = new JsonObject();
-        groups.forEach((name, group) -> json.add(name, stats(group)));
-        return json;
-    }
-
-    /** Row count, and per sector the mean and spread of the residual. */
+    /**
+     * n, the date range, and per sector the mean and sample sd of real minus predicted, in
+     * sectorOrder; tactic the same for the level, over rows that played a tactic and have both
+     * values. sd is null below two rows, mean below one.
+     */
     static JsonObject stats(List<RatingCalibrationRow> rows) {
         final var json = new JsonObject();
         json.addProperty("n", rows.size());
-        final var sectors = new JsonObject();
+        rows.stream().map(RatingCalibrationRow::getMatchDate).filter(java.util.Objects::nonNull)
+                .min(Comparator.naturalOrder()).ifPresent(d -> json.addProperty("from", day(d)));
+        rows.stream().map(RatingCalibrationRow::getMatchDate).filter(java.util.Objects::nonNull)
+                .max(Comparator.naturalOrder()).ifPresent(d -> json.addProperty("to", day(d)));
+        final var mean = new JsonArray();
+        final var sd = new JsonArray();
         for (int i = 0; i < SECTORS.length; i++) {
             final int s = i;
-            final double mean = rows.stream().mapToDouble(r -> r.getResidual()[s]).average().orElse(Double.NaN);
-            final var one = new JsonObject();
-            if (rows.isEmpty()) {
-                one.add("mean", null);
-            } else {
-                one.addProperty("mean", mean);
-            }
-            if (rows.size() < 2) {
-                one.add("sd", null);
-            } else {
-                final double ss = rows.stream().mapToDouble(r -> Math.pow(r.getResidual()[s] - mean, 2)).sum();
-                one.addProperty("sd", Math.sqrt(ss / (rows.size() - 1)));
-            }
-            sectors.add(key(SECTORS[i]), one);
+            addMeanAndSd(rows, r -> r.getResidual()[s], mean, sd);
         }
-        json.add("sectors", sectors);
+        json.add("mean", mean);
+        json.add("sd", sd);
+
+        final var tacticRows = rows.stream().filter(CalibrationSummary::hasTactic).toList();
+        final var tactic = new JsonObject();
+        tactic.addProperty("n", tacticRows.size());
+        final var tMean = new JsonArray();
+        final var tSd = new JsonArray();
+        addMeanAndSd(tacticRows, CalibrationSummary::tacticResidual, tMean, tSd);
+        tactic.add("mean", tMean.get(0));
+        tactic.add("sd", tSd.get(0));
+        json.add("tactic", tactic);
         return json;
+    }
+
+    private static void addMeanAndSd(List<RatingCalibrationRow> rows, ToDoubleFunction<RatingCalibrationRow> value,
+                                     JsonArray means, JsonArray sds) {
+        if (rows.isEmpty()) {
+            means.add(com.google.gson.JsonNull.INSTANCE);
+            sds.add(com.google.gson.JsonNull.INSTANCE);
+            return;
+        }
+        final double mean = rows.stream().mapToDouble(value).average().orElseThrow();
+        means.add(round2(mean));
+        if (rows.size() < 2) {
+            sds.add(com.google.gson.JsonNull.INSTANCE);
+        } else {
+            final double ss = rows.stream().mapToDouble(r -> Math.pow(value.applyAsDouble(r) - mean, 2)).sum();
+            sds.add(round2(Math.sqrt(ss / (rows.size() - 1))));
+        }
+    }
+
+    /** One row: arrays in sectorOrder; confounded and tactic only where they say something. */
+    static JsonObject row(RatingCalibrationRow r) {
+        final var json = new JsonObject();
+        json.addProperty("matchId", r.getMatchId());
+        json.addProperty("date", r.getMatchDate() == null ? null : day(r.getMatchDate()));
+        json.addProperty("matchType", r.getMatchType());
+        json.addProperty("location", location(r.getLocation()));
+        json.addProperty("ageDays", Math.round(r.getSnapshotAgeDays() * 10) / 10.0);
+        if (r.isConfounded()) {
+            json.addProperty("confounded", r.getConfoundedReason());
+        }
+        final var pred = new JsonArray();
+        final var resid = new JsonArray();
+        for (int i = 0; i < SECTORS.length; i++) {
+            pred.add(round2(r.getPredicted()[i]));
+            resid.add(round2(r.getResidual()[i]));
+        }
+        json.add("pred", pred);
+        json.add("resid", resid);
+        if (hasTactic(r)) {
+            final var tactic = new JsonArray();
+            tactic.add(round2(r.getPredictedTactic() + 1));
+            tactic.add(r.getRealTactic());
+            json.add("tactic", tactic);
+        }
+        return json;
+    }
+
+    /** Both levels stored, and a tactic other than normal was played. */
+    private static boolean hasTactic(RatingCalibrationRow r) {
+        return r.getPredictedTactic() != null && r.getRealTactic() != null && r.getTactic() != 0;
+    }
+
+    /** Real level minus the predicted one; the model's level is its raw tactic rating + 1. */
+    private static double tacticResidual(RatingCalibrationRow r) {
+        return r.getRealTactic() - (r.getPredictedTactic() + 1);
+    }
+
+    /** IMatchDetails' location codes, named: away 0, home 1, derby 2, tournament 3, neutral 4. */
+    static String location(int code) {
+        return switch (code) {
+            case 0 -> "away";
+            case 1 -> "home";
+            case 2 -> "derby";
+            case 3 -> "tournament";
+            case 4 -> "neutral";
+            default -> String.valueOf(code);
+        };
+    }
+
+    private static String day(core.util.HODateTime d) {
+        return d.toHT().substring(0, 10);
+    }
+
+    private static double round2(double v) {
+        return Math.round(v * 100) / 100.0;
     }
 }

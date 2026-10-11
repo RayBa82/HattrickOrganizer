@@ -39,6 +39,10 @@ public class RatingCalibrationRow extends AbstractTable.Storable {
     private double[] residual = new double[RatingSector.values().length];
     private boolean confounded;
     private String confoundedReason;
+    /** The model's raw tactic rating at kick-off (level = rating + 1); null on rows from before 1008. */
+    private Double predictedTactic;
+    /** The tactic level Hattrick reported (tacticSkill); null on rows from before 1008. */
+    private Integer realTactic;
 
     public RatingCalibrationRow() {
     }

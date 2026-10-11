@@ -63,6 +63,14 @@ final class RatingCalibrationTable extends AbstractTable {
                 .setGetter(o -> truncateString(row(o).getConfoundedReason(), 128))
                 .setSetter((o, v) -> row(o).setConfoundedReason((String) v))
                 .setType(Types.VARCHAR).setLength(128).isNullable(true).build());
+        cols.add(ColumnDescriptor.Builder.newInstance().setColumnName("PRED_TACTIC")
+                .setGetter(o -> row(o).getPredictedTactic())
+                .setSetter((o, v) -> row(o).setPredictedTactic((Double) v))
+                .setType(Types.DOUBLE).isNullable(true).build());
+        cols.add(ColumnDescriptor.Builder.newInstance().setColumnName("REAL_TACTIC")
+                .setGetter(o -> row(o).getRealTactic())
+                .setSetter((o, v) -> row(o).setRealTactic((Integer) v))
+                .setType(Types.INTEGER).isNullable(true).build());
         this.columns = cols.toArray(new ColumnDescriptor[0]);
     }
 

@@ -163,7 +163,7 @@ Each table is a subclass of `core.db.AbstractTable` that declares its columns as
 `ColumnDescriptor[]` in `initColumns()`; the base class generates the select/insert/update/delete SQL
 from that, using `idColumns` to know how many leading columns form the key.
 
-**Schema changes require a migration.** `DBManager.DBVersion` (currently `1007`, "HO 10.0") is the
+**Schema changes require a migration.** `DBManager.DBVersion` (currently `1008`, "HO 10.0") is the
 target; `core.db.DBUpdater.updateDB` is a deliberately fall-through `switch` where each `case` is a
 starting version that cascades through every later `updateDBvNNN()` step. Adding a column means:
 change the table's `initColumns()`, bump `DBVersion`, and add the matching case plus `ALTER TABLE`

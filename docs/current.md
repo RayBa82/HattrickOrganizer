@@ -45,32 +45,23 @@ Measured on a copy of the dev DB (29 players, data to late September), default a
 they only pass through the same budget step. Measure with the headless server on a DB copy:
 `java -Djava.awt.headless=true -Dho.dbParentFolder=<copy> -cp HO.jar core.HeadlessMain --port 18765`
 from `build/install/XXX`, then `tools/call` each tool.
-## MCP requests from the hattrick session (2026-10-11)
 
-Six tool requests, all on `lineup-tv-view`, unit-tested (`core.mcp.*` green), pushed with
-`./gradlew dockerPush`; the server picks them up with `docker compose pull && docker compose up -d`.
-Not yet run against live CHPP: the send_match_order read-back can still report differences
-Hattrick normalises away (team orders and penalty takers are untested).
+## Rating calibration back as an MCP tool (2026-10-11)
 
-1. `get_match_order(matchId, matchType)` reads the order Hattrick holds (matchorders view, through
-   `OnlineWorker.lineupFromOrder`, the download's own HRF route) in send_match_order's echo shape.
-   `send_match_order` re-reads after sending: `verified` true/false/`hidden`/`failed`, plus
-   `differences`. Trigger: the 2026-10-11 friendly (771815754) returned ok twice but never showed.
-2. `download_team`: `lineupReplaced` was null whenever no lineup was stored for the next match
-   before the download - exactly when Hattrick's default order (3-4-2) came in. Now true in that
-   case, with the new lineup as `storedLineup`; snapshots carry `matchId`.
-3. `get_player_history sinceLastTraining`: per player, newest snapshot before the last training
-   update against the newest overall; changed players only, `unconfirmed` for missing sides.
-4. `simulate_lineup` takes matchId/weather without positions: scores a copy of the live lineup.
-5. `get_training wholeSquadWeek`: every squad player in `currentWeek.players`, ignoring playerIds.
-6. "All training data per player reachable": `get_player_history includeTraining`
-   adds the stored training weeks (TRAININGS: type, intensity, stamina share, coach/assistant
-   levels) and per player the minutes each week banked, rebuilt from stored lineups like
-   currentWeek; `weeks` defaults to 4 with it to stay inside the budget. includeEvents now
-   covers up to 30 players, events cut to the `weeks` window.
-   Not available anywhere: Hattrick keeps no per-player training-minutes history and no past
-   training settings beyond the last week (training.xml LastTraining*); sub-skills are HO's
-   estimate, never Hattrick data; minutes exist only for current squad players and only for
-   matches whose lineup HO downloaded. Not yet exposed: training.xml SpecialTraining (stamina
-   special training, at most 3 players) - HO does not parse it.
+`get_rating_calibration` (MatchTools, summary in `core.mcp.CalibrationSummary`) is registered
+again, reshaped with the hattrick session, which wants to measure HO's rating bias. The
+RATING_CALIBRATION rows have existed since DB 1005 and are written at every match-details
+download (`RatingCalibration.calibrateAndStore`); only the tool had been retired in the 40-to-30 trim.
+- stats over non-confounded rows with a snapshot at most `maxSnapshotAgeDays` (7) old: n, date
+  range, mean/sd of real minus predicted per sector in `sectorOrder`, and the same for the
+  tactic level. `includeConfounded`, `matchTypes` filter stats and rows.
+- rows: paged (20, max 40), newest first, pred/resid arrays, `tactic` [predicted, real],
+  `confounded` reason only when set. 20 rows 4.6k, 40 rows 8.0k on the dev DB copy.
+- `backfill` rates stored matches without a row; with `recompute` it redoes all of them.
+- DB 1008 adds PRED_TACTIC (the raw tactic rating; level = rating + 1) and REAL_TACTIC
+  (Hattrick's tacticSkill). Rows from before stay null until a `backfill` + `recompute`.
 
+Dev DB copy (36 rated matches; 128 others had no snapshot before kick-off): HO overrates our
+attack (central -0.78, sd 0.6) and underrates the defence (central +0.49); midfield -0.03.
+League is the worst (attack central -1.52, n 3), friendlies nearly neutral. The tactic level
+comes out 1.4 too low in league matches (n 3), matching the 2026-10-10 observation (10 vs 12).
