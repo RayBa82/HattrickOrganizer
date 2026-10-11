@@ -71,11 +71,13 @@ public final class TransferTools {
                         "Search the Hattrick transfer market; age and at least one skill are "
                                 + "mandatory. Hattrick refuses a skill window wider than 3 levels, "
                                 + "and an age range including 17 or 18 may span at most one year. "
-                                + "Narrow rather than page - there is no exact total above 100 "
-                                + "matches. queries[] runs several searches in one call. Capped per "
-                                + "HO session. Every hit is stored and feeds estimate_market_value.",
+                                + "queries[] runs several searches in one call (hits merged). Searches "
+                                + "are capped per HO session; page and sort hits with resultId for "
+                                + "free. Every hit is stored and feeds estimate_market_value.",
                         searchSchema(),
-                        args -> args.has("queries") ? searchBatch(args) : search(queryFrom(args))),
+                        TransferTools::searchTool)
+                        .withBudget("Page the hits with resultId + limit/offset (no new search, "
+                                + "not counted against the cap); pass full only with a small limit."),
                 new McpTool("get_team_transfers",
                         "The managed team's own transfer history, newest first, with price, TSI at "
                                 + "transfer time and the mother-club and previous-club fees. A local "
@@ -1063,8 +1065,20 @@ public final class TransferTools {
         return profile.has("specialty") ? profile.get("specialty").getAsInt() : null;
     }
 
-    /** {@link #search}'s hits (or null), and null unless a search-cap refusal was swallowed. */
+    /** {@link #liveSearchSummary} of the search (or null), and null unless a search-cap refusal was swallowed. */
     private record LiveSearchOutcome(JsonObject hits, String skippedNote) {}
+
+    /**
+     * The live search as a count and a resultId: the hits themselves page through
+     * search_transfers resultId, where up to 100 full hits cannot blow the response budget.
+     */
+    private static JsonObject liveSearchSummary(XMLTransferSearchParser.Page page) {
+        final var json = new JsonObject();
+        json.addProperty("itemCount", page.itemCount());
+        json.addProperty("hitCount", page.hits().size());
+        json.addProperty("resultId", keepResult(page.hits()));
+        return json;
+    }
 
     /**
      * The live comparable search {@code estimateMarketValue} folds in before reading the local
@@ -1081,10 +1095,10 @@ public final class TransferTools {
         }
         final var explicit = args.has("live") && !args.get("live").isJsonNull();
         if (explicit) {
-            return new LiveSearchOutcome(search(query), null);
+            return new LiveSearchOutcome(liveSearchSummary(search(query)), null);
         }
         try {
-            return new LiveSearchOutcome(search(query), null);
+            return new LiveSearchOutcome(liveSearchSummary(search(query)), null);
         } catch (McpToolException e) {
             return new LiveSearchOutcome(null, e.getMessage());
         }
@@ -2128,7 +2142,18 @@ public final class TransferTools {
                 "tsiMax", McpTool.prop("integer", "maximum TSI"),
                 "priceMin", McpTool.prop("integer", "minimum current price (highest bid, else asking price), in the user's currency"),
                 "priceMax", McpTool.prop("integer", "maximum current price (highest bid, else asking price), in the user's currency"),
-                "pageSize", McpTool.prop("integer", "results per page, default and maximum 100"),
+                "pageSize", McpTool.prop("integer", "hits Hattrick returns per search, default and "
+                        + "maximum 100"),
+                "resultId", McpTool.prop("string", "page or re-sort the hits of an earlier call instead "
+                        + "of searching: no CHPP request, not counted against the cap. Last "
+                        + KEPT_RESULTS + " kept"),
+                "limit", McpTool.prop("integer", "hits per answer, default " + HIT_PAGE + " (max "
+                        + HIT_MAX_PAGE + "), with full " + FULL_HIT_PAGE + " (max " + FULL_HIT_MAX_PAGE + ")"),
+                "offset", McpTool.prop("integer", "hits to skip; default 0. count is the total"),
+                "sort", McpTool.prop("string", "deadline, age, tsi, price or salary, ascending; a "
+                        + "leading - for descending. Default Hattrick's order"),
+                "full", McpTool.prop("boolean", "each hit as an object with seller and bidder; default "
+                        + "false: arrays in hitFields order"),
                 "queries", McpTool.prop("array", "several searches in one call, each shaped like "
                         + "the single-search arguments above; replaces them. Returns results[], "
                         + "each echoing its query; a failed one carries its own error"));
@@ -2208,7 +2233,145 @@ public final class TransferTools {
         }
     }
 
-    private static JsonObject search(TransferSearchQuery query) throws McpToolException {
+    /**
+     * search_transfers: a new search (single or queries[]), or with resultId a page of one already
+     * run. Either way the hits are kept under a resultId so the caller can page and sort them
+     * without a new CHPP search - those count against the per-session cap, pages do not.
+     */
+    private static JsonObject searchTool(JsonObject args) throws McpToolException {
+        if (args.has("resultId")) {
+            final var id = McpJson.reqString(args, "resultId");
+            final List<XMLTransferSearchParser.Hit> hits;
+            synchronized (SEARCH_RESULTS) {
+                hits = SEARCH_RESULTS.get(id);
+            }
+            if (hits == null) {
+                throw new McpToolException("No search result " + id + " - only the last "
+                        + KEPT_RESULTS + " are kept, and none survive a restart. Search again.");
+            }
+            final var json = new JsonObject();
+            json.addProperty("currency", McpJson.currency());
+            addHitPage(json, id, hits, args);
+            return json;
+        }
+        final var json = new JsonObject();
+        json.addProperty("currency", McpJson.currency());
+        final var hits = new ArrayList<XMLTransferSearchParser.Hit>();
+        if (args.has("queries")) {
+            json.add("results", searchBatch(McpJson.reqArray(args, "queries"), hits));
+        } else {
+            final var page = search(queryFrom(args));
+            json.addProperty("itemCount", page.itemCount());
+            json.addProperty("pageSize", page.pageSize());
+            hits.addAll(page.hits());
+        }
+        addHitPage(json, keepResult(hits), hits, args);
+        return json;
+    }
+
+    /** Keeps hits pageable under a new resultId; the oldest beyond {@link #KEPT_RESULTS} go. */
+    private static String keepResult(List<XMLTransferSearchParser.Hit> hits) {
+        synchronized (SEARCH_RESULTS) {
+            final var id = "s" + (++searchResultCounter);
+            SEARCH_RESULTS.put(id, List.copyOf(hits));
+            return id;
+        }
+    }
+
+    /** How many search results stay pageable, newest kept. */
+    static final int KEPT_RESULTS = 10;
+    private static final Map<String, List<XMLTransferSearchParser.Hit>> SEARCH_RESULTS =
+            new LinkedHashMap<>() {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, List<XMLTransferSearchParser.Hit>> eldest) {
+                    return size() > KEPT_RESULTS;
+                }
+            };
+    private static int searchResultCounter;
+    /** Compact hits per page: ~130 chars each, so the default stays near 6.5k. */
+    static final int HIT_PAGE = 50;
+    static final int HIT_MAX_PAGE = 70;
+    /** Full hits are ~600 chars each: 15 were already ~9k. */
+    static final int FULL_HIT_PAGE = 10;
+    static final int FULL_HIT_MAX_PAGE = 12;
+    /** The order of a compact hit's values, sent once as hitFields; the details from age on. */
+    static final List<String> HIT_FIELDS = List.of("playerId", "playerName", "nativeCountryId",
+            "askingPrice", "highestBid", "deadline", "age", "ageDays", "salary", "tsi", "specialty",
+            "cards", "injuryLevel", "form", "stamina", "experience", "leadership", "keeper",
+            "defender", "playmaker", "winger", "passing", "scorer", "setPieces");
+
+    /** resultId, count, the sorted page of hits (compact unless full) and its offset. */
+    static void addHitPage(JsonObject json, String resultId, List<XMLTransferSearchParser.Hit> all,
+                           JsonObject args) {
+        final var full = McpJson.optBool(args, "full", false);
+        final var limit = Math.min(Math.max(McpJson.optInt(args, "limit",
+                full ? FULL_HIT_PAGE : HIT_PAGE), 1), full ? FULL_HIT_MAX_PAGE : HIT_MAX_PAGE);
+        final var offset = Math.max(McpJson.optInt(args, "offset", 0), 0);
+        final var sort = McpJson.optString(args, "sort", "");
+        final var sorted = new ArrayList<>(all);
+        if (!sort.isEmpty()) {
+            sorted.sort(hitOrder(sort));
+        }
+        final var hits = new JsonArray();
+        sorted.stream().skip(offset).limit(limit)
+                .forEach(hit -> hits.add(full ? McpJson.hit(hit) : compactHit(hit)));
+        json.addProperty("resultId", resultId);
+        json.addProperty("count", all.size());
+        json.addProperty("offset", offset);
+        json.addProperty("returned", hits.size());
+        if (!full) {
+            final var fields = new JsonArray();
+            HIT_FIELDS.forEach(fields::add);
+            json.add("hitFields", fields);
+        }
+        json.add("hits", hits);
+    }
+
+    /**
+     * The sort argument: deadline, age, tsi, price (highest bid, else asking price) or salary,
+     * ascending, or descending with a leading '-'. Hits without details (deadline passed) go last.
+     */
+    static Comparator<XMLTransferSearchParser.Hit> hitOrder(String sort) {
+        final var descending = sort.startsWith("-");
+        final var key = descending ? sort.substring(1) : sort;
+        final java.util.function.Function<XMLTransferSearchParser.Hit, Long> value = switch (key) {
+            case "deadline" -> h -> h.deadline() == null ? null : h.deadline().getInstant().toEpochMilli();
+            case "age" -> h -> h.details() == null ? null : h.details().age() * 112L + h.details().ageDays();
+            case "tsi" -> h -> h.details() == null ? null : (long) h.details().tsi();
+            case "price" -> h -> h.highestBid() > 0 ? h.highestBid() : h.askingPrice();
+            case "salary" -> h -> h.details() == null ? null : h.details().salary();
+            default -> throw new IllegalArgumentException("sort takes deadline, age, tsi, price or "
+                    + "salary, with a leading - for descending; had " + sort);
+        };
+        final Comparator<Long> direction = descending ? Comparator.reverseOrder() : Comparator.naturalOrder();
+        return Comparator.comparing(value, Comparator.nullsLast(direction));
+    }
+
+    /**
+     * One hit as an array in {@link #HIT_FIELDS} order. The player details come last, so a hit
+     * whose deadline has passed (Hattrick then sends no details) simply ends after deadline.
+     */
+    static JsonArray compactHit(XMLTransferSearchParser.Hit hit) {
+        final var row = new JsonArray();
+        row.add(hit.playerId());
+        row.add(hit.playerName());
+        row.add(hit.nativeCountryId());
+        row.add(McpJson.money(hit.askingPrice()));
+        row.add(McpJson.money(hit.highestBid()));
+        row.add(hit.deadline() == null ? null : hit.deadline().toHT().substring(0, 16));
+        final var d = hit.details();
+        if (d != null) {
+            for (final long v : new long[]{d.age(), d.ageDays(), McpJson.money(d.salary()), d.tsi(),
+                    d.specialty(), d.cards(), d.injuryLevel(), d.form(), d.stamina(), d.experience(),
+                    d.leadership(), d.keeper(), d.defender(), d.playmaker(), d.winger(), d.passing(),
+                    d.scorer(), d.setPieces()}) {
+                row.add(v);
+            }
+        }
+        return row;
+    }
+
+    private static XMLTransferSearchParser.Page search(TransferSearchQuery query) throws McpToolException {
         final XMLTransferSearchParser.Page page;
         try {
             page = TransferSearchService.instance().searchForAgent(query);
@@ -2222,34 +2385,24 @@ public final class TransferTools {
             // so it comes back as an isError tool result instead.
             throw new McpToolException(e.getMessage());
         }
-
         final var observedAt = HODateTime.now();
-        final var hits = new JsonArray();
         for (final var hit : page.hits()) {
             DBManager.instance().storeTransferListing(TransferListing.fromHit(hit, observedAt));
-            hits.add(McpJson.hit(hit));
         }
-
-        final var json = new JsonObject();
-        json.addProperty("currency", McpJson.currency());
-        // -1 means "more than 100", Hattrick's analogy to "many"
-        json.addProperty("itemCount", page.itemCount());
-        json.addProperty("pageSize", page.pageSize());
-        json.add("hits", hits);
-        return json;
+        return page;
     }
 
     /**
      * A sweep of {@link #search} calls in one round trip. Each query is independent: one hitting
      * the per-session cap or an invalid range reports its own {@code error} rather than losing the
      * queries already answered, since discarding those would cost the caller exactly the round
-     * trips this tool exists to save.
+     * trips this tool exists to save. The hits go into {@code hits}, a player found twice once.
      */
-    private static JsonObject searchBatch(JsonObject args) {
-        final var queries = McpJson.reqArray(args, "queries");
+    private static JsonArray searchBatch(JsonArray queries, List<XMLTransferSearchParser.Hit> hits) {
         if (queries.isEmpty()) {
             throw new IllegalArgumentException("queries is empty - pass at least one search.");
         }
+        final var seen = new java.util.HashSet<Integer>();
         final var results = new JsonArray();
         for (final var element : queries) {
             final var item = new JsonObject();
@@ -2259,22 +2412,18 @@ public final class TransferTools {
                     throw new IllegalArgumentException(
                             "Each entry in queries must be an object, got: " + element);
                 }
-                final var result = search(queryFrom(element.getAsJsonObject()));
-                for (final var entry : result.entrySet()) {
-                    if (!entry.getKey().equals("currency")) {
-                        item.add(entry.getKey(), entry.getValue());
-                    }
-                }
+                final var page = search(queryFrom(element.getAsJsonObject()));
+                item.addProperty("itemCount", page.itemCount());
+                item.addProperty("hitCount", page.hits().size());
+                page.hits().stream().filter(h -> seen.add(h.playerId())).forEach(hits::add);
             } catch (IllegalArgumentException | McpToolException e) {
                 item.addProperty("error", e.getMessage());
             }
             results.add(item);
         }
-        final var json = new JsonObject();
-        json.addProperty("currency", McpJson.currency());
-        json.add("results", results);
-        return json;
+        return results;
     }
+
 
     private static JsonObject teamTransfers(JsonObject args) throws McpToolException {
         final var teamId = McpJson.model().getBasics().getTeamId();

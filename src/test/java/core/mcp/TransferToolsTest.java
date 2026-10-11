@@ -1469,4 +1469,52 @@ class TransferToolsTest {
         assertThat(shortNote.get("note").getAsString()).isEqualTo("target");
         assertThat(shortNote.has("noteCut")).isFalse();
     }
+
+    private static core.file.xml.XMLTransferSearchParser.Hit hit(int id, int age, int ageDays, String deadline,
+                                                                  boolean withDetails) {
+        final var details = withDetails ? new core.file.xml.XMLTransferSearchParser.Details(age, ageDays, 0,
+                1000 + id, 5, 3, 4, 2, 0, -1, 6, 1, 7, 2, 5, 4, 3, 6) : null;
+        return new core.file.xml.XMLTransferSearchParser.Hit(id, "P" + id, 5, 0,
+                HODateTime.fromHT(deadline), 0, null, 9, "Seller", 3, details);
+    }
+
+    @Test
+    void compactHit_followsHitFieldsAndEndsAtDeadlineWithoutDetails() {
+        final var row = TransferTools.compactHit(hit(7, 17, 40, "2026-10-12 20:15:00", true));
+
+        assertThat(row).hasSize(TransferTools.HIT_FIELDS.size());
+        assertThat(row.get(TransferTools.HIT_FIELDS.indexOf("deadline")).getAsString()).isEqualTo("2026-10-12 20:15");
+        assertThat(row.get(TransferTools.HIT_FIELDS.indexOf("ageDays")).getAsInt()).isEqualTo(40);
+        assertThat(row.get(TransferTools.HIT_FIELDS.indexOf("playmaker")).getAsInt()).isEqualTo(7);
+        assertThat(row.get(TransferTools.HIT_FIELDS.indexOf("setPieces")).getAsInt()).isEqualTo(6);
+
+        assertThat(TransferTools.compactHit(hit(8, 0, 0, "2026-10-12 20:15:00", false)))
+                .hasSize(TransferTools.HIT_FIELDS.indexOf("deadline") + 1);
+    }
+
+    @Test
+    void addHitPage_sortsAndPagesTheKeptHits() {
+        final var hits = List.of(hit(1, 18, 10, "2026-10-12 10:00:00", true),
+                hit(2, 17, 90, "2026-10-12 09:00:00", true),
+                hit(3, 17, 5, "2026-10-12 11:00:00", true),
+                hit(4, 0, 0, "2026-10-12 08:00:00", false));
+        final var json = new JsonObject();
+
+        TransferTools.addHitPage(json, "s1", hits,
+                JsonParser.parseString("{\"sort\":\"age\",\"limit\":2,\"offset\":1}").getAsJsonObject());
+
+        assertThat(json.get("count").getAsInt()).isEqualTo(4);
+        assertThat(json.get("returned").getAsInt()).isEqualTo(2);
+        // Youngest first: 3 (17y5d), 2 (17y90d), 1 (18y10d), 4 without details last; page from 1.
+        assertThat(StreamSupport.stream(json.getAsJsonArray("hits").spliterator(), false)
+                .map(h -> h.getAsJsonArray().get(0).getAsInt())).containsExactly(2, 1);
+
+        final var byDeadline = new JsonObject();
+        TransferTools.addHitPage(byDeadline, "s1", hits,
+                JsonParser.parseString("{\"sort\":\"-deadline\",\"limit\":1}").getAsJsonObject());
+        assertThat(byDeadline.getAsJsonArray("hits").get(0).getAsJsonArray().get(0).getAsInt()).isEqualTo(3);
+
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> TransferTools.hitOrder("name"));
+    }
 }

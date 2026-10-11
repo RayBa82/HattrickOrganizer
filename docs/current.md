@@ -32,6 +32,13 @@ Defaults reshaped with the hattrick session (field names kept):
 - `get_series`: `matches` holds our fixtures; `allTeams` the whole series (fits only with
   `include: ["matches"]`, 9.9k).
 - `list_scout`: page 20, compact notes cut at 80 chars (`noteCut`).
+- `search_transfers`: hits as arrays in `hitFields` (~115 chars; 50 a page, max 70), `full`
+  for the old objects (10, max 12). Every answer keeps its hits under a `resultId` (last 10,
+  in memory): `resultId` + `limit`/`offset`/`sort` pages without a CHPP search, so not
+  against the cap. queries[] merges the hits (a player once), results[] keeps per-query
+  itemCount/hitCount/error. estimate_market_value's `liveSearch` is now that summary plus a
+  resultId instead of up to 100 full hits. Before, over-budget searches came back as the bare
+  envelope - the hattrick screening script read Claude Code's saved oversize-result file.
 
 Nothing is lost, only paged (checked on the DB copy): `get_squad` pages with `limit`/`offset`
 (limit 8 carries every include part, 15 the core with skills); `get_player_history` pages back in
