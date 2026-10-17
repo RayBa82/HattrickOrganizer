@@ -49,11 +49,12 @@ public final class LineupTools {
     public static List<McpTool> tools() {
         return List.of(
                 new McpTool("get_lineup",
-                        "The lineup currently set in HO, with its sector ratings and formation, "
+                        "The lineup currently set in HO, with sector ratings, formation, "
                                 + "penalty takers (with strength) and team orders. Ratings average "
                                 + "90 minutes with every team order firing at its minute; standing "
                                 + "and red-card conditions are not modelled. "
                                 + "assumptions.weather is the weather they were scored under. "
+                                + "unavailablePlayers: injured/suspended in it. "
                                 + "simulate_lineup scores a hypothetical one instead.",
                         McpTool.schema(new JsonObject()),
                         args -> currentLineup()),
@@ -87,9 +88,9 @@ public final class LineupTools {
                         "Send THE LINEUP CURRENTLY SET IN HO to Hattrick as the match order. This "
                                 + "leaves the machine and OVERWRITES the order Hattrick holds for "
                                 + "that match. Check it with get_lineup first. "
-                                + "League matches are matchType 1; take other ids "
-                                + "from get_matches. Returns the order as sent, re-read from "
-                                + "Hattrick: verified false lists the differences. Without "
+                                + "matchType: 1 league, others from get_matches. Returns the order as sent, re-read from "
+                                + "Hattrick: verified false lists the differences; "
+                                + "unavailablePlayers warns. Without "
                                 + "Supporter: status supporterRequired, nothing sent.",
                         matchOrderSchema(),
                         LineupTools::sendMatchOrder),
@@ -126,6 +127,7 @@ public final class LineupTools {
             final var orderString = lineup.toJson();
             wrapper.addProperty("order", orderString);
             wrapper.add("echo", LineupOrders.echo(orderString, benchRoleIds(lineup)));
+            wrapper.add("unavailablePlayers", unavailablePlayers(lineup, model));
             return wrapper;
         });
         final var orderString = sentOrder.get("order").getAsString();
@@ -133,6 +135,11 @@ public final class LineupTools {
 
         final var out = new JsonObject();
         out.addProperty("matchId", matchId);
+        final var unavailable = sentOrder.getAsJsonArray("unavailablePlayers");
+        if (!unavailable.isEmpty()) {
+            // Sent anyway: Hattrick takes the order, and the caller may mean it (a sub on the bench).
+            out.add("unavailablePlayers", unavailable);
+        }
         final var mismatch = matchMismatch(lineupMatchId.get(), matchId);
         if (mismatch != null) {
             out.addProperty("warning", mismatch);
@@ -411,6 +418,30 @@ public final class LineupTools {
      * {@code allowUnavailable}. Both simulate_lineup and apply_lineup route through here, so the
      * check sits here rather than in either tool.
      */
+    private static String unavailableReason(core.model.player.Player player) {
+        return player.isRedCarded() ? "suspended" : "injured for " + player.getInjuryWeeks() + " more week(s)";
+    }
+
+    /**
+     * Injured or suspended players in {@code lineup}: playerId, name, roleId, reason. get_lineup
+     * and send_match_order warn with it rather than refuse - the order may be meant that way.
+     */
+    static com.google.gson.JsonArray unavailablePlayers(Lineup lineup, core.model.HOModel model) {
+        final var out = new com.google.gson.JsonArray();
+        for (final var position : lineup.getAllPositions()) {
+            final var player = position.getPlayerId() > 0 ? model.getCurrentPlayer(position.getPlayerId()) : null;
+            if (player != null && !McpJson.isAvailable(player)) {
+                final var row = new JsonObject();
+                row.addProperty("playerId", player.getPlayerId());
+                row.addProperty("name", player.getFullName());
+                row.addProperty("roleId", position.getRoleId());
+                row.addProperty("reason", unavailableReason(player));
+                out.add(row);
+            }
+        }
+        return out;
+    }
+
     private static void rejectUnavailable(JsonObject spec) throws McpToolException {
         if (McpJson.optBool(spec, "allowUnavailable", false)) {
             return;
@@ -426,9 +457,7 @@ public final class LineupTools {
             final var playerId = McpJson.reqInt(element.getAsJsonObject(), "playerId");
             final var player = playerId > 0 ? model.getCurrentPlayer(playerId) : null;
             if (player != null && !McpJson.isAvailable(player)) {
-                complaints.add(player.getFullName() + " (" + playerId + ") is "
-                        + (player.isRedCarded() ? "suspended" : "injured for "
-                        + player.getInjuryWeeks() + " more week(s)"));
+                complaints.add(player.getFullName() + " (" + playerId + ") is " + unavailableReason(player));
             }
         }
         if (!complaints.isEmpty()) {
@@ -525,6 +554,10 @@ public final class LineupTools {
             final var team = model.getCurrentLineupTeam();
             final var json = describe(team.getLineup(), ratingModel);
             addLineupMatch(json, team, next);
+            final var unavailable = unavailablePlayers(team.getLineup(), model);
+            if (!unavailable.isEmpty()) {
+                json.add("unavailablePlayers", unavailable);
+            }
             return json;
         });
     }

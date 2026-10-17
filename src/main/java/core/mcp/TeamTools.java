@@ -62,13 +62,13 @@ public final class TeamTools {
                         McpTool.schema(new JsonObject()),
                         args -> team()),
                 new McpTool("get_squad",
-                        "Squad rows: skills (sub-level), character, specialty as arrays/numbers "
-                                + "per skillOrder, characterOrder, specialtyNames; loyalty, "
-                                + "motherclub/transferListed (if true), penaltyStrength, form, stamina, "
+                        "Squad rows: skills (sub-level), character, specialty by "
+                                + "skillOrder/characterOrder/specialtyNames; loyalty, "
+                                + "motherclub/transferListed if true, penaltyStrength, form, stamina, "
                                 + "group, tsi, wage, injuryWeeks, cards, available (false, no injury = "
-                                + "suspended). positionRatings (slots 100-113): only = whole-squad "
-                                + "matrix; include = in rows (unasked for up to " + FULL_SQUAD_RECORDS
-                                + " playerIds).",
+                                + "suspended), injuredInLastMatch while injuryWeeks lags. "
+                                + "positionRatings (slots 100-113): only = squad matrix; include = in "
+                                + "rows (auto for up to " + FULL_SQUAD_RECORDS + " playerIds).",
                         McpTool.schema(McpTool.properties(
                                 "playerIds", McpTool.prop("array",
                                         "only these players; the whole squad if omitted. An id not "
@@ -335,10 +335,24 @@ public final class TeamTools {
             throw new IllegalArgumentException("only takes positionRatings; had " + only);
         }
         final var ratingsOnly = !only.isEmpty();
+        final var injuredLastMatch = MatchTools.injuredInLastMatch(model.getBasics().getTeamId());
         final var players = new JsonArray();
         for (final var player : selected.stream().skip(offset).limit(limit).toList()) {
             final var row = McpJson.player(player, ratingModel);
-            players.add(ratingsOnly ? ratingsRow(row) : compactSquadRow(row, include));
+            if (ratingsOnly) {
+                players.add(ratingsRow(row));
+                continue;
+            }
+            final var compact = compactSquadRow(row, include);
+            final var injury = injuredLastMatch.get(player.getPlayerId());
+            if (injury != null && player.getInjuryWeeks() <= 0) {
+                // Hattrick has not caught up yet: the match says injured, injuryWeeks still 0.
+                final var flag = new JsonObject();
+                flag.addProperty("matchId", injury[0]);
+                flag.addProperty("minute", injury[1]);
+                compact.add("injuredInLastMatch", flag);
+            }
+            players.add(compact);
         }
         final var json = new JsonObject();
         if (ratingsOnly) {

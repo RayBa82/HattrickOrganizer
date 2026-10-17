@@ -160,7 +160,7 @@ public class PlayerTransfer extends AbstractTable.Storable {
      * <p>
      * Best effort - never lets a lookup or write failure break the transfer download itself.
      */
-    private static void recordLocalSaleObservation(PlayerTransfer transfer) {
+    static void recordLocalSaleObservation(PlayerTransfer transfer) {
         try {
             var p = DBManager.instance().loadLatestPlayerInfo(transfer.getPlayerId());
             if (p == null) {

@@ -80,15 +80,19 @@ public final class TransferTools {
                                 + "not counted against the cap); pass full only with a small limit."),
                 new McpTool("get_team_transfers",
                         "The managed team's own transfer history, newest first, with price, TSI at "
-                                + "transfer time and the mother-club and previous-club fees. A local "
-                                + "read - HO refreshes it on every team download. Returns one page "
-                                + "(default 20); page back with offset.",
+                                + "transfer time, the mother-club and previous-club fees, and specialty "
+                                + "+ skills from HO's own snapshot of the player around the transfer. "
+                                + "A local read - HO refreshes it, and records our sales into the "
+                                + "market corpus, on every team download. One page (default 20); "
+                                + "page back with offset.",
                         McpTool.schema(McpTool.properties(
                                 "season", McpTool.prop("integer", "Hattrick season number; omit for the full history"),
                                 "direction", McpTool.prop("string", "buy, sell, or omit for both"),
                                 "limit", McpTool.prop("integer", "how many transfers to return, newest first; default 20, max 100"),
                                 "offset", McpTool.prop("integer", "how many of the newest transfers to skip, for paging; default 0"))),
-                        TransferTools::teamTransfers),
+                        TransferTools::teamTransfers)
+                        .withBudget("Page with a smaller limit and offset, or narrow by season / direction.",
+                                McpTool.OptionalSection.perItem("transfers", "skills", "skills", "specialty")),
                 new McpTool("get_player_transfer_history",
                         "Every Hattrick transfer of any player, ours or not, newest first: date, "
                                 + "price, TSI at the time, seller and buyer. One CHPP request per call. "
@@ -129,19 +133,20 @@ public final class TransferTools {
                         TransferTools::openBids),
                 new McpTool("manage_scout",
                         "Edit HO's OWN local shortlist (Transfers -> TransferScout tab), not a "
-                                + "Hattrick bookmark. action=add: each player must have been seen "
-                                + "by an earlier search_transfers; re-adding replaces the entry; one "
-                                + "CHPP call per player for character, echoed back in list_scout's "
-                                + "shape. action=remove: also stops the re-listing watch each entry "
-                                + "costs on every team download. list_scout reads it.",
+                                + "Hattrick bookmark. add: each player must have been seen by an "
+                                + "earlier search_transfers; re-adding replaces the entry; one CHPP "
+                                + "call each for character, echoed in list_scout's shape. remove: "
+                                + "also stops each entry's re-listing watch on team downloads. "
+                                + "refresh: current ask/bid/deadline, a CHPP read each (default: "
+                                + "open entries).",
                         McpTool.schema(McpTool.properties(
-                                        "action", McpTool.prop("string", "add or remove"),
+                                        "action", McpTool.prop("string", "add, remove or refresh"),
                                         "players", McpTool.prop("array",
                                                 "bare player ids, or for add {playerId, note} "
                                                         + "objects; the note is free text kept in "
                                                         + "the entry's notes column, e.g. why he "
-                                                        + "is a target")),
-                                "action", "players"),
+                                                        + "is a target; optional for refresh")),
+                                "action"),
                         TransferTools::manageScout),
                 new McpTool("list_scout",
                         "Read back HO's local scout shortlist, filtered, one page (count = the "
@@ -1492,8 +1497,73 @@ public final class TransferTools {
         return switch (McpJson.reqString(args, "action")) {
             case "add" -> addToScout(args);
             case "remove" -> removeFromScout(args);
-            default -> throw new IllegalArgumentException("action must be add or remove.");
+            case "refresh" -> refreshScout(args);
+            default -> throw new IllegalArgumentException("action must be add, remove or refresh.");
         };
+    }
+
+    /**
+     * Re-read the current ask, bid and deadline of scout entries - the named players, or every
+     * entry not sold whose deadline is still ahead - with one {@code playerdetails} call each,
+     * no transfer search. Each listed response is also stored as a corpus observation.
+     */
+    private static JsonObject refreshScout(JsonObject args) throws McpToolException {
+        final var wanted = new java.util.LinkedHashSet<Integer>();
+        if (args.has("players") && args.get("players").isJsonArray()) {
+            args.getAsJsonArray("players").forEach(e -> wanted.add(e.isJsonObject()
+                    ? e.getAsJsonObject().get("playerId").getAsInt() : e.getAsInt()));
+        }
+        final var now = new java.sql.Timestamp(System.currentTimeMillis());
+        // onEdt hands back JSON only, so the ids travel as an array.
+        final var picked = LineupTools.onEdt(() -> {
+            final var json = new JsonObject();
+            final var array = new JsonArray();
+            ScoutList.entries().stream()
+                    .filter(e -> wanted.isEmpty() ? !e.isSold() && e.getDeadline() != null && e.getDeadline().after(now)
+                            : wanted.contains(e.getPlayerID()))
+                    .forEach(e -> array.add(e.getPlayerID()));
+            json.add("ids", array);
+            return json;
+        });
+        final var ids = new ArrayList<Integer>();
+        picked.getAsJsonArray("ids").forEach(e -> ids.add(e.getAsInt()));
+
+        // Off the EDT: one CHPP read per player.
+        final var listed = new LinkedHashMap<Integer, core.file.xml.XMLPlayersParser.MarketPlayer>();
+        final var notListed = new JsonArray();
+        for (final var id : ids) {
+            final var m = OnlineWorker.downloadMarketPlayer(String.valueOf(id));
+            if (m != null && m.transferListed() && m.deadline() != null) {
+                listed.put(id, m);
+                DBManager.instance().storeTransferListing(TransferListing.fromPlayerDetails(m, HODateTime.now()));
+            } else {
+                notListed.add(id);
+            }
+        }
+
+        return LineupTools.onEdt(() -> {
+            listed.forEach((id, m) -> ScoutList.recordRelisting(id, m.askingPrice(), m.highestBid(), m.deadline()));
+            final var refreshed = new JsonArray();
+            ScoutList.entries().stream()
+                    .filter(e -> listed.containsKey(e.getPlayerID()))
+                    .forEach(e -> refreshed.add(McpJson.scoutEntry(e)));
+            final var out = new JsonObject();
+            out.addProperty("status", "ok");
+            out.addProperty("refreshedCount", refreshed.size());
+            out.add("refreshed", refreshed);
+            if (!notListed.isEmpty()) {
+                // Sold, withdrawn, or the read failed (HO's log says which); the entry is unchanged.
+                out.add("notListed", notListed);
+            }
+            if (!wanted.isEmpty()) {
+                final var notOnList = new JsonArray();
+                wanted.stream().filter(id -> !ids.contains(id)).forEach(notOnList::add);
+                if (!notOnList.isEmpty()) {
+                    out.add("notOnList", notOnList);
+                }
+            }
+            return out;
+        });
     }
 
     private static JsonObject addToScout(JsonObject args) throws McpToolException {
@@ -2547,6 +2617,16 @@ public final class TransferTools {
             json.addProperty("counterpartyTeamName", isBuy ? t.getSellerName() : t.getBuyerName());
             json.addProperty("motherClubFee", McpJson.money(t.getMotherClubFee()));
             json.addProperty("previousClubCommission", McpJson.money(t.getPreviousClubFee()));
+            // HO's own snapshot of him: the last download before a sale, the first after a buy.
+            final var snapshot = t.getDate() == null ? null
+                    : DBManager.instance().getSpielerAtDate(t.getPlayerId(), t.getDate().toDbTimestamp());
+            if (snapshot != null) {
+                json.addProperty("specialty", snapshot.getSpecialty());
+                final var skills = new JsonObject();
+                playerSkillLevels(snapshot).forEach(skills::addProperty);
+                skills.addProperty("setPieces", snapshot.getValue4Skill(core.constants.player.PlayerSkill.SETPIECES));
+                json.add("skills", skills);
+            }
             transfers.add(json);
         }
 

@@ -852,12 +852,13 @@ class TransferToolsTest {
     }
 
     @Test
-    void manageScout_requiresActionAndPlayersAndRejectsAnEmptyRemove() {
+    void manageScout_requiresActionAndRejectsAnEmptyRemove() {
         final var tool = tool("manage_scout");
 
+        // players is optional since refresh defaults to the open entries; add/remove still demand it.
         assertThat(tool.inputSchema().getAsJsonArray("required"))
                 .extracting(com.google.gson.JsonElement::getAsString)
-                .containsExactly("action", "players");
+                .containsExactly("action");
 
         final var handler = tool.handler();
         final var empty = JsonParser.parseString("{\"action\":\"remove\",\"players\":[]}")
@@ -870,7 +871,7 @@ class TransferToolsTest {
                 .getAsJsonObject();
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> handler.call(unknown))
-                .withMessageContaining("add or remove");
+                .withMessageContaining("add, remove or refresh");
     }
 
     @Test

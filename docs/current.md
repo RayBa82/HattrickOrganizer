@@ -65,8 +65,19 @@ At the hattrick session's request, with the user's decisions.
   skill: count, sold, weighted median price). The download holds every comparable, untrimmed with
   weightBreakdown and `inSample`, grouped the same way. "Pro Skill" was the user's wording, and
   "A and B skill" is their answer.
-- Open: injury replacements without a substitution order (event 424) may lack `cameOn`. Check
-  on match 768523845. Neither tool has been measured on a DB copy yet.
+- Checked live on match 768523845: wentOff/injured 65 and cameOn 65 are right. `startRoleId` was
+  added. The skillGroups median is now the estimate's own method over the group's in-sample rows.
+- Follow-ups from the hattrick session, all four requested by the user:
+  get_lineup / send_match_order list `unavailablePlayers` (warning only, nothing refused).
+  get_squad rows carry `injuredInLastMatch` {matchId, minute} while injuryWeeks is still 0, from
+  the newest played match if it is at most a week old. Own sales reach the corpus on every
+  download: `updateTeamTransfersIncremental`, the path download_team takes, never called
+  `recordLocalSaleObservation`, which is why sales were entered by hand. Sales from before this
+  fix are not backfilled. get_team_transfers rows add specialty + skills from HO's snapshot
+  around the transfer, declared optional for the budget. `manage_scout action: refresh` re-reads
+  ask/bid/deadline with one playerdetails call each (default: open entries) and stores each
+  response as a corpus row.
+- Not measured on a DB copy yet.
   lineup, so no column), `confounded` reason only when set. `attitude` filters stats and rows.
   20 rows 5.5k, 40 rows were 9.7k on the dev DB copy.
 - `backfill` rates stored matches without a row; with `recompute` it redoes all of them.

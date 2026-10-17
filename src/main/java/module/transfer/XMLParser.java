@@ -295,6 +295,13 @@ public final class XMLParser {
         for (var player : updateTeamTransfers(fresh)) {
             updatePlayerTransfers(player.getPlayerId());
         }
+        // The same corpus seeding downloadMissingTransfers does for a sale it stores; without it a
+        // sale that came in on this path, the one every download takes, never reached the corpus.
+        for (var transfer : fresh) {
+            if (transfer.getSellerid() == teamId) {
+                PlayerTransfer.recordLocalSaleObservation(transfer);
+            }
+        }
         return fresh.size();
     }
 

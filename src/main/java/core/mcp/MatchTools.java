@@ -556,6 +556,33 @@ public final class MatchTools {
         return details != null && details.getMatchID() == matchId ? details : null;
     }
 
+    /**
+     * Our players injured in our newest played match, playerId -> {matchId, minute}: get_squad
+     * shows it while Hattrick's injuryWeeks still reads 0 after the match. Empty when that match is
+     * more than a week old or HO has no details for it.
+     * ponytail: the week cut-off stands in for "Hattrick has caught up"; a one-week injury healed
+     * before the next match can still show for those days.
+     */
+    static Map<Integer, int[]> injuredInLastMatch(int teamId) {
+        final var last = DBManager.instance().getOwnPlayedMatchInfo(1, false);
+        if (last.isEmpty() || last.get(0).getMatchSchedule() == null
+                || java.time.Duration.between(last.get(0).getMatchSchedule().getInstant(),
+                        java.time.Instant.now()).toDays() > 7) {
+            return Map.of();
+        }
+        final var info = last.get(0);
+        final var details = storedDetails(info.getMatchType(), info.getMatchID());
+        final var out = new HashMap<Integer, int[]>();
+        if (details != null && details.getHighlights() != null) {
+            for (final var e : details.getHighlights()) {
+                if (e.getTeamID() == teamId && e.isInjured()) {
+                    out.putIfAbsent(e.getPlayerId(), new int[]{info.getMatchID(), e.getMinute()});
+                }
+            }
+        }
+        return out;
+    }
+
     /** The stored row of the match {@code args} names by matchId (+ optional matchType). */
     private static MatchKurzInfo storedMatch(JsonObject args) throws McpToolException {
         final var matchId = McpJson.reqInt(args, "matchId");
