@@ -688,31 +688,33 @@ class TransferToolsTest {
         assertThat(breakdown.character()).isEqualTo(1.0);
     }
 
-    /**
-     * Reported against the profile feature: three basis: resolved_sales calls each came back with
-     * a 40-row comparables array where every row had sold: false - the resolved sales backing
-     * sampleSize were real, just crowded out of the array by unrelated live re-searches with a
-     * fresher observedAt. evidenceOrder is the fix: the sample surfaces within the row cap
-     * regardless of how the rest of the corpus was re-observed since, and the untouched rows keep
-     * their relative (newest-first) order around it.
-     */
     @Test
-    void evidenceOrder_surfacesTheSampleAheadOfRowsThatWerentUsed() {
-        final var used = new TransferListing();
-        used.setPlayerId(1);
-        final var unused1 = new TransferListing();
-        unused1.setPlayerId(2);
-        final var unused2 = new TransferListing();
-        unused2.setPlayerId(3);
+    void skillPair_isTheBestAndSecondBestSkillTiesByName() {
+        final var levels = new java.util.LinkedHashMap<String, Integer>();
+        levels.put("keeper", 1);
+        levels.put("playmaking", 6);
+        levels.put("passing", 6);
+        levels.put("scoring", 3);
+        assertThat(TransferTools.skillPair(levels)).isEqualTo("passing/playmaking");
+        levels.put("playmaking", 7);
+        assertThat(TransferTools.skillPair(levels)).isEqualTo("playmaking/passing");
+    }
 
-        // Newest-first, as estimateMarketValue hands it in - the two unused rows sort ahead of
-        // the one actually backing the estimate.
-        final var comparables = List.of(unused1, unused2, used);
-        final var sample = List.of(new TransferTools.PricedComparable(used, 500_000L, 1.0));
+    @Test
+    void skillGroupSummary_countsSalesAndTakesTheWeightedMedian() {
+        final var sold = new TransferListing();
+        sold.setSalePrice(400_000L);
+        final var rows = List.of(
+                new TransferTools.EvidenceRow(sold, new JsonObject(), 400_000L, 0.2),
+                new TransferTools.EvidenceRow(new TransferListing(), new JsonObject(), 900_000L, 1.0));
 
-        final var ordered = TransferTools.evidenceOrder(comparables, sample);
+        final var json = TransferTools.skillGroupSummary("playmaking/passing", rows);
 
-        assertThat(ordered).containsExactly(used, unused1, unused2);
+        assertThat(json.get("aSkill").getAsString()).isEqualTo("playmaking");
+        assertThat(json.get("bSkill").getAsString()).isEqualTo("passing");
+        assertThat(json.get("count").getAsInt()).isEqualTo(2);
+        assertThat(json.get("sold").getAsInt()).isEqualTo(1);
+        assertThat(json.get("weightedMedianPrice").getAsLong()).isEqualTo(McpJson.money(900_000L));
     }
 
     @Test

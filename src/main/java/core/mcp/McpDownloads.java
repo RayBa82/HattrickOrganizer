@@ -1,5 +1,7 @@
 package core.mcp;
 
+import com.google.gson.JsonObject;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -32,6 +34,16 @@ final class McpDownloads {
         final var id = UUID.randomUUID().toString();
         FILES.put(id, json);
         return PREFIX + id;
+    }
+
+    /** Keeps {@code file} for download and names it in {@code answer}: download, downloadChars, downloadNote. */
+    static void attach(JsonObject answer, JsonObject file) {
+        final var text = McpHttpServer.GSON.toJson(file);
+        answer.addProperty("download", put(text));
+        answer.addProperty("downloadChars", text.length());
+        answer.addProperty("downloadNote", "HTTP GET this path on the MCP endpoint's host and port "
+                + "(e.g. curl http://localhost:8765/mcp/download/...); the newest " + KEPT
+                + " downloads are kept in memory");
     }
 
     /** The file behind a request path, or null when it is unknown or gone. */

@@ -276,7 +276,9 @@ public class MatchEvent extends AbstractTable.Storable {
     }
 
     public boolean isInjured() {
-        return m_eInjuryType == Matchdetails.eInjuryType.INJURY;
+        // XMLMatchdetailsParser never typed 95 and 97 as injuries, and stored events keep that type
+        return m_eInjuryType == Matchdetails.eInjuryType.INJURY
+                || m_iMatchEventID == 95 || m_iMatchEventID == 97;
     }
 
     public boolean isBooked() {

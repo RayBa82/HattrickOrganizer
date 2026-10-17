@@ -10,6 +10,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -97,6 +98,20 @@ class MatchToolsTest {
         assertThat(se.get("outcome").getAsString()).isEqualTo("goal");
         assertThat(se.get("specialEvent").getAsBoolean()).isTrue();
         assertThat(events.get(2).getAsJsonObject().get("outcome").getAsString()).isEqualTo("miss");
+    }
+
+    @Test
+    void matchEventsJson_eventTypesKeepsOnlyThoseRowsButCountsAll() {
+        // 101 goal, 95 injured after foul and exits (stored without an injury type), 352 sub, 510 yellow
+        final var json = MatchTools.matchEventsJson(1, 2,
+                List.of(event(12, 101, 1), event(40, 95, 1), event(41, 352, 1), event(60, 510, 2)),
+                Set.of("injury", "substitution"));
+
+        assertThat(json.getAsJsonObject("home").get("goals").getAsInt()).isEqualTo(1);
+        final var events = json.getAsJsonArray("events");
+        assertThat(events).hasSize(2);
+        assertThat(events.get(0).getAsJsonObject().get("eventId").getAsInt()).isEqualTo(95);
+        assertThat(events.get(1).getAsJsonObject().get("eventId").getAsInt()).isEqualTo(352);
     }
 
     @Test

@@ -244,7 +244,9 @@ works if no single call floods its context.
   endpoint (`/mcp/download/<id>`, same Origin/Host guards, newest 20 in memory). Nothing ever
   passes the budget, and nothing relies on the client saving big answers to a file.
   `search_transfers` has it (the hattrick screening script). Add it only where a script needs
-  it, never speculatively.
+  it, never speculatively. `estimate_market_value` (comparables by A/B skill) and `get_match`
+  (event rows) always answer that way, by the user's call: their full lists are what gets
+  reasoned over, and no default size kept them under budget.
 - **New or changed tools** declare their budget and are measured against a real database (the
   headless server on a copy of the dev DB, default arguments) before they ship. `McpBudgetTest`
   covers the mechanism: dropped sections, the envelope, nothing partial leaking through.

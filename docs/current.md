@@ -49,26 +49,24 @@ Nothing is lost, only paged (checked on the DB copy): `get_squad` pages with `li
 (limit 8 carries every include part, 15 the core with skills); `get_player_history` pages back in
 time with `weeks` + `weeksAgo`, one player's snapshots a week at a time (up to 28 a week there,
 7.6k - a week with more than ~35 downloads would still drop them); `get_training` takes
-`playerIds` for long predictions. Whatever a call drops is named in `droppedForBudget`.
+## get_match minutes, estimate_market_value as a download (2026-10-18)
 
-Measured on a copy of the dev DB (29 players, data to late September), default arguments:
-`get_squad` 8.1k, `get_player_history` 8.5k, `list_scout` 6.8k, `get_training` 5.7k,
-`get_series` 4.2k; all other local tools 0.4-6.3k. The CHPP-backed tools were not measured;
-they only pass through the same budget step. Measure with the headless server on a DB copy:
-`java -Djava.awt.headless=true -Dho.dbParentFolder=<copy> -cp HO.jar core.HeadlessMain --port 18765`
-from `build/install/XXX`, then `tools/call` each tool.
-
-## Rating calibration back as an MCP tool (2026-10-11)
-
-`get_rating_calibration` (MatchTools, summary in `core.mcp.CalibrationSummary`) is registered
-again, reshaped with the hattrick session, which wants to measure HO's rating bias. The
-RATING_CALIBRATION rows have existed since DB 1005 and are written at every match-details
-download (`RatingCalibration.calibrateAndStore`); only the tool had been retired in the 40-to-30 trim.
-- stats over non-confounded rows with a snapshot at most `maxSnapshotAgeDays` (7) old: n, date
-  range, mean/sd of real minus predicted per sector in `sectorOrder`, and the same for the
-  tactic level. `includeConfounded`, `matchTypes` filter stats and rows.
-- rows: paged (20, max 30), newest first, pred/resid arrays, `tactic` [predicted, real],
-  `attitude`, `behaviours` (a char per slot 100-113, read per page row from the stored match
+At the hattrick session's request, with the user's decisions.
+- `get_match` ourPlayers: `startMinute` (always 0) is gone. Rows now carry `started` and `minutesPlayed`
+  (`MatchLineupTeam.getTrainMinutesPlayedInPositions`), plus `cameOn`/`wentOff` from the stored
+  substitution orders and `injured`/`bruised`/`yellowCards`/`redCard` from the events, each only
+  when it happened. `includeEvents` keeps the per-team counts inline. Every event row (filtered by
+  `eventTypes`) goes into a download, always, by the user's call.
+- `MatchEvent.isInjured` counts events 95 and 97. The parser never typed them as injuries, so
+  training minutes ran to the final whistle for those players. The fix also applies to events
+  already stored.
+- `estimate_market_value`: the 40-row `comparables` array is gone (a 17y PM6/PS6 profile was
+  24k). The answer has `skillGroups`, one line per A/B skill pair (best/second-best positional
+  skill: count, sold, weighted median price). The download holds every comparable, untrimmed with
+  weightBreakdown and `inSample`, grouped the same way. "Pro Skill" was the user's wording, and
+  "A and B skill" is their answer.
+- Open: injury replacements without a substitution order (event 424) may lack `cameOn`. Check
+  on match 768523845. Neither tool has been measured on a DB copy yet.
   lineup, so no column), `confounded` reason only when set. `attitude` filters stats and rows.
   20 rows 5.5k, 40 rows were 9.7k on the dev DB copy.
 - `backfill` rates stored matches without a row; with `recompute` it redoes all of them.

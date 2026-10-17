@@ -173,13 +173,12 @@ public final class TransferTools {
                         .withBudget("Page with a smaller limit and offset, filter with skills, "
                                 + "ageMin/ageMax, specialty or onlyOpen; pass full only with a small limit."),
                 new McpTool("estimate_market_value",
-                        "Value one of your players, or via profile a player outside the squad, "
-                                + "against stored transfer listings. Returns the matching listings; "
-                                + "reason over those, not the median in `estimate`. Below 3 sales, "
-                                + "see resolvedSales + listingsEstimate. Also searches today's "
-                                + "market first and stores the hits - one of the session's capped "
-                                + "searches; pass live: false to read the stored corpus only, for "
-                                + "free.",
+                        "Value a squad player, or via profile any player, against stored "
+                                + "listings: the estimate, a summary per A/B skill group, and every "
+                                + "comparable as a download - reason over those, not the median. "
+                                + "Below 3 sales, see resolvedSales + listingsEstimate. Searches "
+                                + "today's market first and stores the hits (one of the session's "
+                                + "capped searches); live: false reads the stored corpus only, free.",
                         McpTool.schema(McpTool.properties(
                                         "playerId", McpTool.prop("integer",
                                                 "the player to value - a squad player id"),
@@ -411,9 +410,6 @@ public final class TransferTools {
      * the listings figure stands apart - see {@link #basis}.
      */
     private static final int MIN_RESOLVED_SAMPLE = 3;
-
-    /** How many comparable rows come back as evidence. Enough to reason over, small enough to read. */
-    private static final int MAX_COMPARABLES = 40;
 
     /** A Hattrick season year is 112 days (ageDays runs 0-111) - see docs/current.md @ f5c51d0d. Used to turn
      * age + ageDays into one continuous day count, so a 23y111 and a 24y0 comparable are recognised
@@ -682,22 +678,37 @@ public final class TransferTools {
     /** One comparable's contribution: its (possibly fallback-adjusted) price and its weight. */
     record PricedComparable(TransferListing listing, long price, double weight) {}
 
+    /** One comparable as the download lists it, with what its skill group's summary needs. */
+    record EvidenceRow(TransferListing listing, JsonObject json, long price, double weight) {}
+
     /**
-     * {@code comparables}, with the rows {@code sample} was actually computed from surfacing
-     * first - a stable sort, so each of the two groups keeps {@code comparables}' own newest-
-     * first order. Without this, a caller who trusts {@code basis}/{@code sampleSize} could find
-     * none of the resolved sales they describe within the {@link #MAX_COMPARABLES}-row window: a
-     * sale's observedAt freezes once it resolves, so live re-searches of asks that were never
-     * part of the sample keep pushing their own observedAt ahead of it.
+     * A listing's A and B skill - its best and second best positional skill, ties by name the way
+     * {@link #topSkillsOnly} orders them - as {@code "playmaking/passing"}.
      */
-    static List<TransferListing> evidenceOrder(List<TransferListing> comparables,
-                                                List<PricedComparable> sample) {
-        final var sampleListings = sample.stream()
-                .map(PricedComparable::listing)
-                .collect(Collectors.toSet());
-        return comparables.stream()
-                .sorted(Comparator.comparing(l -> !sampleListings.contains(l)))
+    static String skillPair(Map<String, Integer> levels) {
+        final var top = levels.entrySet().stream()
+                .filter(e -> e.getValue() != null)
+                .sorted(Map.Entry.<String, Integer>comparingByValue().reversed()
+                        .thenComparing(Map.Entry.comparingByKey()))
+                .limit(2)
+                .map(Map.Entry::getKey)
                 .toList();
+        return (top.isEmpty() ? "unknown" : top.get(0)) + "/" + (top.size() < 2 ? "unknown" : top.get(1));
+    }
+
+    /** aSkill, bSkill, count, sold and the weighted median adjustedPrice of one skill group. */
+    static JsonObject skillGroupSummary(String pair, List<EvidenceRow> rows) {
+        final var skills = pair.split("/");
+        final var json = new JsonObject();
+        json.addProperty("aSkill", skills[0]);
+        json.addProperty("bSkill", skills[1]);
+        json.addProperty("count", rows.size());
+        json.addProperty("sold", rows.stream().filter(r -> r.listing().getSalePrice() != null).count());
+        json.addProperty("weightedMedianPrice", McpJson.money(weightedMedian(rows.stream()
+                .sorted(Comparator.comparingLong(EvidenceRow::price))
+                .map(r -> new double[]{r.price(), r.weight()})
+                .toList())));
+        return json;
     }
 
 
@@ -952,42 +963,60 @@ public final class TransferTools {
         // wage, TSI, form, the other skills and how long ago each was seen, all of which change
         // what a player is worth. Reason over these rows instead of trusting the number.
         //
-        // weight is the same combined similarity weight the estimate was computed with, so a row
-        // that barely counted is visible as such rather than looking like equal evidence.
-        // weightBreakdown says *why*: which of age/skill/character similarity - each 0-1, 1 meaning
-        // no gap at all - pulled it down, rather than leaving that to be inferred from the raw
-        // numbers next to the target player's own.
-        // adjustedPrice is what this row would contribute to the estimate: the sale price unchanged,
-        // or an ask/bid nudged by fallbackClimb for time still left on the clock - so the climb
-        // documented in estimateNote/note can be checked per row instead of only taken on faith.
-        // The sample the estimate above was actually computed from surfaces first, so a caller
-        // who trusts basis/sampleSize sees those rows within the cap - see evidenceOrder's doc.
-        final var evidence = new JsonArray();
-        evidenceOrder(comparables, sample).stream()
-                .limit(MAX_COMPARABLES)
-                .forEach(l -> {
-                    final var row = topSkillsOnly(McpJson.listing(l), listingSkillLevels(l));
-                    final var breakdown = comparableWeightBreakdown(
-                            l, playerAgeDays, ageSigma, playerCSkill, playerChar, targetSpecialty, positionGroup);
-                    row.addProperty("weight", round2(breakdown.combined()));
-                    final var weightBreakdown = new JsonObject();
-                    weightBreakdown.addProperty("age", round2(breakdown.age()));
-                    weightBreakdown.addProperty("skill", round2(breakdown.skill()));
-                    weightBreakdown.addProperty("character", round2(breakdown.character()));
-                    weightBreakdown.addProperty("specialty", round2(breakdown.specialty()));
-                    row.add("weightBreakdown", weightBreakdown);
-                    final var rawPrice = l.getSalePrice() != null ? l.getSalePrice()
-                            : Math.max(l.getAskingPrice(), l.getHighestBid());
-                    final var adjustedPrice = l.getSalePrice() != null ? rawPrice
-                            : Math.round(rawPrice * fallbackClimb(l));
-                    row.addProperty("adjustedPrice", McpJson.money(adjustedPrice));
-                    evidence.add(row);
+        // Every comparable goes into a download, never into the answer, whatever its size: grouped
+        // by A skill (best positional skill) and B skill (second best), so a playmaking-led and a
+        // passing-led player read apart. The answer keeps one summary line per group.
+        // weight is the combined similarity weight the estimate was computed with; weightBreakdown
+        // says which of age/skill/character/specialty - each 0-1, 1 meaning no gap - pulled it down.
+        // adjustedPrice is what the row contributes: the sale price unchanged, or an ask/bid nudged
+        // by fallbackClimb for time still left on the clock. inSample: the estimate used this row.
+        final var sampleListings = sample.stream().map(PricedComparable::listing).collect(Collectors.toSet());
+        final var groups = new LinkedHashMap<String, List<EvidenceRow>>();
+        for (final var l : comparables) {
+            final var breakdown = comparableWeightBreakdown(
+                    l, playerAgeDays, ageSigma, playerCSkill, playerChar, targetSpecialty, positionGroup);
+            final var row = McpJson.listing(l);
+            row.addProperty("weight", round2(breakdown.combined()));
+            final var weightBreakdown = new JsonObject();
+            weightBreakdown.addProperty("age", round2(breakdown.age()));
+            weightBreakdown.addProperty("skill", round2(breakdown.skill()));
+            weightBreakdown.addProperty("character", round2(breakdown.character()));
+            weightBreakdown.addProperty("specialty", round2(breakdown.specialty()));
+            row.add("weightBreakdown", weightBreakdown);
+            final var rawPrice = l.getSalePrice() != null ? l.getSalePrice()
+                    : Math.max(l.getAskingPrice(), l.getHighestBid());
+            final var adjustedPrice = l.getSalePrice() != null ? rawPrice
+                    : Math.round(rawPrice * fallbackClimb(l));
+            row.addProperty("adjustedPrice", McpJson.money(adjustedPrice));
+            row.addProperty("inSample", sampleListings.contains(l));
+            groups.computeIfAbsent(skillPair(listingSkillLevels(l)), k -> new ArrayList<>())
+                    .add(new EvidenceRow(l, row, adjustedPrice, breakdown.combined()));
+        }
+        final var summary = new JsonArray();
+        final var fileGroups = new JsonArray();
+        groups.entrySet().stream()
+                .sorted(Comparator.comparingDouble(e -> -e.getValue().stream().mapToDouble(EvidenceRow::weight).sum()))
+                .forEach(e -> {
+                    final var head = skillGroupSummary(e.getKey(), e.getValue());
+                    summary.add(head);
+                    final var group = head.deepCopy();
+                    final var rows = new JsonArray();
+                    e.getValue().stream()
+                            .sorted(Comparator.comparingDouble(EvidenceRow::weight).reversed())
+                            .forEach(r -> rows.add(r.json()));
+                    group.add("comparables", rows);
+                    fileGroups.add(group);
                 });
-        json.add("comparables", evidence);
-        json.addProperty("comparablesReturned", evidence.size());
+        json.add("skillGroups", summary);
         json.addProperty("comparablesMatched", comparables.size());
         // How many rows those distinct players were collapsed from, so the gap is visible.
         json.addProperty("observationsMatched", observations.size());
+        final var file = new JsonObject();
+        file.addProperty("currency", McpJson.currency());
+        file.add("player", json.get("player").deepCopy());
+        file.addProperty("positionGroup", positionGroup);
+        file.add("skillGroups", fileGroups);
+        McpDownloads.attach(json, file);
 
         if (!useSales) {
             // Resolved sales are the truth: below MIN_RESOLVED_SAMPLE they are neither blended with
@@ -1036,12 +1065,11 @@ public final class TransferTools {
                 + "weighted by closeness in age (day precision), third-best skill, character "
                 + "and specialty where known (a different specialty is down-weighted, not "
                 + "excluded - see specialtyFilter/positionGroup), and clamped against a wild outlier - as a starting anchor only. It "
-                + "still ignores wage, TSI, form, set pieces and how stale each observation is. The comparables "
-                + "array carries those plus each row's own weight (weightBreakdown says which of "
-                + "age/skill/character/specialty pulled it down) and adjustedPrice (what it actually "
-                + "contributed, after the time-left climb where that applies) - check the "
-                + "number instead of trusting it. Each row lists its three best positional skills "
-                + "plus set pieces; the positional skills below the top three are not returned.");
+                + "still ignores wage, TSI, form, set pieces and how stale each observation is. The "
+                + "download carries those per comparable, grouped by A/B skill, plus each row's own "
+                + "weight (weightBreakdown says which of age/skill/character/specialty pulled it "
+                + "down) and adjustedPrice (what it actually contributed, after the time-left climb "
+                + "where that applies) - check the number instead of trusting it.");
         final var spNote = setPiecesNote(targetSetPieces(hasProfile, profile, player),
                 comparables.stream().map(TransferListing::getSetPieces).toList());
         if (spNote != null) {
@@ -2366,7 +2394,6 @@ public final class TransferTools {
         file.addProperty("count", all.size());
         file.add("hitFields", fields);
         file.add("hits", hits);
-        final var text = McpHttpServer.GSON.toJson(file);
 
         json.addProperty("resultId", resultId);
         json.addProperty("count", all.size());
@@ -2376,11 +2403,7 @@ public final class TransferTools {
             preview.add(hits.get(i));
         }
         json.add("preview", preview);
-        json.addProperty("download", McpDownloads.put(text));
-        json.addProperty("downloadChars", text.length());
-        json.addProperty("downloadNote", "HTTP GET this path on the MCP endpoint's host and port "
-                + "(e.g. curl http://localhost:8765/mcp/download/...); the newest " + McpDownloads.KEPT
-                + " downloads are kept in memory");
+        McpDownloads.attach(json, file);
     }
 
     static final int BULK_PREVIEW = 3;

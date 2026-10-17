@@ -14,11 +14,14 @@ import core.net.Connector;
 import core.net.OnlineWorker;
 import core.model.match.MatchEvent;
 import core.model.match.MatchKurzInfo;
+import core.model.match.MatchLineupTeam;
 import core.model.match.Matchdetails;
+import core.model.player.MatchRoleID;
 import core.prediction.engine.MatchPredictionManager;
 import core.rating.RatingPredictionModel.RatingSector;
 import core.util.HODateTime;
 import module.lineup.Lineup;
+import module.lineup.substitution.model.MatchOrderType;
 
 import org.w3c.dom.Element;
 
@@ -26,8 +29,10 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Played matches, and the Monte Carlo simulator on top of them.
@@ -71,8 +76,9 @@ public final class MatchTools {
                         MatchTools::matches),
                 new McpTool("get_match",
                         "One played match in full: both sides' sector ratings, HatStats, tactic, "
-                                + "formation, attendance, and our own players' match ratings; "
-                                + "includeEvents adds the event list. Read the top level status: "
+                                + "formation, attendance, and our own players' match ratings, "
+                                + "minutes, subs, injuries and cards; includeEvents adds per-team event "
+                                + "counts and the event list as a download. Read the top level status: "
                                 + "'ok', or 'no_match_details' when HO has the result but never "
                                 + "downloaded the details.",
                         McpTool.schema(McpTool.properties(
@@ -83,9 +89,13 @@ public final class MatchTools {
                                                         + "ambiguous across source systems"),
                                         "includeEvents", McpTool.prop("boolean",
                                                 "add events: per team goals, chances and special "
-                                                        + "events, then every event (minute, name, "
+                                                        + "events, plus a download of every event (minute, name, "
                                                         + "team, player, objectPlayerId, goal/miss, "
-                                                        + "specialEvent); default false")),
+                                                        + "specialEvent); default false"),
+                                        "eventTypes", McpTool.prop("array",
+                                                "with includeEvents, only events of these types: any of "
+                                                        + String.join(", ", EVENT_TYPES)
+                                                        + "; default all")),
                                 "matchId"),
                         MatchTools::match),
                 new McpTool("get_match_weather",
@@ -518,11 +528,18 @@ public final class MatchTools {
         json.addProperty("arena", details.getArenaName());
         json.add("home", side(details, true));
         json.add("away", side(details, false));
-        json.add("ourPlayers", playerRatings(matchId, info.getMatchType(), teamId));
+        final var events = details.getHighlights() == null ? List.<MatchEvent>of() : details.getHighlights();
+        json.add("ourPlayers", playerRatings(matchId, info.getMatchType(), teamId, details, events));
         if (McpJson.optBool(args, "includeEvents", false)) {
-            final var events = details.getHighlights();
-            json.add("events", matchEventsJson(info.getHomeTeamID(), info.getGuestTeamID(),
-                    events == null ? List.of() : events));
+            // Per-team counts in the answer, every event row in a download - always, whatever the size.
+            final var all = matchEventsJson(info.getHomeTeamID(), info.getGuestTeamID(), events, eventTypes(args));
+            final var rows = all.remove("events").getAsJsonArray();
+            all.addProperty("count", rows.size());
+            final var file = new JsonObject();
+            file.addProperty("matchId", matchId);
+            file.add("events", rows);
+            McpDownloads.attach(all, file);
+            json.add("events", all);
         }
         return json;
     }
@@ -589,15 +606,46 @@ public final class MatchTools {
      * Event ids 100-199 are goals and 200-299 missed chances (Hattrick's own ranges).
      */
     static JsonObject matchEventsJson(int homeTeamId, int awayTeamId, List<MatchEvent> events) {
+        return matchEventsJson(homeTeamId, awayTeamId, events, null);
+    }
+
+    /** {@code types}: only rows of these {@link #EVENT_TYPES}, null for all; the counts stay whole. */
+    static JsonObject matchEventsJson(int homeTeamId, int awayTeamId, List<MatchEvent> events, Set<String> types) {
         final var json = new JsonObject();
         json.add("home", eventCounts(homeTeamId, events));
         json.add("away", eventCounts(awayTeamId, events));
         final var rows = new JsonArray();
         for (final var e : events) {
-            rows.add(eventRow(e, e.getTeamID() == homeTeamId || e.getTeamID() == awayTeamId));
+            if (types == null || isEventType(e, types)) {
+                rows.add(eventRow(e, e.getTeamID() == homeTeamId || e.getTeamID() == awayTeamId));
+            }
         }
         json.add("events", rows);
         return json;
+    }
+
+    static final List<String> EVENT_TYPES = List.of("goal", "chance", "card", "injury", "substitution", "special");
+
+    private static Set<String> eventTypes(JsonObject args) {
+        if (!args.has("eventTypes") || !args.get("eventTypes").isJsonArray()) {
+            return null;
+        }
+        final var types = new HashSet<String>();
+        args.getAsJsonArray("eventTypes").forEach(e -> types.add(e.getAsString()));
+        if (!Set.copyOf(EVENT_TYPES).containsAll(types)) {
+            throw new IllegalArgumentException("eventTypes takes " + String.join(", ", EVENT_TYPES)
+                    + "; had " + types);
+        }
+        return types;
+    }
+
+    private static boolean isEventType(MatchEvent e, Set<String> types) {
+        return types.contains("goal") && e.isGoalEvent()
+                || types.contains("chance") && e.isNonGoalEvent()
+                || types.contains("card") && e.isBooked()
+                || types.contains("injury") && e.isBruisedOrInjured()
+                || types.contains("substitution") && e.isSubstitution()
+                || types.contains("special") && e.getMatchEventID() != null && e.isSE();
     }
 
     /**
@@ -828,8 +876,18 @@ public final class MatchTools {
         return (raw - 1) / 4.0 + 1;
     }
 
-    /** Our own players' match ratings, which is what makes predicted versus actual checkable. */
-    private static JsonArray playerRatings(int matchId, MatchType matchType, int teamId) {
+    /**
+     * Our own players' match ratings, which is what makes predicted versus actual checkable, and
+     * who played how long: cameOn / wentOff from the executed substitution orders, injuries and
+     * cards from the events. Those fields are left out when they did not happen.
+     */
+    private static JsonArray playerRatings(int matchId, MatchType matchType, int teamId,
+                                           Matchdetails details, List<MatchEvent> events) {
+        final var lineupTeam = DBManager.instance().loadMatchLineupTeam(matchType.getId(), matchId, teamId);
+        if (lineupTeam != null) {
+            // its minutes read the events; hand it the stored ones instead of a download
+            lineupTeam.setMatchDetails(details);
+        }
         final var players = new JsonArray();
         for (final var position : DBManager.instance().getMatchLineupPlayers(matchId, matchType, teamId)) {
             if (position.getPlayerId() <= 0) {
@@ -842,10 +900,39 @@ public final class MatchTools {
             json.addProperty("behaviour", position.getBehaviour());
             json.addProperty("rating", position.getRating());
             json.addProperty("ratingEndOfMatch", position.getRatingStarsEndOfMatch());
-            json.addProperty("startMinute", position.getStartMinute());
+            json.addProperty("started", MatchRoleID.isFieldMatchRoleId(position.getStartPosition()));
+            if (lineupTeam != null) {
+                addSubstitutions(json, lineupTeam, position.getPlayerId());
+            }
+            addIncidents(json, events, teamId, position.getPlayerId());
             players.add(json);
         }
         return players;
+    }
+
+    private static void addSubstitutions(JsonObject json, MatchLineupTeam lineupTeam, int playerId) {
+        json.addProperty("minutesPlayed", lineupTeam.getTrainMinutesPlayedInPositions(playerId, null, false));
+        for (final var s : lineupTeam.getSubstitutions()) {
+            if (s.getOrderType() == MatchOrderType.SUBSTITUTION) {
+                if (s.getObjectPlayerID() == playerId) json.addProperty("cameOn", s.getMatchMinuteCriteria());
+                if (s.getSubjectPlayerID() == playerId) json.addProperty("wentOff", s.getMatchMinuteCriteria());
+            }
+        }
+    }
+
+    private static void addIncidents(JsonObject json, List<MatchEvent> events, int teamId, int playerId) {
+        int yellowCards = 0;
+        for (final var e : events) {
+            if (e.getTeamID() != teamId || e.getPlayerId() != playerId) continue;
+            if (e.isInjured()) {
+                json.addProperty("injured", e.getMinute());
+            } else if (e.isBruised()) {
+                json.addProperty("bruised", e.getMinute());
+            }
+            if (e.isYellowCard()) yellowCards++;
+            if (e.isRedCard()) json.addProperty("redCard", e.getMinute());
+        }
+        if (yellowCards > 0) json.addProperty("yellowCards", yellowCards);
     }
 
     /**
