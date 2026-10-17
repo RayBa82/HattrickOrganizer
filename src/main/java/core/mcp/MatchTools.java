@@ -900,7 +900,13 @@ public final class MatchTools {
             json.addProperty("behaviour", position.getBehaviour());
             json.addProperty("rating", position.getRating());
             json.addProperty("ratingEndOfMatch", position.getRatingStarsEndOfMatch());
-            json.addProperty("started", MatchRoleID.isFieldMatchRoleId(position.getStartPosition()));
+            // roleId is the slot at the final whistle (19-21 replaced, 33-35 red carded, 17/18 set
+            // pieces/captain rows of their own); startRoleId the slot he kicked off in
+            final var started = MatchRoleID.isFieldMatchRoleId(position.getStartPosition());
+            json.addProperty("started", started);
+            if (started) {
+                json.addProperty("startRoleId", position.getStartPosition());
+            }
             if (lineupTeam != null) {
                 addSubstitutions(json, lineupTeam, position.getPlayerId());
             }

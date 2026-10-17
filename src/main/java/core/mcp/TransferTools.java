@@ -678,8 +678,8 @@ public final class TransferTools {
     /** One comparable's contribution: its (possibly fallback-adjusted) price and its weight. */
     record PricedComparable(TransferListing listing, long price, double weight) {}
 
-    /** One comparable as the download lists it, with what its skill group's summary needs. */
-    record EvidenceRow(TransferListing listing, JsonObject json, long price, double weight) {}
+    /** One comparable as the download lists it; {@code sampled} is its entry in the estimate's sample, or null. */
+    record EvidenceRow(TransferListing listing, JsonObject json, double weight, PricedComparable sampled) {}
 
     /**
      * A listing's A and B skill - its best and second best positional skill, ties by name the way
@@ -696,7 +696,12 @@ public final class TransferTools {
         return (top.isEmpty() ? "unknown" : top.get(0)) + "/" + (top.size() < 2 ? "unknown" : top.get(1));
     }
 
-    /** aSkill, bSkill, count, sold and the weighted median adjustedPrice of one skill group. */
+    /**
+     * aSkill, bSkill, count, sold, inSample and weightedMedianPrice of one skill group. The median
+     * is the estimate's own, restricted to the group: only its rows in the estimate's sample (sales
+     * when there are enough, else the climb-adjusted asks), same weights, same outlier clamp - see
+     * {@link #clampedWeightedMedian}. Null when none of the group's rows are in the sample.
+     */
     static JsonObject skillGroupSummary(String pair, List<EvidenceRow> rows) {
         final var skills = pair.split("/");
         final var json = new JsonObject();
@@ -704,10 +709,13 @@ public final class TransferTools {
         json.addProperty("bSkill", skills[1]);
         json.addProperty("count", rows.size());
         json.addProperty("sold", rows.stream().filter(r -> r.listing().getSalePrice() != null).count());
-        json.addProperty("weightedMedianPrice", McpJson.money(weightedMedian(rows.stream()
-                .sorted(Comparator.comparingLong(EvidenceRow::price))
-                .map(r -> new double[]{r.price(), r.weight()})
-                .toList())));
+        final var sampled = rows.stream()
+                .map(EvidenceRow::sampled)
+                .filter(java.util.Objects::nonNull)
+                .sorted(Comparator.comparingLong(PricedComparable::price))
+                .toList();
+        json.addProperty("inSample", sampled.size());
+        json.addProperty("weightedMedianPrice", sampled.isEmpty() ? null : McpJson.money(clampedWeightedMedian(sampled)));
         return json;
     }
 
@@ -970,7 +978,8 @@ public final class TransferTools {
         // says which of age/skill/character/specialty - each 0-1, 1 meaning no gap - pulled it down.
         // adjustedPrice is what the row contributes: the sale price unchanged, or an ask/bid nudged
         // by fallbackClimb for time still left on the clock. inSample: the estimate used this row.
-        final var sampleListings = sample.stream().map(PricedComparable::listing).collect(Collectors.toSet());
+        final var sampleByListing = sample.stream()
+                .collect(Collectors.toMap(PricedComparable::listing, pc -> pc, (a, b) -> a));
         final var groups = new LinkedHashMap<String, List<EvidenceRow>>();
         for (final var l : comparables) {
             final var breakdown = comparableWeightBreakdown(
@@ -988,9 +997,9 @@ public final class TransferTools {
             final var adjustedPrice = l.getSalePrice() != null ? rawPrice
                     : Math.round(rawPrice * fallbackClimb(l));
             row.addProperty("adjustedPrice", McpJson.money(adjustedPrice));
-            row.addProperty("inSample", sampleListings.contains(l));
+            row.addProperty("inSample", sampleByListing.containsKey(l));
             groups.computeIfAbsent(skillPair(listingSkillLevels(l)), k -> new ArrayList<>())
-                    .add(new EvidenceRow(l, row, adjustedPrice, breakdown.combined()));
+                    .add(new EvidenceRow(l, row, breakdown.combined(), sampleByListing.get(l)));
         }
         final var summary = new JsonArray();
         final var fileGroups = new JsonArray();

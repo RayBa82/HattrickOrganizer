@@ -701,12 +701,13 @@ class TransferToolsTest {
     }
 
     @Test
-    void skillGroupSummary_countsSalesAndTakesTheWeightedMedian() {
+    void skillGroupSummary_takesTheEstimatesMedianOverTheGroupsSampledRowsOnly() {
         final var sold = new TransferListing();
         sold.setSalePrice(400_000L);
         final var rows = List.of(
-                new TransferTools.EvidenceRow(sold, new JsonObject(), 400_000L, 0.2),
-                new TransferTools.EvidenceRow(new TransferListing(), new JsonObject(), 900_000L, 1.0));
+                new TransferTools.EvidenceRow(sold, new JsonObject(), 0.2,
+                        new TransferTools.PricedComparable(sold, 400_000L, 0.2)),
+                new TransferTools.EvidenceRow(new TransferListing(), new JsonObject(), 1.0, null));
 
         final var json = TransferTools.skillGroupSummary("playmaking/passing", rows);
 
@@ -714,7 +715,9 @@ class TransferToolsTest {
         assertThat(json.get("bSkill").getAsString()).isEqualTo("passing");
         assertThat(json.get("count").getAsInt()).isEqualTo(2);
         assertThat(json.get("sold").getAsInt()).isEqualTo(1);
-        assertThat(json.get("weightedMedianPrice").getAsLong()).isEqualTo(McpJson.money(900_000L));
+        // only the sampled row counts: the unsold ask outweighs it but is not in the estimate's sample
+        assertThat(json.get("inSample").getAsInt()).isEqualTo(1);
+        assertThat(json.get("weightedMedianPrice").getAsLong()).isEqualTo(McpJson.money(400_000L));
     }
 
     @Test
