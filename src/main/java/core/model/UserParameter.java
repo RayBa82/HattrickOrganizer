@@ -113,8 +113,8 @@ public final class UserParameter extends Configuration {
     //------MCP server (see docs/superpowers/specs/2026-08-30-mcp-server-design.md)---
     public boolean mcpServerEnabled = false;
     public int mcpServerPort = 8765;
-    /** How many transfer searches one HO session may issue in total. */
-    public int mcpSearchesPerSession = 20;
+    /** How many transfer searches HO may issue per rolling hour (TransferSearchService.WINDOW). */
+    public int mcpSearchesPerSession = 50;
     /** How many CHPP writes (training, match order, challenges, bids) one HO session may issue in total. */
     public int mcpChppWritesPerSession = 20;
     /**
@@ -478,6 +478,7 @@ public final class UserParameter extends Configuration {
         map.put("mcpServerEnabled", String.valueOf(mcpServerEnabled));
         map.put("mcpServerPort", String.valueOf(mcpServerPort));
         map.put("mcpSearchesPerSession", String.valueOf(mcpSearchesPerSession));
+        map.put("mcpSearchCapRaised", "true");
         map.put("mcpChppWritesPerSession", String.valueOf(mcpChppWritesPerSession));
         map.put("mcpDownloadsPerSession", String.valueOf(mcpDownloadsPerSession));
         map.put("mcpScoutResolvedThrough",
@@ -732,7 +733,12 @@ public final class UserParameter extends Configuration {
         // Configuration.getIntValue returns 0 for a key an older database does not have yet,
         // so 0 means "not configured" and the default applies.
         mcpServerPort = orDefault(getIntValue(values, "mcpServerPort"), 8765);
-        mcpSearchesPerSession = orDefault(getIntValue(values, "mcpSearchesPerSession"), 20);
+        mcpSearchesPerSession = orDefault(getIntValue(values, "mcpSearchesPerSession"), 50);
+        // The default went from 20 to 50. A database still on the old default (every save writes
+        // it) moves up once; a 20 set after that stays.
+        if (mcpSearchesPerSession == 20 && !getBooleanValue(values, "mcpSearchCapRaised")) {
+            mcpSearchesPerSession = 50;
+        }
         mcpChppWritesPerSession = orDefault(getIntValue(values, "mcpChppWritesPerSession"), 20);
         mcpDownloadsPerSession = orDefault(getIntValue(values, "mcpDownloadsPerSession"), 5);
         mcpScoutResolvedThrough = getStringValue(values, "mcpScoutResolvedThrough");

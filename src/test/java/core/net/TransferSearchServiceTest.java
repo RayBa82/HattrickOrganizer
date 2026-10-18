@@ -55,6 +55,12 @@ class TransferSearchServiceTest {
     /** A service that answers from a canned file instead of calling Hattrick. */
     static class StubService extends TransferSearchService {
         String lastQueryString;
+        java.time.Instant clock = java.time.Instant.parse("2026-10-18T12:00:00Z");
+
+        @Override
+        protected java.time.Instant now() {
+            return clock;
+        }
 
         @Override
         protected String fetch(TransferSearchQuery query, boolean silent) {
@@ -113,5 +119,27 @@ class TransferSearchServiceTest {
         assertThatExceptionOfType(TransferSearchService.SearchFailed.class)
                 .isThrownBy(() -> service.searchForAgent(validQuery().build()))
                 .withMessageContaining("20");
+    }
+
+    @Test
+    void searchForAgent_capFreesUpAWindowAfterTheOldestSearch() throws Exception {
+        final var service = new StubService();
+        core.model.UserParameter.instance().mcpSearchesPerSession = 2;
+        final var start = service.clock;
+
+        service.searchForAgent(validQuery().build());
+        service.clock = start.plusSeconds(600);
+        service.searchForAgent(validQuery().build());
+
+        service.clock = start.plus(TransferSearchService.WINDOW).minusSeconds(1);
+        assertThatExceptionOfType(TransferSearchService.SearchFailed.class)
+                .isThrownBy(() -> service.searchForAgent(validQuery().build()))
+                .withMessageContaining("frees up in 0 minutes");
+
+        service.clock = start.plus(TransferSearchService.WINDOW);
+        assertThat(service.searchForAgent(validQuery().build()).hits()).hasSize(1);
+        // the second search is still inside its window
+        assertThatExceptionOfType(TransferSearchService.SearchFailed.class)
+                .isThrownBy(() -> service.searchForAgent(validQuery().build()));
     }
 }

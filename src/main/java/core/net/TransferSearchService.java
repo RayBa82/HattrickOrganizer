@@ -5,6 +5,11 @@ import core.model.TranslationFacility;
 import core.model.UserParameter;
 import core.util.HOLogger;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayDeque;
+import java.util.Deque;
+
 /**
  * Headless transfer market search.
  * <p>
@@ -12,8 +17,9 @@ import core.util.HOLogger;
  * any Swing call: {@code setWaitInformation} and the error dialog stay in OnlineWorker, so this can
  * be called from a plain worker thread.
  * <p>
- * Searches are capped per HO session ({@link core.model.UserParameter#mcpSearchesPerSession}) so
- * that no caller can scan the market in bulk.
+ * Searches are capped per rolling hour ({@link core.model.UserParameter#mcpSearchesPerSession})
+ * so that no caller can scan the market in bulk. A window rather than a per-process count, since
+ * the headless server runs for weeks and a process count would never come back.
  */
 public class TransferSearchService {
 
@@ -50,13 +56,15 @@ public class TransferSearchService {
     TransferSearchService() {
     }
 
-    /** Searches issued in this HO session, by either caller. Bounds total CHPP traffic. */
-    private int searchesThisSession;
+    static final Duration WINDOW = Duration.ofHours(1);
+
+    /** When the searches of the last {@link #WINDOW} went out, by either caller, oldest first. */
+    private final Deque<Instant> recentSearches = new ArrayDeque<>();
 
     /**
      * Search the transfer market on behalf of an MCP client.
      * <p>
-     * Refused only when the per-session cap has no room left. The message says why, so the model
+     * Refused only when the cap has no room left in the current window. The message says why, so the model
      * can act on it rather than retrying.
      */
     public XMLTransferSearchParser.Page searchForAgent(TransferSearchQuery query) throws SearchFailed {
@@ -86,12 +94,19 @@ public class TransferSearchService {
         }
         synchronized (this) {
             final var cap = UserParameter.instance().mcpSearchesPerSession;
-            if (searchesThisSession >= cap) {
-                throw new SearchFailed(null, "The transfer search cap of " + cap + " searches per HO "
-                        + "session is used up. Raise it in HO's options under MCP server, or restart "
-                        + "HO, before searching again.");
+            final var now = now();
+            while (!recentSearches.isEmpty() && !recentSearches.peekFirst().plus(WINDOW).isAfter(now)) {
+                recentSearches.removeFirst();
             }
-            searchesThisSession++;
+            if (recentSearches.size() >= cap) {
+                // empty only with a cap of 0, which never frees up; the message then says "now"
+                final var free = recentSearches.isEmpty() ? now : recentSearches.peekFirst().plus(WINDOW);
+                throw new SearchFailed(null, "The transfer search cap of " + cap + " searches per "
+                        + "hour is used up; the next one frees up in "
+                        + Duration.between(now, free).toMinutes() + " minutes (" + free + "). Use the "
+                        + "local corpus (live:false) or page earlier results by resultId meanwhile.");
+            }
+            recentSearches.addLast(now);
         }
         try {
             final var xml = fetch(query, silent);
@@ -109,6 +124,11 @@ public class TransferSearchService {
             HOLogger.instance().log(TransferSearchService.class, e);
             throw new SearchFailed("Error searching transfers: " + e.getMessage(), e);
         }
+    }
+
+    /** The clock the window runs on. Overridden in tests. */
+    protected Instant now() {
+        return Instant.now();
     }
 
     /**

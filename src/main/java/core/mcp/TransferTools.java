@@ -72,7 +72,7 @@ public final class TransferTools {
                                 + "mandatory. Hattrick refuses a skill window wider than 3 levels, "
                                 + "and an age range including 17 or 18 may span at most one year. "
                                 + "queries[] runs several searches in one call (hits merged). Searches "
-                                + "are capped per HO session; page and sort hits with resultId for "
+                                + "are capped per hour; page and sort hits with resultId for "
                                 + "free. Every hit is stored and feeds estimate_market_value.",
                         searchSchema(),
                         TransferTools::searchTool)
@@ -2349,7 +2349,7 @@ public final class TransferTools {
     /**
      * search_transfers: a new search (single or queries[]), or with resultId a page of one already
      * run. Either way the hits are kept under a resultId so the caller can page and sort them
-     * without a new CHPP search - those count against the per-session cap, pages do not.
+     * without a new CHPP search - those count against the hourly cap, pages do not.
      */
     private static JsonObject searchTool(JsonObject args) throws McpToolException {
         // A bad sort is refused before the search: after it, the search would be spent and its
@@ -2554,7 +2554,7 @@ public final class TransferTools {
 
     /**
      * A sweep of {@link #search} calls in one round trip. Each query is independent: one hitting
-     * the per-session cap or an invalid range reports its own {@code error} rather than losing the
+     * the hourly cap or an invalid range reports its own {@code error} rather than losing the
      * queries already answered, since discarding those would cost the caller exactly the round
      * trips this tool exists to save. The hits go into {@code hits}, a player found twice once.
      */

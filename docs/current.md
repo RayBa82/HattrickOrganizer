@@ -78,6 +78,10 @@ At the hattrick session's request, with the user's decisions.
   ask/bid/deadline with one playerdetails call each (default: open entries) and stores each
   response as a corpus row.
 - Not measured on a DB copy yet.
+- Transfer search cap: 50 per rolling hour (`TransferSearchService.WINDOW`), not per HO process,
+  since the headless container never restarts. User's call after CHPP's "no bot scanning" rule
+  was weighed: CHPP documents no numeric limit. A DB still on the old default 20 moves to 50 once
+  (`mcpSearchCapRaised`). The options label still says "per session" (POEditor text).
   lineup, so no column), `confounded` reason only when set. `attitude` filters stats and rows.
   20 rows 5.5k, 40 rows were 9.7k on the dev DB copy.
 - `backfill` rates stored matches without a row; with `recompute` it redoes all of them.
