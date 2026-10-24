@@ -346,7 +346,8 @@ public final class LineupTools {
                         LineupOrders.TEAM_ORDERS, McpTool.prop("array", LineupOrders.TEAM_ORDERS_DOC),
                         "matchId", McpTool.prop("integer", "score for this stored fixture: its location "
                                 + "and HO's stored weather forecast (get_match_weather refreshes it); "
-                                + "default HO's next upcoming match"),
+                                + "default HO's next upcoming match. apply_lineup also stores the lineup for it, "
+                                + "so send_match_order for that match finds it"),
                         "weather", McpTool.prop("integer", "0 rain, 1 overcast, 2 partially cloudy, 3 sunny; "
                                 + "overrides the fixture's forecast. Technical/Powerful/Quick players "
                                 + "gain or lose 5% by it")),
@@ -599,6 +600,15 @@ public final class LineupTools {
             // path the Lineup tab uses.
             final var team = model.getCurrentLineupTeam();
             applySpec(team.getLineup(), spec);
+            // matchId names the match the lineup is for, not only the fixture it is scored under:
+            // without this it stays stored under the match HO loaded on start, and send_match_order
+            // for matchId warns that it belongs to another one. That match keeps its stored row.
+            final var matchId = McpJson.optInteger(spec, "matchId");
+            if (matchId != null && matchId != team.getMatchId()) {
+                final var match = DBManager.instance().getMatchesKurzInfoByMatchID(matchId, null);
+                team.setMatchId(matchId);
+                team.setMatchType(match.getMatchType());
+            }
             if (takers != null) {
                 team.getLineup().setPenaltyTakers(takers);
             }
