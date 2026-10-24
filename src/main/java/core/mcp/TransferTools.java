@@ -2268,7 +2268,8 @@ public final class TransferTools {
                         + "download (HTTP GET of the returned download path on the MCP endpoint); "
                         + "the answer keeps resultId, count, hitFields and a 3-hit preview. Default false"),
                 "queries", McpTool.prop("array", "several searches in one call, each shaped like "
-                        + "the single-search arguments above; replaces them. Returns results[], "
+                        + "the single-search arguments above; replaces them. bulk, full, limit, offset "
+                        + "and sort go at the top level, not in an entry. Returns results[], "
                         + "each echoing its query; a failed one carries its own error"));
         // No required list: a single search needs ageMin, ageMax and skills, a batch needs queries,
         // and queryFrom rejects either one incomplete.
@@ -2358,6 +2359,9 @@ public final class TransferTools {
         if (!sort.isEmpty()) {
             hitOrder(sort);
         }
+        if (args.has("queries")) {
+            rejectCallArgsInQueries(McpJson.reqArray(args, "queries"));
+        }
         if (args.has("resultId")) {
             final var id = McpJson.reqString(args, "resultId");
             final List<XMLTransferSearchParser.Hit> hits;
@@ -2387,6 +2391,28 @@ public final class TransferTools {
         }
         addHitPage(json, keepResult(hits), hits, args);
         return json;
+    }
+
+    /** Arguments that shape the whole answer, not one search: only read at the top level. */
+    static final List<String> CALL_ARGS = List.of("bulk", "full", "limit", "offset", "sort", "resultId");
+
+    /**
+     * Refuses a call argument inside a queries[] entry before any search runs. queryFrom ignores
+     * keys it does not know, so bulk there used to be dropped silently and the answer paged inline
+     * - with the searches already spent against the hourly cap.
+     */
+    static void rejectCallArgsInQueries(JsonArray queries) {
+        for (final var element : queries) {
+            if (!element.isJsonObject()) {
+                continue;
+            }
+            final var misplaced = CALL_ARGS.stream().filter(element.getAsJsonObject()::has).toList();
+            if (!misplaced.isEmpty()) {
+                throw new IllegalArgumentException(String.join(", ", misplaced) + " inside a queries "
+                        + "entry is not read - pass it once at the top level, next to queries. "
+                        + "Nothing was searched.");
+            }
+        }
     }
 
     /** Keeps hits pageable under a new resultId; the oldest beyond {@link #KEPT_RESULTS} go. */

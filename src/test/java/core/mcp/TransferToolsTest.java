@@ -1537,6 +1537,19 @@ class TransferToolsTest {
                 .isThrownBy(() -> handler.call(args)).withMessageContaining("sort takes");
     }
 
+    /** bulk inside a queries entry was dropped silently and the hits came back inline. */
+    @Test
+    void searchTransfers_refusesBulkInsideAQueryBeforeSearching() {
+        final var handler = TransferTools.tools().stream().filter(t -> t.name().equals("search_transfers"))
+                .findFirst().orElseThrow().handler();
+        final var args = JsonParser.parseString("""
+                {"queries":[{"ageMin":17,"ageMax":18,"skills":[{"skill":"PLAYMAKING","min":8,"max":11}],
+                 "pageSize":50,"bulk":true}]}""").getAsJsonObject();
+
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> handler.call(args)).withMessageContaining("bulk inside a queries entry");
+    }
+
     @Test
     void bulk_putsEveryHitSortedIntoADownloadAndKeepsTheAnswerSmall() {
         final var hits = new java.util.ArrayList<core.file.xml.XMLTransferSearchParser.Hit>();
