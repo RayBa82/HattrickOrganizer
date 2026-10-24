@@ -71,6 +71,9 @@ public class Matchdetails extends AbstractTable.Storable implements core.model.m
     //0=Regen,1=BewÃ¶lkt,2=wolkig,3=Sonne
     private int m_iWetterId = -1;
 
+    /** CHPP's FinishedDate was supplied. Not stored: only the download decides with it. */
+    private boolean finished;
+
     private int m_iZuschauer;
 
     private CupLevel m_mtCupLevel = CupLevel.NONE;
@@ -1314,6 +1317,18 @@ public class Matchdetails extends AbstractTable.Storable implements core.model.m
      */
     public final void setSpielDatumFromString(String date) {
         m_clSpielDatum = HODateTime.fromHT(date);
+    }
+
+    /**
+     * Whether the match has been played. CHPP supplies FinishedDate only then; WeatherID can
+     * come before kick-off and is no sign of a played match.
+     */
+    public final boolean isFinished() {
+        return finished;
+    }
+
+    public final void setFinished(boolean finished) {
+        this.finished = finished;
     }
 
     private MatchLineupTeam teamLineup;

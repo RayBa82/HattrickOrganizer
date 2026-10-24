@@ -566,7 +566,8 @@ public class OnlineWorker {
 						info.setMatchSchedule(details.getMatchDate());
 						info.setMatchType(details.getMatchType());
 						int wetterId = details.getWetterId();
-						if (wetterId != -1) {
+						// WeatherID can come before kick-off; only FinishedDate marks a played match
+						if (details.isFinished() && wetterId != -1) {
 							info.setMatchStatus(MatchKurzInfo.FINISHED);
 							info.setWeather(Weather.getById(details.getWetterId()));
 							info.setWeatherForecast(Weather.Forecast.HAPPENED);

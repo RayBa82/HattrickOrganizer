@@ -368,6 +368,8 @@ public class XMLMatchdetailsParser {
             md.setMatchID(Integer.parseInt(ele.getFirstChild().getNodeValue()));
             ele = (Element) root.getElementsByTagName("MatchDate").item(0);
             md.setSpielDatumFromString(ele.getFirstChild().getNodeValue());
+            ele = (Element) root.getElementsByTagName("FinishedDate").item(0);
+            md.setFinished(ele != null && ele.getFirstChild() != null);
         } catch (Exception e) {
             HOLogger.instance().log(XMLMatchdetailsParser.class,e);
 		}
