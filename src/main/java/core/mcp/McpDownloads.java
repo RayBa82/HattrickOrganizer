@@ -1,5 +1,6 @@
 package core.mcp;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
 import java.util.LinkedHashMap;
@@ -44,6 +45,36 @@ final class McpDownloads {
         answer.addProperty("downloadNote", "HTTP GET this path on the MCP endpoint's host and port "
                 + "(e.g. curl http://localhost:8765/mcp/download/...); the newest " + KEPT
                 + " downloads are kept in memory");
+    }
+
+    /** Rows of the list a {@link #bulk} answer still shows. */
+    static final int PREVIEW = 3;
+
+    /**
+     * A tool's bulk answer: the whole answer goes into the download, and what comes back is the
+     * same answer with {@code listKey} cut to its first {@link #PREVIEW} rows (as preview). The
+     * header that makes the rows readable (skillOrder, count, note...) is in both; fileOnly names
+     * parts too big for the answer, left out of the header and of each preview row alike.
+     */
+    static JsonObject bulk(JsonObject full, String listKey, String... fileOnly) {
+        final var answer = full.deepCopy();
+        for (final var key : fileOnly) {
+            answer.remove(key);
+        }
+        final var rows = answer.remove(listKey).getAsJsonArray();
+        final var preview = new JsonArray();
+        for (int i = 0; i < Math.min(PREVIEW, rows.size()); i++) {
+            final var row = rows.get(i);
+            if (row.isJsonObject()) {
+                for (final var key : fileOnly) {
+                    row.getAsJsonObject().remove(key);
+                }
+            }
+            preview.add(row);
+        }
+        answer.add("preview", preview);
+        attach(answer, full);
+        return answer;
     }
 
     /** The file behind a request path, or null when it is unknown or gone. */

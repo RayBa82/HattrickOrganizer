@@ -82,7 +82,12 @@ public final class TeamTools {
                                         "how many players to skip; default 0. count is the total"),
                                 "only", McpTool.prop("string",
                                         "positionRatings: just the slot matrix, per player playerId and "
-                                                + "r (ratings in slotOrder, every player incl. unavailable)"))),
+                                                + "r (ratings in slotOrder, every player incl. unavailable)"),
+                                "bulk", McpTool.prop("boolean",
+                                        "for scripts: the rows with every include part as a JSON file "
+                                                + "to download (HTTP GET of the returned download path "
+                                                + "on the MCP endpoint); the answer keeps the header, "
+                                                + "count and a 3-row preview. Default false"))),
                         TeamTools::squad)
                         .withBudget("Page with limit/offset (count is the total) or name playerIds; "
                                         + "for the whole squad's position ratings pass only positionRatings.",
@@ -320,7 +325,8 @@ public final class TeamTools {
         if (args.has("playerIds") && args.get("playerIds").isJsonArray()) {
             args.getAsJsonArray("playerIds").forEach(e -> wanted.add(e.getAsInt()));
         }
-        final var include = squadParts(args, wanted.size());
+        final var bulk = McpJson.optBool(args, "bulk", false);
+        final var include = squadParts(args, bulk ? 1 : wanted.size());
         // Always: penaltyStrength is in every row.
         final var ratingModel = McpJson.privateRatingModel();
 
@@ -376,7 +382,7 @@ public final class TeamTools {
         json.addProperty("offset", offset);
         json.addProperty("returned", players.size());
         json.add("players", players);
-        return json;
+        return bulk ? McpDownloads.bulk(json, "players") : json;
     }
 
     /** A get_squad only-positionRatings row: playerId and the ratings in FIELD_ROLES order, 1 decimal. */

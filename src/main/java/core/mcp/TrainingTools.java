@@ -218,7 +218,13 @@ public final class TrainingTools {
                                                 + "the last training update, drops included - per "
                                                 + "player the newest snapshot before it against the "
                                                 + "newest overall. Lists changed players only. "
-                                                + "Default false"))),
+                                                + "Default false"),
+                                "bulk", McpTool.prop("boolean",
+                                        "for scripts: every player row as a JSON file to download "
+                                                + "(HTTP GET of the returned download path on the MCP "
+                                                + "endpoint), derived, coverage and screen on by "
+                                                + "default; the answer keeps the header and a 3-row "
+                                                + "preview. Not with sinceLastTraining. Default false"))),
                         TrainingTools::playerHistory)
                         .withBudget("Ask for fewer playerIds, or page through time with a smaller "
                                         + "weeks plus weeksAgo (weeks 4, then weeksAgo 4, 8, ...); "
@@ -333,6 +339,10 @@ public final class TrainingTools {
     private static JsonObject playerHistory(JsonObject args) throws McpToolException {
         final var model = McpJson.model();
         if (McpJson.optBool(args, "sinceLastTraining", false)) {
+            if (McpJson.optBool(args, "bulk", false)) {
+                throw new IllegalArgumentException("bulk is for the history, not sinceLastTraining - "
+                        + "its answer lists changed players only and stays small.");
+            }
             return sinceLastTraining(model, historyPlayerIds(args, model));
         }
         final var includeTraining = McpJson.optBool(args, "includeTraining", false);
@@ -368,9 +378,11 @@ public final class TrainingTools {
         }
         final var trainingWeeks = includeTraining
                 ? trainingHistory(model, window, new HashSet<>(ids)) : null;
-        final var derivedOn = McpJson.optBool(args, "includeDerived", ids.size() <= DERIVED_PLAYERS);
-        final var coverageOn = McpJson.optBool(args, "includeCoverage", ids.size() <= COVERAGE_PLAYERS);
-        final var screenOn = McpJson.optBool(args, "includeScreen", !derivedOn);
+        // bulk: a script reads the file, so every per-player section defaults on, whatever the count.
+        final var bulk = McpJson.optBool(args, "bulk", false);
+        final var derivedOn = McpJson.optBool(args, "includeDerived", bulk || ids.size() <= DERIVED_PLAYERS);
+        final var coverageOn = McpJson.optBool(args, "includeCoverage", bulk || ids.size() <= COVERAGE_PLAYERS);
+        final var screenOn = McpJson.optBool(args, "includeScreen", bulk || !derivedOn);
         for (final var playerId : ids) {
             final var row = history(playerId, window, trained, includeSnapshots);
             shapeRow(row, screenOn, derivedOn, coverageOn);
@@ -385,6 +397,7 @@ public final class TrainingTools {
         if (trainingWeeks != null) {
             json.add("trainingWeeks", trainingWeeks.weeks());
         }
+        json.addProperty("count", players.size());
         json.add("players", players);
         json.addProperty("note", "levelsPerHtYear is the trained skill's sub-skill-inclusive gain "
                 + "between coverage.firstDate and coverage.lastDate, divided by coverage."
@@ -399,7 +412,8 @@ public final class TrainingTools {
                 + "calling a player stalled. An empty levelUps over a long observedWeeks is the "
                 + "real 'growth has stopped' signal; an empty one next to a short span, or one "
                 + "with gaps, means it cannot be told.");
-        return json;
+        return bulk ? McpDownloads.bulk(json, "players", "trainingWeeks", "snapshots",
+                "trainingEvents") : json;
     }
 
     /**

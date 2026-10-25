@@ -2511,7 +2511,7 @@ public final class TransferTools {
         McpDownloads.attach(json, file);
     }
 
-    static final int BULK_PREVIEW = 3;
+    static final int BULK_PREVIEW = McpDownloads.PREVIEW;
 
     /**
      * The sort argument: deadline, age, tsi, price (highest bid, else asking price) or salary,
