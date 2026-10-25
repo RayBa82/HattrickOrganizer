@@ -89,7 +89,11 @@ public final class TransferTools {
                                 "season", McpTool.prop("integer", "Hattrick season number; omit for the full history"),
                                 "direction", McpTool.prop("string", "buy, sell, or omit for both"),
                                 "limit", McpTool.prop("integer", "how many transfers to return, newest first; default 20, max 100"),
-                                "offset", McpTool.prop("integer", "how many of the newest transfers to skip, for paging; default 0"))),
+                                "offset", McpTool.prop("integer", "how many of the newest transfers to skip, for paging; default 0"),
+                                "bulk", McpTool.prop("boolean", "for scripts: every transfer as a JSON file "
+                                        + "to download (HTTP GET of the returned download path on the MCP "
+                                        + "endpoint); the answer keeps the totals and a 3-row preview. "
+                                        + "Default false"))),
                         TransferTools::teamTransfers)
                         .withBudget("Page with a smaller limit and offset, or narrow by season / direction.",
                                 McpTool.OptionalSection.perItem("transfers", "skills", "skills", "specialty")),
@@ -173,7 +177,12 @@ public final class TransferTools {
                                         + DEFAULT_SCOUT_PAGE + ", max " + MAX_SCOUT_PAGE),
                                 "offset", McpTool.prop("integer",
                                         "how many matching entries to skip, in shortlist order; "
-                                                + "default 0"))),
+                                                + "default 0"),
+                                "bulk", McpTool.prop("boolean",
+                                        "for scripts: every matching entry, full, as a JSON file to "
+                                                + "download (HTTP GET of the returned download path on "
+                                                + "the MCP endpoint); the answer keeps count and a 3-row "
+                                                + "preview. Default false"))),
                         TransferTools::listScout)
                         .withBudget("Page with a smaller limit and offset, filter with skills, "
                                 + "ageMin/ageMax, specialty or onlyOpen; pass full only with a small limit."),
@@ -1687,9 +1696,12 @@ public final class TransferTools {
 
     private static JsonObject listScout(JsonObject args) throws McpToolException {
         final var filter = ScoutFilter.from(args);
-        final var full = McpJson.optBool(args, "full", false);
-        final var offset = Math.max(McpJson.optInt(args, "offset", 0), 0);
-        final var limit = Math.min(Math.max(McpJson.optInt(args, "limit", DEFAULT_SCOUT_PAGE), 1), MAX_SCOUT_PAGE);
+        // bulk: every matching entry, full, into the download.
+        final var bulk = McpJson.optBool(args, "bulk", false);
+        final var full = bulk || McpJson.optBool(args, "full", false);
+        final var offset = bulk ? 0 : Math.max(McpJson.optInt(args, "offset", 0), 0);
+        final var limit = bulk ? Integer.MAX_VALUE
+                : Math.min(Math.max(McpJson.optInt(args, "limit", DEFAULT_SCOUT_PAGE), 1), MAX_SCOUT_PAGE);
         final var out = LineupTools.onEdt(() -> {
             final var now = java.time.Instant.now();
             final var entries = ScoutList.entries().stream().filter(e -> filter.test(e, now)).toList();
@@ -1748,7 +1760,7 @@ public final class TransferTools {
             }
             out.add("players", compact);
         }
-        return out;
+        return bulk ? McpDownloads.bulk(out, "players") : out;
     }
 
     /** list_scout's default row: the market state plus age and specialty, not the frozen skills. */
@@ -2621,8 +2633,10 @@ public final class TransferTools {
         // same as HO's own Transfers tab. Push LIMIT/OFFSET into TransferTable if a team's history
         // ever gets big enough to matter.
         final var all = DBManager.instance().getTransfers(season, bought, sold);
-        final var offset = Math.max(McpJson.optInt(args, "offset", 0), 0);
-        final var limit = Math.min(Math.max(McpJson.optInt(args, "limit", 20), 1), 100);
+        // bulk: every transfer into the download, so no page.
+        final var bulk = McpJson.optBool(args, "bulk", false);
+        final var offset = bulk ? 0 : Math.max(McpJson.optInt(args, "offset", 0), 0);
+        final var limit = bulk ? all.size() : Math.min(Math.max(McpJson.optInt(args, "limit", 20), 1), 100);
         final var page = offset >= all.size() ? List.<PlayerTransfer>of()
                 : all.subList(offset, Math.min(offset + limit, all.size()));
 
@@ -2665,7 +2679,7 @@ public final class TransferTools {
         json.addProperty("totalSpent", McpJson.money(DBManager.instance().getSumTransferPrices(teamId, false)));
         json.addProperty("totalEarned", McpJson.money(DBManager.instance().getSumTransferPrices(teamId, true)));
         json.add("transfers", transfers);
-        return json;
+        return bulk ? McpDownloads.bulk(json, "transfers") : json;
     }
 
     /**

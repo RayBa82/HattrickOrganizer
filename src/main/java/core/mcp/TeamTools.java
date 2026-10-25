@@ -117,7 +117,14 @@ public final class TeamTools {
                                                         + "tournaments; default true"),
                                         "days", McpTool.prop("integer",
                                                 "ratings: how far back to search, in days; "
-                                                        + "default " + MatchTools.DEFAULT_OPPONENT_DAYS)),
+                                                        + "default " + MatchTools.DEFAULT_OPPONENT_DAYS),
+                                        "bulk", McpTool.prop("boolean",
+                                                "for scripts: the whole report as a JSON file to "
+                                                        + "download (HTTP GET of the returned download "
+                                                        + "path on the MCP endpoint); the answer keeps the "
+                                                        + "averages and a 3-row preview of matches and "
+                                                        + "players. Costs the same CHPP requests as "
+                                                        + "without it. Default false")),
                                 "teamId"),
                         TeamTools::scoutOpponent),
                 new McpTool("get_series",
@@ -136,7 +143,13 @@ public final class TeamTools {
                                                 + "default false, the whole season"),
                                 "allTeams", McpTool.prop("boolean",
                                         "matches: every pairing of the series, not only ours - to "
-                                                + "look up another team's fixtures; default false"))),
+                                                + "look up another team's fixtures; default false"),
+                                "bulk", McpTool.prop("boolean",
+                                        "for scripts: the answer as a JSON file to download (HTTP GET "
+                                                + "of the returned download path on the MCP endpoint), "
+                                                + "by default every part and allTeams; the answer keeps "
+                                                + "table and otherUpcoming and a 3-row preview of matches. "
+                                                + "Default false"))),
                         TeamTools::series)
                         .withBudget("With allTeams pass include [\"matches\"] alone; otherwise set "
                                 + "upcomingOnly or include only the parts you read (table, otherUpcoming)."),
@@ -546,7 +559,8 @@ public final class TeamTools {
         if (include.contains("squad")) {
             json.add("squad", opponentSquad(args));
         }
-        return json;
+        return McpJson.optBool(args, "bulk", false)
+                ? McpDownloads.bulkSections(json, "ratings.matches", "squad.players") : json;
     }
 
     private static final List<String> SCOUT_PARTS = List.of("ratings", "squad");
@@ -636,7 +650,10 @@ public final class TeamTools {
      * fetched last and can be an old season's series until the next team download.
      */
     private static JsonObject series(JsonObject args) throws McpToolException {
-        final var include = includeParts(args, SERIES_PARTS);
+        // bulk: every part and, unless the caller says otherwise, every pairing of the series.
+        final var bulk = McpJson.optBool(args, "bulk", false);
+        final var include = bulk && !args.has("include") ? java.util.Set.copyOf(SERIES_PARTS)
+                : includeParts(args, SERIES_PARTS);
         final var model = McpJson.model();
         final var teamId = model.getBasics().getTeamId();
         final var xtra = model.getXtraDaten();
@@ -652,7 +669,7 @@ public final class TeamTools {
         }
         if (include.contains("matches")) {
             json.add("matches", fixtures(plan, teamId, McpJson.optBool(args, "upcomingOnly", false),
-                    McpJson.optBool(args, "allTeams", false)));
+                    McpJson.optBool(args, "allTeams", bulk)));
         }
         if (include.contains("table")) {
             if (plan == null || plan.getTable() == null) {
@@ -670,7 +687,7 @@ public final class TeamTools {
             json.add("otherUpcoming", others);
         }
         json.add("nextCupMatchId", nextCupMatchId(others));
-        return json;
+        return bulk && json.has("matches") ? McpDownloads.bulk(json, "matches") : json;
     }
 
     private static JsonArray fixtures(module.series.MatchFixtures plan, int teamId, boolean upcomingOnly,

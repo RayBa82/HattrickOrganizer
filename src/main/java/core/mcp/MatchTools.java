@@ -72,7 +72,12 @@ public final class MatchTools {
                                         "how many matches to return, default " + DEFAULT_COUNT),
                                 "officialOnly", McpTool.prop("boolean",
                                         "league, cup and qualification only, leaving out friendlies "
-                                                + "and tournaments; default true"))),
+                                                + "and tournaments; default true"),
+                                "bulk", McpTool.prop("boolean",
+                                        "for scripts: the matches as a JSON file to download (HTTP GET "
+                                                + "of the returned download path on the MCP endpoint), "
+                                                + "every stored one unless count is given; the answer "
+                                                + "keeps count and a 3-row preview. Default false"))),
                         MatchTools::matches),
                 new McpTool("get_match",
                         "One played match in full: both sides' sector ratings, HatStats, tactic, "
@@ -388,7 +393,9 @@ public final class MatchTools {
 
     private static JsonObject matches(JsonObject args) throws McpToolException {
         final var teamId = McpJson.model().getBasics().getTeamId();
-        final var count = McpJson.optInt(args, "count", DEFAULT_COUNT);
+        // bulk: every stored match into the download unless count says otherwise; null = no limit.
+        final var bulk = McpJson.optBool(args, "bulk", false);
+        final Integer count = bulk && !args.has("count") ? null : McpJson.optInt(args, "count", DEFAULT_COUNT);
         final var officialOnly = McpJson.optBool(args, "officialOnly", true);
 
         final var played = new JsonArray();
@@ -396,8 +403,9 @@ public final class MatchTools {
             played.add(summary(info, teamId));
         }
         final var json = new JsonObject();
+        json.addProperty("count", played.size());
         json.add("matches", played);
-        return json;
+        return bulk ? McpDownloads.bulk(json, "matches") : json;
     }
 
     /** Enough of a match to rank it and to ask for it in full. */

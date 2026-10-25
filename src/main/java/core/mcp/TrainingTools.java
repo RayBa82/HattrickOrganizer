@@ -157,7 +157,13 @@ public final class TrainingTools {
                                 "wholeSquadWeek", McpTool.prop("boolean",
                                         "list every squad player in currentWeek.players, nothing "
                                                 + "banked included, ignoring playerIds. With "
-                                                + "playerIds [] it skips the predictions. Default false"))),
+                                                + "playerIds [] it skips the predictions. Default false"),
+                                "bulk", McpTool.prop("boolean",
+                                        "for scripts: every player's weekly prediction as a JSON file to "
+                                                + "download (HTTP GET of the returned download path on "
+                                                + "the MCP endpoint); the answer keeps current and "
+                                                + "3-row previews of players and currentWeek.players. "
+                                                + "Default false"))),
                         TrainingTools::training)
                         .withBudget("Pass playerIds for the predictions you need, or a smaller weeks; "
                                         + "wholeSquadWeek with playerIds [] returns the current week alone.",
@@ -325,7 +331,9 @@ public final class TrainingTools {
             players.add(prediction(player, plan, weeks, lastTraining));
         }
         json.add("players", players);
-        return json;
+        // currentWeek.players too: with wholeSquadWeek it is a row per squad player.
+        return McpJson.optBool(args, "bulk", false)
+                ? McpDownloads.bulkSections(json, "players", "currentWeek.players") : json;
     }
 
     /**

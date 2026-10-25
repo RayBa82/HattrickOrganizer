@@ -53,4 +53,28 @@ class McpDownloadsTest {
         assertThat(file.has("trainingWeeks")).isTrue();
         assertThat(file.getAsJsonArray("players").get(0).getAsJsonObject().has("snapshots")).isTrue();
     }
+
+    @Test
+    void bulkSections_cutsEachSectionsListAndSkipsAMissingSection() {
+        final var matches = new JsonArray();
+        for (int i = 1; i <= 8; i++) {
+            matches.add(i);
+        }
+        final var ratings = new JsonObject();
+        ratings.addProperty("matchesUsed", 8);
+        ratings.add("matches", matches);
+        final var full = new JsonObject();
+        full.add("ratings", ratings);
+
+        final var answer = McpDownloads.bulkSections(full, "ratings.matches", "squad.players");
+
+        final var cut = answer.getAsJsonObject("ratings");
+        assertThat(cut.has("matches")).isFalse();
+        assertThat(cut.get("matchesUsed").getAsInt()).isEqualTo(8);
+        assertThat(cut.getAsJsonArray("preview")).hasSize(McpDownloads.PREVIEW);
+        assertThat(answer.has("squad")).isFalse();
+        final var file = JsonParser.parseString(McpDownloads.get(answer.get("download").getAsString()))
+                .getAsJsonObject();
+        assertThat(file.getAsJsonObject("ratings").getAsJsonArray("matches")).hasSize(8);
+    }
 }

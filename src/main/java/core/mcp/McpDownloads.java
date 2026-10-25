@@ -61,7 +61,33 @@ final class McpDownloads {
         for (final var key : fileOnly) {
             answer.remove(key);
         }
-        final var rows = answer.remove(listKey).getAsJsonArray();
+        cutToPreview(answer, listKey, fileOnly);
+        attach(answer, full);
+        return answer;
+    }
+
+    /**
+     * {@link #bulk} for an answer whose lists sit in its sections: each {@code section.list} path
+     * (e.g. ratings.matches) is cut to a preview inside its section, a bare name at the top level.
+     * A section or list the answer lacks - not included by the caller - is skipped.
+     */
+    static JsonObject bulkSections(JsonObject full, String... listPaths) {
+        final var answer = full.deepCopy();
+        for (final var path : listPaths) {
+            final var dot = path.indexOf('.');
+            final var section = dot < 0 ? answer : answer.getAsJsonObject(path.substring(0, dot));
+            final var list = path.substring(dot + 1);
+            if (section != null && section.has(list)) {
+                cutToPreview(section, list);
+            }
+        }
+        attach(answer, full);
+        return answer;
+    }
+
+    /** Replaces {@code owner}'s list under listKey with a preview of its first rows, fileOnly parts left out. */
+    private static void cutToPreview(JsonObject owner, String listKey, String... fileOnly) {
+        final var rows = owner.remove(listKey).getAsJsonArray();
         final var preview = new JsonArray();
         for (int i = 0; i < Math.min(PREVIEW, rows.size()); i++) {
             final var row = rows.get(i);
@@ -72,9 +98,7 @@ final class McpDownloads {
             }
             preview.add(row);
         }
-        answer.add("preview", preview);
-        attach(answer, full);
-        return answer;
+        owner.add("preview", preview);
     }
 
     /** The file behind a request path, or null when it is unknown or gone. */

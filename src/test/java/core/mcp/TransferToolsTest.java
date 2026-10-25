@@ -437,7 +437,7 @@ class TransferToolsTest {
         assertThat(schema.getAsJsonArray("required")).isEmpty();
         assertThat(schema.getAsJsonObject("properties").keySet())
                 .containsExactlyInAnyOrder("skills", "ageMin", "ageMax", "specialty", "onlyOpen",
-                        "full", "limit", "offset");
+                        "full", "limit", "offset", "bulk");
     }
 
     @Test

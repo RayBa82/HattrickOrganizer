@@ -243,9 +243,12 @@ works if no single call floods its context.
   small summary plus the `download` path; the script fetches it with an HTTP GET on the MCP
   endpoint (`/mcp/download/<id>`, same Origin/Host guards, newest 20 in memory). Nothing ever
   passes the budget, and nothing relies on the client saving big answers to a file.
-  `search_transfers` (the hattrick screening script), `get_squad` and `get_player_history` have
-  it, the last two through `McpDownloads.bulk` (whole answer to the file, list cut to a preview,
-  `fileOnly` parts left out of the answer). Add it only where a script needs
+  `search_transfers` (the hattrick screening script), `get_squad`, `get_player_history`,
+  `get_team_transfers`, `list_scout`, `get_matches`, `get_series`, `get_training` and
+  `analyze_opponent` have it, all but the first through `McpDownloads.bulk` (whole answer to
+  the file, list cut to a preview, `fileOnly` parts left out of the answer) or `bulkSections`
+  (lists inside sections, e.g. `ratings.matches`). `get_player_transfer_history` has none: one
+  player per call, and a squad-wide file would cost a CHPP request per player. Add it only where a script needs
   it, never speculatively. `estimate_market_value` (comparables by A/B skill) and `get_match`
   (event rows) always answer that way, by the user's call: their full lists are what gets
   reasoned over, and no default size kept them under budget.
