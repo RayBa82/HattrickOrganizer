@@ -220,7 +220,15 @@ public final class TransferTools {
                                                         + "being tracked still teaches future "
                                                         + "valuations something."),
                                         "ageTolerance", McpTool.prop("integer", "age window in years, default 1"),
-                                        "skillTolerance", McpTool.prop("integer", "skill window in levels, default 1"),
+                                        "ageWindowDays", McpTool.prop("integer",
+                                                "age window in days either side of the player's "
+                                                        + "age (112 days a year); replaces ageTolerance. "
+                                                        + "Comparables without age days are left out"),
+                                        "primarySkillTolerance", McpTool.prop("integer",
+                                                "window in levels for the best positional skill (A), "
+                                                        + "default 0"),
+                                        "skillTolerance", McpTool.prop("integer",
+                                                "window in levels for the second skill (B), default 1"),
                                         "live", McpTool.prop("boolean",
                                                 "run the comparable query against today's market "
                                                         + "first, store the hits, and estimate over "
@@ -863,9 +871,17 @@ public final class TransferTools {
         final var requestedGroup = positionGroupOrNull(args);
         final var hardSpecialtyFilter = args.has("specialtyFilter") && args.get("specialtyFilter").getAsBoolean();
         final var targetSpecialty = corpusSpecialtyFilter(hasProfile, profile, player);
+        // Unset: the age window stays the whole years of ageTolerance. Negative is refused, not
+        // clamped - a window that silently became 0 days would match next to nobody.
+        final Integer ageWindowDays = args.has("ageWindowDays") ? McpJson.optInt(args, "ageWindowDays", 0) : null;
+        if (ageWindowDays != null && ageWindowDays < 0) {
+            throw new McpToolException("ageWindowDays must be 0 or more.");
+        }
         final var query = comparableQuery(player,
                 McpJson.optInt(args, "ageTolerance", 1),
-                McpJson.optInt(args, "skillTolerance", 1));
+                McpJson.optInt(args, "primarySkillTolerance", 0),
+                McpJson.optInt(args, "skillTolerance", 1),
+                ageWindowDays);
         final var days = Math.max(McpJson.optInt(args, "observedWithinDays", DEFAULT_CORPUS_DAYS), 1);
         final var since = new HODateTime(HODateTime.now().getInstant()
                 .minus(java.time.Duration.ofDays(days)));
@@ -906,6 +922,8 @@ public final class TransferTools {
                         TransferTools::betterObservation))
                 .values().stream()
                 .filter(l -> sameArchetype(l, query.skillType1(), query.skillType2()))
+                .filter(l -> ageWindowDays == null
+                        || withinAgeWindow(l, totalAgeDays(player.getAge(), player.getAgeDays()), ageWindowDays))
                 .sorted(Comparator.comparing(TransferTools::observedAt).reversed())
                 .toList();
 
@@ -971,6 +989,9 @@ public final class TransferTools {
         json.addProperty("positionGroup", positionGroup);
         json.addProperty("positionGroupDerived", requestedGroup == null);
         json.addProperty("observedWithinDays", days);
+        if (ageWindowDays != null) {
+            json.addProperty("ageWindowDays", ageWindowDays);
+        }
         if (liveSearch != null) {
             // The raw hits beside the corpus view of them: itemCount says how much of the market
             // matched, which the deduplicated comparables list below can no longer tell you.
@@ -1053,7 +1074,8 @@ public final class TransferTools {
             json.add("estimate", com.google.gson.JsonNull.INSTANCE);
             json.addProperty("note", (salesPriced.isEmpty() ? "Nothing comparable in the corpus yet."
                     : "Only the resolvedSales above, too few for an estimate, and no listings.")
-                    + " Widen ageTolerance / skillTolerance, or run search_transfers over this profile - "
+                    + " Widen primarySkillTolerance / skillTolerance / ageTolerance (or ageWindowDays),"
+                    + " or run search_transfers over this profile - "
                     + "every hit it returns is stored and becomes a comparable.");
             return json;
         }
@@ -2682,17 +2704,28 @@ public final class TransferTools {
         return bulk ? McpDownloads.bulk(json, "transfers") : json;
     }
 
+    /** Both skill windows alike and an age window in whole years - see the full overload. */
+    static TransferSearchQuery comparableQuery(Player player, int ageTolerance, int skillTolerance) {
+        return comparableQuery(player, ageTolerance, skillTolerance, skillTolerance, null);
+    }
+
     /**
      * The market query that describes a player: his age window and his two highest positional
      * skills. Deliberately no specialty: every live hit is stored and becomes a comparable, so a
      * specialty filter here would fill the corpus with the target's own specialty only, and the
      * soft {@link #specialtyWeight} would have nothing different left to weigh.
      * <p>
+     * primarySkillTolerance widens the best skill's window, skillTolerance the second's: one level
+     * off in the primary skill moves the price far more than in the secondary. Given
+     * ageWindowDays, the years are the ones that window touches and ageTolerance is ignored;
+     * Hattrick searches whole years only, so the caller cuts the hits to the days itself.
+     * <p>
      * Clamped so that Hattrick accepts it - min and max may be at most 3 levels apart, keeper /
      * set pieces carry a minimum level, and an age window reaching down to 17 or 18 may span at
      * most a year.
      */
-    static TransferSearchQuery comparableQuery(Player player, int ageTolerance, int skillTolerance) {
+    static TransferSearchQuery comparableQuery(Player player, int ageTolerance, int primarySkillTolerance,
+                                               int skillTolerance, Integer ageWindowDays) {
         final var ranked = POSITIONAL_SKILLS.stream()
                 .sorted(Comparator.comparingInt(
                         (TransferSearchQuery.Skill s) -> player.getValue4Skill(s.toPlayerSkill())).reversed())
@@ -2705,23 +2738,42 @@ public final class TransferTools {
 
         // maxLevel() clamps the window to the 3 levels Hattrick accepts, so a wide tolerance
         // only widens it downwards.
+        final var primary = Math.min(Math.max(primarySkillTolerance, 0), 2);
         final var tolerance = Math.min(Math.max(skillTolerance, 0), 2);
-        final var ageMin = Math.max(player.getAge() - ageTolerance, 17);
+        final int lowest;
+        final int highest;
+        if (ageWindowDays != null) {
+            final var ageDays = totalAgeDays(player.getAge(), player.getAgeDays());
+            final var window = Math.max(ageWindowDays, 0);
+            lowest = Math.max(ageDays - window, 0) / HATTRICK_YEAR_DAYS;
+            highest = (ageDays + window) / HATTRICK_YEAR_DAYS;
+        } else {
+            lowest = player.getAge() - ageTolerance;
+            highest = player.getAge() + ageTolerance;
+        }
+        final var ageMin = Math.max(lowest, 17);
         // Hattrick rejects a young age window wider than a year, so clamp it like the skill windows.
-        final var ageMax = ageMin <= 18
-                ? Math.min(player.getAge() + ageTolerance, ageMin + 1)
-                : player.getAge() + ageTolerance;
+        final var ageMax = Math.max(ageMin <= 18 ? Math.min(highest, ageMin + 1) : highest, ageMin);
         return TransferSearchQuery.builder()
                 .ageMin(ageMin)
                 .ageMax(ageMax)
                 .skillType1(first)
-                .minSkillValue1(minLevel(first, player, tolerance))
-                .maxSkillValue1(maxLevel(first, player, tolerance))
+                .minSkillValue1(minLevel(first, player, primary))
+                .maxSkillValue1(maxLevel(first, player, primary))
                 .skillType2(second)
                 .minSkillValue2(second == null ? null : minLevel(second, player, tolerance))
                 .maxSkillValue2(second == null ? null : maxLevel(second, player, tolerance))
                 .pageSize(MAX_PAGE_SIZE)
                 .build();
+    }
+
+    /**
+     * Whether a comparable's age, as observed, lies within ageWindowDays of the target's. A
+     * listing without days only knows its year, so it cannot be placed inside a window of days.
+     */
+    static boolean withinAgeWindow(TransferListing listing, int targetAgeDays, int ageWindowDays) {
+        return listing.getAgeDays() != null
+                && Math.abs(totalAgeDays(listing.getAge(), listing.getAgeDays()) - targetAgeDays) <= ageWindowDays;
     }
 
     /** The window's lower bound, lifted to whatever minimum Hattrick enforces for the skill. */
@@ -2734,9 +2786,13 @@ public final class TransferTools {
         return Math.max(player.getValue4Skill(skill.toPlayerSkill()) - tolerance, minimum);
     }
 
-    /** The window's upper bound, kept within the 3 levels of the lower one Hattrick accepts. */
+    /**
+     * The window's upper bound, kept within the 3 levels of the lower one Hattrick accepts and
+     * never below it (a keeper 2 at tolerance 0 still searches keeper 3).
+     */
     private static int maxLevel(TransferSearchQuery.Skill skill, Player player, int tolerance) {
         final var value = player.getValue4Skill(skill.toPlayerSkill());
-        return Math.min(value + tolerance, minLevel(skill, player, tolerance) + 3);
+        final var min = minLevel(skill, player, tolerance);
+        return Math.max(Math.min(value + tolerance, min + 3), min);
     }
 }

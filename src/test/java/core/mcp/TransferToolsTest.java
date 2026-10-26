@@ -572,7 +572,8 @@ class TransferToolsTest {
                 .filter(t -> t.name().equals("estimate_market_value")).findFirst().orElseThrow();
         final var properties = tool.inputSchema().getAsJsonObject("properties");
         assertThat(properties.keySet())
-                .contains("playerId", "profile", "ageTolerance", "skillTolerance", "live");
+                .contains("playerId", "profile", "ageTolerance", "ageWindowDays", "primarySkillTolerance",
+                        "skillTolerance", "live");
         // Neither is unconditionally required at the schema level - profile makes playerId
         // optional, so the mutual-exclusion / required-field checks live in estimateMarketValue
         // itself (see the validation tests below) rather than in the schema.
@@ -1298,6 +1299,58 @@ class TransferToolsTest {
         assertThat(query.minSkillValue1()).isEqualTo(3);       // keeper minimum level
         assertThat(query.maxSkillValue1() - query.minSkillValue1()).isLessThanOrEqualTo(4);
         assertThat(query.validationErrorKey()).isNull();
+    }
+
+    /** The primary skill gets its own window: PM 11 is not priced against PM 9-10 rows. */
+    @Test
+    void comparableQuery_primarySkillToleranceOnlyWidensTheBestSkill() {
+        //                      kp de pm pa wi sc sp
+        final var p = player(24, 1, 4, 11, 10, 3, 2, 1);
+
+        final var query = TransferTools.comparableQuery(p, 1, 0, 1, null);
+
+        assertThat(query.minSkillValue1()).isEqualTo(11);
+        assertThat(query.maxSkillValue1()).isEqualTo(11);
+        assertThat(query.minSkillValue2()).isEqualTo(9);
+        assertThat(query.maxSkillValue2()).isEqualTo(11);
+        assertThat(query.validationErrorKey()).isNull();
+    }
+
+    /** A keeper below Hattrick's keeper minimum at tolerance 0 still gets a valid window. */
+    @Test
+    void comparableQuery_neverPutsTheMaximumBelowTheSkillsMinimum() {
+        //                      kp de pm pa wi sc sp
+        final var p = player(24, 2, 1, 1, 1, 1, 1, 1);
+
+        final var query = TransferTools.comparableQuery(p, 1, 0, 1, null);
+
+        assertThat(query.minSkillValue1()).isEqualTo(3);
+        assertThat(query.maxSkillValue1()).isEqualTo(3);
+    }
+
+    /** A window in days searches the years it touches; the hits are then cut to the days. */
+    @Test
+    void ageWindowDays_searchesTheYearsItTouchesAndCutsToTheDays() {
+        //                      kp de pm pa wi sc sp
+        final var p = player(24, 1, 4, 11, 10, 3, 2, 1);
+        p.setAgeDays(35);
+
+        final var query = TransferTools.comparableQuery(p, 3, 0, 1, 40);
+        assertThat(query.ageMin()).isEqualTo(23);   // 24y35d - 40d = 23y107d
+        assertThat(query.ageMax()).isEqualTo(24);   // 24y75d
+
+        final var target = 24 * 112 + 35;
+        final var inside = new TransferListing();
+        inside.setAge(23);
+        inside.setAgeDays(107);
+        final var outside = new TransferListing();
+        outside.setAge(24);
+        outside.setAgeDays(76);
+        final var noDays = new TransferListing();
+        noDays.setAge(24);
+        assertThat(TransferTools.withinAgeWindow(inside, target, 40)).isTrue();
+        assertThat(TransferTools.withinAgeWindow(outside, target, 40)).isFalse();
+        assertThat(TransferTools.withinAgeWindow(noDays, target, 40)).isFalse();
     }
 
     /**
