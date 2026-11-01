@@ -38,6 +38,13 @@ class WeekToolsTest {
         assertThat(full.get("fullTrainingMinutes").getAsInt()).isEqualTo(90);
         assertThat(full.has("partlyTrainingMinutes")).isFalse();
         assertThat(full.get("maxedForWeek").getAsBoolean()).isTrue();
+
+        final var partway = new JsonObject();
+        WeekTools.addMinutes(partway, JsonParser.parseString("""
+                {"fullTrainingMinutes":45,"partlyTrainingMinutes":30}""").getAsJsonObject());
+        assertThat(partway.get("fullTrainingMinutes").getAsInt()).isEqualTo(45);
+        assertThat(partway.get("partlyTrainingMinutes").getAsInt()).isEqualTo(30);
+        assertThat(partway.get("maxedForWeek").getAsBoolean()).isFalse();
     }
 
     /** The brief keeps what changed and drops the dates the agent does not act on. */

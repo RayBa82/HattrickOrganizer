@@ -50,8 +50,9 @@ comes out 1.4 too low in league matches (n 3), matching the 2026-10-10 observati
 
 ## MCP 2026-07-28 and the tasks extension (2026-11-01)
 
-Branch `mcp-tasks`, cut from `master` after `lineup-tv-view` was fast-forwarded into it (local,
-not pushed). AGENTS.md, "Protocol", has the design as built.
+Branch `mcp-tasks`, cut from `master` after `lineup-tv-view` was fast-forwarded into it, then
+fast-forwarded into `master` (local, not pushed to GitHub; the image `ho-headless:10.0`/`latest`
+is pushed). AGENTS.md, "Protocol", has the design as built.
 - `McpHttpServer` serves both eras. Requests with the `_meta` protocol version get the stateless
   2026-07-28 rules: `server/discover`, header checks (`-32020`), version check (`-32022`),
   `resultType`, serverInfo in `_meta`, and cacheable `tools/list`. `initialize` stays legacy
@@ -122,3 +123,10 @@ not pushed). AGENTS.md, "Protocol", has the design as built.
   unproven. `foreignWageFactor` stays 1.2 (the cautious side) until a real foreign purchase
   shows get_squad's wage against the hit's Salary. "Ours" is `XtraData.getCountryId`, the
   team's CountryID (3 for Germany), the same id space as nativeCountryId.
+- First real run (hattrick session): figures checked by hand. Follow-ups built:
+  screen_market columns `cards` (2 yellows warn, 3 suspended) and `estimateBasis`, a
+  `minSample` warning (default 15), `searchesRun`/`searchCap`/`searchCapLeft`, and every
+  `filteredOut` key even at 0. week_brief fixtures run oldest first (get_training too) and
+  carry `derby`/`neutral`: HO rates every derby as awayDerby, home or not, so `home: true`
+  next to apply_lineup's awayDerby is right. Player rows add `age`/`ageDays` and
+  `trainingSpeed` (HO's plan for next week). 8,126 chars for 29 players without orders.

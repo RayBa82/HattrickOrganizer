@@ -55,10 +55,11 @@ public final class WeekTools {
         return List.of(
                 new McpTool("week_brief",
                         "The week in one call: training type and trained roles; every fixture of "
-                                + "the training week (tournaments too) with matchTypeId, trains, "
-                                + "injuriesPossible and the order Hattrick holds (players, captain "
-                                + "on the pitch, hoLineupDiffers); per player banked minutes, "
-                                + "maxedForWeek, top-3 positions, availability; level-ups since "
+                                + "the training week, oldest first (tournaments too), with matchTypeId, "
+                                + "trains, injuriesPossible and the order Hattrick holds (players, "
+                                + "captain on the pitch, hoLineupDiffers); per player age, banked "
+                                + "minutes, maxedForWeek, trainingSpeed, top-3 positions, "
+                                + "availability; level-ups since "
                                 + "the last training. sources dates every part.",
                         McpTool.schema(McpTool.properties(
                                 PLAYER_IDS, McpTool.prop("array",
@@ -258,7 +259,7 @@ public final class WeekTools {
 
     /**
      * One compact row per player: defaults are left out (no injury, no cards, not listed, no
-     * group, no minutes), so a fit squad stays short.
+     * group, no minutes, trainingSpeed 0), so a fit squad stays short.
      */
     private static JsonArray players(HOModel model, JsonArray weekRows, java.util.Set<Integer> wanted)
             throws McpToolException {
@@ -268,10 +269,16 @@ public final class WeekTools {
             minutes.put(row.get(PLAYER_ID).getAsInt(), row);
         }
         final var ratingModel = McpJson.privateRatingModel();
+        final var plan = DBManager.instance().getFutureTrainingsVector();
         final var rows = new JsonArray();
         for (final var player : model.getCurrentPlayers()) {
             if (!player.isCoach() && wanted.contains(player.getPlayerId())) {
-                rows.add(playerRow(player, minutes.get(player.getPlayerId()), ratingModel));
+                final var row = playerRow(player, minutes.get(player.getPlayerId()), ratingModel);
+                final var speed = TrainingTools.nextWeekTrainingSpeed(player, plan);
+                if (speed > 0) {
+                    row.addProperty("trainingSpeed", Math.round(speed));
+                }
+                rows.add(row);
             }
         }
         return rows;
@@ -281,6 +288,8 @@ public final class WeekTools {
         final var row = new JsonObject();
         row.addProperty(PLAYER_ID, player.getPlayerId());
         row.addProperty("name", player.getFullName());
+        row.addProperty("age", player.getAge());
+        row.addProperty("ageDays", player.getAgeDays());
         if (player.getSpecialty() > 0) {
             row.addProperty("specialty", player.getSpecialtyName());
         }

@@ -1,5 +1,6 @@
 package core.mcp;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import core.file.xml.XMLTransferSearchParser;
@@ -116,6 +117,7 @@ class MarketToolsTest {
         assertThat(rules.squadCap()).isEqualTo(26);
         assertThat(rules.specialties()).isNull();
         assertThat(rules.scout()).isZero();
+        assertThat(rules.minSample()).isEqualTo(15);
         assertThat(rules("{\"specialties\":[2,5]}").specialties()).isEqualTo(Set.of(2, 5));
     }
 
@@ -127,5 +129,35 @@ class MarketToolsTest {
                 "{\"estimate\":null,\"listingsEstimate\":{\"value\":20000}}").getAsJsonObject()))
                 .isEqualTo(20_000L);
         assertThat(MarketTools.estimateFigure(new JsonObject())).isNull();
+    }
+
+    /** Every reason comes with 0 too, in a fixed order. */
+    @Test
+    void emptyRejections_listEveryReasonAtZero() {
+        assertThat(MarketTools.emptyRejections()).containsExactly(Map.entry("closed", 0),
+                Map.entry("injured", 0), Map.entry("specialty", 0), Map.entry("screen", 0),
+                Map.entry("wage", 0));
+    }
+
+    @Test
+    void warnings_nameTwoYellowsASuspensionAndAThinSample() {
+        final var warnings = new JsonArray();
+        MarketTools.addCardWarning(1, warnings);
+        assertThat(warnings).isEmpty();
+        MarketTools.addCardWarning(2, warnings);
+        MarketTools.addCardWarning(3, warnings);
+        MarketTools.addSampleWarning(6, 15, warnings);
+        MarketTools.addSampleWarning(15, 15, warnings);
+        MarketTools.addSampleWarning(null, 15, warnings);
+        assertThat(warnings).hasSize(3);
+        assertThat(warnings.get(0).getAsString()).startsWith("2 yellow cards");
+        assertThat(warnings.get(1).getAsString()).startsWith("suspended");
+        assertThat(warnings.get(2).getAsString()).isEqualTo("thin estimate: n=6");
+    }
+
+    @Test
+    void columns_carryCardsAndTheEstimateBasis() {
+        assertThat(MarketTools.COLUMNS).containsSubsequence("cardRisk", "cards", "closes",
+                "estimate", "estimateBasis", "middleHalf");
     }
 }

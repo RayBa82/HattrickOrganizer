@@ -20,6 +20,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -984,8 +985,12 @@ public final class TrainingTools {
     private static JsonArray weekFixtures(HOModel model, HODateTime weekEnd) {
         final var types = new ArrayList<>(MatchType.getOfficialMatchTypes());
         types.addAll(MatchType.getTournamentMatchTypes());
-        final var matches = DBManager.instance().loadMatchesBetween(model.getBasics().getTeamId(),
-                weekEnd.minus(7, ChronoUnit.DAYS), weekEnd.plus(23, ChronoUnit.HOURS), types);
+        final var matches = new ArrayList<>(DBManager.instance().loadMatchesBetween(
+                model.getBasics().getTeamId(), weekEnd.minus(7, ChronoUnit.DAYS),
+                weekEnd.plus(23, ChronoUnit.HOURS), types));
+        // Oldest first, so the next match to set up comes right after the played ones.
+        matches.sort(Comparator.comparing(MatchKurzInfo::getMatchSchedule,
+                Comparator.nullsLast(Comparator.naturalOrder())));
         final var fixtures = new JsonArray();
         for (final var match : matches) {
             final var played = match.getMatchStatus() == MatchKurzInfo.FINISHED;
@@ -1003,6 +1008,13 @@ public final class TrainingTools {
                 match.getMatchSchedule() == null ? null : match.getMatchSchedule().toHT());
         fixture.addProperty("opponent", match.getOpponentTeamName());
         fixture.addProperty("home", match.isHomeMatch());
+        // HO rates every derby as location awayDerby, home or not (Lineup.setUpcomingMatch).
+        if (match.isDerby()) {
+            fixture.addProperty("derby", true);
+        }
+        if (match.isNeutral()) {
+            fixture.addProperty("neutral", true);
+        }
         fixture.addProperty("played", played);
         fixture.addProperty("lineupAvailable", lineupAvailable);
         return fixture;
@@ -1133,6 +1145,19 @@ public final class TrainingTools {
             json.add("startRoleIds", this.startRoleIds);
             return json;
         }
+    }
+
+    /**
+     * HO's training speed for the coming week (0-100: full 100, partial and osmosis less), as
+     * get_training reports it; 0 without a planned week.
+     */
+    static double nextWeekTrainingSpeed(Player player, List<TrainingPerWeek> plan) {
+        if (plan.isEmpty()) {
+            return 0;
+        }
+        final var manager = new FutureTrainingManager(player, plan);
+        manager.previewPlayer(1);
+        return manager.getTrainingSpeed();
     }
 
     /**
