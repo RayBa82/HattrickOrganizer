@@ -102,3 +102,10 @@ not pushed). AGENTS.md, "Protocol", has the design as built.
   summary (`DOWNLOAD_KEYS`), the snapshot date and `compactLevelUps(sinceLastTraining)`.
   Measured on the DB copy with `download: never`: 775 chars for 29 players. The download path
   is unit-tested only.
+- Item 7 is done before 6: `estimate_market_value` `summary: true` keeps playerId/name, the
+  figures, `sampleSize`, the top 3 `skillGroups` (+ `skillGroupCount`) and the download, and
+  drops the notes and the player block. Every valuation now has `middleHalf` (unweighted
+  quartiles of the sorted sample) beside `range`, which one stray sale stretches (1,000 to
+  377,400 on the DB copy). Measured: 2,252 chars by default, about 420 with summary.
+- Item 6 (`screen_market`) is open. It needs the hattrick session's rules (saved searches,
+  slots, caps) agreed as parameters first.

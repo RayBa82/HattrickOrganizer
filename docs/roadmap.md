@@ -76,5 +76,5 @@ by all HO users.
    - Rules are parameters, not server code: specialty per slot, age/skill windows, caps,
      top-N, squad cap, sort and cash reserve. The training slots are read from
      `get_training`.
-7. **`price_compact`:** an `estimate_market_value` `summary` mode with median, range and count.
-   The download stays.
+7. Done: `estimate_market_value` `summary` (figures, `middleHalf`, top 3 skill groups, the
+   download).

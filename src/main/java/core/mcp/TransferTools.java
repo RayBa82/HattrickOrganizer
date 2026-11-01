@@ -62,6 +62,13 @@ public final class TransferTools {
     /** The argument and answer field that names a kept search result. */
     private static final String RESULT_ID = "resultId";
 
+    private static final String CURRENCY = "currency";
+    private static final String ESTIMATE = "estimate";
+    private static final String RANGE = "range";
+    private static final String MIDDLE_HALF = "middleHalf";
+    private static final String PLAYER = "player";
+    private static final String SKILL_GROUPS = "skillGroups";
+
     /** How long a losing bid keeps showing in the default view after its deadline. */
     private static final java.time.Duration LOSING_BID_GRACE = java.time.Duration.ofHours(24);
 
@@ -281,6 +288,13 @@ public final class TransferTools {
                                                         + "age, position group and specialty id with "
                                                         + "how many sold. Local and free; alone, without "
                                                         + "playerId or profile, it returns only corpus. "
+                                                        + "Default false"),
+                                        SUMMARY, McpTool.prop("boolean",
+                                                "answer with the figures only: estimate (or "
+                                                        + "listingsEstimate), range, middleHalf, "
+                                                        + "sampleSize, the top " + SUMMARY_GROUPS
+                                                        + " skillGroups and the download; the notes "
+                                                        + "and the player block are left out. "
                                                         + "Default false"))),
                         TransferTools::estimateMarketValue)
         );
@@ -290,6 +304,12 @@ public final class TransferTools {
 
     /** One Hattrick season. Older listings priced a market that has moved on. */
     private static final int DEFAULT_CORPUS_DAYS = 112;
+    private static final String SUMMARY = "summary";
+    private static final int SUMMARY_GROUPS = 3;
+    /** What summary keeps of a valuation, besides playerId/name and the top skill groups. */
+    private static final List<String> SUMMARY_KEYS = List.of(CURRENCY, "basis", "sampleSize",
+            "resolvedSalesAvailable", ESTIMATE, RANGE, MIDDLE_HALF, "listingsEstimate",
+            "resolvedSales", "liveSearch", "liveSearchSkipped", "download", "note", "corpus");
 
     // ------------------------------------------------------------------ corpus stats
 
@@ -842,7 +862,38 @@ public final class TransferTools {
         if (withCorpus) {
             json.add("corpus", marketCorpusStats(args));
         }
-        return json;
+        return McpJson.optBool(args, SUMMARY, false) ? summary(json) : json;
+    }
+
+    /**
+     * A valuation cut to its figures, for the skills that price several players in a row: the
+     * notes repeat themselves on every call, and the player block is what the caller sent.
+     */
+    static JsonObject summary(JsonObject valuation) {
+        final var summary = new JsonObject();
+        if (valuation.has(PLAYER)) {
+            final var player = valuation.getAsJsonObject(PLAYER);
+            for (final var key : List.of("playerId", "name")) {
+                if (player.has(key)) {
+                    summary.add(key, player.get(key));
+                }
+            }
+        }
+        for (final var key : SUMMARY_KEYS) {
+            if (valuation.has(key)) {
+                summary.add(key, valuation.get(key));
+            }
+        }
+        if (valuation.has(SKILL_GROUPS)) {
+            final var groups = new JsonArray();
+            final var all = valuation.getAsJsonArray(SKILL_GROUPS);
+            for (var i = 0; i < Math.min(SUMMARY_GROUPS, all.size()); i++) {
+                groups.add(all.get(i));
+            }
+            summary.add(SKILL_GROUPS, groups);
+            summary.addProperty("skillGroupCount", all.size());
+        }
+        return summary;
     }
 
     private static JsonObject valuation(JsonObject args) throws McpToolException {
@@ -974,9 +1025,9 @@ public final class TransferTools {
                         .toList();
 
         final var json = new JsonObject();
-        json.addProperty("currency", McpJson.currency());
+        json.addProperty(CURRENCY, McpJson.currency());
         // The player being valued, so the comparison is self-contained in one call.
-        json.add("player", hasProfile
+        json.add(PLAYER, hasProfile
                 ? profilePlayerJson(profile)
                 : topSkillsOnly(McpJson.player(player), playerLevels));
         if (hasProfile) {
@@ -1057,15 +1108,15 @@ public final class TransferTools {
                     group.add("comparables", rows);
                     fileGroups.add(group);
                 });
-        json.add("skillGroups", summary);
+        json.add(SKILL_GROUPS, summary);
         json.addProperty("comparablesMatched", comparables.size());
         // How many rows those distinct players were collapsed from, so the gap is visible.
         json.addProperty("observationsMatched", observations.size());
         final var file = new JsonObject();
-        file.addProperty("currency", McpJson.currency());
-        file.add("player", json.get("player").deepCopy());
+        file.addProperty(CURRENCY, McpJson.currency());
+        file.add(PLAYER, json.get(PLAYER).deepCopy());
         file.addProperty("positionGroup", positionGroup);
-        file.add("skillGroups", fileGroups);
+        file.add(SKILL_GROUPS, fileGroups);
         McpDownloads.attach(json, file);
 
         if (!useSales) {
@@ -1077,7 +1128,7 @@ public final class TransferTools {
             json.add("resolvedSales", sales);
         }
         if (sample.isEmpty()) {
-            json.add("estimate", com.google.gson.JsonNull.INSTANCE);
+            json.add(ESTIMATE, com.google.gson.JsonNull.INSTANCE);
             json.addProperty("note", (salesPriced.isEmpty() ? "Nothing comparable in the corpus yet."
                     : "Only the resolvedSales above, too few for an estimate, and no listings.")
                     + " Widen primarySkillTolerance / skillTolerance / ageTolerance (or ageWindowDays),"
@@ -1093,15 +1144,22 @@ public final class TransferTools {
         final var range = new JsonArray();
         range.add(McpJson.money(sample.get(0).price()));
         range.add(McpJson.money(sample.get(sample.size() - 1).price()));
+        // The range is min to max and one stray sale stretches it; the middle half is what a
+        // bid limit is set against. Unweighted quartiles of the same sorted sample.
+        final var middleHalf = new JsonArray();
+        middleHalf.add(McpJson.money(sample.get((sample.size() - 1) / 4).price()));
+        middleHalf.add(McpJson.money(sample.get(3 * (sample.size() - 1) / 4).price()));
         if (useSales) {
-            json.addProperty("estimate", figure);
-            json.add("range", range);
+            json.addProperty(ESTIMATE, figure);
+            json.add(RANGE, range);
+            json.add(MIDDLE_HALF, middleHalf);
         } else {
             // Never in `estimate`: a figure built from asks and bids must not pass for a sale price.
-            json.add("estimate", com.google.gson.JsonNull.INSTANCE);
+            json.add(ESTIMATE, com.google.gson.JsonNull.INSTANCE);
             final var listingsEstimate = new JsonObject();
             listingsEstimate.addProperty("value", figure);
-            listingsEstimate.add("range", range);
+            listingsEstimate.add(RANGE, range);
+            listingsEstimate.add(MIDDLE_HALF, middleHalf);
             listingsEstimate.addProperty("label", "listings only, not sale prices - approximate");
             json.add("listingsEstimate", listingsEstimate);
             json.addProperty("note", (salesPriced.isEmpty()
@@ -1239,7 +1297,7 @@ public final class TransferTools {
     }
 
     /**
-     * The {@code "player"} field for a {@code profile}-based valuation - built only from the
+     * The {@code PLAYER} field for a {@code profile}-based valuation - built only from the
      * fields the caller actually supplied, so nothing is echoed back with an invented value (see
      * {@link #playerFromProfile} for the defaults used to run the actual comparable matching).
      */
@@ -1736,7 +1794,7 @@ public final class TransferTools {
             final var players = new JsonArray();
             entries.stream().skip(offset).limit(limit).forEach(e -> players.add(McpJson.scoutEntry(e)));
             final var json = new JsonObject();
-            json.addProperty("currency", McpJson.currency());
+            json.addProperty(CURRENCY, McpJson.currency());
             json.addProperty("count", entries.size());
             json.addProperty("offset", offset);
             json.addProperty("returned", players.size());
@@ -1952,7 +2010,7 @@ public final class TransferTools {
         }
 
         final var out = new JsonObject();
-        out.addProperty("currency", McpJson.currency());
+        out.addProperty(CURRENCY, McpJson.currency());
         out.addProperty("count", bids.size());
         out.add("bids", bids);
         final var selling = sellingRows(current);
@@ -2168,7 +2226,7 @@ public final class TransferTools {
 
         final var out = new JsonObject();
         out.addProperty("status", "confirm_required");
-        out.addProperty("currency", McpJson.currency());
+        out.addProperty(CURRENCY, McpJson.currency());
 
         final var listing = DBManager.instance().loadLatestTransferListing(playerId);
         final var player = new JsonObject();
@@ -2184,7 +2242,7 @@ public final class TransferTools {
             player.addProperty("note", "No market snapshot for this player - run search_transfers "
                     + "for him first if you want a preview.");
         }
-        out.add("player", player);
+        out.add(PLAYER, player);
 
         // Echoed back in the user's currency - the numbers the model passed in.
         final var bid = new JsonObject();
@@ -2219,10 +2277,10 @@ public final class TransferTools {
         recordOurBid(pending, result);
         final var out = new JsonObject();
         out.addProperty("status", "ok");
-        out.addProperty("currency", McpJson.currency());
+        out.addProperty(CURRENCY, McpJson.currency());
         final var player = new JsonObject();
         player.addProperty("id", pending.playerId());
-        out.add("player", player);
+        out.add(PLAYER, player);
         out.addProperty("highestBid", McpJson.money(result.highestBid()));
         if (result.maxBid() != null) {
             out.addProperty("maxBid", McpJson.money(result.maxBid()));
@@ -2413,12 +2471,12 @@ public final class TransferTools {
                         + KEPT_RESULTS + " are kept, and none survive a restart. Search again.");
             }
             final var json = new JsonObject();
-            json.addProperty("currency", McpJson.currency());
+            json.addProperty(CURRENCY, McpJson.currency());
             addHitPage(json, id, hits, args);
             return json;
         }
         final var json = new JsonObject();
-        json.addProperty("currency", McpJson.currency());
+        json.addProperty(CURRENCY, McpJson.currency());
         final var hits = new ArrayList<XMLTransferSearchParser.Hit>();
         if (args.has("queries")) {
             json.add("results", searchBatch(McpJson.reqArray(args, "queries"), hits));
@@ -2534,7 +2592,7 @@ public final class TransferTools {
         final var hits = new JsonArray();
         sorted.forEach(hit -> hits.add(compactHit(hit)));
         final var file = new JsonObject();
-        file.addProperty("currency", McpJson.currency());
+        file.addProperty(CURRENCY, McpJson.currency());
         file.addProperty(RESULT_ID, resultId);
         file.addProperty("count", all.size());
         file.add("hitFields", fields);
@@ -2699,7 +2757,7 @@ public final class TransferTools {
         }
 
         final var json = new JsonObject();
-        json.addProperty("currency", McpJson.currency());
+        json.addProperty(CURRENCY, McpJson.currency());
         json.addProperty("totalCount", all.size());
         json.addProperty("offset", offset);
         json.addProperty("returned", transfers.size());

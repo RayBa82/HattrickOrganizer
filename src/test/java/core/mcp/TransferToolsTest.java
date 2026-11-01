@@ -39,6 +39,22 @@ class TransferToolsTest {
         AmountOfMoney.Companion.setExchangeRate(BigDecimal.ONE);   // other tests set it; reset
     }
 
+    /** summary keeps the figures, the top three A/B groups and the download, nothing else. */
+    @Test
+    void summary_keepsTheFiguresTopGroupsAndTheDownload() {
+        final var summary = TransferTools.summary(JsonParser.parseString("""
+                {"currency":"€","player":{"playerId":7,"name":"A","tsi":1800},"basis":"sales",
+                 "sampleSize":29,"estimate":35000,"range":[1000,377400],"middleHalf":[20000,50000],
+                 "skillGroups":[{"aSkill":"a"},{"aSkill":"b"},{"aSkill":"c"},{"aSkill":"d"}],
+                 "comparablesMatched":58,"download":"/mcp/download/x","downloadNote":"long",
+                 "estimateNote":"long","setPiecesNote":"long"}""").getAsJsonObject());
+        assertThat(summary.keySet()).containsExactly("playerId", "name", "currency", "basis",
+                "sampleSize", "estimate", "range", "middleHalf", "download", "skillGroups",
+                "skillGroupCount");
+        assertThat(summary.getAsJsonArray("skillGroups")).hasSize(3);
+        assertThat(summary.get("skillGroupCount").getAsInt()).isEqualTo(4);
+    }
+
     private static TransferListing observation(String observedAt, Long salePrice) {
         final var listing = new TransferListing();
         listing.setPlayerId(1);
