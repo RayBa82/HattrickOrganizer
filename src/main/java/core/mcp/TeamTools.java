@@ -1182,7 +1182,7 @@ public final class TeamTools {
      * {@code result}. One at a time with the taskId form - both end on the EDT anyway, but a second
      * download straight after the first would only spend the session's cap.
      */
-    private static JsonObject downloadTeamTask(JsonObject args) throws McpToolException {
+    static JsonObject downloadTeamTask(JsonObject args) throws McpToolException {
         synchronized (downloadTasks) {
             if (latestDownload != null && latestDownload.finishedAt == null) {
                 throw new McpToolException("A download is already running (taskId "

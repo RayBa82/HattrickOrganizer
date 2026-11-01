@@ -9,6 +9,7 @@ import core.model.player.IMatchRoleID;
 import core.model.player.Player;
 import core.rating.RatingPredictionModel;
 import core.util.HODateTime;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Arrays;
 import java.util.Comparator;
@@ -38,6 +39,14 @@ public final class WeekTools {
     private static final int TOP_POSITIONS = 3;
     private static final int SHOWN_DIFFERENCES = 5;
     private static final int ELEVEN = 11;
+    private static final String DOWNLOAD = "download";
+    private static final String AUTO = "auto";
+    private static final String ALWAYS = "always";
+    private static final String NEVER = "never";
+    /** What level_up_report repeats from download_team's result; the rest is in get_team etc. */
+    private static final List<String> DOWNLOAD_KEYS = List.of("hrfId", "becameCurrent",
+            PLAYERS, "newTransfers", "lineupReplaced", "lineupKept", "lineupMatchId",
+            "hattrickOrderDiff", "lineupNote");
 
     private WeekTools() {
     }
@@ -61,7 +70,21 @@ public final class WeekTools {
                         WeekTools::weekBrief)
                         .asTask(args -> McpJson.optBool(args, INCLUDE_ORDERS, true))
                         .withBudget("Pass playerIds for fewer player rows, or includeOrders false.",
-                                McpTool.OptionalSection.perItem(PLAYERS, BEST_POSITIONS, BEST_POSITIONS))
+                                McpTool.OptionalSection.perItem(PLAYERS, BEST_POSITIONS, BEST_POSITIONS)),
+                new McpTool("level_up_report",
+                        "After a training: downloads the team when needed (download auto: only "
+                                + "when HO's snapshot predates the training; keeps HO's lineup) and "
+                                + "reports the level-ups since the last training: skill from/to "
+                                + "per player, unchanged count, unconfirmed players. One call "
+                                + "instead of download_team polling and a history per player.",
+                        McpTool.schema(McpTool.properties(
+                                PLAYER_IDS, McpTool.prop("array",
+                                        "only these players; default the whole squad"),
+                                DOWNLOAD, McpTool.prop("string", "auto (default), always or "
+                                        + "never; auto and always spend a team download"))),
+                        WeekTools::levelUpReport)
+                        .asTask(args -> !NEVER.equals(McpJson.optString(args, DOWNLOAD, AUTO)))
+                        .withBudget("Pass playerIds for fewer rows.")
         );
     }
 
@@ -97,6 +120,55 @@ public final class WeekTools {
 
         json.add(LEVEL_UPS, compactLevelUps(TrainingTools.sinceLastTraining(model, ids)));
         return json;
+    }
+
+    private static JsonObject levelUpReport(JsonObject args) throws McpToolException {
+        final var mode = McpJson.optString(args, DOWNLOAD, AUTO);
+        if (!List.of(AUTO, ALWAYS, NEVER).contains(mode)) {
+            throw new McpToolException("download must be auto, always or never, not '" + mode + "'");
+        }
+        final var json = new JsonObject();
+        final var nextTraining = nextTraining(McpJson.model());
+        if (ALWAYS.equals(mode) || AUTO.equals(mode) && trainedSince(nextTraining, HODateTime.now())) {
+            json.add(DOWNLOAD, downloadSummary(TeamTools.downloadTeamTask(new JsonObject())));
+        } else {
+            final var skipped = new JsonObject();
+            skipped.addProperty(STATUS, NEVER.equals(mode) ? "not asked"
+                    : "skipped: no training since HO's snapshot");
+            json.add(DOWNLOAD, skipped);
+        }
+        final var model = McpJson.model();
+        json.addProperty("snapshot", model.getBasics() == null || model.getBasics().getDatum() == null
+                ? null : model.getBasics().getDatum().toHT());
+        json.add(LEVEL_UPS, compactLevelUps(
+                TrainingTools.sinceLastTraining(model, TrainingTools.historyPlayerIds(args, model))));
+        return json;
+    }
+
+    private static @Nullable HODateTime nextTraining(HOModel model) {
+        final var xtra = model.getXtraDaten();
+        return xtra == null ? null : xtra.getNextTrainingDate();
+    }
+
+    /**
+     * True when a training has run since the snapshot whose next training date this is - then
+     * the snapshot cannot show its level-ups yet. Unknown counts as trained: a download is what
+     * finds out.
+     */
+    static boolean trainedSince(@Nullable HODateTime nextTraining, HODateTime now) {
+        return nextTraining == null || !now.isBefore(nextTraining);
+    }
+
+    /** download_team's result cut to what a level-up report needs, with status done. */
+    static JsonObject downloadSummary(JsonObject result) {
+        final var summary = new JsonObject();
+        summary.addProperty(STATUS, "done");
+        for (final var key : DOWNLOAD_KEYS) {
+            if (result.has(key)) {
+                summary.add(key, result.get(key));
+            }
+        }
+        return summary;
     }
 
     /** Where each part comes from, so the agent does not have to re-check a number. */

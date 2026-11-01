@@ -61,4 +61,37 @@ class WeekToolsTest {
         assertThat(order.get("hoLineupDiffers").isJsonNull()).isTrue();
         assertThat(order.get("message").getAsString()).contains("no lineup");
     }
+
+    /** A download is a CHPP round trip, so the report is a task unless it is told not to download. */
+    @Test
+    void levelUpReport_runsAsATaskUnlessDownloadIsNever() {
+        final var report = WeekTools.tools().get(1);
+        assertThat(report.name()).isEqualTo("level_up_report");
+        assertThat(report.taskEligible(new JsonObject())).isTrue();
+        assertThat(report.taskEligible(JsonParser.parseString("""
+                {"download":"never"}""").getAsJsonObject())).isFalse();
+        assertThat(report.inputSchema().getAsJsonObject("properties").keySet())
+                .containsExactlyInAnyOrder("playerIds", "download");
+    }
+
+    /** auto downloads once the snapshot's next training is due, or when HO cannot tell. */
+    @Test
+    void trainedSince_onceTheSnapshotsNextTrainingIsDue() {
+        final var now = core.util.HODateTime.now();
+        assertThat(WeekTools.trainedSince(now.plusDaysAtSameLocalTime(1), now)).isFalse();
+        assertThat(WeekTools.trainedSince(now.plusDaysAtSameLocalTime(-1), now)).isTrue();
+        assertThat(WeekTools.trainedSince(now, now)).isTrue();
+        assertThat(WeekTools.trainedSince(null, now)).isTrue();
+    }
+
+    /** The report repeats only the download facts it needs, and says it ran. */
+    @Test
+    void downloadSummary_keepsTheCountsAndTheLineupOutcomeOnly() {
+        final var summary = WeekTools.downloadSummary(JsonParser.parseString("""
+                {"hrfId":5,"becameCurrent":true,"players":29,"newTransfers":0,
+                 "sections":{"matches":true},"notRefreshed":"long text",
+                 "lineupReplaced":false,"lineupKept":true,"lineupMatchId":9}""").getAsJsonObject());
+        assertThat(summary.keySet()).containsExactly("status", "hrfId", "becameCurrent", "players",
+                "newTransfers", "lineupReplaced", "lineupKept", "lineupMatchId");
+    }
 }

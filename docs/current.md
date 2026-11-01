@@ -96,3 +96,9 @@ not pushed). AGENTS.md, "Protocol", has the design as built.
   `lineupReplaced`, `lineupKept`, `lineupMatchId` and `hattrickOrderDiff`
   (`LineupTools.lineupDiff`); `previousLineup` only when replaced, and `storedLineup` is gone.
   Unit-tested only: a download spends CHPP requests.
+- Item 5 is done: `level_up_report` in `WeekTools`. `download` auto (default) runs
+  `TeamTools.downloadTeamTask` (now package-private, keepLineup true) only when now is at or past
+  the snapshot's `nextTrainingDate`; always / never force it. It answers with a cut download
+  summary (`DOWNLOAD_KEYS`), the snapshot date and `compactLevelUps(sinceLastTraining)`.
+  Measured on the DB copy with `download: never`: 775 chars for 29 players. The download path
+  is unit-tested only.

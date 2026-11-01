@@ -59,9 +59,8 @@ by all HO users.
 4. Done: `download_team` `keepLineup` (default true, MCP only; the Download button still
    replaces). HO's lineup is written back when the next match is the same one. The result
    names `lineupMatchId` and has `hattrickOrderDiff`.
-5. **`level_up_report`** (task): after Friday's training, download and report the level-ups
-   since the last training, compactly. It replaces download status polling and the per-player
-   history loop in sell-trainee.
+5. Done: `level_up_report` (`WeekTools`, a task unless `download: never`). `download: auto`
+   downloads only once the snapshot's next training is due, keeping HO's lineup.
 6. **`screen_market`** (task): run all saved searches with wide CHPP windows and filter on the
    server, so the fewest searches are spent. Searches that do not fit are queued.
    - `specialty` as a list (`[4,5]`), filtered on the server.
