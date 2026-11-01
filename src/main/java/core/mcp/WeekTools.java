@@ -29,6 +29,7 @@ public final class WeekTools {
     private static final String PLAYER_ID = "playerId";
     private static final String PLAYER_IDS = "playerIds";
     private static final String INCLUDE_ORDERS = "includeOrders";
+    private static final String INCLUDE_LEVEL_UPS = "includeLevelUps";
     private static final String POSITIONS = "positions";
     private static final String STATUS = "status";
     private static final String FIXTURES = "fixtures";
@@ -67,7 +68,10 @@ public final class WeekTools {
                                                 + "the whole squad"),
                                 INCLUDE_ORDERS, McpTool.prop("boolean",
                                         "read the order Hattrick holds for each upcoming fixture, "
-                                                + "one CHPP request each. Default true"))),
+                                                + "one CHPP request each. Default true"),
+                                INCLUDE_LEVEL_UPS, McpTool.prop("boolean",
+                                        "levelUps since the last training (level_up_report has "
+                                                + "them too). Default true"))),
                         WeekTools::weekBrief)
                         .asTask(args -> McpJson.optBool(args, INCLUDE_ORDERS, true))
                         .withBudget("Pass playerIds for fewer player rows, or includeOrders false.",
@@ -119,7 +123,9 @@ public final class WeekTools {
         json.add("lineupDataComplete", week.get("lineupDataComplete"));
         json.add(PLAYERS, players(model, week.getAsJsonArray(PLAYERS), new HashSet<>(ids)));
 
-        json.add(LEVEL_UPS, compactLevelUps(TrainingTools.sinceLastTraining(model, ids)));
+        if (McpJson.optBool(args, INCLUDE_LEVEL_UPS, true)) {
+            json.add(LEVEL_UPS, compactLevelUps(TrainingTools.sinceLastTraining(model, ids)));
+        }
         return json;
     }
 

@@ -21,7 +21,7 @@ class WeekToolsTest {
         assertThat(weekBrief().taskEligible(JsonParser.parseString("""
                 {"includeOrders":false}""").getAsJsonObject())).isFalse();
         assertThat(weekBrief().inputSchema().getAsJsonObject("properties").keySet())
-                .containsExactlyInAnyOrder("playerIds", "includeOrders");
+                .containsExactlyInAnyOrder("playerIds", "includeOrders", "includeLevelUps");
     }
 
     /** A player with no minutes this week is not maxed, and zero minutes are left out. */

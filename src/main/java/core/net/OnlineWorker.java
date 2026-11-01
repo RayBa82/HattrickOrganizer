@@ -564,16 +564,15 @@ public class OnlineWorker {
 						info.setGuestTeamID(details.getGuestTeamId());
 						info.setArenaId(details.getArenaID());
 						info.setMatchSchedule(details.getMatchDate());
-						info.setMatchType(details.getMatchType());
-						int wetterId = details.getWetterId();
+							info.setMatchType(details.getMatchType());
+							copyRegion(info, details);
+							int wetterId = details.getWetterId();
 						// WeatherID can come before kick-off; only FinishedDate marks a played match
 						if (details.isFinished() && wetterId != -1) {
 							info.setMatchStatus(MatchKurzInfo.FINISHED);
 							info.setWeather(Weather.getById(details.getWetterId()));
 							info.setWeatherForecast(Weather.Forecast.HAPPENED);
-						} else if (info.getArenaId() > 0) {
-							info.setRegionId(details.getRegionId());
-
+							} else if (info.getArenaId() > 0) {
 							if (!info.getWeatherForecast().isSure()) {
 								Regiondetails regiondetails = getRegionDetails(info.getRegionId());
 								if (regiondetails != null) {
@@ -1103,6 +1102,16 @@ public class OnlineWorker {
 			_match.setMatchType(MatchType.NONE);
 			conn.setSilentDownload(false);
 			return _match;
+		}
+	}
+
+	/**
+	 * The match's region, for a played match too: isDerby is computed against it, and a played
+	 * derby used to lose its flag on every later matches download.
+	 */
+	static void copyRegion(MatchKurzInfo info, Matchdetails details) {
+		if (details.getRegionId() != null) {
+			info.setRegionId(details.getRegionId());
 		}
 	}
 

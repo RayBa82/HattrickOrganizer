@@ -130,3 +130,8 @@ is pushed). AGENTS.md, "Protocol", has the design as built.
   carry `derby`/`neutral`: HO rates every derby as awayDerby, home or not, so `home: true`
   next to apply_lineup's awayDerby is right. Player rows add `age`/`ageDays` and
   `trainingSpeed` (HO's plan for next week). 8,126 chars for 29 players without orders.
+- Second run: week_brief `includeLevelUps` (default true). A played derby lost `isDerby` on
+  every later matches download: `downloadMatchData` set the region from the match details only
+  for upcoming matches, so the derby check compared against no region. `OnlineWorker.copyRegion`
+  now sets it for played matches too. Stored rows heal when the match is loaded again; rating
+  calibration rows of past derbies keep the location they were stored with.
