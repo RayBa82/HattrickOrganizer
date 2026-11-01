@@ -82,3 +82,10 @@ not pushed). AGENTS.md, "Protocol", has the design as built.
   captain and set pieces pseudo-roles 17/18 are gone from `positions`; `captainId` and
   `setPiecesTakerId` carry them. Measured on the DB copy: one swap answers with 703 chars
   instead of about 1,950.
+- Item 3 is done: `week_brief` in the new `WeekTools`. It reuses `TrainingTools.current`,
+  `currentWeek` and `sinceLastTraining` (now package-private). It reads the held orders through
+  `LineupTools.heldOrder` and compares them with HO's stored lineup for the match
+  (`loadMatchLineupTeam`). Player rows leave defaults out, and `bestPositions` is a roleId ->
+  rating map. On the DB copy (29 players, `includeOrders` false) it answers with 6,856 chars,
+  against about 21,000 for get_training + get_series + get_squad + sinceLastTraining. The
+  order part is unit-tested only: reading it live costs CHPP requests.

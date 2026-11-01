@@ -430,7 +430,7 @@ public final class TrainingTools {
      * the newest snapshot from before it against the newest one overall - observed changes, where
      * get_training's skillChanges are predictions.
      */
-    private static JsonObject sinceLastTraining(HOModel model, List<Integer> ids) {
+    static JsonObject sinceLastTraining(HOModel model, List<Integer> ids) {
         final var json = new JsonObject();
         final var xtra = model.getXtraDaten();
         final var lastTraining = xtra == null ? null : xtra.getTrainingDateAfterWeeks(-1);
@@ -574,7 +574,7 @@ public final class TrainingTools {
     }
 
     /** The explicit ids in the caller's order, else every non-coach in the current squad. */
-    private static List<Integer> historyPlayerIds(JsonObject args, HOModel model) {
+    static List<Integer> historyPlayerIds(JsonObject args, HOModel model) {
         final var ids = new ArrayList<Integer>();
         if (args.has("playerIds") && !args.get("playerIds").isJsonNull()) {
             for (final var element : args.getAsJsonArray("playerIds")) {
@@ -830,7 +830,7 @@ public final class TrainingTools {
     }
 
     /** The training settings themselves, as HO derived them from the latest download. */
-    private static JsonObject current(HOModel model) {
+    static JsonObject current(HOModel model) {
         final var json = new JsonObject();
         final var training = model.getTraining();
         if (training == null) {
@@ -895,7 +895,7 @@ public final class TrainingTools {
      * ({@code MatchLineupTeam.getTrainingMinutesPlayedInSectors}), so substitutions, position
      * swaps and red cards are accounted for rather than approximated from the starting eleven.
      */
-    private static JsonObject currentWeek(HOModel model, Set<Integer> wanted, boolean everyone) {
+    static JsonObject currentWeek(HOModel model, Set<Integer> wanted, boolean everyone) {
         final var json = new JsonObject();
         final var xtra = model.getXtraDaten();
         final var team = model.getTeam();

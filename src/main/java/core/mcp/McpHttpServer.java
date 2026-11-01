@@ -149,6 +149,7 @@ public final class McpHttpServer {
         registerAll(TransferTools.tools());
         registerAll(LineupTools.tools());
         registerAll(TrainingTools.tools());
+        registerAll(WeekTools.tools());
         registerAll(MatchTools.tools());
         registerAll(BackupTools.tools());
     }

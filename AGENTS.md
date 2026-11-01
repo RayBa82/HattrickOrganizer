@@ -209,7 +209,8 @@ available languages at runtime.
 ### MCP server
 
 `core.mcp` exposes HO's data to AI agents over MCP: `McpHttpServer` serves JSON-RPC, and the
-tools live in `TeamTools`, `MatchTools`, `LineupTools`, `TrainingTools` and `TransferTools`. Each is
+tools live in `TeamTools`, `MatchTools`, `LineupTools`, `TrainingTools`, `TransferTools` and
+`WeekTools` (`week_brief`, the aggregate the hattrick skills start the week with). Each is
 an `McpTool(name, description, schema, handler)`. `McpServerToolsTest` pins the tool count and a
 400-char cap on descriptions.
 

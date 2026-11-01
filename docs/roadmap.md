@@ -52,13 +52,10 @@ by all HO users.
 2. Done: `apply_lineup` answers with `changed` (a diff), the ratings and
    `captainInStartingEleven`. With `full` it adds the whole lineup. `get_lineup` has the
    captain flag, and both list occupied field and bench slots only.
-3. **`week_brief`** (inline, mostly local): the training type and all fixtures as in 1.
-   - Per trainee: minutes banked, maxed for the week, the top-3 position ratings, specialty,
-     injury/cards and transfer-listed.
-   - Level-ups since the last training.
-   - Per fixture: whether Hattrick already holds an order (player count, gaps), captain in the
-     eleven, and whether the HO lineup differs from it.
-   - Name the source of every number (tool, timestamp).
+3. Done: `week_brief` (`WeekTools`). It covers training, all fixtures of the week, the order
+   Hattrick holds per upcoming fixture (`includeOrders`, one CHPP request each, so it runs as a
+   task), and per player minutes, maxed, top-3 positions and availability. It adds the level-ups
+   since the last training and `sources`.
 4. **`download_team` `keepLineup`.** Do not silently replace the HO lineup with Hattrick's
    match order, and name the match whose lineup was replaced. Default to be decided: true only
    in the MCP tool, or in the desktop app too.
