@@ -2,6 +2,7 @@ package core.mcp;
 
 import com.google.gson.JsonObject;
 import core.constants.player.PlayerSkill;
+import core.model.enums.MatchType;
 import core.model.player.Player;
 import core.net.ChppWriteService;
 import core.util.AmountOfMoney;
@@ -475,5 +476,32 @@ class TrainingToolsTest {
         final var json = minutes.toJson(1);
         assertThat(json.get("fullTrainingMinutes").getAsInt()).isEqualTo(60);
         assertThat(json.get("maxedForWeek").getAsBoolean()).isFalse();
+    }
+
+    /**
+     * A Supporter cup match trains nobody but still needs a match order, and send_match_order
+     * takes the numeric type: the fixture row has to say both.
+     */
+    @Test
+    void fixture_marksTournamentMatchesAsNotTrainingAndInjuryFree() {
+        final var tournament = typeFields(MatchType.TOURNAMENTGROUP);
+        assertThat(tournament.get("matchType").getAsString()).isEqualTo("TOURNAMENTGROUP");
+        assertThat(tournament.get("matchTypeId").getAsInt()).isEqualTo(50);
+        assertThat(tournament.get("trains").getAsBoolean()).isFalse();
+        assertThat(tournament.get("injuriesPossible").getAsBoolean()).isFalse();
+
+        final var friendly = typeFields(MatchType.FRIENDLYNORMAL);
+        assertThat(friendly.get("trains").getAsBoolean()).isTrue();
+        assertThat(friendly.get("injuriesPossible").getAsBoolean()).isTrue();
+
+        final var masters = typeFields(MatchType.MASTERS);
+        assertThat(masters.get("trains").getAsBoolean()).isFalse();
+        assertThat(masters.get("injuriesPossible").getAsBoolean()).isTrue();
+    }
+
+    private static JsonObject typeFields(MatchType type) {
+        final var fixture = new JsonObject();
+        TrainingTools.addMatchTypeFields(fixture, type);
+        return fixture;
     }
 }

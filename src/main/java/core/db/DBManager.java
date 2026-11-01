@@ -1019,6 +1019,16 @@ public class DBManager implements PersistenceManager {
 	}
 
 	/**
+	 * The team's matches of the given types between two dates, upcoming ones included.
+	 * Unlike {@link #loadOfficialMatchesBetween} the caller picks the types, e.g. to list
+	 * tournament matches that do not count for training.
+	 */
+	public List<MatchKurzInfo> loadMatchesBetween(int teamId, HODateTime firstMatchDate, HODateTime lastMatchDate,
+			List<MatchType> matchTypes) {
+		return ((MatchesKurzInfoTable)getTable(MatchesKurzInfoTable.TABLENAME)).getMatchesKurzInfo(teamId, firstMatchDate.toDbTimestamp(), lastMatchDate.toDbTimestamp(), matchTypes);
+	}
+
+	/**
 	 * Get all matches with a certain status for the given team from the
 	 * database.
 	 *

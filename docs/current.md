@@ -69,3 +69,10 @@ not pushed). AGENTS.md, "Protocol", has the design as built.
   legacy, header mismatch, unknown task and method. The task path is covered by unit tests only.
   Every task tool spends CHPP requests, so a live run needs the user's go-ahead and a client
   that speaks the extension.
+- Next: the aggregate tools in `docs/roadmap.md` ("MCP aggregate tools for the hattrick
+  skills"). Item 1 is done: `get_training` `currentWeek.fixtures` now lists tournament and
+  ladder matches too (they were missing because `TrainingPerWeek` loads only training types).
+  Each row has `matchTypeId` (what `send_match_order` takes), `home`, `trains` and
+  `injuriesPossible`.
+  The minutes still come from the training matches only. Checked on the DB copy, which has no
+  tournament match, so the tournament row is covered by the unit test.

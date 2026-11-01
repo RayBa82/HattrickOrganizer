@@ -16,6 +16,7 @@ import core.training.TrainingManager;
 import core.training.TrainingPerWeek;
 import core.training.WeeklyTrainingType;
 import core.util.HODateTime;
+import org.jetbrains.annotations.Nullable;
 
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -922,9 +923,8 @@ public final class TrainingTools {
         json.add("fullTrainingRoleIds", roleIds(weekly.getTrainingSkillPositions()));
 
         final var banked = new LinkedHashMap<Integer, WeekMinutes>();
-        final var fixtures = new JsonArray();
-        final var missingLineups = bankWeek(model, wanted, week, weekly, banked, fixtures);
-        json.add("fixtures", fixtures);
+        final var missingLineups = bankWeek(model, wanted, week, weekly, banked);
+        json.add("fixtures", weekFixtures(model, weekEnd));
         if (everyone) {
             for (final var player : model.getCurrentPlayers()) {
                 if (!player.isCoach()) {
@@ -954,22 +954,16 @@ public final class TrainingTools {
     /**
      * Banks every match of a training week into the per-player totals.
      *
-     * @param fixtures receives one row per match, or null to skip them
      * @return how many played matches have no downloaded lineup, so their minutes are missing
      */
     private static int bankWeek(HOModel model, Set<Integer> wanted, TrainingPerWeek week,
-            WeeklyTrainingType weekly, Map<Integer, WeekMinutes> banked, JsonArray fixtures) {
+            WeeklyTrainingType weekly, Map<Integer, WeekMinutes> banked) {
         final var teamId = model.getBasics().getTeamId();
         var missingLineups = 0;
         for (final var match : week.getMatches()) {
             final var played = match.getMatchStatus() == MatchKurzInfo.FINISHED;
             final var details = played ? match.getMatchdetails() : null;
             final var lineup = details == null ? null : details.getOwnTeamLineup();
-
-            if (fixtures != null) {
-                fixtures.add(fixture(match, played, lineup != null));
-            }
-
             if (lineup == null) {
                 if (played) {
                     missingLineups++;
@@ -981,17 +975,49 @@ public final class TrainingTools {
         return missingLineups;
     }
 
+    /**
+     * Every match of the training week that ends at {@code weekEnd}, tournament and ladder matches
+     * included. {@link TrainingPerWeek} loads only the types that count for training, so its list
+     * misses a Supporter cup match that still needs a match order. Same window as
+     * {@code TrainingPerWeek.loadMatches}.
+     */
+    private static JsonArray weekFixtures(HOModel model, HODateTime weekEnd) {
+        final var types = new ArrayList<>(MatchType.getOfficialMatchTypes());
+        types.addAll(MatchType.getTournamentMatchTypes());
+        final var matches = DBManager.instance().loadMatchesBetween(model.getBasics().getTeamId(),
+                weekEnd.minus(7, ChronoUnit.DAYS), weekEnd.plus(23, ChronoUnit.HOURS), types);
+        final var fixtures = new JsonArray();
+        for (final var match : matches) {
+            final var played = match.getMatchStatus() == MatchKurzInfo.FINISHED;
+            final var details = played ? match.getMatchdetails() : null;
+            fixtures.add(fixture(match, played, details != null && details.getOwnTeamLineup() != null));
+        }
+        return fixtures;
+    }
+
     private static JsonObject fixture(MatchKurzInfo match, boolean played, boolean lineupAvailable) {
         final var fixture = new JsonObject();
         fixture.addProperty("matchId", match.getMatchID());
-        fixture.addProperty("matchType",
-                match.getMatchType() == null ? null : match.getMatchType().name());
+        addMatchTypeFields(fixture, match.getMatchType());
         fixture.addProperty("date",
                 match.getMatchSchedule() == null ? null : match.getMatchSchedule().toHT());
         fixture.addProperty("opponent", match.getOpponentTeamName());
+        fixture.addProperty("home", match.isHomeMatch());
         fixture.addProperty("played", played);
         fixture.addProperty("lineupAvailable", lineupAvailable);
         return fixture;
+    }
+
+    /**
+     * The fields of a fixture row that depend only on its type. {@code matchTypeId} is what
+     * send_match_order takes. {@code trains} follows the training rules: tournaments, ladders and
+     * Masters train nobody. Tournament and ladder matches cause no injuries, by Hattrick's rules.
+     */
+    static void addMatchTypeFields(JsonObject fixture, @Nullable MatchType type) {
+        fixture.addProperty("matchType", type == null ? null : type.name());
+        fixture.addProperty("matchTypeId", type == null ? null : type.getId());
+        fixture.addProperty("trains", type != null && type.isOfficial() && type != MatchType.MASTERS);
+        fixture.addProperty("injuriesPossible", type != null && !type.isTournament());
     }
 
     /** The past training weeks inside the window, and per player the minutes each one banked. */
@@ -1022,7 +1048,7 @@ public final class TrainingTools {
             row.addProperty("coachLevel", week.getCoachLevel());
             row.addProperty("assistantsLevel", week.getTrainingAssistantsLevel());
             final var banked = new LinkedHashMap<Integer, WeekMinutes>();
-            final var missing = weekly == null ? 0 : bankWeek(model, wanted, week, weekly, banked, null);
+            final var missing = weekly == null ? 0 : bankWeek(model, wanted, week, weekly, banked);
             row.addProperty("lineupDataComplete", missing == 0);
             weeks.add(row);
             for (final var entry : banked.entrySet()) {

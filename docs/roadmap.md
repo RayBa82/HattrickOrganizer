@@ -35,3 +35,49 @@ server had 14 usable rows in all, 3-4 of them league; the dev DB copy has 10.
 
 Measurement only so far: `RatingCalibration` fits nothing. A model change needs a before/after
 comparison over the same rows (`get_rating_calibration backfill recompute`).
+
+## MCP aggregate tools for the hattrick skills
+
+**Trigger:** none, worked off in this order. Agreed with the hattrick session on 2026-11-01:
+its skills (set-lineup, search-transfers, price-player, buy-/sell-trainee, squad-review,
+book-friendly) chain many calls. Its own estimate is a fifth to a third fewer tokens per week,
+mostly from the lineup echo (about 2.5k tokens per eleven) and from one round per tool call.
+Mechanical rules move to the server, and judgement stays with the agent: the A/B split, tactics,
+selling and bid limits. The server never bids. Extra CHPP requests are fine, but the
+transfer-search limit is never worked around with a token refresh. HO's consumer key is shared
+by all HO users.
+
+1. Done: `get_training` lists tournament fixtures, with `matchTypeId`, `home`, `trains` and
+   `injuriesPossible`.
+2. **Lineup diff.** `apply_lineup`/`get_lineup` answer with a diff, and the full echo only on
+   request. Add a flag for whether the captain is in the starting eleven.
+3. **`week_brief`** (inline, mostly local): the training type and all fixtures as in 1.
+   - Per trainee: minutes banked, maxed for the week, the top-3 position ratings, specialty,
+     injury/cards and transfer-listed.
+   - Level-ups since the last training.
+   - Per fixture: whether Hattrick already holds an order (player count, gaps), captain in the
+     eleven, and whether the HO lineup differs from it.
+   - Name the source of every number (tool, timestamp).
+4. **`download_team` `keepLineup`.** Do not silently replace the HO lineup with Hattrick's
+   match order, and name the match whose lineup was replaced. Default to be decided: true only
+   in the MCP tool, or in the desktop app too.
+5. **`level_up_report`** (task): after Friday's training, download and report the level-ups
+   since the last training, compactly. It replaces download status polling and the per-player
+   history loop in sell-trainee.
+6. **`screen_market`** (task): run all saved searches with wide CHPP windows and filter on the
+   server, so the fewest searches are spent. Searches that do not fit are queued.
+   - `specialty` as a list (`[4,5]`), filtered on the server.
+   - Filters: a wage limit that adds +20 % for foreigners (`nativeCountryId` differs from
+     ours), no injured players, a specialty whitelist and top-N.
+   - A fixed table: Player, Specialty, Age, PM, PASS, SC, WG, DEF, KP, SP, EXP, Wage in squad,
+     Price, Card risk, Closes.
+   - Card risk for the top-N via `playerdetails`, without scouting the players.
+   - The expected final price per hit from the comparables: median, range and count. Early
+     bids mislead.
+   - Buy check: squad size against the cap of 26, and `expectedCash` minus the open bids.
+   - Optional `scout: N`, off by default, because it writes to Hattrick.
+   - Rules are parameters, not server code: specialty per slot, age/skill windows, caps,
+     top-N, squad cap, sort and cash reserve. The training slots are read from
+     `get_training`.
+7. **`price_compact`:** an `estimate_market_value` `summary` mode with median, range and count.
+   The download stays.
