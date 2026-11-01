@@ -246,4 +246,49 @@ class LineupToolsTest {
         assertThat(a.getPositionById(IMatchRoleID.keeper).getPlayerId()).isEqualTo(11);
         assertThat(b.getPositionById(IMatchRoleID.keeper).getPlayerId()).isEqualTo(22);
     }
+
+    /** apply_lineup answers with the diff alone, so it has to name every kind of change. */
+    @Test
+    void lineupDiff_namesMovedPlayersEmptiedSlotsAndChangedScalarsOnly() {
+        final var before = JsonParser.parseString("""
+                {"positions":[{"roleId":100,"playerId":11,"behaviour":0},
+                              {"roleId":101,"playerId":12,"behaviour":0}],
+                 "tactic":0,"attitude":0,"captainId":12,"setPiecesTakerId":0,
+                 "penaltyTakers":[],"teamOrders":[]}""").getAsJsonObject();
+        final var after = JsonParser.parseString("""
+                {"positions":[{"roleId":100,"playerId":11,"behaviour":0},
+                              {"roleId":102,"playerId":12,"behaviour":1}],
+                 "tactic":0,"attitude":1,"captainId":12,"setPiecesTakerId":0,
+                 "penaltyTakers":[],"teamOrders":[]}""").getAsJsonObject();
+
+        final var diff = LineupTools.lineupDiff(before, after);
+
+        assertThat(diff.keySet()).containsExactlyInAnyOrder("positions", "attitude");
+        assertThat(diff.getAsJsonArray("positions")).hasToString(
+                "[{\"roleId\":101,\"from\":{\"playerId\":12,\"behaviour\":0},\"to\":null},"
+                        + "{\"roleId\":102,\"from\":null,\"to\":{\"playerId\":12,\"behaviour\":1}}]");
+        assertThat(diff.getAsJsonObject("attitude")).hasToString("{\"from\":0,\"to\":1}");
+        assertThat(LineupTools.lineupDiff(after, after).isEmpty()).isTrue();
+    }
+
+    /** Hattrick only counts a captain on the pitch; a benched one gets no warning from HO. */
+    @Test
+    void captainCheck_isTrueOnlyForAFieldedCaptain() throws Exception {
+        final var lineup = LineupTools.scratchLineup(JsonParser.parseString("""
+                {"positions":[{"roleId":100,"playerId":11}],
+                 "bench":[{"roleId":200,"playerId":22}]}""").getAsJsonObject());
+
+        lineup.setCaptain(11);
+        assertThat(captainCheck(lineup)).isTrue();
+        lineup.setCaptain(22);
+        assertThat(captainCheck(lineup)).isFalse();
+        lineup.setCaptain(0);
+        assertThat(captainCheck(lineup)).isFalse();
+    }
+
+    private static boolean captainCheck(module.lineup.Lineup lineup) {
+        final var json = new JsonObject();
+        LineupTools.addCaptainCheck(json, lineup);
+        return json.get("captainInStartingEleven").getAsBoolean();
+    }
 }

@@ -49,8 +49,9 @@ by all HO users.
 
 1. Done: `get_training` lists tournament fixtures, with `matchTypeId`, `home`, `trains` and
    `injuriesPossible`.
-2. **Lineup diff.** `apply_lineup`/`get_lineup` answer with a diff, and the full echo only on
-   request. Add a flag for whether the captain is in the starting eleven.
+2. Done: `apply_lineup` answers with `changed` (a diff), the ratings and
+   `captainInStartingEleven`. With `full` it adds the whole lineup. `get_lineup` has the
+   captain flag, and both list occupied field and bench slots only.
 3. **`week_brief`** (inline, mostly local): the training type and all fixtures as in 1.
    - Per trainee: minutes banked, maxed for the week, the top-3 position ratings, specialty,
      injury/cards and transfer-listed.

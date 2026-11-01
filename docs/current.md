@@ -76,3 +76,9 @@ not pushed). AGENTS.md, "Protocol", has the design as built.
   `injuriesPossible`.
   The minutes still come from the training matches only. Checked on the DB copy, which has no
   tournament match, so the tournament row is covered by the unit test.
+- Item 2 is done: `apply_lineup` answers with `changed` (a diff against the lineup HO held
+  before), the ratings and `captainInStartingEleven`; `full` adds the whole lineup.
+  `LineupTools.describe` lists only occupied field (100-113) and bench (200-213) slots. The
+  captain and set pieces pseudo-roles 17/18 are gone from `positions`; `captainId` and
+  `setPiecesTakerId` carry them. Measured on the DB copy: one swap answers with 703 chars
+  instead of about 1,950.

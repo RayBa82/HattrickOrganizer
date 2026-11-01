@@ -43,6 +43,30 @@ public final class LineupTools {
                     + "2 defensive, 3 towards middle, 4 towards wing. tactic, attitude, "
                     + "styleOfPlay, captainId and setPiecesTakerId are optional.";
 
+    private static final String FULL = "full";
+    private static final String POSITIONS = "positions";
+    private static final String CAPTAIN_ID = "captainId";
+    private static final String TACTIC = "tactic";
+    private static final String ATTITUDE = "attitude";
+    private static final String SET_PIECES_TAKER_ID = "setPiecesTakerId";
+    private static final String ROLE_ID = "roleId";
+    private static final String ARRAY = "array";
+    private static final String GROUP = "group";
+    private static final String ASSIGNMENTS = "assignments";
+    private static final String MATCH_ID = "matchId";
+    private static final String INTEGER = "integer";
+    private static final String MATCH_TYPE = "matchType";
+    private static final String ORDER = "order";
+    private static final String UNAVAILABLE_PLAYERS = "unavailablePlayers";
+    private static final String STATUS = "status";
+    private static final String VERIFIED = "verified";
+    private static final String VERIFY_MESSAGE = "verifyMessage";
+    private static final String BENCH = "bench";
+    private static final String STYLE_OF_PLAY = "styleOfPlay";
+    private static final String PLAYER_ID = "playerId";
+    private static final String BEHAVIOUR = "behaviour";
+    private static final String ALLOW_UNAVAILABLE = "allowUnavailable";
+
     private LineupTools() {
     }
 
@@ -54,18 +78,18 @@ public final class LineupTools {
                                 + "90 minutes with every team order firing at its minute; standing "
                                 + "and red-card conditions are not modelled. "
                                 + "assumptions.weather is the weather they were scored under. "
-                                + "unavailablePlayers: injured/suspended in it. "
-                                + "simulate_lineup scores a hypothetical one instead.",
+                                + "unavailablePlayers: injured/suspended in it; "
+                                + "captainInStartingEleven: captain on the pitch.",
                         McpTool.schema(new JsonObject()),
                         args -> currentLineup()),
                 new McpTool("apply_lineup",
-                        "Write a lineup into HO. Changes what the Lineup tab shows and what HO "
-                                + "would upload; sends nothing to Hattrick. HO can refuse a "
-                                + "position - the Lineup tab's assistant filter unfields a player it "
-                                + "hides - so the returned lineup is what HO holds afterwards, not "
-                                + "an echo. Read notApplied and orderWarnings before reporting it "
-                                + "as set. penaltyTakers / teamOrders replace the whole list.",
-                        lineupSchema(),
+                        "Write a lineup into HO; sends nothing to Hattrick. Answers with what "
+                                + "changed against the lineup HO held before, as HO holds it after "
+                                + "(its assistant filter can unfield a player), plus ratings and "
+                                + "captainInStartingEleven; full adds the whole lineup, so no "
+                                + "get_lineup is needed. Read notApplied and orderWarnings before "
+                                + "reporting it as set. penaltyTakers / teamOrders replace the list.",
+                        applySchema(),
                         LineupTools::apply),
                 new McpTool("set_player_group",
                         "File players under a squad group - the A/B/C team markers HO shows beside "
@@ -74,13 +98,13 @@ public final class LineupTools {
                                 + "group, or assignments ({playerId, group} pairs) to file several "
                                 + "groups in one call; get_squad reports each player's current group.",
                         McpTool.schema(McpTool.properties(
-                                "playerIds", McpTool.prop("array",
+                                "playerIds", McpTool.prop(ARRAY,
                                         "player ids to file under group; omit if using assignments"),
-                                "group", McpTool.prop("string",
+                                GROUP, McpTool.prop("string",
                                         "one of: " + String.join(", ", GroupTeamFactory.TEAMS_GROUPS)
                                                 + " (the empty one clears the group); omit if using "
-                                                + "assignments"),
-                                "assignments", McpTool.prop("array",
+                                                + ASSIGNMENTS),
+                                ASSIGNMENTS, McpTool.prop(ARRAY,
                                         "{playerId, group} pairs, instead of playerIds+group, for "
                                                 + "filing players under different groups in one call"))),
                         LineupTools::setPlayerGroup),
@@ -106,15 +130,15 @@ public final class LineupTools {
 
     private static JsonObject matchOrderSchema() {
         return McpTool.schema(McpTool.properties(
-                        "matchId", McpTool.prop("integer", "the Hattrick match id"),
-                        "matchType", McpTool.prop("integer",
+                        MATCH_ID, McpTool.prop(INTEGER, "the Hattrick match id"),
+                        MATCH_TYPE, McpTool.prop(INTEGER,
                                 "match type id (league = 1; from get_matches for others)")),
-                "matchId", "matchType");
+                MATCH_ID, MATCH_TYPE);
     }
 
     private static JsonObject sendMatchOrder(JsonObject args) throws McpToolException {
-        final var matchId = McpJson.reqInt(args, "matchId");
-        final var matchType = matchType(McpJson.reqInt(args, "matchType"));
+        final var matchId = McpJson.reqInt(args, MATCH_ID);
+        final var matchType = matchType(McpJson.reqInt(args, MATCH_TYPE));
         final var model = McpJson.model();
         final var lineupMatchId = new java.util.concurrent.atomic.AtomicInteger();
         // apply_lineup mutates the live Lineup on the EDT, so serialise it there too.
@@ -125,20 +149,20 @@ public final class LineupTools {
             lineupMatchId.set(team.getMatchId());
             final var wrapper = new JsonObject();
             final var orderString = lineup.toJson();
-            wrapper.addProperty("order", orderString);
+            wrapper.addProperty(ORDER, orderString);
             wrapper.add("echo", LineupOrders.echo(orderString, benchRoleIds(lineup)));
-            wrapper.add("unavailablePlayers", unavailablePlayers(lineup, model));
+            wrapper.add(UNAVAILABLE_PLAYERS, unavailablePlayers(lineup, model));
             return wrapper;
         });
-        final var orderString = sentOrder.get("order").getAsString();
+        final var orderString = sentOrder.get(ORDER).getAsString();
         final var echo = sentOrder.getAsJsonObject("echo");
 
         final var out = new JsonObject();
-        out.addProperty("matchId", matchId);
-        final var unavailable = sentOrder.getAsJsonArray("unavailablePlayers");
+        out.addProperty(MATCH_ID, matchId);
+        final var unavailable = sentOrder.getAsJsonArray(UNAVAILABLE_PLAYERS);
         if (!unavailable.isEmpty()) {
             // Sent anyway: Hattrick takes the order, and the caller may mean it (a sub on the bench).
-            out.add("unavailablePlayers", unavailable);
+            out.add(UNAVAILABLE_PLAYERS, unavailable);
         }
         final var mismatch = matchMismatch(lineupMatchId.get(), matchId);
         if (mismatch != null) {
@@ -149,7 +173,7 @@ public final class LineupTools {
         } catch (ChppWriteService.SupporterRequiredException e) {
             // Not a failure to retry: the order is fine, the account cannot upload it. The echo is
             // what the user has to enter on Hattrick by hand.
-            out.addProperty("status", "supporterRequired");
+            out.addProperty(STATUS, "supporterRequired");
             out.addProperty("sent", false);
             out.addProperty("message", e.getMessage() + " Nothing was sent; wouldSend is the order "
                     + "to enter on Hattrick by hand.");
@@ -158,9 +182,9 @@ public final class LineupTools {
         } catch (ChppWriteService.ChppWriteException e) {
             throw new McpToolException(e.getMessage());
         }
-        out.addProperty("status", "ok");
+        out.addProperty(STATUS, "ok");
         out.addProperty("sent", true);
-        out.add("order", echo);
+        out.add(ORDER, echo);
         addReadBack(out, echo, matchId, matchType);
         return out;
     }
@@ -175,20 +199,20 @@ public final class LineupTools {
         try {
             final var held = heldOrder(matchId, matchType);
             if (held == null) {
-                out.addProperty("verified", "hidden");
-                out.addProperty("verifyMessage", HIDDEN);
+                out.addProperty(VERIFIED, "hidden");
+                out.addProperty(VERIFY_MESSAGE, HIDDEN);
                 return;
             }
             final var differences = orderDifferences(sent, held);
-            out.addProperty("verified", differences.isEmpty());
+            out.addProperty(VERIFIED, differences.isEmpty());
             if (!differences.isEmpty()) {
                 out.add("differences", differences);
-                out.addProperty("verifyMessage", "Hattrick holds a different order than the one sent. "
+                out.addProperty(VERIFY_MESSAGE, "Hattrick holds a different order than the one sent. "
                         + "Do not report it as set; get_match_order shows what Hattrick holds.");
             }
         } catch (McpToolException | RuntimeException e) {
-            out.addProperty("verified", "failed");
-            out.addProperty("verifyMessage", "Sent, but the read-back failed: " + e.getMessage()
+            out.addProperty(VERIFIED, "failed");
+            out.addProperty(VERIFY_MESSAGE, "Sent, but the read-back failed: " + e.getMessage()
                     + " Check it with get_match_order.");
         }
     }
@@ -197,17 +221,17 @@ public final class LineupTools {
             + "shortly before kick-off - so it cannot be read back.";
 
     private static JsonObject getMatchOrder(JsonObject args) throws McpToolException {
-        final var matchId = McpJson.reqInt(args, "matchId");
-        final var matchType = matchType(McpJson.reqInt(args, "matchType"));
+        final var matchId = McpJson.reqInt(args, MATCH_ID);
+        final var matchType = matchType(McpJson.reqInt(args, MATCH_TYPE));
         final var out = new JsonObject();
-        out.addProperty("matchId", matchId);
+        out.addProperty(MATCH_ID, matchId);
         final var held = heldOrder(matchId, matchType);
         if (held == null) {
-            out.addProperty("status", "hidden");
+            out.addProperty(STATUS, "hidden");
             out.addProperty("message", HIDDEN);
         } else {
-            out.addProperty("status", "ok");
-            out.add("order", held);
+            out.addProperty(STATUS, "ok");
+            out.add(ORDER, held);
         }
         return out;
     }
@@ -272,7 +296,7 @@ public final class LineupTools {
     /** Every way the order Hattrick holds differs from the one sent; empty when they agree. */
     static JsonArray orderDifferences(JsonObject sent, JsonObject held) {
         final var differences = new JsonArray();
-        for (final var key : List.of("positions", "bench")) {
+        for (final var key : List.of(POSITIONS, BENCH)) {
             final var sentSlots = byRole(sent.getAsJsonArray(key));
             final var heldSlots = byRole(held.getAsJsonArray(key));
             final var roles = new java.util.TreeSet<>(sentSlots.keySet());
@@ -286,8 +310,8 @@ public final class LineupTools {
                 }
             }
         }
-        for (final var key : List.of("tactic", "attitude", "styleOfPlay", "captainId",
-                "setPiecesTakerId", LineupOrders.PENALTY_TAKERS, LineupOrders.TEAM_ORDERS)) {
+        for (final var key : List.of(TACTIC, ATTITUDE, STYLE_OF_PLAY, CAPTAIN_ID,
+                SET_PIECES_TAKER_ID, LineupOrders.PENALTY_TAKERS, LineupOrders.TEAM_ORDERS)) {
             if (!java.util.Objects.equals(sent.get(key), held.get(key))) {
                 differences.add(key + ": sent " + sent.get(key) + ", Hattrick holds " + held.get(key));
             }
@@ -300,7 +324,7 @@ public final class LineupTools {
         if (slots != null) {
             for (final var element : slots) {
                 final var slot = element.getAsJsonObject();
-                map.put(slot.get("roleId").getAsInt(), slot);
+                map.put(slot.get(ROLE_ID).getAsInt(), slot);
             }
         }
         return map;
@@ -310,8 +334,8 @@ public final class LineupTools {
         if (slot == null) {
             return "nobody";
         }
-        return "player " + slot.get("playerId").getAsInt()
-                + (slot.has("behaviour") ? " behaviour " + slot.get("behaviour").getAsInt() : "");
+        return "player " + slot.get(PLAYER_ID).getAsInt()
+                + (slot.has(BEHAVIOUR) ? " behaviour " + slot.get(BEHAVIOUR).getAsInt() : "");
     }
 
     /** An order without field players would wipe the one Hattrick holds, so it never leaves. */
@@ -332,26 +356,35 @@ public final class LineupTools {
                 + ", not " + matchId + ". Check get_lineup's lineupMatchId and nextMatch.";
     }
 
+    /** apply_lineup takes a lineup spec plus {@code full}, which simulate_lineup has no use for. */
+    private static JsonObject applySchema() {
+        final var schema = lineupSchema();
+        schema.getAsJsonObject("properties").add(FULL, McpTool.prop("boolean",
+                "also return the whole lineup as HO holds it after the write. Default false: "
+                        + "only what changed"));
+        return schema;
+    }
+
     static JsonObject lineupSchema() {
         return McpTool.schema(McpTool.properties(
-                        "positions", McpTool.prop("array", SPEC_DOC),
-                        "bench", McpTool.prop("array", "bench slots as {roleId, playerId}"),
-                        "tactic", McpTool.prop("integer", "tactic type"),
-                        "attitude", McpTool.prop("integer", "attitude"),
-                        "styleOfPlay", McpTool.prop("integer", "style of play, -10 defensive to 10 offensive"),
-                        "allowUnavailable", McpTool.prop("boolean", "score the lineup even though it fields an injured or suspended player; rejected by default"),
-                        "captainId", McpTool.prop("integer", "player id of the captain"),
-                        "setPiecesTakerId", McpTool.prop("integer", "player id of the set pieces taker"),
-                        LineupOrders.PENALTY_TAKERS, McpTool.prop("array", LineupOrders.PENALTY_TAKERS_DOC),
-                        LineupOrders.TEAM_ORDERS, McpTool.prop("array", LineupOrders.TEAM_ORDERS_DOC),
-                        "matchId", McpTool.prop("integer", "score for this stored fixture: its location "
+                        POSITIONS, McpTool.prop(ARRAY, SPEC_DOC),
+                        BENCH, McpTool.prop(ARRAY, "bench slots as {roleId, playerId}"),
+                        TACTIC, McpTool.prop(INTEGER, "tactic type"),
+                        ATTITUDE, McpTool.prop(INTEGER, ATTITUDE),
+                        STYLE_OF_PLAY, McpTool.prop(INTEGER, "style of play, -10 defensive to 10 offensive"),
+                        ALLOW_UNAVAILABLE, McpTool.prop("boolean", "score the lineup even though it fields an injured or suspended player; rejected by default"),
+                        CAPTAIN_ID, McpTool.prop(INTEGER, "player id of the captain"),
+                        SET_PIECES_TAKER_ID, McpTool.prop(INTEGER, "player id of the set pieces taker"),
+                        LineupOrders.PENALTY_TAKERS, McpTool.prop(ARRAY, LineupOrders.PENALTY_TAKERS_DOC),
+                        LineupOrders.TEAM_ORDERS, McpTool.prop(ARRAY, LineupOrders.TEAM_ORDERS_DOC),
+                        MATCH_ID, McpTool.prop(INTEGER, "score for this stored fixture: its location "
                                 + "and HO's stored weather forecast (get_match_weather refreshes it); "
                                 + "default HO's next upcoming match. apply_lineup also stores the lineup for it, "
                                 + "so send_match_order for that match finds it"),
-                        "weather", McpTool.prop("integer", "0 rain, 1 overcast, 2 partially cloudy, 3 sunny; "
+                        "weather", McpTool.prop(INTEGER, "0 rain, 1 overcast, 2 partially cloudy, 3 sunny; "
                                 + "overrides the fixture's forecast. Technical/Powerful/Quick players "
                                 + "gain or lose 5% by it")),
-                "positions");
+                POSITIONS);
     }
 
     /**
@@ -363,7 +396,7 @@ public final class LineupTools {
         final var club = model != null ? model.getClub() : null;
         final var orders = LineupOrders.parseTeamOrders(spec, model,
                 club != null ? club.getTacticalAssistantLevels() : 0);
-        if (!McpJson.optBool(spec, "allowUnavailable", false)) {
+        if (!McpJson.optBool(spec, ALLOW_UNAVAILABLE, false)) {
             LineupOrders.rejectUnavailable(null, orders, model);
         }
         final var lineup = new Lineup();
@@ -400,14 +433,14 @@ public final class LineupTools {
      * up front - before apply_lineup touches the live lineup - rather than sent and silently ignored.
      */
     static void rejectKeeperAsSetPiecesTaker(JsonObject spec) {
-        if (!spec.has("setPiecesTakerId") || spec.get("setPiecesTakerId").isJsonNull()) {
+        if (!spec.has(SET_PIECES_TAKER_ID) || spec.get(SET_PIECES_TAKER_ID).isJsonNull()) {
             return;
         }
-        final var takerId = spec.get("setPiecesTakerId").getAsInt();
-        for (final var element : McpJson.reqArray(spec, "positions")) {
+        final var takerId = spec.get(SET_PIECES_TAKER_ID).getAsInt();
+        for (final var element : McpJson.reqArray(spec, POSITIONS)) {
             final var position = element.getAsJsonObject();
-            if (McpJson.reqInt(position, "roleId") == IMatchRoleID.keeper
-                    && McpJson.reqInt(position, "playerId") == takerId) {
+            if (McpJson.reqInt(position, ROLE_ID) == IMatchRoleID.keeper
+                    && McpJson.reqInt(position, PLAYER_ID) == takerId) {
                 throw new IllegalArgumentException("setPiecesTakerId " + takerId + " is the keeper "
                         + "(roleId 100) - a keeper cannot take set pieces. Name an outfield player.");
             }
@@ -433,9 +466,9 @@ public final class LineupTools {
             final var player = position.getPlayerId() > 0 ? model.getCurrentPlayer(position.getPlayerId()) : null;
             if (player != null && !McpJson.isAvailable(player)) {
                 final var row = new JsonObject();
-                row.addProperty("playerId", player.getPlayerId());
+                row.addProperty(PLAYER_ID, player.getPlayerId());
                 row.addProperty("name", player.getFullName());
-                row.addProperty("roleId", position.getRoleId());
+                row.addProperty(ROLE_ID, position.getRoleId());
                 row.addProperty("reason", unavailableReason(player));
                 out.add(row);
             }
@@ -444,7 +477,7 @@ public final class LineupTools {
     }
 
     private static void rejectUnavailable(JsonObject spec) throws McpToolException {
-        if (McpJson.optBool(spec, "allowUnavailable", false)) {
+        if (McpJson.optBool(spec, ALLOW_UNAVAILABLE, false)) {
             return;
         }
         // Deliberately not McpJson.model(): with no snapshot loaded there is nothing to check the
@@ -454,8 +487,8 @@ public final class LineupTools {
             return;
         }
         final var complaints = new java.util.ArrayList<String>();
-        for (final var element : McpJson.reqArray(spec, "positions")) {
-            final var playerId = McpJson.reqInt(element.getAsJsonObject(), "playerId");
+        for (final var element : McpJson.reqArray(spec, POSITIONS)) {
+            final var playerId = McpJson.reqInt(element.getAsJsonObject(), PLAYER_ID);
             final var player = playerId > 0 ? model.getCurrentPlayer(playerId) : null;
             if (player != null && !McpJson.isAvailable(player)) {
                 complaints.add(player.getFullName() + " (" + playerId + ") is " + unavailableReason(player));
@@ -484,7 +517,7 @@ public final class LineupTools {
      * so a bad id leaves apply_lineup's live lineup alone.
      */
     static void applyFixture(Lineup lineup, JsonObject spec) throws McpToolException {
-        final var matchId = McpJson.optInteger(spec, "matchId");
+        final var matchId = McpJson.optInteger(spec, MATCH_ID);
         final var match = matchId == null ? null
                 : DBManager.instance().getMatchesKurzInfoByMatchID(matchId, null);
         if (matchId != null && match == null) {
@@ -513,35 +546,35 @@ public final class LineupTools {
         rejectKeeperAsSetPiecesTaker(spec);
         rejectUnavailable(spec);
         applyFixture(lineup, spec);
-        for (final var element : McpJson.reqArray(spec, "positions")) {
+        for (final var element : McpJson.reqArray(spec, POSITIONS)) {
             final var position = element.getAsJsonObject();
-            final var roleId = McpJson.reqInt(position, "roleId");
+            final var roleId = McpJson.reqInt(position, ROLE_ID);
             requireSlot(lineup, roleId);
-            lineup.setSpielerAtPosition(roleId, McpJson.reqInt(position, "playerId"),
-                    (byte) McpJson.optInt(position, "behaviour", IMatchRoleID.NORMAL));
+            lineup.setSpielerAtPosition(roleId, McpJson.reqInt(position, PLAYER_ID),
+                    (byte) McpJson.optInt(position, BEHAVIOUR, IMatchRoleID.NORMAL));
         }
-        if (spec.has("bench")) {
-            for (final var element : spec.getAsJsonArray("bench")) {
+        if (spec.has(BENCH)) {
+            for (final var element : spec.getAsJsonArray(BENCH)) {
                 final var slot = element.getAsJsonObject();
-                final var roleId = McpJson.reqInt(slot, "roleId");
+                final var roleId = McpJson.reqInt(slot, ROLE_ID);
                 requireSlot(lineup, roleId);
-                lineup.setSpielerAtPosition(roleId, McpJson.reqInt(slot, "playerId"));
+                lineup.setSpielerAtPosition(roleId, McpJson.reqInt(slot, PLAYER_ID));
             }
         }
-        if (spec.has("tactic")) {
-            lineup.setTacticType(spec.get("tactic").getAsInt());
+        if (spec.has(TACTIC)) {
+            lineup.setTacticType(spec.get(TACTIC).getAsInt());
         }
-        if (spec.has("attitude")) {
-            lineup.setAttitude(spec.get("attitude").getAsInt());
+        if (spec.has(ATTITUDE)) {
+            lineup.setAttitude(spec.get(ATTITUDE).getAsInt());
         }
-        if (spec.has("styleOfPlay")) {
-            lineup.setStyleOfPlay(spec.get("styleOfPlay").getAsInt());
+        if (spec.has(STYLE_OF_PLAY)) {
+            lineup.setStyleOfPlay(spec.get(STYLE_OF_PLAY).getAsInt());
         }
-        if (spec.has("captainId")) {
-            lineup.setCaptain(spec.get("captainId").getAsInt());
+        if (spec.has(CAPTAIN_ID)) {
+            lineup.setCaptain(spec.get(CAPTAIN_ID).getAsInt());
         }
-        if (spec.has("setPiecesTakerId")) {
-            lineup.setKicker(spec.get("setPiecesTakerId").getAsInt());
+        if (spec.has(SET_PIECES_TAKER_ID)) {
+            lineup.setKicker(spec.get(SET_PIECES_TAKER_ID).getAsInt());
         }
     }
 
@@ -554,10 +587,11 @@ public final class LineupTools {
         return onEdt(() -> {
             final var team = model.getCurrentLineupTeam();
             final var json = describe(team.getLineup(), ratingModel);
+            addCaptainCheck(json, team.getLineup());
             addLineupMatch(json, team, next);
             final var unavailable = unavailablePlayers(team.getLineup(), model);
             if (!unavailable.isEmpty()) {
-                json.add("unavailablePlayers", unavailable);
+                json.add(UNAVAILABLE_PLAYERS, unavailable);
             }
             return json;
         });
@@ -572,14 +606,14 @@ public final class LineupTools {
                                @Nullable core.model.match.MatchKurzInfo next) {
         final var matchId = team.getMatchId();
         json.add("lineupMatchId", matchId > 0 ? new com.google.gson.JsonPrimitive(matchId) : com.google.gson.JsonNull.INSTANCE);
-        json.add("matchType", matchId > 0 ? new com.google.gson.JsonPrimitive(team.getMatchType().getId()) : com.google.gson.JsonNull.INSTANCE);
+        json.add(MATCH_TYPE, matchId > 0 ? new com.google.gson.JsonPrimitive(team.getMatchType().getId()) : com.google.gson.JsonNull.INSTANCE);
         if (next == null) {
             json.add("nextMatch", com.google.gson.JsonNull.INSTANCE);
             return;
         }
         final var nextJson = new JsonObject();
-        nextJson.addProperty("matchId", next.getMatchID());
-        nextJson.addProperty("matchType", next.getMatchType().getId());
+        nextJson.addProperty(MATCH_ID, next.getMatchID());
+        nextJson.addProperty(MATCH_TYPE, next.getMatchType().getId());
         nextJson.addProperty("date", next.getMatchSchedule() == null ? null : next.getMatchSchedule().toHT());
         json.add("nextMatch", nextJson);
     }
@@ -591,7 +625,7 @@ public final class LineupTools {
         final var takers = LineupOrders.parsePenaltyTakers(spec, model);
         final var orders = LineupOrders.parseTeamOrders(spec, model,
                 model.getClub() != null ? model.getClub().getTacticalAssistantLevels() : 0);
-        if (!McpJson.optBool(spec, "allowUnavailable", false)) {
+        if (!McpJson.optBool(spec, ALLOW_UNAVAILABLE, false)) {
             LineupOrders.rejectUnavailable(takers, orders, model);
         }
         return onEdt(() -> {
@@ -599,11 +633,12 @@ public final class LineupTools {
             // MatchLineupTeam, not a Lineup - so mutate it in place and persist through the same
             // path the Lineup tab uses.
             final var team = model.getCurrentLineupTeam();
+            final var before = describe(team.getLineup(), null);
             applySpec(team.getLineup(), spec);
             // matchId names the match the lineup is for, not only the fixture it is scored under:
             // without this it stays stored under the match HO loaded on start, and send_match_order
             // for matchId warns that it belongs to another one. That match keeps its stored row.
-            final var matchId = McpJson.optInteger(spec, "matchId");
+            final var matchId = McpJson.optInteger(spec, MATCH_ID);
             if (matchId != null && matchId != team.getMatchId()) {
                 final var match = DBManager.instance().getMatchesKurzInfoByMatchID(matchId, null);
                 team.setMatchId(matchId);
@@ -627,24 +662,41 @@ public final class LineupTools {
                 lineupPanel.update();
             }
             model.storeLineup(team);
-            final var result = describe(team.getLineup(), ratingModel);
-            final var orderWarnings = LineupOrders.warnings(team.getLineup(), model);
-            if (!orderWarnings.isEmpty()) {
-                result.add("orderWarnings", orderWarnings);
-            }
-            final var refused = refusedByHo(team.getLineup(), spec);
-            if (!refused.isEmpty()) {
-                result.add("notApplied", refused);
-                result.addProperty("warning", "HO did not keep " + refused.size()
-                        + " of the requested positions - the lineup above is what it actually "
-                        + "holds, not what was asked for. The Lineup tab's assistant filter "
-                        + "unfields a player it hides, so this is usually its squad-group filter "
-                        + "or its \"exclude players from the last match\" setting. Turn that "
-                        + "setting off in HO, or field a player the filter allows. Do not report "
-                        + "these positions as set.");
-            }
-            return result;
+            return applyResult(team, before, spec, ratingModel);
         });
+    }
+
+    /** What apply_lineup answers once HO has stored the lineup; runs on the EDT. */
+    private static JsonObject applyResult(core.model.match.MatchLineupTeam team, JsonObject before,
+            JsonObject spec, core.rating.RatingPredictionModel ratingModel) throws McpToolException {
+        final var model = McpJson.model();
+        // Without the rating model: the diff compares positions and orders, and the ratings
+        // are computed once, below.
+        final var after = describe(team.getLineup(), null);
+        final var result = new JsonObject();
+        result.addProperty("lineupMatchId", team.getMatchId());
+        result.add("changed", lineupDiff(before, after));
+        addCaptainCheck(result, team.getLineup());
+        result.add("ratings", McpJson.ratings(ratingModel, team.getLineup()));
+        if (McpJson.optBool(spec, FULL, false)) {
+            result.add("lineup", after);
+        }
+        final var orderWarnings = LineupOrders.warnings(team.getLineup(), model);
+        if (!orderWarnings.isEmpty()) {
+            result.add("orderWarnings", orderWarnings);
+        }
+        final var refused = refusedByHo(team.getLineup(), spec);
+        if (!refused.isEmpty()) {
+            result.add("notApplied", refused);
+            result.addProperty("warning", "HO did not keep " + refused.size()
+                    + " of the requested positions - changed shows what it actually "
+                    + "holds, not what was asked for. The Lineup tab's assistant filter "
+                    + "unfields a player it hides, so this is usually its squad-group filter "
+                    + "or its \"exclude players from the last match\" setting. Turn that "
+                    + "setting off in HO, or field a player the filter allows. Do not report "
+                    + "these positions as set.");
+        }
+        return result;
     }
 
     /**
@@ -654,13 +706,13 @@ public final class LineupTools {
      * and is the reason {@code apply_lineup} refreshes the Lineup tab before reporting: without
      * that the answer would be yes, and the tab would quietly undo it afterwards.
      */
-    static JsonArray refusedByHo(Lineup lineup, JsonObject spec) throws McpToolException {
+    static JsonArray refusedByHo(Lineup lineup, JsonObject spec) {
         final var refused = new JsonArray();
         for (final var wanted : requestedSlots(spec)) {
             final var slot = lineup.getPositionById(wanted.roleId);
             if (slot != null && slot.getPlayerId() != wanted.playerId) {
                 final var entry = new JsonObject();
-                entry.addProperty("roleId", wanted.roleId);
+                entry.addProperty(ROLE_ID, wanted.roleId);
                 entry.addProperty("requestedPlayerId", wanted.playerId);
                 entry.addProperty("actualPlayerId", slot.getPlayerId());
                 refused.add(entry);
@@ -672,18 +724,18 @@ public final class LineupTools {
     private record RequestedSlot(int roleId, int playerId) {
     }
 
-    private static List<RequestedSlot> requestedSlots(JsonObject spec) throws McpToolException {
+    private static List<RequestedSlot> requestedSlots(JsonObject spec) {
         final var slots = new ArrayList<RequestedSlot>();
-        for (final var element : McpJson.reqArray(spec, "positions")) {
+        for (final var element : McpJson.reqArray(spec, POSITIONS)) {
             final var position = element.getAsJsonObject();
-            slots.add(new RequestedSlot(McpJson.reqInt(position, "roleId"),
-                    McpJson.reqInt(position, "playerId")));
+            slots.add(new RequestedSlot(McpJson.reqInt(position, ROLE_ID),
+                    McpJson.reqInt(position, PLAYER_ID)));
         }
-        if (spec.has("bench")) {
-            for (final var element : spec.getAsJsonArray("bench")) {
+        if (spec.has(BENCH)) {
+            for (final var element : spec.getAsJsonArray(BENCH)) {
                 final var slot = element.getAsJsonObject();
-                slots.add(new RequestedSlot(McpJson.reqInt(slot, "roleId"),
-                        McpJson.reqInt(slot, "playerId")));
+                slots.add(new RequestedSlot(McpJson.reqInt(slot, ROLE_ID),
+                        McpJson.reqInt(slot, PLAYER_ID)));
             }
         }
         return slots;
@@ -697,15 +749,15 @@ public final class LineupTools {
 
         // Resolve everyone up front: a bad id must not leave half the squad refiled.
         final var assignments = new ArrayList<GroupAssignment>();
-        if (args.has("assignments")) {
-            for (final var element : args.getAsJsonArray("assignments")) {
+        if (args.has(ASSIGNMENTS)) {
+            for (final var element : args.getAsJsonArray(ASSIGNMENTS)) {
                 final var entry = element.getAsJsonObject();
-                final var playerId = McpJson.reqInt(entry, "playerId");
+                final var playerId = McpJson.reqInt(entry, PLAYER_ID);
                 assignments.add(new GroupAssignment(requirePlayer(model, playerId),
-                        group(McpJson.reqString(entry, "group"))));
+                        group(McpJson.reqString(entry, GROUP))));
             }
         } else {
-            final var group = group(McpJson.reqString(args, "group"));
+            final var group = group(McpJson.reqString(args, GROUP));
             for (final var id : McpJson.reqArray(args, "playerIds")) {
                 assignments.add(new GroupAssignment(requirePlayer(model, id.getAsInt()), group));
             }
@@ -721,9 +773,9 @@ public final class LineupTools {
                 // The setter persists to SPIELERNOTIZEN itself - there is nothing else to store.
                 assignment.player().setTeamInfoSmilie(assignment.group());
                 final var json = new JsonObject();
-                json.addProperty("playerId", assignment.player().getPlayerId());
+                json.addProperty(PLAYER_ID, assignment.player().getPlayerId());
                 json.addProperty("name", assignment.player().getFullName());
-                json.addProperty("group", assignment.player().getTeamGroup());
+                json.addProperty(GROUP, assignment.player().getTeamGroup());
                 changed.add(json);
             }
             // What HO's own group buttons do afterwards - the tables render the group icons.
@@ -767,24 +819,11 @@ public final class LineupTools {
      */
     static JsonObject describe(Lineup lineup, @Nullable core.rating.RatingPredictionModel ratingModel) {
         final var json = new JsonObject();
-        final var positions = new com.google.gson.JsonArray();
-        for (final var position : lineup.getAllPositions()) {
-            // Penalty takers have their own list below; roleId 0 is an empty kicker slot's padding.
-            final var roleId = position.getRoleId();
-            if (roleId == 0 || (roleId >= IMatchRoleID.penaltyTaker1 && roleId <= IMatchRoleID.penaltyTaker11)) {
-                continue;
-            }
-            final var positionJson = new JsonObject();
-            positionJson.addProperty("roleId", position.getRoleId());
-            positionJson.addProperty("playerId", position.getPlayerId());
-            positionJson.addProperty("behaviour", position.getBehaviour());
-            positions.add(positionJson);
-        }
-        json.add("positions", positions);
-        json.addProperty("tactic", lineup.getTacticType());
-        json.addProperty("attitude", lineup.getAttitude());
-        json.addProperty("captainId", lineup.getCaptain());
-        json.addProperty("setPiecesTakerId", lineup.getKicker());
+        json.add(POSITIONS, occupiedPositions(lineup));
+        json.addProperty(TACTIC, lineup.getTacticType());
+        json.addProperty(ATTITUDE, lineup.getAttitude());
+        json.addProperty(CAPTAIN_ID, lineup.getCaptain());
+        json.addProperty(SET_PIECES_TAKER_ID, lineup.getKicker());
         json.add(LineupOrders.PENALTY_TAKERS, LineupOrders.penaltyTakers(lineup,
                 core.model.HOVerwaltung.instance().getModel(), ratingModel));
         json.add(LineupOrders.TEAM_ORDERS, LineupOrders.teamOrders(lineup.getSubstitutionList()));
@@ -794,6 +833,90 @@ public final class LineupTools {
             json.add("ratings", McpJson.ratings(ratingModel, lineup));
         }
         return json;
+    }
+
+    /** The field and bench slots someone stands in, as {roleId, playerId, behaviour}. */
+    private static JsonArray occupiedPositions(Lineup lineup) {
+        final var positions = new JsonArray();
+        for (final var position : lineup.getAllPositions()) {
+            // Field and bench only: penalty takers, set pieces taker and captain have their own
+            // fields. Empty slots are left out, so a missing roleId is an empty one.
+            final var roleId = position.getRoleId();
+            final var field = roleId >= IMatchRoleID.keeper && roleId <= IMatchRoleID.leftForward;
+            final var bench = roleId >= IMatchRoleID.startReserves && roleId <= IMatchRoleID.substXT2;
+            if (!(field || bench) || position.getPlayerId() <= 0) {
+                continue;
+            }
+            final var positionJson = new JsonObject();
+            positionJson.addProperty(ROLE_ID, position.getRoleId());
+            positionJson.addProperty(PLAYER_ID, position.getPlayerId());
+            positionJson.addProperty(BEHAVIOUR, position.getBehaviour());
+            positions.add(positionJson);
+        }
+        return positions;
+    }
+
+    /**
+     * What apply_lineup changed, from two {@link #describe} snapshots without ratings. Positions
+     * as {@code {roleId, from, to}}, a missing side being an empty slot; scalars as
+     * {@code {from, to}}; penalty takers and team orders as the whole new list. Empty when
+     * nothing changed.
+     */
+    static JsonObject lineupDiff(JsonObject before, JsonObject after) {
+        final var diff = new JsonObject();
+        final var was = byRole(before.getAsJsonArray(POSITIONS));
+        final var now = byRole(after.getAsJsonArray(POSITIONS));
+        final var roles = new java.util.TreeSet<>(was.keySet());
+        roles.addAll(now.keySet());
+        final var positions = new JsonArray();
+        for (final var role : roles) {
+            final var from = was.get(role);
+            final var to = now.get(role);
+            if (!java.util.Objects.equals(from, to)) {
+                final var entry = new JsonObject();
+                entry.addProperty(ROLE_ID, role);
+                entry.add("from", withoutRole(from));
+                entry.add("to", withoutRole(to));
+                positions.add(entry);
+            }
+        }
+        if (!positions.isEmpty()) {
+            diff.add(POSITIONS, positions);
+        }
+        for (final var key : List.of(TACTIC, ATTITUDE, CAPTAIN_ID, SET_PIECES_TAKER_ID)) {
+            if (!java.util.Objects.equals(before.get(key), after.get(key))) {
+                final var change = new JsonObject();
+                change.add("from", before.get(key));
+                change.add("to", after.get(key));
+                diff.add(key, change);
+            }
+        }
+        for (final var key : List.of(LineupOrders.PENALTY_TAKERS, LineupOrders.TEAM_ORDERS)) {
+            if (!java.util.Objects.equals(before.get(key), after.get(key))) {
+                diff.add(key, after.get(key));
+            }
+        }
+        return diff;
+    }
+
+    private static com.google.gson.JsonElement withoutRole(@Nullable JsonObject slot) {
+        if (slot == null) {
+            return com.google.gson.JsonNull.INSTANCE;
+        }
+        final var copy = slot.deepCopy();
+        copy.remove(ROLE_ID);
+        return copy;
+    }
+
+    /**
+     * Hattrick gives the captain's bonus only to a captain on the pitch, and HO does not stop a
+     * benched or unfielded one. No captain counts as false.
+     */
+    static void addCaptainCheck(JsonObject json, Lineup lineup) {
+        final var captain = lineup.getCaptain();
+        json.addProperty(CAPTAIN_ID, captain);
+        json.addProperty("captainInStartingEleven", captain > 0
+                && lineup.getFieldPositions().stream().anyMatch(p -> p.getPlayerId() == captain));
     }
 
     /**
