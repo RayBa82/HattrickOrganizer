@@ -59,6 +59,9 @@ public final class TransferTools {
 
     private static final int MAX_PAGE_SIZE = 100;     // the CHPP maximum, and HO's default
 
+    /** The argument and answer field that names a kept search result. */
+    private static final String RESULT_ID = "resultId";
+
     /** How long a losing bid keeps showing in the default view after its deadline. */
     private static final java.time.Duration LOSING_BID_GRACE = java.time.Duration.ofHours(24);
 
@@ -80,7 +83,7 @@ public final class TransferTools {
                                 + "not counted against the cap); pass full only with a small limit.")
                         // a fresh search is one CHPP request per queries entry plus the resolver;
                         // paging a kept result with resultId is a local read
-                        .asTask(args -> !args.has("resultId")),
+                        .asTask(args -> !args.has(RESULT_ID)),
                 new McpTool("get_team_transfers",
                         "The managed team's own transfer history, newest first, with price, TSI at "
                                 + "transfer time, the mother-club and previous-club fees, and specialty "
@@ -1154,7 +1157,7 @@ public final class TransferTools {
         final var json = new JsonObject();
         json.addProperty("itemCount", page.itemCount());
         json.addProperty("hitCount", page.hits().size());
-        json.addProperty("resultId", keepResult(page.hits()));
+        json.addProperty(RESULT_ID, keepResult(page.hits()));
         return json;
     }
 
@@ -2291,7 +2294,7 @@ public final class TransferTools {
                 "pageSize", McpTool.prop("integer", "hits Hattrick returns per search, default and "
                         + "maximum 100. itemCount is the market total, -1 above 100 - narrow the "
                         + "search then, there is no exact total"),
-                "resultId", McpTool.prop("string", "page or re-sort the hits of an earlier call instead "
+                RESULT_ID, McpTool.prop("string", "page or re-sort the hits of an earlier call instead "
                         + "of searching: no CHPP request, not counted against the cap. Last "
                         + KEPT_RESULTS + " kept"),
                 "limit", McpTool.prop("integer", "hits per answer, default " + HIT_PAGE + " (max "
@@ -2399,8 +2402,8 @@ public final class TransferTools {
         if (args.has("queries")) {
             rejectCallArgsInQueries(McpJson.reqArray(args, "queries"));
         }
-        if (args.has("resultId")) {
-            final var id = McpJson.reqString(args, "resultId");
+        if (args.has(RESULT_ID)) {
+            final var id = McpJson.reqString(args, RESULT_ID);
             final List<XMLTransferSearchParser.Hit> hits;
             synchronized (SEARCH_RESULTS) {
                 hits = SEARCH_RESULTS.get(id);
@@ -2431,7 +2434,7 @@ public final class TransferTools {
     }
 
     /** Arguments that shape the whole answer, not one search: only read at the top level. */
-    static final List<String> CALL_ARGS = List.of("bulk", "full", "limit", "offset", "sort", "resultId");
+    static final List<String> CALL_ARGS = List.of("bulk", "full", "limit", "offset", "sort", RESULT_ID);
 
     /**
      * Refuses a call argument inside a queries[] entry before any search runs. queryFrom ignores
@@ -2502,7 +2505,7 @@ public final class TransferTools {
         final var hits = new JsonArray();
         sorted.stream().skip(offset).limit(limit)
                 .forEach(hit -> hits.add(full ? McpJson.hit(hit) : compactHit(hit)));
-        json.addProperty("resultId", resultId);
+        json.addProperty(RESULT_ID, resultId);
         json.addProperty("count", all.size());
         json.addProperty("offset", offset);
         json.addProperty("returned", hits.size());
@@ -2532,12 +2535,12 @@ public final class TransferTools {
         sorted.forEach(hit -> hits.add(compactHit(hit)));
         final var file = new JsonObject();
         file.addProperty("currency", McpJson.currency());
-        file.addProperty("resultId", resultId);
+        file.addProperty(RESULT_ID, resultId);
         file.addProperty("count", all.size());
         file.add("hitFields", fields);
         file.add("hits", hits);
 
-        json.addProperty("resultId", resultId);
+        json.addProperty(RESULT_ID, resultId);
         json.addProperty("count", all.size());
         json.add("hitFields", fields);
         final var preview = new JsonArray();

@@ -213,16 +213,13 @@ class McpHttpServerTest {
         return server;
     }
 
+    /** Waits for the task's work to end, then reads it the way a client does, with tasks/get. */
     private static JsonObject pollUntilTerminal(McpHttpServer server, String taskId) throws InterruptedException {
-        for (int i = 0; i < 200; i++) {
-            final var task = send(server, modern(50 + i, "tasks/get", "{\"taskId\":\"" + taskId + "\"}",
-                    WITH_TASKS)).body().getAsJsonObject("result");
-            if (!task.get("status").getAsString().equals("working")) {
-                return task;
-            }
-            Thread.sleep(25);
-        }
-        throw new AssertionError("task " + taskId + " never finished");
+        server.awaitTask(taskId);
+        final var task = send(server, modern(50, "tasks/get", "{\"taskId\":\"" + taskId + "\"}",
+                WITH_TASKS)).body().getAsJsonObject("result");
+        assertThat(task.get("status").getAsString()).as("task %s after 10 s", taskId).isNotEqualTo("working");
+        return task;
     }
 
     @Test

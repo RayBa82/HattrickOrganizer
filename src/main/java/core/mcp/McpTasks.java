@@ -11,7 +11,11 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 
 /**
@@ -142,6 +146,25 @@ final class McpTasks {
                         + " and HO does not interrupt a running download or write)";
             }
             task.lastUpdatedAt = Instant.now();
+        }
+    }
+
+    /** How long {@link #await} waits for a task's work at most. */
+    static final long AWAIT_LIMIT_MS = 10_000L;
+
+    /**
+     * Wait until the task's work has run or was cancelled, at most {@link #AWAIT_LIMIT_MS}. Its
+     * status is final by then: the work sets it before it returns.
+     */
+    void await(Task task) throws InterruptedException {
+        final Future<?> future;
+        synchronized (this) {
+            future = task.future;
+        }
+        try {
+            future.get(AWAIT_LIMIT_MS, TimeUnit.MILLISECONDS);
+        } catch (CancellationException | ExecutionException | TimeoutException e) {
+            // cancelled or ended either way; a timeout leaves the task as it is for the caller to read
         }
     }
 

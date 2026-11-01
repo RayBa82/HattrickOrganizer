@@ -75,6 +75,18 @@ public final class McpHttpServer {
     static final String META_SERVER_INFO = "io.modelcontextprotocol/serverInfo";
     static final String TASKS_EXTENSION = "io.modelcontextprotocol/tasks";
 
+    private static final String PROTOCOL_VERSION_HEADER = "MCP-Protocol-Version";
+    private static final String JSONRPC = "jsonrpc";
+    private static final String JSONRPC_VERSION = "2.0";
+    private static final String META = "_meta";
+    private static final String RESULT_TYPE = "resultType";
+    private static final String EXTENSIONS = "extensions";
+    private static final String ARGUMENTS = "arguments";
+    private static final String TOOLS_CALL = "tools/call";
+    private static final String TASKS_GET = "tasks/get";
+    private static final String TASKS_UPDATE = "tasks/update";
+    private static final String TASKS_CANCEL = "tasks/cancel";
+
     static final int HEADER_MISMATCH = -32020;
     static final int MISSING_REQUIRED_CLIENT_CAPABILITY = -32021;
     static final int UNSUPPORTED_PROTOCOL_VERSION = -32022;
@@ -266,6 +278,17 @@ public final class McpHttpServer {
     }
 
     /**
+     * Wait until the task's work has ended, at most {@link McpTasks#AWAIT_LIMIT_MS}. For tests,
+     * which would otherwise have to poll {@code tasks/get} on a timer; an unknown id returns at once.
+     */
+    void awaitTask(String taskId) throws InterruptedException {
+        final var task = tasks.get(taskId);
+        if (task != null) {
+            tasks.await(task);
+        }
+    }
+
+    /**
      * Answer one JSON-RPC request.
      *
      * @param headers HTTP request header lookup, case-insensitive; null skips the header checks
@@ -279,11 +302,11 @@ public final class McpHttpServer {
         final var params = request.has("params") && request.get("params").isJsonObject()
                 ? request.getAsJsonObject("params")
                 : new JsonObject();
-        final var meta = params.has("_meta") && params.get("_meta").isJsonObject()
-                ? params.getAsJsonObject("_meta")
+        final var meta = params.has(META) && params.get(META).isJsonObject()
+                ? params.getAsJsonObject(META)
                 : null;
         final var bodyVersion = string(meta, META_PROTOCOL_VERSION);
-        final var headerVersion = headers == null ? null : headers.apply("MCP-Protocol-Version");
+        final var headerVersion = headers == null ? null : headers.apply(PROTOCOL_VERSION_HEADER);
 
         // initialize always means legacy. Otherwise a version in _meta, or a header naming a
         // revision newer than the last legacy one, means a modern client - and from then on the
@@ -301,7 +324,7 @@ public final class McpHttpServer {
             case "initialize" -> result(id, initialize(params));
             case "ping" -> result(id, new JsonObject());
             case "tools/list" -> result(id, toolsList());
-            case "tools/call" -> legacyToolsCall(id, params);
+            case TOOLS_CALL -> legacyToolsCall(id, params);
             // A modern probe without _meta still learns what this server speaks.
             case "server/discover" -> result(id, complete(discover()));
             default -> error(id, -32601, "Unknown method: " + method);
@@ -326,8 +349,8 @@ public final class McpHttpServer {
         return switch (method) {
             case "server/discover" -> new Reply(200, result(id, complete(discover())));
             case "tools/list" -> new Reply(200, result(id, complete(cacheable(toolsList()))));
-            case "tools/call" -> new Reply(200, modernToolsCall(id, params, tasksDeclared));
-            case "tasks/get", "tasks/update", "tasks/cancel" -> taskRequest(id, method, params, tasksDeclared);
+            case TOOLS_CALL -> new Reply(200, modernToolsCall(id, params, tasksDeclared));
+            case TASKS_GET, TASKS_UPDATE, TASKS_CANCEL -> taskRequest(id, method, params, tasksDeclared);
             // The modern transport wants 404 here: it tells this server apart from a legacy one
             // that has no such endpoint, and the JSON-RPC body says which it is.
             default -> new Reply(404, error(id, -32601, "Method not found: " + method));
@@ -341,25 +364,25 @@ public final class McpHttpServer {
      */
     private static String headerMismatch(String method, JsonObject params, String bodyVersion,
                                          UnaryOperator<String> headers) {
-        final var version = headers.apply("MCP-Protocol-Version");
+        final var version = headers.apply(PROTOCOL_VERSION_HEADER);
         if (version == null) {
             return "the MCP-Protocol-Version header is missing";
         }
         if (!version.equals(bodyVersion)) {
-            return "MCP-Protocol-Version header value '" + version + "' does not match body value '"
-                    + bodyVersion + "' (_meta " + META_PROTOCOL_VERSION + ")";
+            return mismatch(PROTOCOL_VERSION_HEADER, version, bodyVersion)
+                    + " (_meta " + META_PROTOCOL_VERSION + ")";
         }
         final var mcpMethod = headers.apply("Mcp-Method");
         if (mcpMethod == null) {
             return "the Mcp-Method header is missing";
         }
         if (!mcpMethod.equals(method)) {
-            return "Mcp-Method header value '" + mcpMethod + "' does not match body value '" + method + "'";
+            return mismatch("Mcp-Method", mcpMethod, method);
         }
         final var nameField = switch (method) {
-            case "tools/call" -> "name";
+            case TOOLS_CALL -> "name";
             // the tasks extension routes on the task id
-            case "tasks/get", "tasks/update", "tasks/cancel" -> "taskId";
+            case TASKS_GET, TASKS_UPDATE, TASKS_CANCEL -> "taskId";
             default -> null;
         };
         if (nameField == null) {
@@ -375,9 +398,13 @@ public final class McpHttpServer {
         }
         final var expected = string(params, nameField);
         if (!name.equals(expected)) {
-            return "Mcp-Name header value '" + name + "' does not match body value '" + expected + "'";
+            return mismatch("Mcp-Name", name, expected);
         }
         return null;
+    }
+
+    private static String mismatch(String header, String headerValue, String bodyValue) {
+        return header + " header value '" + headerValue + "' does not match body value '" + bodyValue + "'";
     }
 
     /** A header value with the {@code =?base64?...?=} sentinel decoded; null when that is not Base64. */
@@ -398,7 +425,7 @@ public final class McpHttpServer {
         if (meta == null || !(meta.get(META_CLIENT_CAPABILITIES) instanceof JsonObject capabilities)) {
             return false;
         }
-        return capabilities.get("extensions") instanceof JsonObject extensions
+        return capabilities.get(EXTENSIONS) instanceof JsonObject extensions
                 && extensions.has(TASKS_EXTENSION);
     }
 
@@ -429,7 +456,7 @@ public final class McpHttpServer {
         extensions.add(TASKS_EXTENSION, new JsonObject());
         final var capabilities = new JsonObject();
         capabilities.add("tools", new JsonObject());
-        capabilities.add("extensions", extensions);
+        capabilities.add(EXTENSIONS, extensions);
 
         final var result = new JsonObject();
         result.add("supportedVersions", supportedVersions());
@@ -483,8 +510,8 @@ public final class McpHttpServer {
         if (tasksDeclared && tool.taskEligible(arguments)) {
             final var task = tasks.create(name, () -> runTool(tool, arguments, true, true));
             final var handle = tasks.describe(task, false);
-            handle.addProperty("resultType", "task");
-            handle.add("_meta", serverInfoMeta());
+            handle.addProperty(RESULT_TYPE, "task");
+            handle.add(META, serverInfoMeta());
             return result(id, handle);
         }
         final var outcome = runTool(tool, arguments, false, true);
@@ -498,7 +525,7 @@ public final class McpHttpServer {
             final var extensions = new JsonObject();
             extensions.add(TASKS_EXTENSION, new JsonObject());
             final var required = new JsonObject();
-            required.add("extensions", extensions);
+            required.add(EXTENSIONS, extensions);
             final var data = new JsonObject();
             data.add("requiredCapabilities", required);
             return new Reply(400, error(id, MISSING_REQUIRED_CLIENT_CAPABILITY,
@@ -513,8 +540,8 @@ public final class McpHttpServer {
                     + ", and an HO restart forgets them; call the tool again."));
         }
         final JsonObject answer = switch (method) {
-            case "tasks/get" -> tasks.describe(task, true);
-            case "tasks/cancel" -> {
+            case TASKS_GET -> tasks.describe(task, true);
+            case TASKS_CANCEL -> {
                 tasks.cancel(task);
                 yield new JsonObject();
             }
@@ -547,8 +574,8 @@ public final class McpHttpServer {
     }
 
     private static JsonObject arguments(JsonObject params) {
-        return params.has("arguments") && params.get("arguments").isJsonObject()
-                ? params.getAsJsonObject("arguments")
+        return params.has(ARGUMENTS) && params.get(ARGUMENTS).isJsonObject()
+                ? params.getAsJsonObject(ARGUMENTS)
                 : new JsonObject();
     }
 
@@ -560,7 +587,7 @@ public final class McpHttpServer {
         contents.add(content);
         final var result = new JsonObject();
         if (modern) {
-            result.addProperty("resultType", "complete");
+            result.addProperty(RESULT_TYPE, "complete");
         }
         result.add("content", contents);
         result.addProperty("isError", isError);
@@ -582,14 +609,14 @@ public final class McpHttpServer {
 
     /** A modern ordinary result: {@code resultType: complete}, the server named in {@code _meta}. */
     private static JsonObject complete(JsonObject result) {
-        if (!result.has("resultType")) {
-            result.addProperty("resultType", "complete");
+        if (!result.has(RESULT_TYPE)) {
+            result.addProperty(RESULT_TYPE, "complete");
         }
         return withServerInfo(result);
     }
 
     private static JsonObject withServerInfo(JsonObject result) {
-        result.add("_meta", serverInfoMeta());
+        result.add(META, serverInfoMeta());
         return result;
     }
 
@@ -613,7 +640,7 @@ public final class McpHttpServer {
             return result(id, outcome.result());
         }
         final var response = new JsonObject();
-        response.addProperty("jsonrpc", "2.0");
+        response.addProperty(JSONRPC, JSONRPC_VERSION);
         response.add("id", id);
         response.add("error", outcome.error());
         return response;
@@ -621,7 +648,7 @@ public final class McpHttpServer {
 
     private static JsonObject result(JsonElement id, JsonObject result) {
         final var response = new JsonObject();
-        response.addProperty("jsonrpc", "2.0");
+        response.addProperty(JSONRPC, JSONRPC_VERSION);
         response.add("id", id);
         response.add("result", result);
         return response;
@@ -644,7 +671,7 @@ public final class McpHttpServer {
             error.add("data", data);
         }
         final var response = new JsonObject();
-        response.addProperty("jsonrpc", "2.0");
+        response.addProperty(JSONRPC, JSONRPC_VERSION);
         response.add("id", id);
         response.add("error", error);
         return response;
