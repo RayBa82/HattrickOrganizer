@@ -357,3 +357,11 @@ why the multi-user login dialog appears before anything else at startup.
   there is no harness for the Swing UI or for live CHPP calls.
 - Logging goes through `HOLogger.instance()`, not `System.out`. Uncaught exceptions land in
   `core.util.ExceptionHandler`.
+- **No new diagnostics, and clean up old ones where you can.** A change must not add compiler,
+  inspection or Sonar findings, warnings included. Fix them in the same change and do not dismiss
+  them as style noise. Before committing, check what the branch introduced against its base
+  (with Hybe: `diagnostics_tool` check with `sinceRef: master`) and commit only at 0. A rewritten
+  file counts all of its lines as changed, so compare with the base before calling a finding
+  pre-existing. Findings that already exist in the code you touch get fixed too when the fix is
+  local and safe. Leave out what would ripple into DB columns, persisted keys or the legacy
+  German names (see above), and say what you left out.
