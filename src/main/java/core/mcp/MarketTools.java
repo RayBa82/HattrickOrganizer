@@ -59,6 +59,7 @@ public final class MarketTools {
     private static final String SCOUT = "scout";
     private static final String BOOLEAN = "boolean";
     private static final String INTEGER = "integer";
+    private static final String ARRAY = "array";
     private static final String NUMBER = "number";
     private static final String DEFAULT = "; default ";
     private static final String FREE_CASH = "freeCash";
@@ -123,15 +124,12 @@ public final class MarketTools {
 
     private static JsonObject schema() {
         return McpTool.schema(McpTool.properties(
-                QUERIES, McpTool.prop("array", "searches shaped like search_transfers' single "
-                        + "search; specialty may be an id list (one search each), plus optional "
-                        + "label and screen {skill: min} (keeper, defending, playmaking, winger, "
-                        + "passing, scoring, setPieces, experience) applied to the hits"),
+                QUERIES, queriesProperty(),
                 MAX_WAGE, McpTool.prop(INTEGER, "highest wage in our squad, after the foreign "
                         + "markup" + DEFAULT + DEFAULT_MAX_WAGE),
                 FOREIGN_FACTOR, McpTool.prop(NUMBER, "wage factor for a player whose "
                         + "nativeCountryId is not ours" + DEFAULT + DEFAULT_FOREIGN_FACTOR),
-                SPECIALTIES, McpTool.prop("array", "keep only these specialty ids; default all"),
+                SPECIALTIES, McpTool.prop(ARRAY, "keep only these specialty ids; default all"),
                 EXCLUDE_INJURED, McpTool.prop(BOOLEAN, "drop injured players; default true"),
                 TOP, McpTool.prop(INTEGER, "rows to return" + DEFAULT + DEFAULT_TOP
                         + " (max " + MAX_TOP + ")"),
@@ -151,6 +149,26 @@ public final class MarketTools {
                 RESERVED_CASH, McpTool.prop(INTEGER, "the approved ceilings of all open bids, "
                         + "taken off expectedCash; default 0"),
                 SCOUT, McpTool.prop(INTEGER, "add the first N rows to HO's scout list; default 0")));
+    }
+
+    /** The searches, each with search_transfers' filters plus label and screen. */
+    private static JsonObject queriesProperty() {
+        final var entry = TransferTools.searchFilterProperties();
+        final var specialty = new JsonObject();
+        final var types = new JsonArray();
+        types.add(INTEGER);
+        types.add(ARRAY);
+        specialty.add("type", types);
+        specialty.addProperty("description", "specialty id, or a list of ids (one search each); "
+                + "ids as in search_transfers");
+        entry.add(SPECIALTY, specialty);
+        entry.add(LABEL, McpTool.prop("string", "name echoed on this query's rows"));
+        entry.add(SCREEN, McpTool.prop("object", "{skill: min} applied to the hits; skills: "
+                + "keeper, defending, playmaking, winger, passing, scoring, setPieces, experience"));
+        final var queries = McpTool.prop(ARRAY, "the searches to run; ageMin, ageMax and skills "
+                + "are mandatory in each");
+        queries.add("items", McpTool.schema(entry, "ageMin", "ageMax", "skills"));
+        return queries;
     }
 
     /** One CHPP search to run: the search_transfers arguments with a single specialty. */

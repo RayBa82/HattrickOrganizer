@@ -160,4 +160,19 @@ class MarketToolsTest {
         assertThat(MarketTools.COLUMNS).containsSubsequence("cardRisk", "cards", "closes",
                 "estimate", "estimateBasis", "middleHalf");
     }
+
+    /** The first live run had to learn a query's fields from one error message after another. */
+    @Test
+    void schemaSpellsOutTheFieldsOfAQuery() {
+        final var queries = MarketTools.tools().get(0).inputSchema()
+                .getAsJsonObject("properties").getAsJsonObject("queries");
+        final var entry = queries.getAsJsonObject("items");
+
+        assertThat(entry.getAsJsonObject("properties").keySet())
+                .contains("ageMin", "ageMax", "skills", "specialty", "priceMax", "label", "screen");
+        assertThat(entry.getAsJsonArray("required")).hasSize(3);
+        assertThat(entry.getAsJsonObject("properties").getAsJsonObject("skills")
+                .getAsJsonObject("items").getAsJsonObject("properties").keySet())
+                .containsExactly("skill", "min", "max");
+    }
 }

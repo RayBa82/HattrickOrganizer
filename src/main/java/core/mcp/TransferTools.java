@@ -61,6 +61,27 @@ public final class TransferTools {
 
     /** The argument and answer field that names a kept search result. */
     private static final String RESULT_ID = "resultId";
+    private static final String STRING = "string";
+    private static final String INTEGER = "integer";
+    private static final String SKILL = "skill";
+    private static final String QUERIES = "queries";
+    private static final String SEASON = "season";
+    private static final String DIRECTION = "direction";
+    private static final String LIMIT = "limit";
+    private static final String OFFSET = "offset";
+    private static final String PLAYER_ID = "playerId";
+    private static final String BID_AMOUNT = "bidAmount";
+    private static final String MAX_BID_AMOUNT = "maxBidAmount";
+    private static final String CONFIRM_TOKEN = "confirmToken";
+    private static final String ACTION = "action";
+    private static final String AGE_MIN = "ageMin";
+    private static final String AGE_MAX = "ageMax";
+    private static final String AGE_WINDOW_DAYS = "ageWindowDays";
+    private static final String POSITION_GROUP = "positionGroup";
+    private static final String OBSERVED_WITHIN_DAYS = "observedWithinDays";
+    private static final String NATIVE_COUNTRY_ID = "nativeCountryId";
+    private static final String PAGE_SIZE = "pageSize";
+    private static final String SALE_PRICE = "salePrice";
 
     private static final String CURRENCY = "currency";
     private static final String ESTIMATE = "estimate";
@@ -99,10 +120,10 @@ public final class TransferTools {
                                 + "market corpus, on every team download. One page (default 20); "
                                 + "page back with offset.",
                         McpTool.schema(McpTool.properties(
-                                "season", McpTool.prop("integer", "Hattrick season number; omit for the full history"),
-                                "direction", McpTool.prop("string", "buy, sell, or omit for both"),
-                                "limit", McpTool.prop("integer", "how many transfers to return, newest first; default 20, max 100"),
-                                "offset", McpTool.prop("integer", "how many of the newest transfers to skip, for paging; default 0"),
+                                SEASON, McpTool.prop(INTEGER, "Hattrick season number; omit for the full history"),
+                                DIRECTION, McpTool.prop(STRING, "buy, sell, or omit for both"),
+                                LIMIT, McpTool.prop(INTEGER, "how many transfers to return, newest first; default 20, max 100"),
+                                OFFSET, McpTool.prop(INTEGER, "how many of the newest transfers to skip, for paging; default 0"),
                                 "bulk", McpTool.prop("boolean", "for scripts: every transfer as a JSON file "
                                         + "to download (HTTP GET of the returned download path on the MCP "
                                         + "endpoint); the answer keeps the totals and a 3-row preview. "
@@ -115,8 +136,8 @@ public final class TransferTools {
                                 + "price, TSI at the time, seller and buyer. One CHPP request per call. "
                                 + "An empty list means the player was never sold.",
                         McpTool.schema(McpTool.properties(
-                                        "playerId", McpTool.prop("integer", "the Hattrick player id")),
-                                "playerId"),
+                                        PLAYER_ID, McpTool.prop(INTEGER, "the Hattrick player id")),
+                                PLAYER_ID),
                         TransferTools::playerTransferHistory),
                 new McpTool("place_bid",
                         "Place a transfer bid. TWO STEPS so a stray call cannot spend money: call "
@@ -126,15 +147,15 @@ public final class TransferTools {
                                 + "Amounts are in the user's currency. Step 2 echoes Hattrick's "
                                 + "confirmed maxBid, or a warning if the autobid is missing.",
                         McpTool.schema(McpTool.properties(
-                                        "playerId", McpTool.prop("integer", "the player to bid on"),
-                                        "bidAmount", McpTool.prop("integer",
+                                        PLAYER_ID, McpTool.prop(INTEGER, "the player to bid on"),
+                                        BID_AMOUNT, McpTool.prop(INTEGER,
                                                 "the bid, in the user's currency (required in step 1)"),
-                                        "maxBidAmount", McpTool.prop("integer",
+                                        MAX_BID_AMOUNT, McpTool.prop(INTEGER,
                                                 "optional autobid ceiling, at least bidAmount "
                                                         + "(step 1 refuses a lower one)"),
-                                        "confirmToken", McpTool.prop("string",
+                                        CONFIRM_TOKEN, McpTool.prop(STRING,
                                                 "the token from step 1 (required in step 2, omit in step 1)")),
-                                "playerId"),
+                                PLAYER_ID),
                         TransferTools::placeBid),
                 new McpTool("get_open_bids",
                         "Transfers this team has an active bid on, from Hattrick's own tracking - "
@@ -157,13 +178,13 @@ public final class TransferTools {
                                 + "refresh: current ask/bid/deadline, a CHPP read each (default: "
                                 + "open entries).",
                         McpTool.schema(McpTool.properties(
-                                        "action", McpTool.prop("string", "add, remove or refresh"),
+                                        ACTION, McpTool.prop(STRING, "add, remove or refresh"),
                                         "players", McpTool.prop("array",
                                                 "bare player ids, or for add {playerId, note} "
                                                         + "objects; the note is free text kept in "
                                                         + "the entry's notes column, e.g. why he "
                                                         + "is a target; optional for refresh")),
-                                "action"),
+                                ACTION),
                         TransferTools::manageScout),
                 new McpTool("list_scout",
                         "Read back HO's local scout shortlist, filtered, one page (count = the "
@@ -175,9 +196,9 @@ public final class TransferTools {
                                 "skills", McpTool.prop("array", "skill filters, all must hold: "
                                         + "{skill, min?, max?}, skill one of " + SKILL_NAMES
                                         + "; levels, any span"),
-                                "ageMin", McpTool.prop("integer", "minimum age in years"),
-                                "ageMax", McpTool.prop("integer", "maximum age in years"),
-                                "specialty", McpTool.prop("integer",
+                                AGE_MIN, McpTool.prop(INTEGER, "minimum age in years"),
+                                AGE_MAX, McpTool.prop(INTEGER, "maximum age in years"),
+                                "specialty", McpTool.prop(INTEGER,
                                         "specialty id as in search_transfers (0 none)"),
                                 "onlyOpen", McpTool.prop("boolean",
                                         "only players still on the market: no sale recorded and "
@@ -186,9 +207,9 @@ public final class TransferTools {
                                         "every stored field per player and the whole note; "
                                                 + "default false, notes cut to " + COMPACT_NOTE_CHARS
                                                 + " chars"),
-                                "limit", McpTool.prop("integer", "page size, default "
+                                LIMIT, McpTool.prop(INTEGER, "page size, default "
                                         + DEFAULT_SCOUT_PAGE + ", max " + MAX_SCOUT_PAGE),
-                                "offset", McpTool.prop("integer",
+                                OFFSET, McpTool.prop(INTEGER,
                                         "how many matching entries to skip, in shortlist order; "
                                                 + "default 0"),
                                 "bulk", McpTool.prop("boolean",
@@ -207,7 +228,7 @@ public final class TransferTools {
                                 + "today's market first and stores the hits (one of the session's "
                                 + "capped searches); live: false reads the stored corpus only, free.",
                         McpTool.schema(McpTool.properties(
-                                        "playerId", McpTool.prop("integer",
+                                        PLAYER_ID, McpTool.prop(INTEGER,
                                                 "the player to value - a squad player id"),
                                         "profile", McpTool.prop("object",
                                                 "value a hypothetical player instead of a squad "
@@ -232,15 +253,15 @@ public final class TransferTools {
                                                         + "player who left the squad without ever "
                                                         + "being tracked still teaches future "
                                                         + "valuations something."),
-                                        "ageTolerance", McpTool.prop("integer", "age window in years, default 1"),
-                                        "ageWindowDays", McpTool.prop("integer",
+                                        "ageTolerance", McpTool.prop(INTEGER, "age window in years, default 1"),
+                                        AGE_WINDOW_DAYS, McpTool.prop(INTEGER,
                                                 "age window in days either side of the player's "
                                                         + "age (112 days a year); replaces ageTolerance. "
                                                         + "Comparables without age days are left out"),
-                                        "primarySkillTolerance", McpTool.prop("integer",
+                                        "primarySkillTolerance", McpTool.prop(INTEGER,
                                                 "window in levels for the best positional skill (A), "
                                                         + "default 0"),
-                                        "skillTolerance", McpTool.prop("integer",
+                                        "skillTolerance", McpTool.prop(INTEGER,
                                                 "window in levels for the second skill (B), default 1"),
                                         "live", McpTool.prop("boolean",
                                                 "run the comparable query against today's market "
@@ -263,7 +284,7 @@ public final class TransferTools {
                                                         + "softly (weightBreakdown.specialty), same "
                                                         + "specialty weighs 1.0. An unknown specialty on "
                                                         + "either side is neutral."),
-                                        "positionGroup", McpTool.prop("string",
+                                        POSITION_GROUP, McpTool.prop(STRING,
                                                 "optional override: keeper, back_line, winger, inner_mid or "
                                                         + "forward. Default: derived from the player's top "
                                                         + "positional skill and echoed as positionGroup / "
@@ -277,7 +298,7 @@ public final class TransferTools {
                                                         + "weight falls with the score gap to the target's "
                                                         + "specialty (1 - 0.7 x gap, floor 0.3). Scores are "
                                                         + "ordinal placeholders; weather is not modelled."),
-                                        "observedWithinDays", McpTool.prop("integer",
+                                        OBSERVED_WITHIN_DAYS, McpTool.prop(INTEGER,
                                                 "ignore listings older than this many days, default "
                                                         + DEFAULT_CORPUS_DAYS + " (one Hattrick season)"),
                                         "includeCorpus", McpTool.prop("boolean",
@@ -318,7 +339,7 @@ public final class TransferTools {
             List.of("keeper", "back_line", "inner_mid", "winger", "forward", "unknown");
 
     private static JsonObject marketCorpusStats(JsonObject args) {
-        final var days = Math.max(McpJson.optInt(args, "observedWithinDays", DEFAULT_CORPUS_DAYS), 1);
+        final var days = Math.max(McpJson.optInt(args, OBSERVED_WITHIN_DAYS, DEFAULT_CORPUS_DAYS), 1);
         // ponytail: loads the whole table, since the position group is a Java heuristic; move the
         // counts to SQL GROUP BY if the corpus ever gets big enough for this to be slow.
         return corpusStats(DBManager.instance().loadAllTransferListings(), HODateTime.now(), days);
@@ -637,10 +658,10 @@ public final class TransferTools {
 
     /** Validates a caller's positionGroup (null passes through) and returns it. */
     static String positionGroupOrNull(JsonObject args) throws McpToolException {
-        if (!args.has("positionGroup") || args.get("positionGroup").isJsonNull()) {
+        if (!args.has(POSITION_GROUP) || args.get(POSITION_GROUP).isJsonNull()) {
             return null;
         }
-        final var group = args.get("positionGroup").getAsString();
+        final var group = args.get(POSITION_GROUP).getAsString();
         if (!POSITION_SCORE.containsKey(group)) {
             throw new McpToolException("positionGroup must be one of " + new java.util.TreeSet<>(POSITION_SCORE.keySet())
                     + ", got '" + group + "'.");
@@ -856,7 +877,7 @@ public final class TransferTools {
 
     static JsonObject estimateMarketValue(JsonObject args) throws McpToolException {
         final var withCorpus = McpJson.optBool(args, "includeCorpus", false);
-        final var hasPlayer = args.has("playerId") && !args.get("playerId").isJsonNull()
+        final var hasPlayer = args.has(PLAYER_ID) && !args.get(PLAYER_ID).isJsonNull()
                 || args.has("profile") && !args.get("profile").isJsonNull();
         final var json = withCorpus && !hasPlayer ? new JsonObject() : valuation(args);
         if (withCorpus) {
@@ -883,7 +904,7 @@ public final class TransferTools {
         final var summary = new JsonObject();
         if (valuation.has(PLAYER)) {
             final var player = valuation.getAsJsonObject(PLAYER);
-            for (final var key : List.of("playerId", "name")) {
+            for (final var key : List.of(PLAYER_ID, "name")) {
                 if (player.has(key)) {
                     summary.add(key, player.get(key));
                 }
@@ -907,7 +928,7 @@ public final class TransferTools {
     }
 
     private static JsonObject valuation(JsonObject args) throws McpToolException {
-        final var hasPlayerId = args.has("playerId") && !args.get("playerId").isJsonNull();
+        final var hasPlayerId = args.has(PLAYER_ID) && !args.get(PLAYER_ID).isJsonNull();
         final var hasProfile = args.has("profile") && !args.get("profile").isJsonNull();
         if (!hasPlayerId && !hasProfile) {
             throw new McpToolException(
@@ -923,7 +944,7 @@ public final class TransferTools {
             player = playerFromProfile(profile);
             requireThirdSkill(profile);
         } else {
-            final var playerId = McpJson.reqInt(args, "playerId");
+            final var playerId = McpJson.reqInt(args, PLAYER_ID);
             player = McpJson.model().getCurrentPlayer(playerId);
             if (player == null) {
                 throw new McpToolException("No player with id " + playerId + " is in the squad. "
@@ -940,7 +961,7 @@ public final class TransferTools {
         final var targetSpecialty = corpusSpecialtyFilter(hasProfile, profile, player);
         // Unset: the age window stays the whole years of ageTolerance. Negative is refused, not
         // clamped - a window that silently became 0 days would match next to nobody.
-        final Integer ageWindowDays = args.has("ageWindowDays") ? McpJson.optInt(args, "ageWindowDays", 0) : null;
+        final Integer ageWindowDays = args.has(AGE_WINDOW_DAYS) ? McpJson.optInt(args, AGE_WINDOW_DAYS, 0) : null;
         if (ageWindowDays != null && ageWindowDays < 0) {
             throw new McpToolException("ageWindowDays must be 0 or more.");
         }
@@ -949,7 +970,7 @@ public final class TransferTools {
                 McpJson.optInt(args, "primarySkillTolerance", 0),
                 McpJson.optInt(args, "skillTolerance", 1),
                 ageWindowDays);
-        final var days = Math.max(McpJson.optInt(args, "observedWithinDays", DEFAULT_CORPUS_DAYS), 1);
+        final var days = Math.max(McpJson.optInt(args, OBSERVED_WITHIN_DAYS, DEFAULT_CORPUS_DAYS), 1);
         final var since = new HODateTime(HODateTime.now().getInstant()
                 .minus(java.time.Duration.ofDays(days)));
 
@@ -1053,11 +1074,11 @@ public final class TransferTools {
         json.addProperty("comparableQuery", query.toQueryString());
         // Which position the specialty fit was judged for, and whether the caller said so or it was
         // read off the player's top skill - see derivePositionGroup.
-        json.addProperty("positionGroup", positionGroup);
+        json.addProperty(POSITION_GROUP, positionGroup);
         json.addProperty("positionGroupDerived", requestedGroup == null);
-        json.addProperty("observedWithinDays", days);
+        json.addProperty(OBSERVED_WITHIN_DAYS, days);
         if (ageWindowDays != null) {
-            json.addProperty("ageWindowDays", ageWindowDays);
+            json.addProperty(AGE_WINDOW_DAYS, ageWindowDays);
         }
         if (liveSearch != null) {
             // The raw hits beside the corpus view of them: itemCount says how much of the market
@@ -1090,7 +1111,7 @@ public final class TransferTools {
             row.addProperty("weight", round2(breakdown.combined()));
             final var weightBreakdown = new JsonObject();
             weightBreakdown.addProperty("age", round2(breakdown.age()));
-            weightBreakdown.addProperty("skill", round2(breakdown.skill()));
+            weightBreakdown.addProperty(SKILL, round2(breakdown.skill()));
             weightBreakdown.addProperty("character", round2(breakdown.character()));
             weightBreakdown.addProperty("specialty", round2(breakdown.specialty()));
             row.add("weightBreakdown", weightBreakdown);
@@ -1125,7 +1146,7 @@ public final class TransferTools {
         final var file = new JsonObject();
         file.addProperty(CURRENCY, McpJson.currency());
         file.add(PLAYER, json.get(PLAYER).deepCopy());
-        file.addProperty("positionGroup", positionGroup);
+        file.addProperty(POSITION_GROUP, positionGroup);
         file.add(SKILL_GROUPS, fileGroups);
         McpDownloads.attach(json, file);
 
@@ -1351,11 +1372,11 @@ public final class TransferTools {
      * corrupt every future query that reads this row back.
      */
     static TransferListing listingFromProfile(JsonObject profile, Player player) {
-        if (!profile.has("playerId") || !profile.has("salePrice")) {
+        if (!profile.has(PLAYER_ID) || !profile.has(SALE_PRICE)) {
             return null;
         }
         final var listing = new TransferListing();
-        listing.setPlayerId(profile.get("playerId").getAsInt());
+        listing.setPlayerId(profile.get(PLAYER_ID).getAsInt());
         listing.setObservedAt(HODateTime.now());
         if (profile.has("playerName")) {
             listing.setPlayerName(profile.get("playerName").getAsString());
@@ -1385,7 +1406,7 @@ public final class TransferTools {
         // what TransferListing's own column actually holds, same as queryFrom does for priceMin/
         // priceMax. Storing the raw local-currency number here corrupted every stored row by the
         // league's exchange rate once McpJson.money() converted it back for display.
-        listing.setSalePrice(McpJson.swedishKrona(profile.get("salePrice").getAsLong()));
+        listing.setSalePrice(McpJson.swedishKrona(profile.get(SALE_PRICE).getAsLong()));
         return listing;
     }
 
@@ -1612,7 +1633,7 @@ public final class TransferTools {
     }
 
     private static JsonObject manageScout(JsonObject args) throws McpToolException {
-        return switch (McpJson.reqString(args, "action")) {
+        return switch (McpJson.reqString(args, ACTION)) {
             case "add" -> addToScout(args);
             case "remove" -> removeFromScout(args);
             case "refresh" -> refreshScout(args);
@@ -1629,7 +1650,7 @@ public final class TransferTools {
         final var wanted = new java.util.LinkedHashSet<Integer>();
         if (args.has("players") && args.get("players").isJsonArray()) {
             args.getAsJsonArray("players").forEach(e -> wanted.add(e.isJsonObject()
-                    ? e.getAsJsonObject().get("playerId").getAsInt() : e.getAsInt()));
+                    ? e.getAsJsonObject().get(PLAYER_ID).getAsInt() : e.getAsInt()));
         }
         final var now = new java.sql.Timestamp(System.currentTimeMillis());
         // onEdt hands back JSON only, so the ids travel as an array.
@@ -1698,7 +1719,7 @@ public final class TransferTools {
             final String note;
             if (element.isJsonObject()) {
                 final var object = element.getAsJsonObject();
-                playerId = McpJson.reqInt(object, "playerId");
+                playerId = McpJson.reqInt(object, PLAYER_ID);
                 note = McpJson.optString(object, "note", null);
             } else {
                 playerId = element.getAsInt();
@@ -1765,7 +1786,7 @@ public final class TransferTools {
         }
         final var wanted = new java.util.LinkedHashSet<Integer>();
         requested.forEach(e -> wanted.add(e.isJsonObject()
-                ? e.getAsJsonObject().get("playerId").getAsInt() : e.getAsInt()));
+                ? e.getAsJsonObject().get(PLAYER_ID).getAsInt() : e.getAsInt()));
 
         return LineupTools.onEdt(() -> {
             final var tabOpen = ScoutList.isLive();
@@ -1778,7 +1799,7 @@ public final class TransferTools {
                     return false;
                 }
                 final var json = new JsonObject();
-                json.addProperty("playerId", entry.getPlayerID());
+                json.addProperty(PLAYER_ID, entry.getPlayerID());
                 json.addProperty("name", entry.getName());
                 removed.add(json);
                 return true;
@@ -1793,7 +1814,7 @@ public final class TransferTools {
             out.addProperty("visibleInUi", tabOpen ? "yes, the TransferScout table refreshed"
                     : "the Transfers tab is closed; the change is stored and shows when it opens");
             final var stillWanted = new java.util.LinkedHashSet<>(wanted);
-            removed.forEach(e -> stillWanted.remove(e.getAsJsonObject().get("playerId").getAsInt()));
+            removed.forEach(e -> stillWanted.remove(e.getAsJsonObject().get(PLAYER_ID).getAsInt()));
             if (!stillWanted.isEmpty()) {
                 final var notOnList = new JsonArray();
                 stillWanted.forEach(notOnList::add);
@@ -1808,9 +1829,9 @@ public final class TransferTools {
         // bulk: every matching entry, full, into the download.
         final var bulk = McpJson.optBool(args, "bulk", false);
         final var full = bulk || McpJson.optBool(args, "full", false);
-        final var offset = bulk ? 0 : Math.max(McpJson.optInt(args, "offset", 0), 0);
+        final var offset = bulk ? 0 : Math.max(McpJson.optInt(args, OFFSET, 0), 0);
         final var limit = bulk ? Integer.MAX_VALUE
-                : Math.min(Math.max(McpJson.optInt(args, "limit", DEFAULT_SCOUT_PAGE), 1), MAX_SCOUT_PAGE);
+                : Math.min(Math.max(McpJson.optInt(args, LIMIT, DEFAULT_SCOUT_PAGE), 1), MAX_SCOUT_PAGE);
         final var out = LineupTools.onEdt(() -> {
             final var now = java.time.Instant.now();
             final var entries = ScoutList.entries().stream().filter(e -> filter.test(e, now)).toList();
@@ -1819,7 +1840,7 @@ public final class TransferTools {
             final var json = new JsonObject();
             json.addProperty(CURRENCY, McpJson.currency());
             json.addProperty("count", entries.size());
-            json.addProperty("offset", offset);
+            json.addProperty(OFFSET, offset);
             json.addProperty("returned", players.size());
             json.add("players", players);
             return json;
@@ -1840,7 +1861,7 @@ public final class TransferTools {
         for (final var element : out.getAsJsonArray("players")) {
             final var player = element.getAsJsonObject();
             final var listing = DBManager.instance()
-                    .loadLatestTransferListing(player.get("playerId").getAsInt());
+                    .loadLatestTransferListing(player.get(PLAYER_ID).getAsInt());
             if (listing == null) {
                 continue;
             }
@@ -1873,9 +1894,9 @@ public final class TransferTools {
     }
 
     /** list_scout's default row: the market state plus age and specialty, not the frozen skills. */
-    private static final List<String> COMPACT_SCOUT_KEYS = List.of("playerId", "playerName", "note",
+    private static final List<String> COMPACT_SCOUT_KEYS = List.of(PLAYER_ID, "playerName", "note",
             "age", "specialty", "price", "deadline", "askingPrice", "highestBid", "observedAt",
-            "salePrice", "soldAt");
+            SALE_PRICE, "soldAt");
     private static final int DEFAULT_SCOUT_PAGE = 20;
     /** A compact row's note is cut here; full returns it whole. */
     static final int COMPACT_NOTE_CHARS = 80;
@@ -1913,12 +1934,12 @@ public final class TransferTools {
                                 + "the shape {skill, min?, max?}.");
                     }
                     final var f = array.get(i).getAsJsonObject();
-                    skills.add(new SkillRange(parseSkill(McpJson.reqString(f, "skill")),
+                    skills.add(new SkillRange(parseSkill(McpJson.reqString(f, SKILL)),
                             McpJson.optInteger(f, "min"), McpJson.optInteger(f, "max")));
                 }
             }
             return new ScoutFilter(McpJson.optBool(args, "onlyOpen", false),
-                    McpJson.optInteger(args, "ageMin"), McpJson.optInteger(args, "ageMax"),
+                    McpJson.optInteger(args, AGE_MIN), McpJson.optInteger(args, AGE_MAX),
                     McpJson.optInteger(args, "specialty"), List.copyOf(skills));
         }
 
@@ -2018,7 +2039,7 @@ public final class TransferTools {
                 }
             }
             final var json = new JsonObject();
-            json.addProperty("playerId", item.playerId());
+            json.addProperty(PLAYER_ID, item.playerId());
             json.addProperty("playerName", item.playerName());
             json.addProperty("transferId", item.transferId());
             json.addProperty("deadline", item.deadline());
@@ -2058,7 +2079,7 @@ public final class TransferTools {
                 continue;
             }
             final var json = new JsonObject();
-            json.addProperty("playerId", item.playerId());
+            json.addProperty(PLAYER_ID, item.playerId());
             json.addProperty("playerName", item.playerName());
             json.addProperty("deadline", item.deadline());
             final var askingPrice = ownAskingPrice(item);
@@ -2102,7 +2123,7 @@ public final class TransferTools {
     }
 
     private static JsonObject playerTransferHistory(JsonObject args) throws McpToolException {
-        final var playerId = McpJson.reqInt(args, "playerId");
+        final var playerId = McpJson.reqInt(args, PLAYER_ID);
         try {
             return playerTransferHistoryJson(playerId,
                     core.net.ChppWriteService.instance().playerTransfersForAgent(playerId));
@@ -2121,7 +2142,7 @@ public final class TransferTools {
             final var json = new JsonObject();
             json.addProperty("transferId", t.getTransferId());
             json.addProperty("date", t.getDate() == null ? null : t.getDate().toHT());
-            json.addProperty("season", t.getSeason());
+            json.addProperty(SEASON, t.getSeason());
             json.addProperty("week", t.getWeek());
             json.addProperty("price", McpJson.money(t.getPrice()));
             json.addProperty("tsi", t.getTsi());
@@ -2132,7 +2153,7 @@ public final class TransferTools {
             rows.add(json);
         }
         final var out = new JsonObject();
-        out.addProperty("playerId", playerId);
+        out.addProperty(PLAYER_ID, playerId);
         out.addProperty("playerName", sorted.isEmpty() ? null : sorted.get(0).getPlayerName());
         out.add("transfers", rows);
         return out;
@@ -2162,7 +2183,7 @@ public final class TransferTools {
             json.addProperty("ourBid", McpJson.money(ledger.getOurBid()));
         }
         if (ledger.getFinalPrice() != null) {
-            json.addProperty("salePrice", McpJson.money(ledger.getFinalPrice()));
+            json.addProperty(SALE_PRICE, McpJson.money(ledger.getFinalPrice()));
             json.addProperty("outcome", ledger.getOutcome());
         }
     }
@@ -2219,8 +2240,8 @@ public final class TransferTools {
 
     private static JsonObject placeBid(JsonObject args) throws McpToolException {
         sweepExpiredBids();
-        final var playerId = McpJson.reqInt(args, "playerId");
-        final var confirmToken = McpJson.optString(args, "confirmToken", null);
+        final var playerId = McpJson.reqInt(args, PLAYER_ID);
+        final var confirmToken = McpJson.optString(args, CONFIRM_TOKEN, null);
 
         if (confirmToken == null) {
             return previewBid(args, playerId);
@@ -2232,8 +2253,8 @@ public final class TransferTools {
         // The model bids in the user's currency; placeBid is sent in swedish krona, as playerdetails
         // documents ("Bid amount in SEK"). transfersearch's price bounds turned out to be local, so
         // check the first real bid's echoed amount (docs/current.md @ f5c51d0d).
-        final var bidAmountLocal = McpJson.reqLong(args, "bidAmount");
-        final Long maxBidAmountLocal = McpJson.optLong(args, "maxBidAmount");
+        final var bidAmountLocal = McpJson.reqLong(args, BID_AMOUNT);
+        final Long maxBidAmountLocal = McpJson.optLong(args, MAX_BID_AMOUNT);
         if (maxBidAmountLocal != null && maxBidAmountLocal < bidAmountLocal) {
             throw new McpToolException("maxBidAmount " + maxBidAmountLocal + " is below bidAmount "
                     + bidAmountLocal + ": the autobid ceiling must be at least the bid. Nothing was "
@@ -2269,13 +2290,13 @@ public final class TransferTools {
 
         // Echoed back in the user's currency - the numbers the model passed in.
         final var bid = new JsonObject();
-        bid.addProperty("bidAmount", bidAmountLocal);
+        bid.addProperty(BID_AMOUNT, bidAmountLocal);
         if (maxBidAmountLocal != null) {
-            bid.addProperty("maxBidAmount", maxBidAmountLocal);
+            bid.addProperty(MAX_BID_AMOUNT, maxBidAmountLocal);
         }
         out.add("bid", bid);
 
-        out.addProperty("confirmToken", token);
+        out.addProperty(CONFIRM_TOKEN, token);
         out.addProperty("expiresInSeconds", 120);
         out.addProperty("note", "Call place_bid again with this confirmToken and the same playerId "
                 + "to place the bid.");
@@ -2350,48 +2371,64 @@ public final class TransferTools {
         }
     }
 
-    private static JsonObject searchSchema() {
-        final var properties = McpTool.properties(
-                "ageMin", McpTool.prop("integer", "minimum age in years. Hattrick limits how wide "
+    /**
+     * The filters of one market search: search_transfers' single search, and each entry of its
+     * queries and of screen_market's.
+     */
+    static JsonObject searchFilterProperties() {
+        final var skills = McpTool.prop("array", "one to four skill filters, each "
+                + "{skill, min, max}. skill is one of " + SKILL_NAMES + ". min and max are "
+                + "levels and may be at most 3 apart. The first entry is the primary skill "
+                + "and is mandatory; set pieces, leadership and experience have a floor of "
+                + "level 5, keeper of level 3");
+        skills.add("items", McpTool.schema(McpTool.properties(
+                SKILL, McpTool.prop(STRING, "one of " + SKILL_NAMES),
+                "min", McpTool.prop(INTEGER, "lowest level"),
+                "max", McpTool.prop(INTEGER, "highest level, at most min + 3")), SKILL));
+        return McpTool.properties(
+                AGE_MIN, McpTool.prop(INTEGER, "minimum age in years. Hattrick limits how wide "
                         + "the age window may be: up to ageMin 18 only ageMax - ageMin <= 1, from "
                         + "ageMin 19 a width of 2. A wider window is refused outright, not answered "
                         + "with an empty result - split it into several searches"),
-                "ageMax", McpTool.prop("integer", "maximum age in years, see ageMin for how far it "
+                AGE_MAX, McpTool.prop(INTEGER, "maximum age in years, see ageMin for how far it "
                         + "may sit above it"),
-                "skills", McpTool.prop("array", "one to four skill filters, each "
-                        + "{skill, min, max}. skill is one of " + SKILL_NAMES + ". min and max are "
-                        + "levels and may be at most 3 apart. The first entry is the primary skill "
-                        + "and is mandatory; set pieces, leadership and experience have a floor of "
-                        + "level 5, keeper of level 3"),
-                "specialty", McpTool.prop("integer",
+                "skills", skills,
+                "specialty", McpTool.prop(INTEGER,
                         "specialty id: 0 none, 1 technical, 2 quick, 3 powerful, 4 unpredictable, "
                                 + "5 head, 6 resilient (regainer), 8 support. 7 is not a specialty. "
                                 + "Leave unset to match any, including the two rare ones"),
-                "nativeCountryId", McpTool.prop("integer", "native country id"),
-                "tsiMin", McpTool.prop("integer", "minimum TSI"),
-                "tsiMax", McpTool.prop("integer", "maximum TSI"),
-                "priceMin", McpTool.prop("integer", "minimum current price (highest bid, else asking price), in the user's currency"),
-                "priceMax", McpTool.prop("integer", "maximum current price (highest bid, else asking price), in the user's currency"),
-                "pageSize", McpTool.prop("integer", "hits Hattrick returns per search, default and "
+                NATIVE_COUNTRY_ID, McpTool.prop(INTEGER, "native country id"),
+                "tsiMin", McpTool.prop(INTEGER, "minimum TSI"),
+                "tsiMax", McpTool.prop(INTEGER, "maximum TSI"),
+                "priceMin", McpTool.prop(INTEGER, "minimum current price (highest bid, else asking price), in the user's currency"),
+                "priceMax", McpTool.prop(INTEGER, "maximum current price (highest bid, else asking price), in the user's currency"));
+    }
+
+    private static JsonObject searchSchema() {
+        final var properties = searchFilterProperties();
+        final var more = McpTool.properties(
+                PAGE_SIZE, McpTool.prop(INTEGER, "hits Hattrick returns per search, default and "
                         + "maximum 100. itemCount is the market total, -1 above 100 - narrow the "
                         + "search then, there is no exact total"),
-                RESULT_ID, McpTool.prop("string", "page or re-sort the hits of an earlier call instead "
+                RESULT_ID, McpTool.prop(STRING, "page or re-sort the hits of an earlier call instead "
                         + "of searching: no CHPP request, not counted against the cap. Last "
                         + KEPT_RESULTS + " kept"),
-                "limit", McpTool.prop("integer", "hits per answer, default " + HIT_PAGE + " (max "
+                LIMIT, McpTool.prop(INTEGER, "hits per answer, default " + HIT_PAGE + " (max "
                         + HIT_MAX_PAGE + "), with full " + FULL_HIT_PAGE + " (max " + FULL_HIT_MAX_PAGE + ")"),
-                "offset", McpTool.prop("integer", "hits to skip; default 0. count is the total"),
-                "sort", McpTool.prop("string", "deadline, age, tsi, price or salary, ascending; a "
+                OFFSET, McpTool.prop(INTEGER, "hits to skip; default 0. count is the total"),
+                "sort", McpTool.prop(STRING, "deadline, age, tsi, price or salary, ascending; a "
                         + "leading - for descending. Default Hattrick's order"),
                 "full", McpTool.prop("boolean", "each hit as an object with seller and bidder; default "
                         + "false: arrays in hitFields order"),
                 "bulk", McpTool.prop("boolean", "for scripts: every hit, compact, as a JSON file to "
                         + "download (HTTP GET of the returned download path on the MCP endpoint); "
                         + "the answer keeps resultId, count, hitFields and a 3-hit preview. Default false"),
-                "queries", McpTool.prop("array", "several searches in one call, each shaped like "
+                QUERIES, McpTool.prop("array", "several searches in one call, each shaped like "
                         + "the single-search arguments above; replaces them. bulk, full, limit, offset "
                         + "and sort go at the top level, not in an entry. Returns results[], "
                         + "each echoing its query; a failed one carries its own error"));
+        more.get(QUERIES).getAsJsonObject().add("items", McpTool.schema(searchFilterProperties()));
+        more.entrySet().forEach(e -> properties.add(e.getKey(), e.getValue()));
         // No required list: a single search needs ageMin, ageMax and skills, a batch needs queries,
         // and queryFrom rejects either one incomplete.
         return McpTool.schema(properties);
@@ -2410,10 +2447,10 @@ public final class TransferTools {
     /** The query the client asked for, with the page size defaulted and capped. */
     static TransferSearchQuery queryFrom(JsonObject args) {
         final var builder = TransferSearchQuery.builder()
-                .ageMin(McpJson.reqInt(args, "ageMin"))
-                .ageMax(McpJson.reqInt(args, "ageMax"))
+                .ageMin(McpJson.reqInt(args, AGE_MIN))
+                .ageMax(McpJson.reqInt(args, AGE_MAX))
                 .specialty(McpJson.optInteger(args, "specialty"))
-                .nativeCountryId(McpJson.optInteger(args, "nativeCountryId"))
+                .nativeCountryId(McpJson.optInteger(args, NATIVE_COUNTRY_ID))
                 .tsiMin(McpJson.optInteger(args, "tsiMin"))
                 .tsiMax(McpJson.optInteger(args, "tsiMax"))
                 // Passed through unconverted: transfersearch reads these in the user's currency,
@@ -2422,7 +2459,7 @@ public final class TransferTools {
                 .priceMax(McpJson.optInteger(args, "priceMax"))
                 // Paging is not exposed: ItemCount comes back as -1 once more than 100 players
                 // match, so a second page buys little and would eat the per session cap.
-                .pageSize(Math.min(McpJson.optInt(args, "pageSize", MAX_PAGE_SIZE), MAX_PAGE_SIZE));
+                .pageSize(Math.min(McpJson.optInt(args, PAGE_SIZE, MAX_PAGE_SIZE), MAX_PAGE_SIZE));
         applySkills(builder, McpJson.reqArray(args, "skills"));
         return builder.build();
     }
@@ -2446,7 +2483,7 @@ public final class TransferTools {
                         + "shape {skill, min, max}.");
             }
             final var filter = skills.get(i).getAsJsonObject();
-            final var skill = parseSkill(McpJson.reqString(filter, "skill"));
+            final var skill = parseSkill(McpJson.reqString(filter, SKILL));
             final var min = McpJson.reqInt(filter, "min");
             final var max = McpJson.reqInt(filter, "max");
             switch (i) {
@@ -2480,8 +2517,8 @@ public final class TransferTools {
         if (!sort.isEmpty()) {
             hitOrder(sort);
         }
-        if (args.has("queries")) {
-            rejectCallArgsInQueries(McpJson.reqArray(args, "queries"));
+        if (args.has(QUERIES)) {
+            rejectCallArgsInQueries(McpJson.reqArray(args, QUERIES));
         }
         if (args.has(RESULT_ID)) {
             final var id = McpJson.reqString(args, RESULT_ID);
@@ -2501,13 +2538,13 @@ public final class TransferTools {
         final var json = new JsonObject();
         json.addProperty(CURRENCY, McpJson.currency());
         final var hits = new ArrayList<XMLTransferSearchParser.Hit>();
-        if (args.has("queries")) {
-            json.add("results", searchBatch(McpJson.reqArray(args, "queries"), hits));
+        if (args.has(QUERIES)) {
+            json.add("results", searchBatch(McpJson.reqArray(args, QUERIES), hits));
         } else {
             final var page = search(queryFrom(args));
             // -1 means "more than 100", Hattrick's analogy to "many"
             json.addProperty("itemCount", page.itemCount());
-            json.addProperty("pageSize", page.pageSize());
+            json.addProperty(PAGE_SIZE, page.pageSize());
             hits.addAll(page.hits());
         }
         addHitPage(json, keepResult(hits), hits, args);
@@ -2515,7 +2552,7 @@ public final class TransferTools {
     }
 
     /** Arguments that shape the whole answer, not one search: only read at the top level. */
-    static final List<String> CALL_ARGS = List.of("bulk", "full", "limit", "offset", "sort", RESULT_ID);
+    static final List<String> CALL_ARGS = List.of("bulk", "full", LIMIT, OFFSET, "sort", RESULT_ID);
 
     /**
      * Refuses a call argument inside a queries[] entry before any search runs. queryFrom ignores
@@ -2562,7 +2599,7 @@ public final class TransferTools {
     static final int FULL_HIT_PAGE = 10;
     static final int FULL_HIT_MAX_PAGE = 12;
     /** The order of a compact hit's values, sent once as hitFields; the details from age on. */
-    static final List<String> HIT_FIELDS = List.of("playerId", "playerName", "nativeCountryId",
+    static final List<String> HIT_FIELDS = List.of(PLAYER_ID, "playerName", NATIVE_COUNTRY_ID,
             "askingPrice", "highestBid", "deadline", "age", "ageDays", "salary", "tsi", "specialty",
             "cards", "injuryLevel", "form", "stamina", "experience", "leadership", "keeper",
             "defender", "playmaker", "winger", "passing", "scorer", "setPieces");
@@ -2575,9 +2612,9 @@ public final class TransferTools {
             return;
         }
         final var full = McpJson.optBool(args, "full", false);
-        final var limit = Math.min(Math.max(McpJson.optInt(args, "limit",
+        final var limit = Math.min(Math.max(McpJson.optInt(args, LIMIT,
                 full ? FULL_HIT_PAGE : HIT_PAGE), 1), full ? FULL_HIT_MAX_PAGE : HIT_MAX_PAGE);
-        final var offset = Math.max(McpJson.optInt(args, "offset", 0), 0);
+        final var offset = Math.max(McpJson.optInt(args, OFFSET, 0), 0);
         final var sort = McpJson.optString(args, "sort", "");
         final var sorted = new ArrayList<>(all);
         if (!sort.isEmpty()) {
@@ -2588,7 +2625,7 @@ public final class TransferTools {
                 .forEach(hit -> hits.add(full ? McpJson.hit(hit) : compactHit(hit)));
         json.addProperty(RESULT_ID, resultId);
         json.addProperty("count", all.size());
-        json.addProperty("offset", offset);
+        json.addProperty(OFFSET, offset);
         json.addProperty("returned", hits.size());
         if (!full) {
             final var fields = new JsonArray();
@@ -2733,8 +2770,8 @@ public final class TransferTools {
 
     private static JsonObject teamTransfers(JsonObject args) throws McpToolException {
         final var teamId = McpJson.model().getBasics().getTeamId();
-        final var season = McpJson.optInt(args, "season", 0);
-        final var direction = McpJson.optString(args, "direction", "").toLowerCase(Locale.ENGLISH);
+        final var season = McpJson.optInt(args, SEASON, 0);
+        final var direction = McpJson.optString(args, DIRECTION, "").toLowerCase(Locale.ENGLISH);
         final var bought = direction.isEmpty() || direction.equals("buy");
         final var sold = direction.isEmpty() || direction.equals("sell");
 
@@ -2744,8 +2781,8 @@ public final class TransferTools {
         final var all = DBManager.instance().getTransfers(season, bought, sold);
         // bulk: every transfer into the download, so no page.
         final var bulk = McpJson.optBool(args, "bulk", false);
-        final var offset = bulk ? 0 : Math.max(McpJson.optInt(args, "offset", 0), 0);
-        final var limit = bulk ? all.size() : Math.min(Math.max(McpJson.optInt(args, "limit", 20), 1), 100);
+        final var offset = bulk ? 0 : Math.max(McpJson.optInt(args, OFFSET, 0), 0);
+        final var limit = bulk ? all.size() : Math.min(Math.max(McpJson.optInt(args, LIMIT, 20), 1), 100);
         final var page = offset >= all.size() ? List.<PlayerTransfer>of()
                 : all.subList(offset, Math.min(offset + limit, all.size()));
 
@@ -2756,9 +2793,9 @@ public final class TransferTools {
             json.addProperty("transferId", t.getTransferId());
             json.addProperty("date", t.getDate() == null ? null : t.getDate().toHT());
             json.addProperty("week", t.getWeek());
-            json.addProperty("season", t.getSeason());
-            json.addProperty("direction", isBuy ? "buy" : "sell");
-            json.addProperty("playerId", t.getPlayerId());
+            json.addProperty(SEASON, t.getSeason());
+            json.addProperty(DIRECTION, isBuy ? "buy" : "sell");
+            json.addProperty(PLAYER_ID, t.getPlayerId());
             json.addProperty("playerName", t.getPlayerName());
             json.addProperty("price", McpJson.money(t.getPrice()));
             json.addProperty("tsi", t.getTsi());
@@ -2782,7 +2819,7 @@ public final class TransferTools {
         final var json = new JsonObject();
         json.addProperty(CURRENCY, McpJson.currency());
         json.addProperty("totalCount", all.size());
-        json.addProperty("offset", offset);
+        json.addProperty(OFFSET, offset);
         json.addProperty("returned", transfers.size());
         json.addProperty("hasMore", offset + transfers.size() < all.size());
         json.addProperty("totalSpent", McpJson.money(DBManager.instance().getSumTransferPrices(teamId, false)));
