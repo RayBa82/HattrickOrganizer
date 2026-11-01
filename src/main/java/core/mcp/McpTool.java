@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
 import java.util.List;
+import java.util.function.Predicate;
 
 /**
  * One MCP tool: what {@code tools/list} advertises and what {@code tools/call} runs.
@@ -16,17 +17,49 @@ import java.util.List;
  *                         tool's own arguments; null derives one from the schema
  * @param optionalSections what {@link McpBudget} may drop, in this order, before it gives up on an
  *                         over-budget answer
+ * @param runsAsTask       which calls are long enough to answer with a task handle when the client
+ *                         speaks the tasks extension (see {@link McpTasks}); null = never
+ * @param taskHandler      what a call that runs as a task executes instead of {@code handler};
+ *                         null = the same handler. For a tool whose plain form already hands
+ *                         out its own polling handle and has to keep doing so for older clients.
  */
 public record McpTool(String name, String description, JsonObject inputSchema, Handler handler,
-                      String budgetHint, List<OptionalSection> optionalSections) {
+                      String budgetHint, List<OptionalSection> optionalSections,
+                      Predicate<JsonObject> runsAsTask, Handler taskHandler) {
 
     public McpTool(String name, String description, JsonObject inputSchema, Handler handler) {
-        this(name, description, inputSchema, handler, null, List.of());
+        this(name, description, inputSchema, handler, null, List.of(), null, null);
     }
 
     /** This tool with its own over-budget hint and the sections it may shed, in drop order. */
     public McpTool withBudget(String hint, OptionalSection... sections) {
-        return new McpTool(name, description, inputSchema, handler, hint, List.of(sections));
+        return new McpTool(name, description, inputSchema, handler, hint, List.of(sections),
+                runsAsTask, taskHandler);
+    }
+
+    /**
+     * This tool, answering the calls {@code when} accepts with a task handle once the client
+     * declares the tasks extension. Pick the calls that can outlast a client's request timeout -
+     * CHPP round trips, not local reads.
+     */
+    public McpTool asTask(Predicate<JsonObject> when) {
+        return asTask(when, null);
+    }
+
+    /** {@link #asTask(Predicate)}, running {@code taskHandler} instead of the plain handler. */
+    public McpTool asTask(Predicate<JsonObject> when, Handler taskHandler) {
+        return new McpTool(name, description, inputSchema, handler, budgetHint, optionalSections,
+                when, taskHandler);
+    }
+
+    /** Whether this call may run as a task, client support aside. */
+    boolean taskEligible(JsonObject arguments) {
+        return runsAsTask != null && runsAsTask.test(arguments);
+    }
+
+    /** The handler a call runs: the task one when it runs as a task and the tool has one. */
+    Handler handlerFor(boolean asTask) {
+        return asTask && taskHandler != null ? taskHandler : handler;
     }
 
     /**

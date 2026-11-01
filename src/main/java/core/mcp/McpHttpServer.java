@@ -3,6 +3,7 @@ package core.mcp;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpExchange;
@@ -13,18 +14,40 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.UnaryOperator;
 
 /**
  * MCP server over Streamable HTTP, single endpoint {@code POST /mcp}, answers as
  * {@code application/json}.
  * <p>
- * No SSE: nothing here pushes server initiated messages, so the event stream half of the transport
- * would be dead weight. {@code GET /mcp} answers 405.
+ * <b>Two protocol eras on one endpoint.</b> Revision {@value #LATEST_VERSION} made MCP stateless:
+ * no {@code initialize} handshake, every request carries its protocol version and the client's
+ * capabilities in {@code params._meta}, mirrored into the {@code MCP-Protocol-Version},
+ * {@code Mcp-Method} and {@code Mcp-Name} headers, and {@code server/discover} names what the
+ * server supports. Clients of {@code 2025-11-25} and earlier still open with {@code initialize}.
+ * This server is "dual-era" in the specification's terms: a request carrying the modern
+ * {@code _meta} version is served by the {@value #LATEST_VERSION} rules, an {@code initialize}
+ * and everything without that {@code _meta} by the legacy ones. Nothing is kept per client either
+ * way - the legacy handshake never stored anything here.
+ * <p>
+ * <b>Tasks.</b> The {@code io.modelcontextprotocol/tasks} extension ({@link McpTasks}) is modern
+ * only. A tool marked {@link McpTool#asTask} answers a {@code tools/call} from a client that
+ * declares the extension with a task handle, and the client polls {@code tasks/get}. Every other
+ * call stays synchronous. The legacy era's experimental tasks (2025-11-25) are not offered - that
+ * revision negotiated them, so a server without them is still a correct one.
+ * <p>
+ * No SSE: nothing here streams progress or pushes notifications, so every answer is one JSON
+ * object, which the transport allows for any request. {@code GET} and {@code DELETE} on
+ * {@code /mcp} answer 405 (the GET stream and sessions are gone in the modern era, and this
+ * server never offered them in the legacy one).
  * <p>
  * The whole security perimeter is three rules, and none of them is optional: bind loopback only,
  * reject any request that carries an {@code Origin} header, and reject any request whose
@@ -33,12 +56,33 @@ import java.util.concurrent.Executors;
  * Together they are the rebinding guard the MCP specification asks of a local server. Without them
  * any page open in the user's browser could read the whole squad.
  * <p>
- * There is no authentication beyond that: any process running as this user can call every tool.
- * The switch being off by default is what bounds that.
+ * There is no authentication beyond that: any process running as this user can call every tool,
+ * and any of them that has a task id can read that task. The switch being off by default is what
+ * bounds that.
  */
 public final class McpHttpServer {
 
-    private static final String DEFAULT_PROTOCOL_VERSION = "2024-11-05";
+    /** The current MCP revision, served statelessly. */
+    static final String LATEST_VERSION = "2026-07-28";
+    static final List<String> MODERN_VERSIONS = List.of(LATEST_VERSION);
+    /** The handshake-based revisions an {@code initialize} may ask for, newest first. */
+    static final List<String> LEGACY_VERSIONS = List.of("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05");
+    /** What an {@code initialize} that names no version gets - the oldest, as before. */
+    private static final String DEFAULT_LEGACY_VERSION = LEGACY_VERSIONS.get(LEGACY_VERSIONS.size() - 1);
+
+    static final String META_PROTOCOL_VERSION = "io.modelcontextprotocol/protocolVersion";
+    static final String META_CLIENT_CAPABILITIES = "io.modelcontextprotocol/clientCapabilities";
+    static final String META_SERVER_INFO = "io.modelcontextprotocol/serverInfo";
+    static final String TASKS_EXTENSION = "io.modelcontextprotocol/tasks";
+
+    static final int HEADER_MISMATCH = -32020;
+    static final int MISSING_REQUIRED_CLIENT_CAPABILITY = -32021;
+    static final int UNSUPPORTED_PROTOCOL_VERSION = -32022;
+
+    /** Freshness hint on cacheable results: the tool list changes only with a new HO build. */
+    static final long LIST_TTL_MS = 60 * 60 * 1000L;
+    private static final int HTTP_THREADS = 4;
+
     /**
      * Nulls are serialized on purpose. Gson drops them by default, which silently discarded fields
      * this code explicitly writes as null - {@code details} on an expired market hit, {@code
@@ -52,8 +96,21 @@ public final class McpHttpServer {
     private static McpHttpServer instance;
 
     private final Map<String, McpTool> tools = new LinkedHashMap<>();
+    private final McpTasks tasks = new McpTasks();
+    /**
+     * One tool handler at a time, plain call or task. Handlers reach straight into DBManager, and
+     * HO's ConnectionManager shares one JDBC Statement and one StatementCache across every table,
+     * so two tool calls in parallel would interleave on it. The HTTP side has several threads only
+     * so that a {@code tasks/get} poll never waits behind a running tool; a plain call that arrives
+     * while a task runs waits for it. Fair, so calls run in the order they arrived.
+     */
+    private final ReentrantLock toolLock = new ReentrantLock(true);
     private HttpServer server;
     private ExecutorService executor;
+
+    /** An answer and the HTTP status it goes out with; a null body is a notification's 202. */
+    record Reply(int status, JsonObject body) {
+    }
 
     public static synchronized McpHttpServer instance() {
         if (instance == null) {
@@ -108,11 +165,8 @@ public final class McpHttpServer {
         final var bind = System.getProperty("ho.mcpBind");
         final var address = bind == null ? InetAddress.getLoopbackAddress() : InetAddress.getByName(bind);
         server = HttpServer.create(new InetSocketAddress(address, port), 0);
-        // Single threaded on purpose. Handlers reach straight into DBManager, and HO's
-        // ConnectionManager shares one JDBC Statement and one StatementCache across every table, so
-        // two tool calls in parallel would interleave on it. A slow CHPP call therefore blocks the
-        // next request - the cheaper of the two problems.
-        executor = Executors.newSingleThreadExecutor();
+        // Several threads, but tool handlers still run one at a time: see toolLock.
+        executor = Executors.newFixedThreadPool(HTTP_THREADS);
         server.setExecutor(executor);
         server.createContext("/mcp", this::serve);
         server.start();
@@ -162,12 +216,12 @@ public final class McpHttpServer {
                 return;
             }
 
-            final var response = handle(request);
-            if (response == null) {
+            final var reply = handle(request, exchange.getRequestHeaders()::getFirst);
+            if (reply.body() == null) {
                 respond(exchange, 202, "");          // a notification gets no body
                 return;
             }
-            respond(exchange, 200, GSON.toJson(response));
+            respond(exchange, reply.status(), GSON.toJson(reply.body()));
         } catch (Exception e) {
             HOLogger.instance().error(getClass(), e);
             try {
@@ -202,52 +256,198 @@ public final class McpHttpServer {
     }
 
     /**
-     * Answer one JSON-RPC request.
+     * Answer one JSON-RPC request without its HTTP headers - the in-process form the tests use.
+     * The modern era's header checks are skipped, everything else applies.
      *
      * @return the response object, or null for a notification (a request without an id)
      */
     JsonObject handle(JsonObject request) {
+        return handle(request, null).body();
+    }
+
+    /**
+     * Answer one JSON-RPC request.
+     *
+     * @param headers HTTP request header lookup, case-insensitive; null skips the header checks
+     */
+    Reply handle(JsonObject request, UnaryOperator<String> headers) {
         final var id = request.get("id");
         if (id == null) {
-            return null;                     // notifications/initialized and friends
+            return new Reply(202, null);     // notifications/initialized and friends
         }
         final var method = request.has("method") ? request.get("method").getAsString() : "";
         final var params = request.has("params") && request.get("params").isJsonObject()
                 ? request.getAsJsonObject("params")
                 : new JsonObject();
+        final var meta = params.has("_meta") && params.get("_meta").isJsonObject()
+                ? params.getAsJsonObject("_meta")
+                : null;
+        final var bodyVersion = string(meta, META_PROTOCOL_VERSION);
+        final var headerVersion = headers == null ? null : headers.apply("MCP-Protocol-Version");
 
+        // initialize always means legacy. Otherwise a version in _meta, or a header naming a
+        // revision newer than the last legacy one, means a modern client - and from then on the
+        // modern rules decide, including the error when header and body disagree.
+        final var modern = !"initialize".equals(method)
+                && (bodyVersion != null
+                || (headerVersion != null && headerVersion.compareTo(LEGACY_VERSIONS.get(0)) > 0));
+        return modern
+                ? handleModern(id, method, params, meta, bodyVersion, headers)
+                : new Reply(200, handleLegacy(id, method, params));
+    }
+
+    private JsonObject handleLegacy(JsonElement id, String method, JsonObject params) {
         return switch (method) {
             case "initialize" -> result(id, initialize(params));
+            case "ping" -> result(id, new JsonObject());
             case "tools/list" -> result(id, toolsList());
-            case "tools/call" -> toolsCall(id, params);
+            case "tools/call" -> legacyToolsCall(id, params);
+            // A modern probe without _meta still learns what this server speaks.
+            case "server/discover" -> result(id, complete(discover()));
             default -> error(id, -32601, "Unknown method: " + method);
         };
     }
 
+    private Reply handleModern(JsonElement id, String method, JsonObject params, JsonObject meta,
+                               String bodyVersion, UnaryOperator<String> headers) {
+        if (headers != null) {
+            final var mismatch = headerMismatch(method, params, bodyVersion, headers);
+            if (mismatch != null) {
+                return new Reply(400, error(id, HEADER_MISMATCH, "Header mismatch: " + mismatch));
+            }
+        }
+        if (!MODERN_VERSIONS.contains(bodyVersion)) {
+            final var data = new JsonObject();
+            data.add("supported", supportedVersions());
+            data.addProperty("requested", bodyVersion);
+            return new Reply(400, error(id, UNSUPPORTED_PROTOCOL_VERSION, "Unsupported protocol version", data));
+        }
+        final var tasksDeclared = declaresTasks(meta);
+        return switch (method) {
+            case "server/discover" -> new Reply(200, result(id, complete(discover())));
+            case "tools/list" -> new Reply(200, result(id, complete(cacheable(toolsList()))));
+            case "tools/call" -> new Reply(200, modernToolsCall(id, params, tasksDeclared));
+            case "tasks/get", "tasks/update", "tasks/cancel" -> taskRequest(id, method, params, tasksDeclared);
+            // The modern transport wants 404 here: it tells this server apart from a legacy one
+            // that has no such endpoint, and the JSON-RPC body says which it is.
+            default -> new Reply(404, error(id, -32601, "Method not found: " + method));
+        };
+    }
+
+    /**
+     * What is wrong with the mirrored headers, or null when they match the body. The standard
+     * headers are required on every modern request; this server declares no {@code x-mcp-header}
+     * parameters, so there are no {@code Mcp-Param-*} headers to check.
+     */
+    private static String headerMismatch(String method, JsonObject params, String bodyVersion,
+                                         UnaryOperator<String> headers) {
+        final var version = headers.apply("MCP-Protocol-Version");
+        if (version == null) {
+            return "the MCP-Protocol-Version header is missing";
+        }
+        if (!version.equals(bodyVersion)) {
+            return "MCP-Protocol-Version header value '" + version + "' does not match body value '"
+                    + bodyVersion + "' (_meta " + META_PROTOCOL_VERSION + ")";
+        }
+        final var mcpMethod = headers.apply("Mcp-Method");
+        if (mcpMethod == null) {
+            return "the Mcp-Method header is missing";
+        }
+        if (!mcpMethod.equals(method)) {
+            return "Mcp-Method header value '" + mcpMethod + "' does not match body value '" + method + "'";
+        }
+        final var nameField = switch (method) {
+            case "tools/call" -> "name";
+            // the tasks extension routes on the task id
+            case "tasks/get", "tasks/update", "tasks/cancel" -> "taskId";
+            default -> null;
+        };
+        if (nameField == null) {
+            return null;
+        }
+        final var raw = headers.apply("Mcp-Name");
+        if (raw == null) {
+            return "the Mcp-Name header is missing";
+        }
+        final var name = decodeHeaderValue(raw);
+        if (name == null) {
+            return "the Mcp-Name header value is not valid Base64";
+        }
+        final var expected = string(params, nameField);
+        if (!name.equals(expected)) {
+            return "Mcp-Name header value '" + name + "' does not match body value '" + expected + "'";
+        }
+        return null;
+    }
+
+    /** A header value with the {@code =?base64?...?=} sentinel decoded; null when that is not Base64. */
+    static String decodeHeaderValue(String raw) {
+        if (raw.length() >= 11 && raw.startsWith("=?base64?") && raw.endsWith("?=")) {
+            try {
+                return new String(Base64.getDecoder().decode(raw.substring(9, raw.length() - 2)),
+                        StandardCharsets.UTF_8);
+            } catch (IllegalArgumentException e) {
+                return null;
+            }
+        }
+        return raw;
+    }
+
+    /** Whether the request's client capabilities name the tasks extension. */
+    private static boolean declaresTasks(JsonObject meta) {
+        if (meta == null || !(meta.get(META_CLIENT_CAPABILITIES) instanceof JsonObject capabilities)) {
+            return false;
+        }
+        return capabilities.get("extensions") instanceof JsonObject extensions
+                && extensions.has(TASKS_EXTENSION);
+    }
+
     private JsonObject initialize(JsonObject params) {
-        // Echo the client's protocol version so that a client of any generation is satisfied - this
-        // server behaves the same under all of them, it speaks plain request/response JSON.
-        final var version = params.has("protocolVersion")
-                ? params.get("protocolVersion").getAsString()
-                : DEFAULT_PROTOCOL_VERSION;
+        // The client's version when this server knows it, else the newest legacy one: a legacy
+        // client that cannot speak it disconnects, which is what the handshake prescribes.
+        final var requested = string(params, "protocolVersion");
+        final String version;
+        if (requested == null) {
+            version = DEFAULT_LEGACY_VERSION;
+        } else {
+            version = LEGACY_VERSIONS.contains(requested) ? requested : LEGACY_VERSIONS.get(0);
+        }
 
         final var capabilities = new JsonObject();
         capabilities.add("tools", new JsonObject());
 
-        final var serverInfo = new JsonObject();
-        serverInfo.addProperty("name", "ho");
-        serverInfo.addProperty("version", String.valueOf(core.HO.VERSION));
-
         final var result = new JsonObject();
         result.addProperty("protocolVersion", version);
         result.add("capabilities", capabilities);
-        result.add("serverInfo", serverInfo);
+        result.add("serverInfo", serverInfo());
         return result;
+    }
+
+    /** {@code server/discover}: the versions, capabilities and identity, in one cacheable answer. */
+    private static JsonObject discover() {
+        final var extensions = new JsonObject();
+        extensions.add(TASKS_EXTENSION, new JsonObject());
+        final var capabilities = new JsonObject();
+        capabilities.add("tools", new JsonObject());
+        capabilities.add("extensions", extensions);
+
+        final var result = new JsonObject();
+        result.add("supportedVersions", supportedVersions());
+        result.add("capabilities", capabilities);
+        return cacheable(result);
+    }
+
+    private static JsonArray supportedVersions() {
+        final var versions = new JsonArray();
+        final var all = new ArrayList<>(MODERN_VERSIONS);
+        all.addAll(LEGACY_VERSIONS);
+        all.forEach(versions::add);
+        return versions;
     }
 
     private JsonObject toolsList() {
         final var list = new JsonArray();
-        for (final var tool : tools.values()) {
+        for (final var tool : tools.values()) {      // registration order: deterministic, as asked
             final var entry = new JsonObject();
             entry.addProperty("name", tool.name());
             entry.addProperty("description", tool.description());
@@ -259,40 +459,167 @@ public final class McpHttpServer {
         return result;
     }
 
-    private JsonObject toolsCall(com.google.gson.JsonElement id, JsonObject params) {
+    private JsonObject legacyToolsCall(JsonElement id, JsonObject params) {
         final var name = params.has("name") ? params.get("name").getAsString() : "";
         final var tool = tools.get(name);
         if (tool == null) {
             return error(id, -32602, "Unknown tool: " + name);
         }
-        final var arguments = params.has("arguments") && params.get("arguments").isJsonObject()
-                ? params.getAsJsonObject("arguments")
-                : new JsonObject();
+        return response(id, runTool(tool, arguments(params), false, false));
+    }
+
+    /**
+     * A modern {@code tools/call}: a task handle when the tool marks this call long-running and
+     * the client declared the tasks extension on this very request (an earlier declaration does
+     * not count - the extension says so), else the plain result.
+     */
+    private JsonObject modernToolsCall(JsonElement id, JsonObject params, boolean tasksDeclared) {
+        final var name = params.has("name") ? params.get("name").getAsString() : "";
+        final var tool = tools.get(name);
+        if (tool == null) {
+            return error(id, -32602, "Unknown tool: " + name);
+        }
+        final var arguments = arguments(params);
+        if (tasksDeclared && tool.taskEligible(arguments)) {
+            final var task = tasks.create(name, () -> runTool(tool, arguments, true, true));
+            final var handle = tasks.describe(task, false);
+            handle.addProperty("resultType", "task");
+            handle.add("_meta", serverInfoMeta());
+            return result(id, handle);
+        }
+        final var outcome = runTool(tool, arguments, false, true);
+        return outcome.error() != null
+                ? response(id, outcome)
+                : result(id, withServerInfo(outcome.result()));
+    }
+
+    private Reply taskRequest(JsonElement id, String method, JsonObject params, boolean tasksDeclared) {
+        if (!tasksDeclared) {
+            final var extensions = new JsonObject();
+            extensions.add(TASKS_EXTENSION, new JsonObject());
+            final var required = new JsonObject();
+            required.add("extensions", extensions);
+            final var data = new JsonObject();
+            data.add("requiredCapabilities", required);
+            return new Reply(400, error(id, MISSING_REQUIRED_CLIENT_CAPABILITY,
+                    "Missing required client capability: " + method + " needs the " + TASKS_EXTENSION
+                            + " extension in _meta " + META_CLIENT_CAPABILITIES, data));
+        }
+        final var taskId = string(params, "taskId");
+        final var task = tasks.get(taskId);
+        if (task == null) {
+            return new Reply(200, error(id, -32602, "Task not found: " + taskId + ". Tasks are kept in "
+                    + "memory for " + McpTasks.TTL_MS / 60_000 + " minutes, the newest " + McpTasks.KEPT
+                    + ", and an HO restart forgets them; call the tool again."));
+        }
+        final JsonObject answer = switch (method) {
+            case "tasks/get" -> tasks.describe(task, true);
+            case "tasks/cancel" -> {
+                tasks.cancel(task);
+                yield new JsonObject();
+            }
+            // No tool here ever asks for input mid-task, so there is never an outstanding
+            // inputRequest; the extension says to ignore responses for unknown keys and ack.
+            default -> new JsonObject();
+        };
+        return new Reply(200, result(id, complete(answer)));
+    }
+
+    /**
+     * Run one tool call under the tool lock. Never throws: an expected failure is a result with
+     * {@code isError}, bad arguments and crashes are JSON-RPC errors.
+     */
+    private McpTasks.Outcome runTool(McpTool tool, JsonObject arguments, boolean asTask, boolean modern) {
+        toolLock.lock();
         try {
-            return result(id, toolResult(McpBudget.fit(tool, tool.handler().call(arguments)), false));
+            final var answer = tool.handlerFor(asTask).call(arguments);
+            return McpTasks.Outcome.result(toolResult(McpBudget.fit(tool, answer), false, modern));
         } catch (McpToolException e) {
-            return result(id, toolResult(e.getMessage(), true));
+            return McpTasks.Outcome.result(toolResult(e.getMessage(), true, modern));
         } catch (IllegalArgumentException e) {
-            return error(id, -32602, e.getMessage());
+            return McpTasks.Outcome.error(errorObject(-32602, e.getMessage()));
         } catch (Exception e) {
             HOLogger.instance().error(getClass(), e);      // no stack trace crosses the wire
-            return error(id, -32603, "Internal error in tool " + name);
+            return McpTasks.Outcome.error(errorObject(-32603, "Internal error in tool " + tool.name()));
+        } finally {
+            toolLock.unlock();
         }
     }
 
-    private static JsonObject toolResult(String text, boolean isError) {
+    private static JsonObject arguments(JsonObject params) {
+        return params.has("arguments") && params.get("arguments").isJsonObject()
+                ? params.getAsJsonObject("arguments")
+                : new JsonObject();
+    }
+
+    private static JsonObject toolResult(String text, boolean isError, boolean modern) {
         final var content = new JsonObject();
         content.addProperty("type", "text");
         content.addProperty("text", text);
         final var contents = new JsonArray();
         contents.add(content);
         final var result = new JsonObject();
+        if (modern) {
+            result.addProperty("resultType", "complete");
+        }
         result.add("content", contents);
         result.addProperty("isError", isError);
         return result;
     }
 
-    private static JsonObject result(com.google.gson.JsonElement id, JsonObject result) {
+    private static JsonObject serverInfo() {
+        final var serverInfo = new JsonObject();
+        serverInfo.addProperty("name", "ho");
+        serverInfo.addProperty("version", String.valueOf(core.HO.VERSION));
+        return serverInfo;
+    }
+
+    private static JsonObject serverInfoMeta() {
+        final var meta = new JsonObject();
+        meta.add(META_SERVER_INFO, serverInfo());
+        return meta;
+    }
+
+    /** A modern ordinary result: {@code resultType: complete}, the server named in {@code _meta}. */
+    private static JsonObject complete(JsonObject result) {
+        if (!result.has("resultType")) {
+            result.addProperty("resultType", "complete");
+        }
+        return withServerInfo(result);
+    }
+
+    private static JsonObject withServerInfo(JsonObject result) {
+        result.add("_meta", serverInfoMeta());
+        return result;
+    }
+
+    /** The modern {@code CacheableResult} fields; private, because the data is one user's team. */
+    private static JsonObject cacheable(JsonObject result) {
+        result.addProperty("ttlMs", LIST_TTL_MS);
+        result.addProperty("cacheScope", "private");
+        return result;
+    }
+
+    private static String string(JsonObject object, String key) {
+        if (object == null || !(object.get(key) instanceof com.google.gson.JsonPrimitive value)
+                || !value.isString()) {
+            return null;
+        }
+        return value.getAsString();
+    }
+
+    private static JsonObject response(JsonElement id, McpTasks.Outcome outcome) {
+        if (outcome.error() == null) {
+            return result(id, outcome.result());
+        }
+        final var response = new JsonObject();
+        response.addProperty("jsonrpc", "2.0");
+        response.add("id", id);
+        response.add("error", outcome.error());
+        return response;
+    }
+
+    private static JsonObject result(JsonElement id, JsonObject result) {
         final var response = new JsonObject();
         response.addProperty("jsonrpc", "2.0");
         response.add("id", id);
@@ -300,10 +627,22 @@ public final class McpHttpServer {
         return response;
     }
 
-    private static JsonObject error(com.google.gson.JsonElement id, int code, String message) {
+    static JsonObject errorObject(int code, String message) {
         final var error = new JsonObject();
         error.addProperty("code", code);
         error.addProperty("message", message);
+        return error;
+    }
+
+    private static JsonObject error(JsonElement id, int code, String message) {
+        return error(id, code, message, null);
+    }
+
+    private static JsonObject error(JsonElement id, int code, String message, JsonObject data) {
+        final var error = errorObject(code, message);
+        if (data != null) {
+            error.add("data", data);
+        }
         final var response = new JsonObject();
         response.addProperty("jsonrpc", "2.0");
         response.add("id", id);

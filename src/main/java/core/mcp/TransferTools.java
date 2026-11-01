@@ -77,7 +77,10 @@ public final class TransferTools {
                         searchSchema(),
                         TransferTools::searchTool)
                         .withBudget("Page the hits with resultId + limit/offset (no new search, "
-                                + "not counted against the cap); pass full only with a small limit."),
+                                + "not counted against the cap); pass full only with a small limit.")
+                        // a fresh search is one CHPP request per queries entry plus the resolver;
+                        // paging a kept result with resultId is a local read
+                        .asTask(args -> !args.has("resultId")),
                 new McpTool("get_team_transfers",
                         "The managed team's own transfer history, newest first, with price, TSI at "
                                 + "transfer time, the mother-club and previous-club fees, and specialty "

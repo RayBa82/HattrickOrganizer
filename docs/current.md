@@ -4,51 +4,6 @@ Only the last one or two pieces of work live here. Older notes are dropped rathe
 accumulated; git keeps them (`git log -p -- docs/current.md`; the full history file as of
 2026-09-26 is `git show f5c51d0d:docs/current.md`).
 
-## MCP token budget enforced (2026-10-11)
-
-AGENTS.md, "MCP server", has the rule as built: `McpBudget.fit` in `toolsCall` sheds a tool's
-declared optional sections first (`droppedForBudget`), and only a core still over 10,000
-characters becomes the `{truncated, wouldBeChars, hint}` envelope. The user chose that over
-AGENTS.md's earlier all-or-nothing, at the hattrick session's request: squad availability and
-the current training week must always arrive.
-
-Defaults reshaped with the hattrick session (field names kept):
-- `get_squad`: compact rows, everything but positionRatings squad-wide in one call (user
-  request via hattrick): skills as an array in `skillOrder` (1 decimal), `character` in
-  `characterOrder`, `specialty` as its number named once in `specialtyNames`, loyalty,
-  penaltyStrength (1 decimal); `motherclub`/`transferListed` only when true, `suspended` gone
-  (`available` false without injury). `include` takes only positionRatings (old part names
-  still accepted); up to 5 `playerIds` get it unasked. 30 players 9.3k, ~300 a row; over
-  budget positionRatings, tsi+wage, penaltyStrength, loyalty, character drop in that order.
-  `only: "positionRatings"` returns just the slot matrix for set-lineup (hattrick's choice):
-  `slotOrder` once, per player `{playerId, r:[14, 1 decimal]}`, unavailable players too;
-  30 players 2.7k.
-- `get_player_history`: `latestSkills` added; `derived` by default for up to 2 players,
-  `coverage` up to 5 (`includeDerived`/`includeCoverage` override). Above 2 players a compact
-  `screen` (levelsPerHtYear, rateBasis, weeksSinceLastLevelUp, daysSinceLastSnapshot, gapCount)
-  replaces them for the hattrick trainee screen: 14 players 8.5k complete, 20 keep it, the
-  whole 29-man squad drops it - full derived+coverage fit only 8 players a call.
-- `get_training`: `weeks` default 1, predictions dated on or before the last update dropped.
-- `get_series`: `matches` holds our fixtures; `allTeams` the whole series (fits only with
-  `include: ["matches"]`, 9.9k).
-- `list_scout`: page 20, compact notes cut at 80 chars (`noteCut`).
-- `search_transfers`: hits as arrays in `hitFields` (~115 chars; 50 a page, max 70), `full`
-  for the old objects (10, max 12). Every answer keeps its hits under a `resultId` (last 10,
-  in memory): `resultId` + `limit`/`offset`/`sort` pages without a CHPP search, so not
-  against the cap. queries[] merges the hits (a player once), results[] keeps per-query
-  itemCount/hitCount/error. estimate_market_value's `liveSearch` is now that summary plus a
-  resultId instead of up to 100 full hits. Before, over-budget searches came back as the bare
-  envelope - the hattrick screening script read Claude Code's saved oversize-result file.
-  `bulk: true` (agreed with hattrick) puts every hit, compact and sorted, into a download
-  (`McpDownloads`, `GET /mcp/download/<id>` on the MCP port, newest 20 in memory); the answer
-  keeps resultId, count, hitFields, a 3-hit preview and the path. The user ruled out relying on
-  Claude Code's saved oversize-result file. AGENTS.md has the rule; no other tool has bulk yet
-  (candidates if a script needs them: list_scout full, get_player_history long histories).
-
-Nothing is lost, only paged (checked on the DB copy): `get_squad` pages with `limit`/`offset`
-(limit 8 carries every include part, 15 the core with skills); `get_player_history` pages back in
-time with `weeks` + `weeksAgo`, one player's snapshots a week at a time (up to 28 a week there,
-7.6k - a week with more than ~35 downloads would still drop them); `get_training` takes
 ## get_match minutes, estimate_market_value as a download (2026-10-18)
 
 At the hattrick session's request, with the user's decisions.
@@ -92,3 +47,25 @@ Dev DB copy (36 rated matches; 128 others had no snapshot before kick-off): HO o
 attack (central -0.78, sd 0.6) and underrates the defence (central +0.49); midfield -0.03.
 League is the worst (attack central -1.52, n 3), friendlies nearly neutral. The tactic level
 comes out 1.4 too low in league matches (n 3), matching the 2026-10-10 observation (10 vs 12).
+
+## MCP 2026-07-28 and the tasks extension (2026-11-01)
+
+Branch `mcp-tasks`, cut from `master` after `lineup-tv-view` was fast-forwarded into it (local,
+not pushed). AGENTS.md, "Protocol", has the design as built.
+- `McpHttpServer` serves both eras. Requests with the `_meta` protocol version get the stateless
+  2026-07-28 rules: `server/discover`, header checks (`-32020`), version check (`-32022`),
+  `resultType`, serverInfo in `_meta`, and cacheable `tools/list`. `initialize` stays legacy
+  but no longer echoes an unknown version (it answers 2025-11-25), and `ping` was added.
+- Tasks (`McpTasks`, extension `io.modelcontextprotocol/tasks`): `download_team` (without
+  taskId), `search_transfers` (without resultId) and `analyze_opponent` answer with a task
+  handle when the client declares the extension. `download_team` then runs the download inside
+  the task, and its old taskId polling stays for every other client.
+- Concurrency changed: tool handlers run one at a time under `toolLock`, and the HTTP pool has 4
+  threads so `tasks/get` never waits. A plain call that arrives while a task is running waits
+  for it. The old taskId download still runs outside the lock, as before.
+- Not done: the legacy experimental tasks (2025-11-25 `tasks/result`/`tasks/list`), SSE,
+  `subscriptions/listen`, and `notifications/tasks`.
+- Checked live on a DB copy (headless, port 8799): discover, tools/list, get_team modern and
+  legacy, header mismatch, unknown task and method. The task path is covered by unit tests only.
+  Every task tool spends CHPP requests, so a live run needs the user's go-ahead and a client
+  that speaks the extension.

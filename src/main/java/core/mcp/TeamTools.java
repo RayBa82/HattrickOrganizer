@@ -126,7 +126,9 @@ public final class TeamTools {
                                                         + "players. Costs the same CHPP requests as "
                                                         + "without it. Default false")),
                                 "teamId"),
-                        TeamTools::scoutOpponent),
+                        TeamTools::scoutOpponent)
+                        // one CHPP request per match averaged, plus the squad: seconds to a minute
+                        .asTask(args -> true),
                 new McpTool("get_series",
                         "Our series: table (all eight teams with position, record, points, goals), "
                                 + "matches (ours; allTeams for all), "
@@ -185,16 +187,17 @@ public final class TeamTools {
                                                 + "(league, cup, friendly) at recent attendance"))),
                         TeamTools::finances),
                 new McpTool("download_team",
-                        "Runs HO's Download (squad, finances, matches, transfers, sub-skills) in the "
-                                + "background, ~2 min: returns a taskId at once (a running download's, "
-                                + "if any). Call again with taskId until status is done or failed; "
-                                + "done carries runtimeSeconds and the result. Not a routine refresh. "
-                                + "It replaces HO's stored lineup with Hattrick's match order: check "
-                                + "result.lineupReplaced, previousLineup and storedLineup.",
+                        "Runs HO's Download (squad, finances, matches, transfers, sub-skills), ~2 "
+                                + "min. With the MCP tasks extension the call is a task. Otherwise it "
+                                + "returns a taskId at once: call again with it until status is done "
+                                + "or failed. Not a routine refresh. It replaces HO's stored lineup "
+                                + "with Hattrick's match order: check lineupReplaced, previousLineup "
+                                + "and storedLineup in the result.",
                         McpTool.schema(McpTool.properties(
                                 TASK_ID, McpTool.prop("string", "a taskId this tool returned: "
                                         + "report that download's status instead of starting one"))),
                         TeamTools::downloadTeam)
+                        .asTask(args -> !args.has(TASK_ID), TeamTools::downloadTeamTask)
         );
     }
 
@@ -1163,6 +1166,22 @@ public final class TeamTools {
             task.finishedAt = HODateTime.now();
         });
         return downloadStatus(task);
+    }
+
+    /**
+     * {@code download_team} as a task of the MCP tasks extension: the task is the handle, so the
+     * download runs inside it and answers what a finished {@link #downloadTeam} reports as
+     * {@code result}. One at a time with the taskId form - both end on the EDT anyway, but a second
+     * download straight after the first would only spend the session's cap.
+     */
+    private static JsonObject downloadTeamTask(JsonObject args) throws McpToolException {
+        synchronized (downloadTasks) {
+            if (latestDownload != null && latestDownload.finishedAt == null) {
+                throw new McpToolException("A download is already running (taskId "
+                        + latestDownload.id + "); poll it with download_team taskId.");
+            }
+        }
+        return runDownload();
     }
 
     /** status running / done / failed, with the runtime once it has finished. */

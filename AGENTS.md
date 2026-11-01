@@ -213,6 +213,32 @@ tools live in `TeamTools`, `MatchTools`, `LineupTools`, `TrainingTools` and `Tra
 an `McpTool(name, description, schema, handler)`. `McpServerToolsTest` pins the tool count and a
 400-char cap on descriptions.
 
+#### Protocol
+
+The server is *dual-era* (MCP 2026-07-28 terms), and it chooses per request:
+- **Modern (2026-07-28):** the request carries `_meta["io.modelcontextprotocol/protocolVersion"]`.
+  It is stateless, and the client must mirror `MCP-Protocol-Version`, `Mcp-Method` and `Mcp-Name`
+  (the tool name, or the taskId for `tasks/*`) into headers. A mismatch is 400 with `-32020`, a
+  version not in `MODERN_VERSIONS` is 400 with `-32022`, and an unknown method is 404 with
+  `-32601`. Results carry `resultType` and serverInfo in `_meta`. `server/discover` is mandatory.
+- **Legacy (2025-11-25 and earlier):** `initialize`, and anything without the `_meta` version.
+  It is synchronous, with `ping` but without tasks. An unknown version gets 2025-11-25.
+
+Bumping the protocol means adding the new version to `MODERN_VERSIONS` once the server
+implements its changes, not before.
+
+**Tasks** (the `io.modelcontextprotocol/tasks` extension, `McpTasks`): when a modern client
+declares the extension in that request's `clientCapabilities`, a tool marked with
+`McpTool.asTask(predicate)` answers with a task handle, and the client polls `tasks/get`. Mark
+calls that can outlast a client timeout (CHPP round trips), never local reads. A tool that hands
+out its own polling handle for older clients, as `download_team` does, passes a separate task
+handler. A tool error (`isError`) completes the task. Only a JSON-RPC error fails it. Tasks are
+kept in memory: 1 h TTL, the newest 50.
+
+**One tool handler at a time.** Plain calls and tasks share `McpHttpServer.toolLock`, because
+HO's DB layer shares one JDBC statement. The HTTP pool has several threads only so that polls and
+downloads never wait behind a running tool.
+
 **Every tool must be token-efficient. This is a project-wide rule, not a per-tool preference.**
 The point of the server is that an agent can learn everything about the team, and that only
 works if no single call floods its context.
