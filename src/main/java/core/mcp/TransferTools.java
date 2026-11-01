@@ -865,6 +865,16 @@ public final class TransferTools {
         return McpJson.optBool(args, SUMMARY, false) ? summary(json) : json;
     }
 
+    /** For screen_market: a local valuation (the args of estimate_market_value), as its summary. */
+    static JsonObject valueForScreen(JsonObject args) throws McpToolException {
+        return summary(valuation(args));
+    }
+
+    /** For screen_market: manage_scout add with these args. */
+    static JsonObject scoutForScreen(JsonObject args) throws McpToolException {
+        return addToScout(args);
+    }
+
     /**
      * A valuation cut to its figures, for the skills that price several players in a row: the
      * notes repeat themselves on every call, and the player block is what the caller sent.
@@ -1569,22 +1579,35 @@ public final class TransferTools {
      * has passed - too late to inform the buy this entry was created for.
      */
     private static void observeForScout(ScoutEintrag entry) {
+        final var player = observeMarketPlayer(entry.getPlayerID());
+        if (player != null) {
+            ScoutList.applyCharacter(entry, player);
+        }
+    }
+
+    /**
+     * One {@code playerdetails} read of a market player, stored the way {@link #observeForScout}
+     * needs it: his character onto his search-hit rows, and a full corpus row while he is listed.
+     * Null when Hattrick refuses or the call fails (logged); best effort, like its callers.
+     */
+    static @org.jetbrains.annotations.Nullable Player observeMarketPlayer(int playerId) {
         try {
-            final var m = OnlineWorker.downloadMarketPlayer(String.valueOf(entry.getPlayerID()));
+            final var m = ChppWriteService.instance().marketPlayerForAgent(playerId);
             if (m == null || m.player().getPlayerId() == 0) {
-                return;
+                return null;
             }
-            ScoutList.applyCharacter(entry, m.player());
-            // Same fetch, onto his stored search-hit rows too, so valuation has it before the next
-            // download's backfill would get there. Legacy name: getGentleness() is Agreeability.
-            DBManager.instance().storeTransferListingCharacter(entry.getPlayerID(),
+            // Onto his stored search-hit rows too, so valuation has it before the next download's
+            // backfill would get there. Legacy name: getGentleness() is Agreeability.
+            DBManager.instance().storeTransferListingCharacter(playerId,
                     m.player().getGentleness(), m.player().getAggressivity(), m.player().getHonesty());
             if (m.transferListed()) {
                 DBManager.instance().storeTransferListing(
                         TransferListing.fromPlayerDetails(m, HODateTime.now()));
             }
+            return m.player();
         } catch (Exception e) {
             HOLogger.instance().error(TransferTools.class, e);
+            return null;
         }
     }
 
@@ -1947,7 +1970,7 @@ public final class TransferTools {
     }
 
     /** trackingTypeId 2 (leading bid) / 8 (losing bid) are the ones you have actually bid on. */
-    private static boolean isOwnBidCategory(int trackingTypeId) {
+    static boolean isOwnBidCategory(int trackingTypeId) {
         return trackingTypeId == 2 || trackingTypeId == 8;
     }
 
@@ -2655,7 +2678,7 @@ public final class TransferTools {
         return row;
     }
 
-    private static XMLTransferSearchParser.Page search(TransferSearchQuery query) throws McpToolException {
+    static XMLTransferSearchParser.Page search(TransferSearchQuery query) throws McpToolException {
         final XMLTransferSearchParser.Page page;
         try {
             page = TransferSearchService.instance().searchForAgent(query);

@@ -61,7 +61,9 @@ by all HO users.
    names `lineupMatchId` and has `hattrickOrderDiff`.
 5. Done: `level_up_report` (`WeekTools`, a task unless `download: never`). `download: auto`
    downloads only once the snapshot's next training is due, keeping HO's lineup.
-6. **`screen_market`** (task): run all saved searches with wide CHPP windows and filter on the
+6. Built, not live-tested: `screen_market` (`MarketTools`). Open: a live run, and whether
+   the transfersearch `Salary` already holds the seller's foreign bonus (then the +20 % counts
+   twice). Original brief: run all saved searches with wide CHPP windows and filter on the
    server, so the fewest searches are spent. Searches that do not fit are queued.
    - `specialty` as a list (`[4,5]`), filtered on the server.
    - Filters: a wage limit that adds +20 % for foreigners (`nativeCountryId` differs from

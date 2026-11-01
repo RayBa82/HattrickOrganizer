@@ -126,6 +126,17 @@ public class TransferSearchService {
         }
     }
 
+    /** How many searches the cap still allows in the current window, for planning a sweep. */
+    public int remainingSearches() {
+        synchronized (this) {
+            final var now = now();
+            while (!recentSearches.isEmpty() && !recentSearches.peekFirst().plus(WINDOW).isAfter(now)) {
+                recentSearches.removeFirst();
+            }
+            return Math.max(0, UserParameter.instance().mcpSearchesPerSession - recentSearches.size());
+        }
+    }
+
     /** The clock the window runs on. Overridden in tests. */
     protected Instant now() {
         return Instant.now();

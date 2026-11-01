@@ -107,5 +107,14 @@ not pushed). AGENTS.md, "Protocol", has the design as built.
   drops the notes and the player block. Every valuation now has `middleHalf` (unweighted
   quartiles of the sorted sample) beside `range`, which one stray sale stretches (1,000 to
   377,400 on the DB copy). Measured: 2,252 chars by default, about 420 with summary.
-- Item 6 (`screen_market`) is open. It needs the hattrick session's rules (saved searches,
-  slots, caps) agreed as parameters first.
+- Item 6 is built: `screen_market` in the new `MarketTools`, with the hattrick session's rules
+  (docs/transfer-searches.md over there) as arguments. `queries` are search_transfers searches;
+  `specialty` may be a list (one CHPP search each), `label` and `screen` ({skill: min}) are
+  stripped before the search. Searches beyond `TransferSearchService.remainingSearches()` come
+  back as `queued`. Filters: closed, injured, specialty whitelist, screen, wage after
+  `foreignWageFactor` (nativeCountryId against `XtraData.getCountryId`). Ranked by price +
+  wage x wageWeeks, cut to `top`, then per row card risk (`TransferTools.observeMarketPlayer`,
+  one playerdetails each, `characterTop`), a local `valueForScreen` estimate and cost/fundsAfter
+  against `buyCheck` (squad vs cap, expectedCash - reservedCash), and re-ranked with the
+  estimate. Rows are arrays in `COLUMNS` order. Unit-tested only: every run spends searches.
+  Open: whether the transfersearch Salary already includes the seller's foreign bonus.
