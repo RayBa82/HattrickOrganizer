@@ -117,4 +117,8 @@ not pushed). AGENTS.md, "Protocol", has the design as built.
   one playerdetails each, `characterTop`), a local `valueForScreen` estimate and cost/fundsAfter
   against `buyCheck` (squad vs cap, expectedCash - reservedCash), and re-ranked with the
   estimate. Rows are arrays in `COLUMNS` order. Unit-tested only: every run spends searches.
-  Open: whether the transfersearch Salary already includes the seller's foreign bonus.
+  Foreign bonus: the hattrick session found hit Salary and playerdetails Salary equal for the
+  same foreigners, so neither adds the bonus twice. Whether Salary is the base wage is still
+  unproven. `foreignWageFactor` stays 1.2 (the cautious side) until a real foreign purchase
+  shows get_squad's wage against the hit's Salary. "Ours" is `XtraData.getCountryId`, the
+  team's CountryID (3 for Germany), the same id space as nativeCountryId.
