@@ -270,7 +270,7 @@ public final class TeamTools {
         json.addProperty("week", basics.getSpieltag());
 
         json.addProperty("leagueId", basics.getLiga());
-        json.addProperty("countryId", basics.getLand());
+        json.addProperty("countryId", basics.getCountryId());
         addKit(json, model.getXtraDaten());
 
         if (league != null) {
@@ -1569,6 +1569,8 @@ public final class TeamTools {
             case NO_TEAM -> new DownloadAdvice(
                     "No team is selected in HO, so there is nothing to download. Only the user can "
                             + "fix this, in HO.", false);
+            case FOREIGN_DATABASE -> new DownloadAdvice(
+                    detail + " Nothing was downloaded or moved; only the user can fix this.", false);
         };
     }
 }

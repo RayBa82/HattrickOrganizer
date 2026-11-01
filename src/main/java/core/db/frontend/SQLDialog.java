@@ -17,12 +17,10 @@ import java.util.regex.Pattern;
 
 
 public class SQLDialog extends JDialog implements ActionListener {
-	
-	private static final long serialVersionUID = 7727562652486277083L;
+
     private JTable table;
     private JTextPane txtArea;
     private JLabel lbl;
-    protected JTree tree;
     private String[] columnNames;
     protected ArrayList<String> statements;
     private int index;
@@ -33,7 +31,7 @@ public class SQLDialog extends JDialog implements ActionListener {
     private final JButton butnext;
     private final JButton buthelp;
     private final JButton buttables;
-    
+
     public SQLDialog() {
         super(HOMainFrame.instance(), "Simple SQL Editor");
         setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
@@ -162,15 +160,13 @@ public class SQLDialog extends JDialog implements ActionListener {
     }
 
     public void refresh() {
-        String txt = getTextArea().getText().toUpperCase();
-        var pattern = Pattern.compile("SELECT .* FROM ");
-        var matcher = pattern.matcher(txt);
-        if(matcher.find()){
+        final String sqlStatement = getTextArea().getText();
+        if (isSelectStatement(sqlStatement)) {
             DummyTableModel model = new DummyTableModel(getValues(), columnNames);
             table.setModel(model);
         } else {
             try {
-                int rows = DBManager.instance().getConnectionManager().executeUpdate(getTextArea().getText());
+                int rows = DBManager.instance().getConnectionManager().executeUpdate(sqlStatement);
                 getInfoLabel().setText(rows + " rows updated");
             }
             catch(Exception ex)
@@ -178,8 +174,15 @@ public class SQLDialog extends JDialog implements ActionListener {
                 handleException(ex, "Statement wrong! ");
             }
         }
-        statements.add(getTextArea().getText());
+        statements.add(sqlStatement);
         index++;
+    }
+
+    private static boolean isSelectStatement(String sqlStatement) {
+        final String sqlStatementUpperCase = sqlStatement.toUpperCase();
+        var pattern = Pattern.compile("SELECT .* FROM ");
+        var matcher = pattern.matcher(sqlStatementUpperCase);
+        return matcher.find();
     }
 
     private void handleException(Exception ex, String itxt) {
@@ -187,18 +190,14 @@ public class SQLDialog extends JDialog implements ActionListener {
     }
 
     private Object[][] getValues() {
-        Object[][] values = (Object[][])null;
-        int rowCount = 0;
-        String txt = getTextArea().getText().toUpperCase();
-        int index1 = txt.indexOf("FROM");
-        String select = txt.substring(0, index1 - 1);
-        String sql = txt.substring(index1, getTextArea().getText().length());
+        Object[][] values = null;
+        final String sqlStatement = getTextArea().getText();
         try
         {
             long start = System.currentTimeMillis();
-            ResultSet rs = DBManager.instance().getConnectionManager().executeQuery(select + " " + sql);
+            ResultSet rs = DBManager.instance().getConnectionManager().executeQuery(sqlStatement);
             rs.last();
-            rowCount = rs.getRow();
+            int rowCount = rs.getRow();
             rs.beforeFirst();
             ResultSetMetaData metaData = rs.getMetaData();
             values = new Object[rowCount][metaData.getColumnCount()];
@@ -260,8 +259,4 @@ public class SQLDialog extends JDialog implements ActionListener {
         TablesDialog dialog = new TablesDialog(this);
         dialog.setVisible(true);
     }
-
-
-
-
 }

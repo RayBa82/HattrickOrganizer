@@ -217,7 +217,7 @@ public class ChppWriteService {
     public Map<String, String> teamActivityForAgent(int teamId) {
         final var xml = fetchTeamDetails(teamId);
         return xml == null || xml.isBlank() ? Map.of()
-                : core.file.xml.XMLTeamDetailsParser.parseTeamdetailsFromString(xml, teamId);
+                : core.file.xml.XMLTeamDetailsParser.parseTeamDetailsFromString(xml, teamId);
     }
 
     protected String fetchTeamDetails(int teamId) {

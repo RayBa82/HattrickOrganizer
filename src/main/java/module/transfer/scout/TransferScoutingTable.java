@@ -12,7 +12,6 @@ import java.util.function.Predicate;
 
 public class TransferScoutingTable extends FixedColumnsTable implements Refreshable {
 
-	private static final long serialVersionUID = 5687881326217263261L;
     private TransferScoutingTableModel m_clTableModel;
 
     TransferScoutingTable() {

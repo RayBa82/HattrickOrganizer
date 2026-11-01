@@ -10,23 +10,24 @@ import core.gui.HOMainFrame;
 import core.gui.InfoPanel;
 import core.gui.theme.ThemeManager;
 import core.model.*;
-import core.model.tournament.TournamentDetails;
 import core.model.enums.MatchType;
 import core.model.enums.MatchTypeExtended;
 import core.model.match.*;
 import core.model.misc.Regiondetails;
 import core.model.player.Player;
+import core.model.tournament.TournamentDetails;
 import core.module.ModuleManager;
 import core.rating.RatingCalibration;
+
 import core.util.HODateTime;
 import core.model.UserParameter;
 import core.util.HOLogger;
 import core.util.Helper;
-import core.util.StringUtils;
 import module.halloffame.HallOfFamePlayer;
 import module.lineup.Lineup;
 import module.nthrf.NtTeamDetails;
 import module.series.MatchFixtures;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
 import org.jetbrains.annotations.Nullable;
 
@@ -35,8 +36,8 @@ import java.awt.*;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.time.temporal.ChronoUnit;
-import java.util.List;
 import java.util.*;
+import java.util.List;
 
 /**
  * @author thomas.werth
@@ -51,7 +52,7 @@ public class OnlineWorker {
 	}
 
 	/** Why a team download produced nothing. The dialog wording stays in the UI layer. */
-	public enum Failure { NO_TEAM, CHPP_ERROR, PLAYING_MATCH, NO_DATA, UNPARSEABLE }
+	public enum Failure { NO_TEAM, CHPP_ERROR, PLAYING_MATCH, NO_DATA, UNPARSEABLE, FOREIGN_DATABASE }
 
 	/**
 	 * A team download that stored nothing, carrying a machine-readable reason.
@@ -88,13 +89,24 @@ public class OnlineWorker {
 	 * dismiss it.
 	 */
 	public static TeamDownload downloadTeamData() throws DownloadFailed {
+		return downloadTeamData(null);
+	}
+
+	/**
+	 * {@link #downloadTeamData()} with the parent of the one dialog the Download button may show:
+	 * whether to move away a database that holds another user's team. Without a parent (MCP,
+	 * headless) that case fails as {@link Failure#FOREIGN_DATABASE} and the database stays where it is.
+	 */
+	static TeamDownload downloadTeamData(@Nullable JDialog parent) throws DownloadFailed {
 		final var hov = HOVerwaltung.instance();
 		final String hrf;
 		try {
-			hrf = ConvertXml2Hrf.createHrf();
+			hrf = ConvertXml2Hrf.createHrf(parent);
 		} catch (IOException e) {
 			throw new DownloadFailed(Failure.CHPP_ERROR, getLangString("Downloadfehler")
 					+ " : Error converting xml 2 HRF. Corrupt/Missing Data : ", e);
+		} catch (ConvertXml2Hrf.ForeignDatabase e) {
+			throw new DownloadFailed(Failure.FOREIGN_DATABASE, e.getMessage(), e);
 		}
 		if (hrf == null) {
 			throw new DownloadFailed(Failure.NO_TEAM, "No team selected.");
@@ -138,13 +150,12 @@ public class OnlineWorker {
 	 */
 	public static boolean getHrf(JDialog parent) {
 		try {
-			saveHRFToFile(parent, downloadTeamData().hrf());
+			saveHRFToFile(parent, downloadTeamData(parent).hrf());
 			return true;
 		} catch (DownloadFailed e) {
 			return report(parent, e);
 		} finally {
 			HOMainFrame.setInformation(getLangString("HRFErfolg"), 0);
-			//HOMainFrame.resetInformation();
 		}
 	}
 
@@ -160,7 +171,7 @@ public class OnlineWorker {
 	 */
 	private static boolean report(JDialog parent, DownloadFailed failure) {
 		switch (failure.reason) {
-			case NO_TEAM -> {
+			case NO_TEAM, FOREIGN_DATABASE -> {
 				return false;
 			}
 			case CHPP_ERROR -> {
@@ -682,7 +693,7 @@ public class OnlineWorker {
 	private static void downloadTeamRatings(int matchID, MatchType matchType, int teamID) {
 		try {
 			var xml = Connector.instance().getTeamDetails(teamID);
-			var teamrating = new MatchTeamRating(matchID, matchType, XMLTeamDetailsParser.parseTeamdetailsFromString(xml, teamID));
+			var teamrating = new MatchTeamRating(matchID, matchType, XMLTeamDetailsParser.parseTeamDetailsFromString(xml, teamID));
 			DBManager.instance().storeTeamRatings(teamrating);
 		} catch (Exception e) {
 			String msg = getLangString("Downloadfehler") + " : Error fetching Team ratings :";
@@ -695,7 +706,7 @@ public class OnlineWorker {
 
 	public static Map<String, String> getTeam(int teamId) {
 		String str = Connector.instance().getTeamDetails(teamId);
-		return XMLTeamDetailsParser.parseTeamdetailsFromString(str, teamId);
+		return XMLTeamDetailsParser.parseTeamDetailsFromString(str, teamId);
 	}
 
 	private static int getRegionId(Map<String, String> team) {

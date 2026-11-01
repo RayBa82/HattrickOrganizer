@@ -55,6 +55,7 @@ public class LineupRatingAssistantPanel extends JPanel implements core.gui.Refre
     }
 
     public LineupRatingAssistantPanel(LineupPanel parent) {
+        super(new BorderLayout());
         m_clLineupPanel = parent;
         initComponents();
         RefreshManager.instance().registerRefreshable(this);
@@ -62,28 +63,29 @@ public class LineupRatingAssistantPanel extends JPanel implements core.gui.Refre
 
     private void initComponents() {
 
-        var pane = new JPanel(new BorderLayout());
-
         var lineupRatingPanel = getLineupRatingPanel();
         var lineupSettingsPanel = getLineupSettingsPanel();
         var lineupAssistantPanel = getLineupAssistantPanel();
 
         LineupDatabasePanel lineupDatabasePanel = new LineupDatabasePanel(m_clLineupPanel);
-        pane.add(lineupRatingPanel, BorderLayout.NORTH);
+        add(lineupRatingPanel, BorderLayout.NORTH);
 
+        var assistantPanel = new JPanel(new BorderLayout());
+        assistantPanel.add(lineupAssistantPanel, BorderLayout.CENTER);
+        var settingsPanel = new JPanel(new BorderLayout());
+        settingsPanel.add(lineupSettingsPanel, BorderLayout.CENTER);
+        var databasePanel = new JPanel(new BorderLayout());
+        databasePanel.add(lineupDatabasePanel, BorderLayout.CENTER);
         var tabView = new JTabbedPane();
-        tabView.addTab(TranslationFacility.tr("ls.module.lineup.assistant"), new JScrollPane(lineupAssistantPanel));
-        tabView.addTab(TranslationFacility.tr("ls.module.lineup.lineup_simulator"), new JScrollPane(lineupSettingsPanel));
-        tabView.addTab(TranslationFacility.tr("ls.menu.file.database"), new JScrollPane(lineupDatabasePanel));
-        pane.add(tabView, BorderLayout.CENTER);
+        tabView.addTab(TranslationFacility.tr("ls.module.lineup.assistant"), assistantPanel);
+        tabView.addTab(TranslationFacility.tr("ls.module.lineup.lineup_simulator"), settingsPanel);
+        tabView.addTab(TranslationFacility.tr("ls.menu.file.database"), databasePanel);
+        add(tabView, BorderLayout.CENTER);
 
         // the match banner is shown over the pitch, see LineupPanel
         this.matchAndLineupPanel = new MatchAndLineupSelectionPanel(m_clLineupPanel);
         matchBanner = new MatchBanner(matchAndLineupPanel);
-        pane.add(matchAndLineupPanel, BorderLayout.SOUTH);
-
-        setLayout(new BorderLayout());
-        add(new JScrollPane(pane), BorderLayout.CENTER);
+        add(matchAndLineupPanel, BorderLayout.SOUTH);
     }
 
     public void refresh() {

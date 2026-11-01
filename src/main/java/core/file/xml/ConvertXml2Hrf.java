@@ -12,6 +12,7 @@ import core.gui.CursorToolkit;
 import core.gui.HOMainFrame;
 import core.gui.theme.ThemeManager;
 import core.model.HOVerwaltung;
+import core.model.TranslationFacility;
 import core.model.match.*;
 import core.model.player.PlayerAvatar;
 import core.model.player.TrainerStatus;
@@ -24,6 +25,8 @@ import core.module.config.ModuleConfig;
 import hattrickdata.Arena;
 import module.transfer.PlayerTransfer;
 import org.jetbrains.annotations.Nullable;
+
+import javax.swing.*;
 import java.awt.GraphicsEnvironment;
 import java.io.IOException;
 import java.time.temporal.ChronoUnit;
@@ -45,10 +48,17 @@ public class ConvertXml2Hrf {
 	private ConvertXml2Hrf() {
 	}
 
+	/** The database holds a team the logged-in user does not own, and nobody can be asked about it. */
+	public static final class ForeignDatabase extends IllegalStateException {
+		ForeignDatabase(String message) {
+			super(message);
+		}
+	}
+
 	/**
 	 * Create the HRF data and return it in one string.
 	 */
-	public static @Nullable String createHrf() throws IOException {
+	public static @Nullable String createHrf(@Nullable JDialog parent) throws IOException {
 		int progressIncrement = 3;
 		HOMainFrame.setInformation(Helper.getTranslation("ls.update_status.connection"), progressIncrement);
 		final Connector mc = Connector.instance();
@@ -64,7 +74,8 @@ public class ConvertXml2Hrf {
 		var teamInfoList = XMLTeamDetailsParser.getTeamInfoFromString(teamDetails);
 		var usersPremierTeamInfo = teamInfoList.stream().filter(TeamInfo::isPrimaryTeam).findFirst().orElse(teamInfoList.stream().findFirst().orElseThrow());
 		var usersPremierTeamId = usersPremierTeamInfo.getTeamId();
-		var initTeamId = teamId <=0;
+        teamId = checkDatabase(parent, teamId, teamInfoList);
+        var initTeamId = teamId <= 0;
 		if (initTeamId || youthTeamId == null) {
 			// We have no team selected or the youth team information is never downloaded before
 			if (teamInfoList.size() == 1) {
@@ -106,7 +117,7 @@ public class ConvertXml2Hrf {
 			}
 		}
 
-		Map<String, String> teamdetailsDataMap = XMLTeamDetailsParser.parseTeamdetailsFromString(teamDetails, teamId);
+		Map<String, String> teamdetailsDataMap = XMLTeamDetailsParser.parseTeamDetailsFromString(teamDetails, teamId);
 		if (teamdetailsDataMap.isEmpty()) return null;
 
 		HOMainFrame.setInformation(Helper.getTranslation("ls.update_status.team_logo"), progressIncrement);
@@ -133,7 +144,7 @@ public class ConvertXml2Hrf {
 			// We need to get hold of the currency info for the primary team, no matter which team we download.
 			usersPremierTeamInfo = XMLWorldDetailsParser.updateTeamInfoWithCurrency(usersPremierTeamInfo, mc.getWorldDetails(usersPremierTeamInfo.getLeagueId()));
 			ModuleConfig.instance().setString("CurrencyRate", usersPremierTeamInfo.getCurrencyRate().trim());
-			ModuleConfig.instance().setString("CountryId", usersPremierTeamInfo.getCountryId());
+			ModuleConfig.instance().setString("CountryId", String.valueOf(usersPremierTeamInfo.getCountryId()));
 			ModuleConfig.instance().setInteger("UsersPremierTeamId", usersPremierTeamInfo.getTeamId());
 			worldDataMap.put("CurrencyRate", ModuleConfig.instance().getString("CurrencyRate"));
 			worldDataMap.put("CountryID", ModuleConfig.instance().getString("CountryId"));
@@ -268,7 +279,46 @@ public class ConvertXml2Hrf {
 		return hrfSgtringBuilder.createHRF().toString();
 	}
 
-	/**
+    /**
+     * Check if the database is still valid
+     * If the contained team is not a team from the current user, the user is asked if the database should be
+     * replaced with a new one. A backup of the previous database is created and the team id is reset to 0.
+     * @param parent Parent dialog for message dialogs
+     * @param teamId Team id found in the database
+     * @param teamInfoList Teams downloaded from hattrick
+     * @return team id (0 if the database was replaced with a new one)
+     */
+    private static int checkDatabase(JDialog parent, int teamId, List<TeamInfo> teamInfoList) {
+        int finalTeamId1 = teamId;
+        final var isDatabaseFromOtherTeam = teamId > 0 && teamInfoList.stream().noneMatch(team -> team.getTeamId() == finalTeamId1);
+        if (isDatabaseFromOtherTeam && (parent == null || GraphicsEnvironment.isHeadless())) {
+            // A silent download (MCP, core.HeadlessMain): no one to ask, and never move a database away unasked.
+            throw new ForeignDatabase("The database holds team " + teamId
+                    + ", which is not one of this Hattrick user's teams. Replace it from desktop HO.");
+        }
+        if (isDatabaseFromOtherTeam) {
+            // Ask user if old database should be deleted
+            final var title = TranslationFacility.tr("ls.download.database.of.other.team");
+            final int choice = JOptionPane.showConfirmDialog(parent, TranslationFacility.tr("ls.download.replace.old.database"), title, JOptionPane.YES_NO_OPTION);
+            if (choice == JOptionPane.YES_OPTION) {
+                if (!DBManager.deleteDatabaseOfPreviousTeam(teamId)) {
+                    // Backup of old database cannot be created
+                    var message = String.format(TranslationFacility.tr("ls.download.cannot.save.old.database"), DBManager.getDbFolder().getAbsolutePath());
+                    JOptionPane.showMessageDialog(parent, message, title, JOptionPane.ERROR_MESSAGE);
+                    System.exit(1);
+                }
+                // Forget the old team id
+                teamId = 0;
+                HOVerwaltung.instance().getModel().getBasics().setTeamId(0);
+            } else {
+                // Terminate HO. User has to remove database folder manually
+                System.exit(0);
+            }
+        }
+        return teamId;
+    }
+
+    /**
 	 * Check if transfer sums of economy data are registered in transfer table
 	 * @param economyDataMap Economy map
 	 * @return true if stored transfers are not fitting to economy data

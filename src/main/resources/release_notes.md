@@ -1,107 +1,72 @@
 ## Highlights
 
-* New hall of fame module
 
-## [Detailed Changelog](https://github.com/ho-dev/HattrickOrganizer/milestone/27)
+## [Detailed Changelog](https://github.com/ho-dev/HattrickOrganizer/milestone/28)
 
 ### Application shell
 
-* Add exit confirmation dialog (#2348)
 
 ### Database
 
+
 ### Download
 
-* Fix null pointer exception in nt team download (#2314)
 
 ### Player Overview
 
-* Fix error storing owner notes with length exceeding the column length (#2358)
-* Fix line feed handling in owner notes. Tooltip shows notes as multiline (#2455)
-* Fix error selecting players with the arrow keys (#2379)
-* Synchronize player selection in training and player overview modules (#2379)
-* Added the columns `Career Assists` and `Assists for the Team` to the overview and details panel. (#2254)
 
-### Team Analyzer
+### HO update
+
+
+### Series
+
+### Matches
 
 ### Hall of fame
 
-* Added (#2296)
 
 ### Squad
 
-* Added support of all 13 **Player Categories** (#2418)
-* Fix world details constraints error (#2444)
 
 ### Lineup
 
-* Fix empty list of upcoming games in Lineup panel after first download.
-* Added support of all 13 **Player Categories** (#2418)
+### Matches
+
 
 ### Training
 
-* Add experience skill to training tables (#2283)
-
-### Transfer
 
 ### Statistics
 
-* Fix background color of terraces income column (#2356)
 
 ### Youth
 
-* Added support of all 13 **Player Categories** (#2418)
-* Fix line feed handling in owner notes. Tooltip shows notes as multiline (#2455)
-
 ### Special Events
 
-* Fixed the missing translation for the home/away `Tactic` and `Details` column and displaying the abbreviation of the
-  tactic now in the corresponding column.
 
 ### Option setting
 
-* Add option to select currency setting (#2288)
 
 ### Special Events
 
-* Fixed a crash that occurred when not ticking `Only matches with SEs`.
+### International Friendly Analyzer
 
-### Youth
 
-* The bug where the number `100` was displayed for the shirt number when the player had no shirt number has been fixed.
-  Instead, nothing is shown now if no number assigned. (#2420)
-* Fix out of bound exception on download when youth player were removed during the week (#2442)
+### Arena Sizer
 
-### Tools
-
-#### Arena Sizer
-
-* Removed the superfluous space for the `Spectators` in braces at the end.
-* Added the image of the stadium and made the view better arranged. (#2140)
-* Added a local cache with TTL for stadium images and manual reload by clicking on the image. (#2440)
 
 ### Misc
 
-* Fix CVEs with HO dependencies
-* Update darklaf to most recent version.
+
+### Developer Tools
+
+* Save downloaded CHPP responses as valid XML files instead of text files, making them directly usable for debugging and
+  automated parser tests. (#2521)
 
 ## Translations
 
-* Added the missing translation for the short text in the table for `Goals for the Team`.
+Reports by Contributors - October 09, 2026 - October 09, 2026
 
-Reports by Contributors - October 19, 2025 - June 19, 2026
+* J
 
-* Jösgall 1005
-* Ioannidouefty 459
-* wsbrenk 113
-* Frankieorabona 73
-* \_KOHb\_ 54
-* Sebastian Reddig 35
-* Walter 28
-* Lidegand 24
-* Kristaps 11
-* Stefan Schenke 5
-* Mara 3
-* Joeri Roels 1
-
-Total 1711
+Total 0

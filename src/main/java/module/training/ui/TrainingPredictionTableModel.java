@@ -12,6 +12,7 @@ import core.model.UserParameter;
 import core.model.player.MatchRoleID;
 import core.training.FutureTrainingManager;
 import core.training.TrainingPreviewPlayers;
+import core.util.HODateTime;
 import module.training.ui.model.TrainingColumn;
 import module.training.ui.model.FutureTrainingEntry;
 import module.training.ui.model.TrainingModel;
@@ -19,19 +20,24 @@ import module.training.ui.model.TrainingProgressColumn;
 
 import javax.swing.*;
 import java.awt.*;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 
 public class TrainingPredictionTableModel  extends HOPlayersTableModel {
 
-
     private TrainingModel model;
+    private HODateTime nextTrainingDate;
 
-    static int nextColumnId = 0;
     public TrainingPredictionTableModel(UserColumnController.ColumnModelId columnModelId) {
         super(columnModelId, "TrainingPrediction");
-        List<UserColumn> newColumns = new ArrayList<>(List.of(
+        initColumns();
+    }
+
+    private void initColumns() {
+        var nextColumnId = 0;
+        var newColumns = new ArrayList<UserColumn>(List.of(
                 new TrainingColumn(nextColumnId++, "Spieler", 150) {
                     @Override
                     public IHOTableCellEntry getTableEntry(FutureTrainingEntry entry) {
@@ -61,26 +67,24 @@ public class TrainingPredictionTableModel  extends HOPlayersTableModel {
                     }
                 }
         ));
-        var actualWeek = HOVerwaltung.instance().getModel().getBasics().getHattrickWeek();
 
-        // We are in the middle where season has not been updated!
-        try {
-            if (HOVerwaltung.instance().getModel().getXtraDaten().getNextTrainingDate()
-                    .isAfter(HOVerwaltung.instance().getModel().getXtraDaten().getSeriesMatchDate())) {
-                actualWeek = actualWeek.plus(7, ChronoUnit.DAYS);
-            }
-        } catch (Exception e1) {
-            // Null when first time HO is launched
-        }
-
-        for (int i = 0; i < UserParameter.instance().futureWeeks; i++) {
-            var htweek = actualWeek.toLocaleHTWeek();
-            var column = new TrainingProgressColumn(nextColumnId++,htweek, i, 60);
+        nextTrainingDate = findDownloadedNextTrainingDate().orElse(HODateTime.now());
+        var nextWeek = nextTrainingDate;
+        for (int weekIndex = 0; weekIndex < UserParameter.instance().futureWeeks; weekIndex++) {
+            var htWeek = nextWeek.toLocaleHTWeek();
+            var column = new TrainingProgressColumn(nextColumnId++, htWeek, weekIndex, 60);
             newColumns.add(column);
-            actualWeek = actualWeek.plus(7, ChronoUnit.DAYS);
+            nextWeek = nextWeek.plusDaysAtSameLocalTime(7);
         }
+        setColumns(newColumns.toArray(new UserColumn[0]));
+    }
 
-        this.columns = newColumns.toArray(new UserColumn[0]);
+    private Optional<HODateTime> findDownloadedNextTrainingDate() {
+        var xtraData = HOVerwaltung.instance().getModel().getXtraDaten();
+        if (xtraData != null) {
+            return Optional.ofNullable(xtraData.getNextTrainingDate());
+        }
+        return Optional.empty();
     }
 
     private Color getBackgroundColor(FutureTrainingEntry entry) {
@@ -96,28 +100,42 @@ public class TrainingPredictionTableModel  extends HOPlayersTableModel {
 
     @Override
     protected void initData() {
+        var headerChanged = isHeaderChanged();
+        if (headerChanged) {
+            initColumns();
+        }
+
         var currentPlayers = getPlayers();
         m_clData = new Object[currentPlayers.size()][getDisplayedColumns().length];
         int rownum = 0;
         for (var player : currentPlayers) {
             int column = 0;
             var training = new FutureTrainingEntry(new FutureTrainingManager(player, this.model.getFutureTrainings()));
-            for ( var col : getDisplayedColumns()){
-                if ( col instanceof  TrainingColumn trainingColumn) {
+            for (var col : getDisplayedColumns()) {
+                if (col instanceof TrainingColumn trainingColumn) {
                     m_clData[rownum][column] = trainingColumn.getTableEntry(training);
-                }
-                else if ( col instanceof  TrainingProgressColumn trainingProgressColumn){
+                } else if (col instanceof TrainingProgressColumn trainingProgressColumn) {
                     m_clData[rownum][column] = trainingProgressColumn.getTableEntry(training);
                 }
                 column++;
             }
             rownum++;
         }
-        fireTableDataChanged();
+
+        if (headerChanged) {
+            readUserColumnSettingsFromTable(Objects.requireNonNull(getTable()));
+            fireTableStructureChanged();
+            writeUserColumnSettingsToTable(getTable());
+        } else {
+            fireTableDataChanged();
+        }
     }
 
     public void setTrainingModel(TrainingModel model) {
         this.model = model;
     }
 
+    public boolean isHeaderChanged() {
+        return !findDownloadedNextTrainingDate().equals(Optional.of(nextTrainingDate));
+    }
 }

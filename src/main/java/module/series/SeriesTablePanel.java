@@ -106,44 +106,45 @@ class SeriesTablePanel extends ImagePanel {
 		final TableColumnModel columnModel = seriesTable.getColumnModel();
 
 		// Place
-		columnModel.getColumn(0).setPreferredWidth(Helper.calcCellWidth(45));
+		columnModel.getColumn(0).setPreferredWidth(Helper.calcCellWidth(54));
 
 		// Club
-		columnModel.getColumn(1).setPreferredWidth(Helper.calcCellWidth(200));
+		columnModel.getColumn(1).setPreferredWidth(Helper.calcCellWidth(240));
 
 		// Points
-		columnModel.getColumn(2).setPreferredWidth(Helper.calcCellWidth(30));
+		columnModel.getColumn(2).setPreferredWidth(Helper.calcCellWidth(42));
 
 		// # Played matches
-		columnModel.getColumn(3).setPreferredWidth(Helper.calcCellWidth(25));
+		columnModel.getColumn(3).setPreferredWidth(Helper.calcCellWidth(42));
 
 		// # Victories
-		columnModel.getColumn(4).setPreferredWidth(Helper.calcCellWidth(25));
+		columnModel.getColumn(4).setPreferredWidth(Helper.calcCellWidth(42));
 
 		// # Draws
-		columnModel.getColumn(5).setPreferredWidth(Helper.calcCellWidth(25));
+		columnModel.getColumn(5).setPreferredWidth(Helper.calcCellWidth(42));
 
 		// # Losses
-		columnModel.getColumn(6).setPreferredWidth(Helper.calcCellWidth(25));
+		columnModel.getColumn(6).setPreferredWidth(Helper.calcCellWidth(42));
 
 		// Goals For
-		columnModel.getColumn(7).setPreferredWidth(Helper.calcCellWidth(30));
+		columnModel.getColumn(7).setPreferredWidth(Helper.calcCellWidth(42));
 
 		// Goals Against
-		columnModel.getColumn(8).setPreferredWidth(Helper.calcCellWidth(30));
+		columnModel.getColumn(8).setPreferredWidth(Helper.calcCellWidth(42));
 
 		// Goals Difference
-		columnModel.getColumn(9).setPreferredWidth(Helper.calcCellWidth(30));
+		columnModel.getColumn(9).setPreferredWidth(Helper.calcCellWidth(42));
 
 		// Serie
-		columnModel.getColumn(10).setPreferredWidth(Helper.calcCellWidth(90));
+		columnModel.getColumn(10).setPreferredWidth(Helper.calcCellWidth(110));
 
 		// Statistics
-		columnModel.getColumn(11).setPreferredWidth(Helper.calcCellWidth(50));
-		columnModel.getColumn(12).setPreferredWidth(Helper.calcCellWidth(50));
-		columnModel.getColumn(13).setPreferredWidth(Helper.calcCellWidth(50));
-		columnModel.getColumn(14).setPreferredWidth(Helper.calcCellWidth(50));
-		columnModel.getColumn(15).setPreferredWidth(Helper.calcCellWidth(50));
+		columnModel.getColumn(11).setPreferredWidth(Helper.calcCellWidth(60));
+		columnModel.getColumn(12).setPreferredWidth(Helper.calcCellWidth(60));
+		columnModel.getColumn(13).setPreferredWidth(Helper.calcCellWidth(60));
+		columnModel.getColumn(14).setPreferredWidth(Helper.calcCellWidth(60));
+		columnModel.getColumn(15).setPreferredWidth(Helper.calcCellWidth(60));
+
 
 		// never narrower than the header text or the widest cell, so nothing gets cut off
 		final TableCellRenderer headerRenderer = seriesTable.getTableHeader().getDefaultRenderer();
@@ -161,22 +162,22 @@ class SeriesTablePanel extends ImagePanel {
 
 	private void initComponents() {
 
-		final GridBagLayout layout = new GridBagLayout();
-		final GridBagConstraints constraints = new GridBagConstraints();
-		final JPanel panel = new JPanel(layout);
+        final GridBagLayout layout = new GridBagLayout();
+        final GridBagConstraints constraints = new GridBagConstraints();
+        final JPanel panel = new JPanel(layout);
 
-		// combobox
-		constraints.gridx = 0;
-		constraints.gridy = 0;
-		constraints.insets = new Insets(4, 0, 4, 100);
-		constraints.anchor = GridBagConstraints.LINE_END;
-		m_jcbStatsAggType = new JComboBox(new String[]{"Max", "Avg"});
-		m_jcbStatsAggType.addActionListener(e -> populateSerieTableStatsOnly());
+        // combobox
+        constraints.gridx = 0;
+        constraints.gridy = 0;
+        constraints.insets = new Insets(4, 0, 4, 100);
+        constraints.anchor = GridBagConstraints.LINE_END;
+        m_jcbStatsAggType = new JComboBox(new String[]{"Max", "Avg"});
+        m_jcbStatsAggType.addActionListener(e -> populateSerieTableStatsOnly());
 
 
-		var fontSize = UserParameter.instance().fontSize;
-		layout.setConstraints(m_jcbStatsAggType, constraints);
-		panel.add(m_jcbStatsAggType);
+        var fontSize = UserParameter.instance().fontSize;
+        layout.setConstraints(m_jcbStatsAggType, constraints);
+        panel.add(m_jcbStatsAggType);
 
 		// serie Table - real header instead of a fake first row, flat rows without grid lines
 		constraints.gridy = 1;
@@ -194,9 +195,9 @@ class SeriesTablePanel extends ImagePanel {
 		layout.setConstraints(tableWrapper, constraints);
 		panel.add(tableWrapper);
 
-		setLayout(new BorderLayout());
-		add(panel);
-	}
+        setLayout(new BorderLayout());
+        add(panel);
+    }
 
 	//  Init from the HRF-XML
 	private void initSeriesTable() {

@@ -120,24 +120,19 @@ public class DBManager implements PersistenceManager {
 
 			String errorMsg = null;
 			try {
-				User current_user = UserManager.instance().getCurrentUser();
-				String dbFolder = current_user.getDbFolder();
-
-				File dbfolder = new File(dbFolder);
-
-				if (!dbfolder.exists()) {
+                File dbFolder = getDbFolder();
+				if (!dbFolder.exists()) {
 					File parentFolder = new File(UserManager.instance().getDbParentFolder());
-
 					boolean dbDirectoryCreated = false;
 					if (!parentFolder.exists() || parentFolder.canWrite()) {
-						dbDirectoryCreated = dbfolder.mkdirs();
+						dbDirectoryCreated = dbFolder.mkdirs();
 					} else {
 						errorMsg = "Could not initialize the database folder.";
 						errorMsg += "No writing rights to the following directory\n" + parentFolder.getAbsolutePath() + "\n";
 						errorMsg += "You can report this error by opening a new bug ticket on GitHub";
 					}
 					if (!dbDirectoryCreated) {
-						errorMsg = "Could not create the database folder: " + dbfolder.getAbsolutePath();
+						errorMsg = "Could not create the database folder: " + dbFolder.getAbsolutePath();
 					}
 				}
 
@@ -233,6 +228,40 @@ public class DBManager implements PersistenceManager {
 		}
 	}
 
+    public static File getDbFolder() {
+        var current_user = UserManager.instance().getCurrentUser();
+        var dbFolderName = current_user.getDbFolder();
+        return new File(dbFolderName);
+    }
+
+    /**
+     * Removes the database of the previous team from active use.
+     * <p>
+     * The database files are not physically deleted. Instead, the database folder
+     * is renamed to {@code <database-folder>-old-<teamId>} to keep a backup for the user.
+     *
+     * @param teamId the id of the previous team
+     * @return {@code true} if no database exists or if the database was successfully moved
+     *         to the backup location; {@code false} otherwise
+     */
+    public static boolean deleteDatabaseOfPreviousTeam(int teamId) {
+        var dbFolder = getDbFolder();
+        if (dbFolder.exists()) {
+            if (m_clInstance != null) {
+                m_clInstance.disconnect(); // Close db connection
+            }
+            var backupFolder = new File(dbFolder.getAbsolutePath() + "-old-" + teamId);
+            if (dbFolder.renameTo(backupFolder)) {
+                HOLogger.instance().info(DBManager.class, "Old database files are saved as " + backupFolder.getAbsolutePath());
+                return true;
+            }
+            HOLogger.instance().error(DBManager.class, "Cannot rename old database files to " + backupFolder.getAbsolutePath());
+            return false;
+        }
+        HOLogger.instance().info(DBManager.class, "No old database files exists at " + dbFolder.getAbsolutePath());
+        return true; // no database exists
+    }
+
 	public static double getDBConfigVersion() {
 		return DBConfigVersion;
 	}
@@ -311,7 +340,6 @@ public class DBManager implements PersistenceManager {
 	 *
 	 * @return the adapter
 	 */
-// Accessor
 	public ConnectionManager getConnectionManager() {
 		return connectionManager;
 	}
@@ -409,6 +437,14 @@ public class DBManager implements PersistenceManager {
 				.loadPlayersBefore(hrfId);
 	}
 
+    /**
+     * Returns the player situation before date
+     *
+     * @param playerId ID of the player.
+     * @param before Timestamp.
+     * @return Player – Player's status before given timestamp.  Null if not found.
+     */
+    @Override
 	public Player getLatestPlayerDownloadBefore(int playerId, Timestamp before) {
 		return ((SpielerTable) getTable(SpielerTable.TABLENAME))
 				.loadPlayerBefore(playerId, before);
@@ -416,7 +452,7 @@ public class DBManager implements PersistenceManager {
 
 	public Player getFirstPlayerDownloadAfter(int playerId, Timestamp before) {
 		return ((SpielerTable) getTable(SpielerTable.TABLENAME))
-				.loadPlayerAfter(playerId, before);
+				.loadPlayerNotBefore(playerId, before);
 	}
 
 	public List<Player> getLatestPlayerDownloadBefore(String playerName, Timestamp before) {
@@ -426,7 +462,7 @@ public class DBManager implements PersistenceManager {
 
 	public List<Player> getFirstPlayerDownloadAfter(String playerName, Timestamp before) {
 		return ((SpielerTable) getTable(SpielerTable.TABLENAME))
-				.loadPlayersAfter(playerName, before);
+				.loadPlayersNotBefore(playerName, before);
 	}
 
 	/**
@@ -754,10 +790,9 @@ public class DBManager implements PersistenceManager {
 	/**
 	 * Gets faktoren from db.
 	 */
-	public void getFaktorenFromDB() {
-		((FaktorenTable) getTable(FaktorenTable.TABLENAME)).getFaktorenFromDB();
+	public List<FactorObject> getFaktorenFromDB() {
+		return ((FaktorenTable) getTable(FaktorenTable.TABLENAME)).getFaktorenFromDB();
 	}
-
 
 	/**
 	 * Gets tournament details from db.
@@ -765,7 +800,6 @@ public class DBManager implements PersistenceManager {
 	 * @param tournamentId the tournament id
 	 * @return the tournament details from db
 	 */
-// Tournament Details
 	public TournamentDetails getTournamentDetailsFromDB(int tournamentId) {
 		TournamentDetails oTournamentDetails;
 		oTournamentDetails = ((TournamentDetailsTable) getTable(TournamentDetailsTable.TABLENAME)).getTournamentDetails(tournamentId);
@@ -1343,7 +1377,7 @@ public class DBManager implements PersistenceManager {
 	 */
 // ------------------------------- FutureTraining
 	// -------------------------------------------------
-	public TrainingPerWeek getFuturTraining(Timestamp trainingDate) {
+	public TrainingPerWeek getFutureTraining(Timestamp trainingDate) {
 		return ((FutureTrainingTable) getTable(FutureTrainingTable.TABLENAME)).loadFutureTrainings(trainingDate);
 	}
 
@@ -1395,7 +1429,8 @@ public class DBManager implements PersistenceManager {
 		HOConfigurationParameter.storeParameters();
 	}
 
-	public String loadHOConfigurationParameter(String key) {
+    @Override
+    public String loadHOConfigurationParameter(String key) {
 		UserConfigurationTable table = (UserConfigurationTable) getTable(UserConfigurationTable.TABLENAME);
 		return table.loadParameter(key);
 	}
@@ -1797,7 +1832,7 @@ public class DBManager implements PersistenceManager {
 	 * Returns a list of PlayerMatchCBItems for given playerID
 	 *
 	 * @param playerID the player ID
-	 * @param officialOnly whether or not to select official game only
+	 * @param officialOnly whether to select official game only
 	 */
 	public Vector<PlayerMatchCBItem> getPlayerMatchCBItems(int playerID, boolean officialOnly) {
 		if(playerID == -1) return new Vector<>();
@@ -2156,7 +2191,7 @@ public class DBManager implements PersistenceManager {
 	 * @param home the home
 	 * @return the ifa match [ ]
 	 */
-	public IfaMatch[] getIFAMatches(boolean home) {
+	public List<IfaMatch> getIFAMatches(boolean home) {
 		return ((IfaMatchTable) getTable(IfaMatchTable.TABLENAME))
 				.getMatches(home);
 	}
@@ -2541,5 +2576,40 @@ public class DBManager implements PersistenceManager {
     public List<HallOfFamePlayer> loadHallOfFame(int hrfId){
         var hallOfFamePlayersTable = ((HallOfFamePlayersTable) getTable(HallOfFamePlayersTable.TABLENAME));
         return hallOfFamePlayersTable.loadHallOfFame(hrfId);
+    }
+
+    /**
+     * Load download info from HRF and XTRADATA table
+     * @return List<DownloadInfo>
+     */
+    public List<DownloadInfo> loadDownloadInfo() {
+        String sql = "select HRF_ID,DATE,HRF.DATUM  FROM" +
+            " (select HRF_ID,MIN(x.a) date FROM" +
+            "    (SELECT HRF_ID,dailyupdate1 a FROM  XTRADATA" +
+            "      UNION" +
+            "      SELECT HRF_ID,dailyupdate2 a FROM  XTRADATA" +
+            "      UNION" +
+            "      SELECT HRF_ID,dailyupdate3 a FROM  XTRADATA" +
+            "      UNION" +
+            "      SELECT HRF_ID,dailyupdate4 a FROM  XTRADATA" +
+            "      UNION" +
+            "      SELECT HRF_ID,dailyupdate5 a FROM  XTRADATA) x" +
+            "    GROUP BY HRF_ID) xtra" +
+            " JOIN HRF on xtra.hrf_id = HRF.hrf_id" +
+            " ORDER BY HRF_ID desc";
+        var ret = new ArrayList<DownloadInfo>();
+        assert connectionManager != null;
+        try (final ResultSet rs = connectionManager.executePreparedQuery(sql)) {
+            assert rs != null;
+            while (rs.next()) {
+                var hrf_id = rs.getInt(1);
+                var update = rs.getTimestamp(2);
+                var date = rs.getTimestamp(3);
+                ret.add(new DownloadInfo(hrf_id, HODateTime.fromDbTimestamp(date), HODateTime.fromDbTimestamp(update)));
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+        return ret;
     }
 }

@@ -12,9 +12,9 @@ import core.net.OnlineWorker;
 import core.training.TrainingManager;
 import core.util.Helper;
 import core.util.HelperWrapper;
-import core.util.StringUtils;
 import module.training.ui.model.TrainingModel;
 import module.training.ui.renderer.OutputTableRenderer;
+import org.apache.commons.lang3.StringUtils;
 
 import javax.swing.*;
 import java.awt.*;
@@ -123,7 +123,7 @@ public class OutputPanel extends LazyImagePanel {
 
         this.trainingProgressTableModel.setModel(this.trainingModel);
         this.trainingProgressTable = new PlayersTable(this.trainingProgressTableModel);
-        this.trainingProgressTable.setDefaultRenderer(Object.class, new OutputTableRenderer(false));
+        this.trainingProgressTable.setDefaultRenderer(Object.class, new OutputTableRenderer());
         add(this.trainingProgressTable.getContainerComponent(), BorderLayout.CENTER);
 
         JPanel buttonPanel = new JPanel(new GridBagLayout());

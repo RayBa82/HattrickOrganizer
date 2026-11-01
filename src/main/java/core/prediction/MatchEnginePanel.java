@@ -17,7 +17,6 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
 public class MatchEnginePanel extends ImagePanel implements	 ActionListener {
-	private static final long serialVersionUID = 4911590394636764762L;
 
 	JButton m_jbButton = new JButton(TranslationFacility.tr("Simulate"));
 

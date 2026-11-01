@@ -1,5 +1,6 @@
 package module.lineup;
 
+import core.gui.RefreshManager;
 import core.gui.Refreshable;
 import core.gui.Updatable;
 import core.gui.comp.table.PlayersTable;
@@ -35,10 +36,11 @@ public class LineupPanel extends core.gui.comp.panel.ImagePanel implements Refre
 	private final List<Updatable> updatable = new ArrayList<>();
 
 	public LineupPanel() {
-		initComponents();
-		var playerOverviewTableModel = (PlayerOverviewTableModel) this.lineupPlayersTable.getModel();
-		playerOverviewTableModel.reInitData();
-	}
+        initComponents();
+        RefreshManager.instance().registerRefreshable(this);
+        var playerOverviewTableModel = (PlayerOverviewTableModel) this.lineupPlayersTable.getModel();
+        playerOverviewTableModel.reInitData();
+    }
 
 	public void storeUserSettings() {
 		var playerOverviewTableModel = (PlayerOverviewTableModel) this.lineupPlayersTable.getModel();
@@ -92,7 +94,7 @@ public class LineupPanel extends core.gui.comp.panel.ImagePanel implements Refre
 		fireUpdate();
 	}
 
-	public void addUpdateable(Updatable updatable) {
+	public void addUpdatable(Updatable updatable) {
 		this.updatable.add(updatable);
 	}
 
@@ -118,9 +120,7 @@ public class LineupPanel extends core.gui.comp.panel.ImagePanel implements Refre
 
 		horizontalSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, false);
 		horizontalSplitPane.setLeftComponent(verticalSplitPane);
-		var lineupPositionJScrollPane = new JScrollPane();
-		lineupPositionJScrollPane.getViewport().add(lineupRatingAssistantPanel);
-		horizontalSplitPane.setRightComponent(lineupPositionJScrollPane);
+		horizontalSplitPane.setRightComponent(new JScrollPane(lineupRatingAssistantPanel));
 
 		UserParameter param = UserParameter.instance();
 		verticalSplitPane.setDividerLocation(param.lineupPanel_verticalSplitLocation);

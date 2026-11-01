@@ -8,19 +8,16 @@ import core.gui.comp.panel.ImagePanel;
 import core.model.TranslationFacility;
 import core.model.UserParameter;
 import core.util.BrowserLauncher;
+import core.util.HOEncryption;
 import core.util.HOLogger;
-import core.util.Helper;
+
+import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.Serial;
-import javax.swing.JButton;
-import javax.swing.JDialog;
-import javax.swing.JLabel;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
 
 public class OAuthDialog extends JDialog {
 
@@ -79,9 +76,8 @@ public class OAuthDialog extends JDialog {
 	private void doAuthorize() {
 		try {
 			m_AccessToken = m_service.getAccessToken(m_RequestToken, m_jtfAuthString.getText().trim());
-			UserParameter.instance().AccessToken = Helper.cryptString(m_AccessToken.getToken());
-			UserParameter.instance().TokenSecret = Helper.cryptString(m_AccessToken.getTokenSecret());
-
+            UserParameter.instance().setEncryptedToken(HOEncryption.encryptString(m_AccessToken.getToken()));
+            UserParameter.instance().setEncryptedTokenSecret(HOEncryption.encryptString(m_AccessToken.getTokenSecret()));
 		} catch (Exception e) {
 			HOLogger.instance().error(getClass(),
 					"Exception in doAuthorize: " + e.getMessage());

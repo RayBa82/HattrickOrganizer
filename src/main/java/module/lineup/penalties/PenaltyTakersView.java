@@ -1,6 +1,5 @@
 package module.lineup.penalties;
 
-import core.constants.UIConstants;
 import core.constants.player.PlayerAbility;
 import core.gui.comp.table.RowNumberTable;
 import core.gui.theme.HOIconName;
@@ -20,7 +19,6 @@ import javax.swing.table.TableColumn;
 import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.awt.event.ItemListener;
-import java.io.Serial;
 import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -30,8 +28,6 @@ import java.util.List;
 
 public class PenaltyTakersView extends JPanel {
 
-	@Serial
-	private static final long serialVersionUID = -5089904466636200088L;
 	private JTable playersTable;
 	private JTable takersTable;
 	private Lineup lineup;
@@ -160,7 +156,6 @@ public class PenaltyTakersView extends JPanel {
 		tablesPanel.add(playersTableLabel, gbc);
 
 		this.playersTable = new JTable();
-		this.playersTable.setRowHeight(UIConstants.TABLE_ROW_HEIGHT);
 		this.playersTable.setModel(new PenaltyTakersTableModel());
 		this.playersTable.setAutoCreateRowSorter(true);
 		// as default, sort by if in lineup, than by ability
@@ -225,7 +220,6 @@ public class PenaltyTakersView extends JPanel {
 		tablesPanel.add(takersTableLabel, gbc);
 
 		this.takersTable = new JTable();
-		this.takersTable.setRowHeight(UIConstants.TABLE_ROW_HEIGHT);
 		this.takersTable.setModel(new PenaltyTakersTableModel());
 		// Every edit goes into the lineup at once: a match order sent while this tab is still open
 		// must carry the takers shown here, not the ones from before the edit.
@@ -551,8 +545,6 @@ public class PenaltyTakersView extends JPanel {
 
 	private class PenaltyTakersTableModel extends AbstractTableModel {
 
-		@Serial
-		private static final long serialVersionUID = 3044881352777003621L;
 		private final String[] columnNames;
 		private List<PenaltyTaker> data = new ArrayList<>();
 
@@ -643,9 +635,6 @@ public class PenaltyTakersView extends JPanel {
 
 	private static class InLineupRenderer extends DefaultTableCellRenderer {
 
-		@Serial
-		private static final long serialVersionUID = 2815809080926324953L;
-
 		@Override
 		public Component getTableCellRendererComponent(JTable table, Object value,
 				boolean isSelected, boolean hasFocus, int row, int column) {
@@ -666,8 +655,6 @@ public class PenaltyTakersView extends JPanel {
 
 	private static class DoubleRenderer extends DefaultTableCellRenderer {
 
-		@Serial
-		private static final long serialVersionUID = -9094435304652745951L;
 		private final NumberFormat format;
 
 		public DoubleRenderer() {
@@ -689,9 +676,6 @@ public class PenaltyTakersView extends JPanel {
 
 	private static class SkillRenderer extends DoubleRenderer {
 
-		@Serial
-		private static final long serialVersionUID = 3943598594307257068L;
-
 		@Override
 		public Component getTableCellRendererComponent(JTable table, Object value,
 				boolean isSelected, boolean hasFocus, int row, int column) {
@@ -704,9 +688,6 @@ public class PenaltyTakersView extends JPanel {
 	}
 
 	private static class PlayerNameRenderer extends DefaultTableCellRenderer {
-
-		@Serial
-		private static final long serialVersionUID = 1970459130002883259L;
 
 		@Override
 		public Component getTableCellRendererComponent(JTable table, Object value,

@@ -4,49 +4,6 @@ Only the last one or two pieces of work live here. Older notes are dropped rathe
 accumulated; git keeps them (`git log -p -- docs/current.md`; the full history file as of
 2026-09-26 is `git show f5c51d0d:docs/current.md`).
 
-## get_match minutes, estimate_market_value as a download (2026-10-18)
-
-At the hattrick session's request, with the user's decisions.
-- `get_match` ourPlayers: `startMinute` (always 0) is gone. Rows now carry `started` and `minutesPlayed`
-  (`MatchLineupTeam.getTrainMinutesPlayedInPositions`), plus `cameOn`/`wentOff` from the stored
-  substitution orders and `injured`/`bruised`/`yellowCards`/`redCard` from the events, each only
-  when it happened. `includeEvents` keeps the per-team counts inline. Every event row (filtered by
-  `eventTypes`) goes into a download, always, by the user's call.
-- `MatchEvent.isInjured` counts events 95 and 97. The parser never typed them as injuries, so
-  training minutes ran to the final whistle for those players. The fix also applies to events
-  already stored.
-- `estimate_market_value`: the 40-row `comparables` array is gone (a 17y PM6/PS6 profile was
-  24k). The answer has `skillGroups`, one line per A/B skill pair (best/second-best positional
-  skill: count, sold, weighted median price). The download holds every comparable, untrimmed with
-  weightBreakdown and `inSample`, grouped the same way. "Pro Skill" was the user's wording, and
-  "A and B skill" is their answer.
-- Checked live on match 768523845: wentOff/injured 65 and cameOn 65 are right. `startRoleId` was
-  added. The skillGroups median is now the estimate's own method over the group's in-sample rows.
-- Follow-ups from the hattrick session, all four requested by the user:
-  get_lineup / send_match_order list `unavailablePlayers` (warning only, nothing refused).
-  get_squad rows carry `injuredInLastMatch` {matchId, minute} while injuryWeeks is still 0, from
-  the newest played match if it is at most a week old. Own sales reach the corpus on every
-  download: `updateTeamTransfersIncremental`, the path download_team takes, never called
-  `recordLocalSaleObservation`, which is why sales were entered by hand. Sales from before this
-  fix are not backfilled. get_team_transfers rows add specialty + skills from HO's snapshot
-  around the transfer, declared optional for the budget. `manage_scout action: refresh` re-reads
-  ask/bid/deadline with one playerdetails call each (default: open entries) and stores each
-  response as a corpus row.
-- Not measured on a DB copy yet.
-- Transfer search cap: 50 per rolling hour (`TransferSearchService.WINDOW`), not per HO process,
-  since the headless container never restarts. User's call after CHPP's "no bot scanning" rule
-  was weighed: CHPP documents no numeric limit. A DB still on the old default 20 moves to 50 once
-  (`mcpSearchCapRaised`). The options label still says "per session" (POEditor text).
-  lineup, so no column), `confounded` reason only when set. `attitude` filters stats and rows.
-  20 rows 5.5k, 40 rows were 9.7k on the dev DB copy.
-- `backfill` rates stored matches without a row; with `recompute` it redoes all of them.
-- DB 1008 adds PRED_TACTIC (the raw tactic rating; level = rating + 1) and REAL_TACTIC
-  (Hattrick's tacticSkill). Rows from before stay null until a `backfill` + `recompute`.
-
-Dev DB copy (36 rated matches; 128 others had no snapshot before kick-off): HO overrates our
-attack (central -0.78, sd 0.6) and underrates the defence (central +0.49); midfield -0.03.
-League is the worst (attack central -1.52, n 3), friendlies nearly neutral. The tactic level
-comes out 1.4 too low in league matches (n 3), matching the 2026-10-10 observation (10 vs 12).
 
 ## MCP 2026-07-28 and the tasks extension (2026-11-01)
 
@@ -135,3 +92,25 @@ is pushed). AGENTS.md, "Protocol", has the design as built.
   for upcoming matches, so the derby check compared against no region. `OnlineWorker.copyRegion`
   now sets it for played matches too. Stored rows heal when the match is loaded again; rating
   calibration rows of past derbies keep the location they were stored with.
+
+## Upstream merge: release/10 into our master (2026-11-01)
+
+Branch `merge-upstream`: `origin/master` (ho-dev, 81 commits incl. release/10 and tag 10.0)
+merged into our `master`. Our work lives on the fork `rayba` (RayBa82/HattrickOrganizer);
+`master` and `mcp-tasks` track it and `remote.pushDefault` is `rayba`, so nothing goes to
+ho-dev by accident. 22 files conflicted; what was decided, beyond keeping both sides:
+- Token storage: upstream's `UserParameter.get/setEncryptedToken(Secret)` and `HOEncryption`
+  (plus the `HO_ENCRYPTED_TOKEN*` env override) replace the public fields; `authorizeOnConsole`
+  writes through the setters. `OAuthDialog.SCOPES` (ours, with the MCP write scopes) stays.
+- Upstream's "database belongs to another team" dialog (`ConvertXml2Hrf.checkDatabase`) never
+  runs on a silent download: without a parent dialog (MCP, headless) it throws
+  `ConvertXml2Hrf.ForeignDatabase`, which `downloadTeamData` reports as the new
+  `Failure.FOREIGN_DATABASE`. The database is neither asked about nor moved.
+- `XMLMatchesParser` keeps reading `MatchContextId` for every match type (ours) and drops the
+  tournament-type lookup (upstream #2527: the parser runs without a DB). Upstream's expected
+  rows now carry the real context ids.
+- Upstream's parser regression tests gained our kit/colour keys; `MatchEventsAnalyserTest`
+  counts events 95/97 as highlights, because our `MatchEvent.isInjured` treats them as injuries.
+- Lineup panels: upstream's null checks on `getLineupPanel()` with our layout (match banner over
+  the pitch, assistant side card). `Basics.getLand` is now `getCountryId`.
+- The `HOTableModel.kt` unchecked-cast warning comes unchanged from upstream.

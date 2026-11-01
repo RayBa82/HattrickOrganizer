@@ -1,6 +1,5 @@
 package core.net;
 
-
 import com.github.scribejava.core.builder.ServiceBuilder;
 import com.github.scribejava.core.model.OAuth1AccessToken;
 import com.github.scribejava.core.model.OAuthRequest;
@@ -10,6 +9,7 @@ import com.github.scribejava.core.oauth.OAuth10aService;
 import core.HO;
 import core.file.xml.XMLArenaParser;
 import core.file.xml.XMLCHPPPreParser;
+import core.file.xml.XMLHattrickDataInfoParser;
 import core.gui.CursorToolkit;
 import core.gui.HOMainFrame;
 import core.model.HOVerwaltung;
@@ -21,8 +21,10 @@ import core.net.login.OAuthDialog;
 import core.net.login.ProxyDialog;
 import core.net.login.ProxySettings;
 import core.util.*;
+import lombok.Getter;
+import lombok.Setter;
+import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.Nullable;
-import org.w3c.dom.Document;
 import tool.updater.VersionInfo;
 
 import javax.swing.*;
@@ -30,8 +32,13 @@ import java.io.*;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.text.SimpleDateFormat;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.function.Supplier;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.Inflater;
 import java.util.zip.InflaterInputStream;
@@ -46,7 +53,18 @@ public class Connector {
 	private ProxySettings proxySettings;
 	private final OAuth10aService m_OAService;
 	private OAuth1AccessToken m_OAAccessToken;
-	private static boolean DEBUGSAVE = false;
+
+    private static final HOLogger log = HOLogger.instance();
+
+    private static final DateTimeFormatter FILE_TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS");
+    private static final DateTimeFormatter LOG_TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd, HH:mm:ss.SSS");
+
+    /**
+     * Property that controls if downloaded CHPP files (XML) are saved.
+     */
+    @Getter
+    @Setter
+    private static boolean saveDownloadedXml = false;
 
 	private boolean silentDownload = false;
 
@@ -57,12 +75,11 @@ public class Connector {
 	 * Creates a new instance of Connector.
 	 */
 	private Connector() {
-		m_OAService = new ServiceBuilder(Helper.decryptString(CONSUMER_KEY))
-						.apiSecret(Helper.decryptString(CONSUMER_SECRET))
+		m_OAService = new ServiceBuilder(HOEncryption.decryptString(CONSUMER_KEY))
+						.apiSecret(HOEncryption.decryptString(CONSUMER_SECRET))
 						.build(HattrickAPI.instance());
 
-
-		m_OAAccessToken = createOAAccessToken();
+		m_OAAccessToken = createOAuthAccessToken();
 	}
 
 	/**
@@ -70,7 +87,8 @@ public class Connector {
 	 * browser on this machine - the user opens the printed URL anywhere and types the code back.
 	 * The token is stored like the dialog stores it, encrypted in the user parameters.
 	 */
-	public void authorizeOnConsole(java.io.BufferedReader in, java.io.PrintStream out) throws Exception {
+	public void authorizeOnConsole(java.io.BufferedReader in, java.io.PrintStream out)
+			throws IOException, InterruptedException, java.util.concurrent.ExecutionException {
 		final var requestToken = m_OAService.getRequestToken();
 		out.println("Open this URL, log in to Hattrick and grant HO access:");
 		out.println(m_OAService.getAuthorizationUrl(requestToken) + core.net.login.OAuthDialog.SCOPES);
@@ -81,15 +99,39 @@ public class Connector {
 			throw new IllegalStateException("No code entered.");
 		}
 		m_OAAccessToken = m_OAService.getAccessToken(requestToken, code.trim());
-		UserParameter.instance().AccessToken = Helper.cryptString(m_OAAccessToken.getToken());
-		UserParameter.instance().TokenSecret = Helper.cryptString(m_OAAccessToken.getTokenSecret());
+		UserParameter.instance().setEncryptedToken(HOEncryption.encryptString(m_OAAccessToken.getToken()));
+		UserParameter.instance().setEncryptedTokenSecret(HOEncryption.encryptString(m_OAAccessToken.getTokenSecret()));
 		core.db.DBManager.instance().saveUserParameter();
 	}
 
-	private OAuth1AccessToken createOAAccessToken() {
-		return new OAuth1AccessToken(Helper.decryptString(UserParameter.instance().AccessToken),
-				Helper.decryptString(UserParameter.instance().TokenSecret));
-	}
+    private static OAuth1AccessToken createOAuthAccessToken() {
+        var accessToken = createAccessToken();
+        return new OAuth1AccessToken(accessToken.getToken(), accessToken.getTokenSecret());
+    }
+
+    private static AccessToken createAccessToken() {
+        return AccessToken.ofEncryptedData(getEncryptedToken(), getEncryptedTokenSecret());
+    }
+
+    private static String getEncryptedToken() {
+        return getFromEnvOrElse(HOEnvironmentVariable.HO_ENCRYPTED_TOKEN, () -> UserParameter.instance().getEncryptedToken());
+    }
+
+    private static String getEncryptedTokenSecret() {
+        return getFromEnvOrElse(HOEnvironmentVariable.HO_ENCRYPTED_TOKEN_SECRET, () -> UserParameter.instance().getEncryptedTokenSecret());
+    }
+
+    private static String getFromEnvOrElse(HOEnvironmentVariable environmentVariable, Supplier<String> supplier) {
+        return environmentVariable.value()
+            .filter(StringUtils::isNotBlank)
+            .map(value -> {
+                HOLogger.instance().info(
+                    Connector.class,
+                    "Found environment variable '%s' and used its value.".formatted(environmentVariable));
+                return value;
+            })
+            .orElseGet(supplier);
+    }
 
 	/**
 	 * Get the Connector instance.
@@ -101,18 +143,7 @@ public class Connector {
 		return m_clInstance;
 	}
 
-	/**
-	 * Sets the DEBUGSAVE flag. Setting the flag to true will save downloaded
-	 * CHPP files.
-	 *
-	 * @param debugSave
-	 *            true to save downloaded CHPP files, false otherwise.
-	 */
-	public static void setDebugSave(boolean debugSave) {
-		DEBUGSAVE = debugSave;
-	}
-
-	/**
+    /**
 	 * Fetch a specific arena
 	 *
 	 * @param arenaId
@@ -735,7 +766,7 @@ public class Connector {
 					case 200, 201 -> {
 						// We are done!
 						returnString = readStream(getResultStream(response));
-						if (DEBUGSAVE) {
+						if (isSaveDownloadedXml()) {
 							saveCHPP(surl, returnString);
 						}
 						String sError = XMLCHPPPreParser.getError(returnString);
@@ -770,7 +801,7 @@ public class Connector {
 							}
 							m_OAAccessToken = authDialog.getAccessToken();
 							if (m_OAAccessToken == null) {
-								m_OAAccessToken = createOAAccessToken();
+								m_OAAccessToken = createOAuthAccessToken();
 							}
 						} else {
 							throw new RuntimeException("HTTP Response Code 401: CHPP Connection failed.");
@@ -855,7 +886,6 @@ public class Connector {
 	 */
 	public InputStream postWebFileWithBodyParameters(String surl, Map<String, String> bodyParas,
 													 boolean showErrorMessage, String scope) {
-
 		OAuthDialog authDialog = null;
 		Response response = null;
 		int iResponse;
@@ -896,9 +926,7 @@ public class Connector {
 						}
 						m_OAAccessToken = authDialog.getAccessToken();
 						if (m_OAAccessToken == null) {
-							m_OAAccessToken = new OAuth1AccessToken(
-									Helper.decryptString(UserParameter.instance().AccessToken),
-									Helper.decryptString(UserParameter.instance().TokenSecret));
+                            m_OAAccessToken = createOAuthAccessToken();
 						}
 					}
 					// Try again...
@@ -976,51 +1004,40 @@ public class Connector {
 		}
 	}
 
-	/**
-	 * Save downloaded data to a temp-file for debugging purposes.
-	 *
-	 * @param url
-	 *            the url where the content was downloaded from
-	 * @param content
-	 *            the content to save
-	 */
-	private void saveCHPP(String url, String content) {
-		File outDir = new File("tmp");
-		if (!outDir.exists()) {
-			outDir.mkdirs();
-		}
+    /**
+     * Save downloaded CHPP data to the 'tmp' folder for debugging purposes.
+     *
+     * @param url     the url where the content was downloaded from
+     * @param content the content to save
+     */
+    private static void saveCHPP(String url, String content) {
+        final var hattrickDataFileName = XMLHattrickDataInfoParser.tryParseFileName(content)
+            .map(name -> StringUtils.substringBeforeLast(name, "."))
+            .orElse(null);
 
-		String xmlName = null;
-		try {
-			Document doc = XMLUtils.createDocument(content);
-			xmlName = XMLUtils.getTagData(doc, "FileName");
-			if (xmlName != null && xmlName.indexOf('.') != -1) {
-				xmlName = xmlName.substring(0, xmlName.lastIndexOf('.'));
-			}
-		} catch (Exception ex) {
-			HOLogger.instance().error(getClass(), ex);
-		}
+        final var downloadDate = LocalDateTime.now();
+        final String outFileName = createOutFileName(hattrickDataFileName, downloadDate);
 
-		Date downloadDate = new Date();
-		SimpleDateFormat df = new SimpleDateFormat("yyyyMMdd-HHmmss-S");
-		String outFileName = df.format(downloadDate) + ".txt";
-		if (!StringUtils.isEmpty(xmlName)) {
-			outFileName = xmlName + "_" + outFileName;
-		}
-		File outFile = new File(outDir, outFileName);
+        try {
+            Path outDir = Files.createDirectories(Path.of("tmp"));
+            File outFile = new File(outDir.toFile(), outFileName);
 
-		df = new SimpleDateFormat("yyyy-MM-dd, HH:mm:ss");
-		StringBuilder builder = new StringBuilder();
-		builder.append("Downloaded at ").append(df.format(downloadDate)).append('\n');
-		builder.append("From ").append(url).append("\n\n");
-		builder.append(content);
+            IOUtils.writeToFile(content, outFile, "UTF-8");
 
-		try {
-			IOUtils.writeToFile(builder.toString(), outFile, "UTF-8");
-		} catch (Exception e) {
-			HOLogger.instance().error(Connector.class, e);
-		}
-	}
+            log.debug(Connector.class, "Saved downloaded CHPP XML '%s' at %s from '%s'"
+                .formatted(outFileName, LOG_TIMESTAMP_FORMATTER.format(downloadDate), url));
+        } catch (Exception e) {
+            log.error(Connector.class, e);
+        }
+    }
+
+    private static String createOutFileName(String xmlFileName, LocalDateTime localDateTime) {
+        String outFileName = FILE_TIMESTAMP_FORMATTER.format(localDateTime) + ".xml";
+        if (StringUtils.isNotEmpty(xmlFileName)) {
+            outFileName = xmlFileName + "_" + outFileName;
+        }
+        return outFileName;
+    }
 
 	/** The CHPP error of the last download, null if it succeeded. */
 	public String lastError() {

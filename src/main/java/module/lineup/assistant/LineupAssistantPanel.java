@@ -3,7 +3,6 @@ package module.lineup.assistant;
 import core.datatype.CBItem;
 import core.gui.HOMainFrame;
 import core.gui.Refreshable;
-import core.gui.comp.panel.ImagePanel;
 import core.gui.theme.GroupTeamFactory;
 import core.gui.theme.HOColorName;
 import core.gui.theme.ImageUtilities;
@@ -36,7 +35,7 @@ import static core.util.Helper.getTranslation;
 
 
 //TODO check if it needs to implement Refreshable
-public class LineupAssistantPanel extends ImagePanel implements Refreshable, ActionListener, ItemListener {
+public class LineupAssistantPanel extends JPanel implements Refreshable, ActionListener, ItemListener {
 
 	UserParameter userParameter = core.model.UserParameter.instance();
 
@@ -76,7 +75,6 @@ public class LineupAssistantPanel extends ImagePanel implements Refreshable, Act
 			new CBItem(TranslationFacility.tr("ST-MF-AW"),
 					LineupAssistant.ST_MF_AW) };
 	private final JComboBox<CBItem> m_jcbPriority = new JComboBox<>(PRIORITIES);
-
 
 	private final JButton m_jbClearLineup = new JButton();
 	private final JButton m_jbStartAssistant = new JButton();
@@ -148,26 +146,30 @@ public class LineupAssistantPanel extends ImagePanel implements Refreshable, Act
 		final HOMainFrame mainFrame = core.gui.HOMainFrame.instance();
 
 		if (actionEvent.getSource().equals(m_jbClearLineup)) {
-			// Empty all positions
-			var lineup = hoModel.getCurrentLineup();
-            lineup.resetStartingLineup();
-            lineup.resetPositionOrders();
-            lineup.resetSubstituteBench();
-            lineup.setKicker(0);
-            lineup.setCaptain(0);
-            HOMainFrame.setInformation(TranslationFacility.tr("Aufstellung_geloescht"));
-            mainFrame.getLineupPanel().update();
+            var lineupPanel = mainFrame.getLineupPanel();
+            if (lineupPanel != null) {
+                // Empty all positions
+                var lineup = hoModel.getCurrentLineup();
+                lineup.resetStartingLineup();
+                lineup.resetPositionOrders();
+                lineup.resetSubstituteBench();
+                lineup.setKicker(0);
+                lineup.setCaptain(0);
+                HOMainFrame.setInformation(TranslationFacility.tr("Aufstellung_geloescht"));
+                lineupPanel.update();
+            }
+
         }
 		else if (actionEvent.getSource().equals(m_jbStartAssistant)) {
 			displayGUI();
 		}
 		else if (actionEvent.getSource().equals(m_jcbxFilterPlayerPositionCB) || actionEvent.getSource().equals(m_jcbxNotLast)) {
-			mainFrame.getLineupPanel().refreshLineupPositionsPanel();
+			Objects.requireNonNull(mainFrame.getLineupPanel()).refreshLineupPositionsPanel();
 		}
 		else if (actionEvent.getSource().equals(m_jcbGroups) || actionEvent.getSource().equals(m_jcbIncludeExclude)) {
 			// Only if filter active
 			if (m_jcbxFilterPlayerPositionCB.isSelected()) {
-				mainFrame.getLineupPanel().refreshLineupPositionsPanel();
+				Objects.requireNonNull(mainFrame.getLineupPanel()).refreshLineupPositionsPanel();
 			}
 		}
 		else if (actionEvent.getSource().equals(overlayOk)) {
@@ -206,13 +208,11 @@ public class LineupAssistantPanel extends ImagePanel implements Refreshable, Act
 
 	@Override
 	public final void itemStateChanged(ItemEvent e) {
-		if (e.getStateChange() == ItemEvent.SELECTED) {
-			// Wetter -> Refresh
-			core.gui.HOMainFrame.instance().getLineupPanel().update();
-
-			// gui.RefreshManager.instance ().doRefresh ();
-		}
-	}
+        if (e.getStateChange() == ItemEvent.SELECTED) {
+            // Weather -> Refresh
+            Objects.requireNonNull(HOMainFrame.instance().getLineupPanel()).update();
+        }
+    }
 
 	public void addToAssistant(PlayerPositionPanel positionPanel) {
 		positions.put(positionPanel, null);
@@ -258,7 +258,7 @@ public class LineupAssistantPanel extends ImagePanel implements Refreshable, Act
 				.getLineup()
 				.optimizeLineup(
 						selectablePlayers,
-						(byte) ((CBItem)m_jcbPriority.getSelectedItem()).getId(),
+						(byte) ((CBItem) Objects.requireNonNull(m_jcbPriority.getSelectedItem())).getId(),
 						isConsiderForm(),
 						isIdealPositionZuerst(),
 						isIgnoreInjured(),
@@ -267,9 +267,7 @@ public class LineupAssistantPanel extends ImagePanel implements Refreshable, Act
 				);
 
 		HOMainFrame.setInformation(TranslationFacility.tr("Autoaufstellung_fertig"));
-		mainFrame.getLineupPanel().update();
-
-		// gui.RefreshManager.instance ().doRefresh ();
+		Objects.requireNonNull(mainFrame.getLineupPanel()).update();
 	}
 
 	/** Which positions the assistant fills when there is no full eleven to start from. */
@@ -287,8 +285,6 @@ public class LineupAssistantPanel extends ImagePanel implements Refreshable, Act
 		if (pendingRemoval != null) pendingRemoval.stop();
 
 		// Add overlays to player panels
-
-
 		for (Map.Entry<PlayerPositionPanel, LineupAssistantSelectorOverlay> entry : positions.entrySet()) {
 			if (entry.getValue() == null) {
 				LineupAssistantSelectorOverlay laso = new LineupAssistantSelectorOverlay();

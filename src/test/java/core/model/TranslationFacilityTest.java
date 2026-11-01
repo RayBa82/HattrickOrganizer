@@ -1,13 +1,28 @@
 package core.model;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.Map;
 import java.util.MissingResourceException;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
 
 class TranslationFacilityTest {
+
+    private Translator originalTranslator;
+
+    @BeforeEach
+    void rememberTranslator() {
+        originalTranslator = TranslationFacility.getTranslator();
+    }
+
+    @AfterEach
+    void restoreTranslator() {
+        TranslationFacility.setTranslator(originalTranslator);
+    }
 
     @Test
     void getTranslator() {
@@ -59,6 +74,41 @@ class TranslationFacilityTest {
 
         // then
         assertThat(translation).isEqualTo("!ls.button.save!");
+    }
+
+    @Test
+    void tr() {
+        // given
+        final var key = "key";
+        final var expectedTranslation = "value";
+        Translator translator = ResourceBundleFromMap.createTranslator("Custom", Map.ofEntries(Map.entry(key, expectedTranslation)));
+        TranslationFacility.setTranslator(translator);
+
+        // when
+        final var translation = TranslationFacility.tr(key);
+
+        // then
+        assertThat(translation).isEqualTo(expectedTranslation);
+    }
+
+    @Test
+    void trSingularOrPlural() {
+        // given
+        final var keySingular = "singular";
+        final var keyPlural = "plural";
+        final var expectedTranslationSingular = "person";
+        final var expectedTranslationPlural = "people";
+        Translator translator = ResourceBundleFromMap.createTranslator("Custom",
+            Map.ofEntries(Map.entry(keySingular, expectedTranslationSingular), Map.entry(keyPlural, expectedTranslationPlural)));
+        TranslationFacility.setTranslator(translator);
+
+        // when
+        final var translationSingular = TranslationFacility.trSingularOrPlural(true, keySingular, keyPlural);
+        final var translationPlural = TranslationFacility.trSingularOrPlural(false, keySingular, keyPlural);
+
+        // then
+        assertThat(translationSingular).isEqualTo(expectedTranslationSingular);
+        assertThat(translationPlural).isEqualTo(expectedTranslationPlural);
     }
 
     @Test

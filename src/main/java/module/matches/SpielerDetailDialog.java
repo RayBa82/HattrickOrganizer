@@ -26,15 +26,12 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.io.Serial;
 
 /**
  * Zeigt Details zu einem Player zu einer Zeit an
  */
 final class SpielerDetailDialog extends JDialog {
 
-	@Serial
-	private static final long serialVersionUID = 7104209757847006926L;
 	private final Dimension COMPONENTENSIZE3 = new Dimension(Helper.calcCellWidth(100),
 			Helper.calcCellWidth(18));
 	private final Dimension COMPONENTENSIZE4 = new Dimension(Helper.calcCellWidth(50),
@@ -231,7 +228,7 @@ final class SpielerDetailDialog extends JDialog {
 				.getCurrentPlayer(m_clPlayer.getPlayerId());
 
 		m_jpName.setText(m_clPlayer.getFullName());
-		m_jpAlter.setText(m_clPlayer.getAge() + "");
+		m_jpAlter.setText(m_clPlayer.getAgeWithDaysAsString(m_clPlayer.getHrfDate()));
 		m_jpNationalitaet.setIcon(ImageUtilities.getCountryFlagIcon(m_clPlayer.getCountryId()));
 
 		var lineup = HOVerwaltung.instance().getModel().getCurrentLineup();

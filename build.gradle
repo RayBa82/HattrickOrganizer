@@ -23,16 +23,17 @@ plugins {
     id "java"
     id "groovy"
     id "org.jetbrains.kotlin.jvm" version "2.2.0"
+    id "org.jetbrains.kotlin.plugin.lombok" version "2.2.0"
     id "application"
     id "org.kordamp.gradle.markdown" version "2.2.0"
     id "com.github.breadmoirai.github-release" version "2.5.2"
     id "com.install4j.gradle" version "12.0"
     id "org.barfuin.gradle.taskinfo" version "2.2.0"
-    id "io.freefair.lombok" version "8.13"
+    id "io.freefair.lombok" version "8.13.1"
 }
 apply plugin: de.jansauer.poeditor.POEditorPlugin
 
-version = '10.0'
+version = '11.0'
 ext {
     // Development_stage (DEV:0  BETA:1  STABLE:2)
     development_stage = project.properties['DEV_STAGE'] as Integer ?: 0
@@ -47,7 +48,7 @@ repositories {
 
 dependencies {
     implementation "com.install4j:install4j-runtime:12.0"
-    implementation "com.fasterxml.jackson.core:jackson-core:2.21.0"
+    implementation "com.fasterxml.jackson.core:jackson-core:2.21.4"
     implementation "com.github.scribejava:scribejava-core:8.3.3"
     implementation "org.hsqldb:hsqldb:2.7.4"
     implementation "com.google.code.gson:gson:2.12.1"
@@ -57,15 +58,16 @@ dependencies {
     implementation "com.github.weisj:darklaf-core:3.1.1"
     implementation "com.github.weisj:darklaf-theme:3.1.1"
     implementation "com.github.weisj:darklaf-property-loader:3.1.1"
-    implementation "org.javatuples:javatuples:1.2"
+    implementation "org.apache.commons:commons-lang3:3.20.0"
     implementation "org.apache.commons:commons-text:1.15.0"
-    implementation "org.knowm.xchart:xchart:3.8.8"
+    implementation "org.knowm.xchart:xchart:4.0.4"
     implementation "org.jsoup:jsoup:1.19.1"
     implementation "org.jetbrains:annotations:26.0.2"
     implementation "org.codehaus.groovy:groovy-all:3.0.24"
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
     testImplementation "org.junit.jupiter:junit-jupiter:5.14.2"
     testImplementation "org.assertj:assertj-core:3.27.7"
+    testImplementation "org.mockito:mockito-core:5.23.0"
     testImplementation "org.jetbrains.kotlin:kotlin-test:2.1.20"
 }
 
@@ -360,9 +362,9 @@ tasks.register("pushmd")  {
         // list the contributors that don't want to be mentioned in release notes
         def contributorFilter = ["Che"]
 
-        def commitCount = callGit('git rev-list 9.0..HEAD --count')
-        def diff = callGit('git diff --shortstat 9.0..HEAD')
-        def contributors = filter(callGit('git shortlog -s -n 9.0..HEAD'), contributorFilter)
+        def commitCount = callGit('git rev-list 10.0..HEAD --count')
+        def diff = callGit('git diff --shortstat 10.0..HEAD')
+        def contributors = filter(callGit('git shortlog -s -n 10.0..HEAD'), contributorFilter)
         def latestCommit = callGit('git log -1 --pretty=format:"%s"')
 
         println("create release-notes")

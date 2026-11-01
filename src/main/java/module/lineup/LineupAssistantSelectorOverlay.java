@@ -11,7 +11,6 @@ import java.awt.event.MouseEvent;
  */
 public class LineupAssistantSelectorOverlay extends module.lineup.lineup.RevealPanel {
 
-	private static final long serialVersionUID = 1L;
 	@lombok.Getter
 	private boolean isSelected;
 

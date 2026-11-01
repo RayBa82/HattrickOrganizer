@@ -217,7 +217,7 @@ public class LineupPositionsPanel extends JPanel implements core.gui.Refreshable
 		// room for the pitch's surround above the first row
 		setBorder(BorderFactory.createEmptyBorder(24, 8, 8, 8));
 
-		centerPanel = new javax.swing.JLayeredPane();
+		centerPanel = new JLayeredPane();
 		centerPanel.setOpaque(false);
 
 		final GridBagLayout layout = new GridBagLayout();

@@ -8,7 +8,7 @@ import core.model.TranslationFacility;
 import core.model.UserParameter;
 import core.net.Connector;
 import core.util.GUIUtils;
-import core.util.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
@@ -19,7 +19,6 @@ import java.awt.event.*;
  * ProxyDialog
  */
 public class ProxyDialog extends JDialog {
-	private static final long serialVersionUID = -2112562621278224332L;
 	private HOMainFrame m_clMainFrame;
 	private JButton cancelButton = new JButton();
 	private JButton okButton = new JButton();

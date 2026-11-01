@@ -20,7 +20,6 @@ import core.util.Helper;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
-import java.io.Serial;
 
 
 /**
@@ -30,8 +29,6 @@ import java.io.Serial;
 final class SpielerTrainingsSimulatorPanel extends ImagePanel
         implements core.gui.Refreshable, ItemListener, ActionListener, FocusListener {
 
-    @Serial
-    private static final long serialVersionUID = 7657564758631332932L;
 
     //~ Static fields/initializers -----------------------------------------------------------------
 
@@ -202,7 +199,7 @@ final class SpielerTrainingsSimulatorPanel extends ImagePanel
         if (e.getSource().equals(m_jbAddTempSpieler)) {
             var player = new Player();
             player.setHrfDate();
-            player.setCountryId(HOVerwaltung.instance().getModel().getBasics().getLand());
+            player.setCountryId(HOVerwaltung.instance().getModel().getBasics().getCountryId());
             player.setPlayerId(module.transfer.scout.TransferEingabePanel.getNextTempSpielerID());
             player.setLastName("Temp " + Math.abs(1000 + player.getPlayerId()));
             player.setAge(getAge());

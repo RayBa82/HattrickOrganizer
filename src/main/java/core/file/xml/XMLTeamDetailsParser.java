@@ -5,7 +5,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -18,43 +17,7 @@ public class XMLTeamDetailsParser {
 
 	private XMLTeamDetailsParser() {}
 
-	public static String fetchRegionID(String xmlFile) {
-		return fetchTeamDetail(xmlFile, "Region", "RegionID");
-	}
-
-	public static String fetchLogoURI(String xmlFile) {
-		return fetchTeamDetail(xmlFile, "LogoURL", null);
-	}
-
-	private static String fetchTeamDetail(String xmlFile, String section, String attribute){
-		try {
-			Document doc = XMLManager.parseString(xmlFile);
-
-			if (doc == null) {
-				return "-1";
-			}
-
-			// Tabelle erstellen
-			Element root = doc.getDocumentElement();
-
-			// Root wechseln
-			root = (Element) root.getElementsByTagName("Team").item(0);
-			root = (Element) root.getElementsByTagName(section).item(0);
-
-			if(attribute != null) {
-				root = (Element) root.getElementsByTagName(attribute).item(0);
-			}
-
-			return XMLManager.getFirstChildNodeValue(root);
-
-		} catch (Exception ex) {
-			HOLogger.instance().log(XMLTeamDetailsParser.class, ex);
-		}
-
-		return "-1";
-	}
-
-	public static Map<String, String> parseTeamdetailsFromString(String inputStream, int teamId) {
+	public static Map<String, String> parseTeamDetailsFromString(String inputStream, int teamId) {
 		return parseDetails(XMLManager.parseString(inputStream), teamId);
 	}
 
@@ -148,11 +111,11 @@ public class XMLTeamDetailsParser {
 			xmlValue2Hash(hash, team, "BotSince");
 
 			// Power Rating
-			Element PowerRating = (Element)doc.getDocumentElement().getElementsByTagName("PowerRating").item(0);
-			xmlValue2Hash(hash, PowerRating, "GlobalRanking");
-			xmlValue2Hash(hash, PowerRating, "LeagueRanking");
-			xmlValue2Hash(hash, PowerRating, "RegionRanking");
-			xmlValue2Hash(hash, PowerRating, "PowerRating");
+			var powerRating = (Element)team.getElementsByTagName("PowerRating").item(0);
+			xmlValue2Hash(hash, powerRating, "GlobalRanking");
+			xmlValue2Hash(hash, powerRating, "LeagueRanking");
+			xmlValue2Hash(hash, powerRating, "RegionRanking");
+			xmlValue2Hash(hash, powerRating, "PowerRating");
 
 			if (team.getElementsByTagName("TeamRank").getLength() > 0) {
 				hash.put("TeamRank", team.getElementsByTagName("TeamRank").item(0).getTextContent());
@@ -173,7 +136,7 @@ public class XMLTeamDetailsParser {
 		if ( ele != null) {
 			root = ele;
 			NodeList list = root.getElementsByTagName("Team");
-			for (int i = 0; (list != null) && (i < list.getLength()); i++) {
+			for (int i = 0; i < list.getLength(); i++) {
 				team = (Element) list.item(i);
 
 				ele = (Element) team.getElementsByTagName("TeamID").item(0);
@@ -198,7 +161,8 @@ public class XMLTeamDetailsParser {
 
 		NodeList list = root.getElementsByTagName("Team");
 
-		for (int i = 0; (list != null) && (i < list.getLength()); i++) {
+		for (int i = 0; i < list.getLength(); i++) {
+
 			Element team = (Element) list.item(i);
 			Element ele;
 
@@ -216,17 +180,27 @@ public class XMLTeamDetailsParser {
 			ele = (Element) team.getElementsByTagName("IsPrimaryClub").item(0);
 			info.setPrimaryTeam(Boolean.parseBoolean(XMLManager.getFirstChildNodeValue(ele)));
 
-
+            // League element
 			Element league = (Element) team.getElementsByTagName("League").item(0);
 			ele = (Element) league.getElementsByTagName("LeagueName").item(0);
-			info.setCountry(XMLManager.getFirstChildNodeValue(ele));
+			info.setLeague(XMLManager.getFirstChildNodeValue(ele));
+
 
 			ele = (Element) league.getElementsByTagName("LeagueID").item(0);
 			info.setLeagueId(Integer.parseInt(XMLManager.getFirstChildNodeValue(ele)));
 
 			ele = (Element) team.getElementsByTagName("LeagueLevelUnit").item(0);
 			ele = (Element) ele.getElementsByTagName("LeagueLevelUnitName").item(0);
-			info.setLeague(XMLManager.getFirstChildNodeValue(ele));
+			info.setLeagueLevel(XMLManager.getFirstChildNodeValue(ele));
+
+            // Country element
+            Element country = (Element) team.getElementsByTagName("Country").item(0);
+            ele = (Element) country.getElementsByTagName("CountryName").item(0);
+            info.setCountry(XMLManager.getFirstChildNodeValue(ele));
+
+            ele = (Element) country.getElementsByTagName("CountryID").item(0);
+            info.setCountryId(Integer.parseInt(XMLManager.getFirstChildNodeValue(ele)));
+
 
 			ret.add(info);
 		}

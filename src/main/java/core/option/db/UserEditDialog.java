@@ -4,7 +4,7 @@ import core.db.user.User;
 import core.gui.comp.NumericDocument;
 import core.model.TranslationFacility;
 import core.util.GUIUtils;
-import core.util.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
@@ -14,7 +14,6 @@ import java.awt.*;
 import java.awt.event.ActionListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.io.Serial;
 
 public class UserEditDialog extends JDialog {
 
@@ -31,8 +30,6 @@ public class UserEditDialog extends JDialog {
 	private final User user;
 	private boolean canceled = true;
 	private final boolean isNew;
-	@Serial
-	private static final long serialVersionUID = -98754947290884048L;
 	private JRadioButton ntTeamYes;
 	private JRadioButton ntTeamNo;
 

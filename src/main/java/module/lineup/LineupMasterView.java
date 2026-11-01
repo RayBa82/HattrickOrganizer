@@ -53,7 +53,7 @@ public class LineupMasterView extends JPanel {
 	}
 
 	private void addListeners() {
-		this.lineupPanel.addUpdateable(this::refreshView);
+		this.lineupPanel.addUpdatable(this::refreshView);
 
 		RefreshManager.instance().registerRefreshable(new Refreshable() {
 

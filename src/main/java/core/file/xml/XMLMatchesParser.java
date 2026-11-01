@@ -1,7 +1,5 @@
 package core.file.xml;
 
-import core.db.DBManager;
-import core.model.tournament.TournamentDetails;
 import core.model.cup.CupLevel;
 import core.model.cup.CupLevelIndex;
 import core.model.match.MatchKurzInfo;
@@ -15,8 +13,6 @@ import java.util.List;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
-
-import static core.net.OnlineWorker.getTournamentDetails;
 
 public class XMLMatchesParser {
 
@@ -62,7 +58,7 @@ public class XMLMatchesParser {
 
 				Element ele;
 				Element tmp;
-				for (int i = 0; (list != null) && (i < list.getLength()); i++) {
+				for (int i = 0; i < list.getLength(); i++) {
 					match = new MatchKurzInfo();
 					ele = (Element) list.item(i);
 
@@ -85,16 +81,10 @@ public class XMLMatchesParser {
 						tmp = (Element) ele.getElementsByTagName("CupLevelIndex").item(0);
 						iCupLevelIndex = Integer.parseInt(tmp.getFirstChild().getNodeValue());
 						match.setCupLevelIndex(CupLevelIndex.fromInt(iCupLevelIndex));
-					}
-					else if (iMatchType == 50) {
-						TournamentDetails oTournamentDetails = DBManager.instance().getTournamentDetailsFromDB(contextId);
-						if (oTournamentDetails == null)
-						{
-							oTournamentDetails = getTournamentDetails(contextId); // download info about tournament from HT
-							DBManager.instance().storeTournamentDetailsIntoDB(oTournamentDetails); // store tournament details into DB
 						}
-						match.setTournamentTypeID(oTournamentDetails.getTournamentType());
-					}
+						// Tournaments: MatchContextId above is the tournament id. The tournament type is no
+						// longer looked up here (#2527) - the parser runs without a database or CHPP.
+
 
 
 					tmp = (Element) ele.getElementsByTagName("HomeTeam").item(0);
