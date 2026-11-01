@@ -89,3 +89,10 @@ not pushed). AGENTS.md, "Protocol", has the design as built.
   rating map. On the DB copy (29 players, `includeOrders` false) it answers with 6,856 chars,
   against about 21,000 for get_training + get_series + get_squad + sinceLastTraining. The
   order part is unit-tested only: reading it live costs CHPP requests.
+- Item 4 is done: `download_team` `keepLineup`, default true in the MCP tool only (the user's
+  call; the Download button still replaces). `runDownload` loads HO's next-match lineup before
+  the download and stores it back when Hattrick's differs for the same match. When the next match
+  changed, Hattrick's order for the new one stays and `lineupNote` says so. The result has
+  `lineupReplaced`, `lineupKept`, `lineupMatchId` and `hattrickOrderDiff`
+  (`LineupTools.lineupDiff`); `previousLineup` only when replaced, and `storedLineup` is gone.
+  Unit-tested only: a download spends CHPP requests.

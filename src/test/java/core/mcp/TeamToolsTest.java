@@ -126,7 +126,7 @@ class TeamToolsTest {
     }
 
     @Test
-    void downloadTeam_takesOnlyAnOptionalTaskId() {
+    void downloadTeam_takesOnlyAnOptionalTaskIdAndKeepLineup() {
         final var download = TeamTools.tools().stream()
                 .filter(t -> t.name().equals("download_team"))
                 .findFirst().orElseThrow();
@@ -135,9 +135,52 @@ class TeamToolsTest {
         // resolvePrices is gone: the download always resolves sale prices, the way HO's own
         // Download button always has. taskId only polls.
         assertThat(download.inputSchema().getAsJsonObject("properties").keySet())
-                .containsExactly("taskId");
-        // the lineup clobber is the one surprise this tool has, so it has to be in the description
-        assertThat(download.description()).contains("lineupReplaced");
+                .containsExactly("taskId", "keepLineup");
+        // what the download does to HO's lineup is the one surprise this tool has
+        assertThat(download.description()).contains("keepLineup");
+    }
+
+    private static com.google.gson.JsonObject lineup(int matchId, int keeperId) {
+        return com.google.gson.JsonParser.parseString("{\"positions\":[{\"roleId\":100,"
+                + "\"playerId\":" + keeperId + ",\"behaviour\":0}],\"tactic\":0,\"attitude\":0,"
+                + "\"captainId\":0,\"setPiecesTakerId\":0,\"matchId\":" + matchId + "}")
+                .getAsJsonObject();
+    }
+
+    @Test
+    void heldLineupWins_onlyForADifferentLineupOfTheSameMatch() {
+        assertThat(TeamTools.heldLineupWins(lineup(1, 7), lineup(1, 8))).isTrue();
+        assertThat(TeamTools.heldLineupWins(lineup(1, 7), lineup(1, 7))).isFalse();
+        assertThat(TeamTools.heldLineupWins(lineup(1, 7), lineup(2, 8))).isFalse();
+        assertThat(TeamTools.heldLineupWins(null, lineup(1, 8))).isFalse();
+        assertThat(TeamTools.heldLineupWins(lineup(1, 7), null)).isFalse();
+    }
+
+    @Test
+    void lineupOutcome_namesTheMatchAndHowHattricksOrderDiffered() {
+        final var kept = new com.google.gson.JsonObject();
+        TeamTools.addLineupOutcome(kept, lineup(1, 7), lineup(1, 8), true);
+        assertThat(kept.get("lineupReplaced").getAsBoolean()).isFalse();
+        assertThat(kept.get("lineupKept").getAsBoolean()).isTrue();
+        assertThat(kept.get("lineupMatchId").getAsInt()).isEqualTo(1);
+        assertThat(kept.getAsJsonObject("hattrickOrderDiff").getAsJsonArray("positions")).hasSize(1);
+        assertThat(kept.has("previousLineup")).isFalse();
+
+        final var moved = new com.google.gson.JsonObject();
+        TeamTools.addLineupOutcome(moved, lineup(1, 7), lineup(2, 8), false);
+        assertThat(moved.get("lineupReplaced").getAsBoolean()).isTrue();
+        assertThat(moved.get("lineupMatchId").getAsInt()).isEqualTo(2);
+        assertThat(moved.getAsJsonObject("previousLineup")).isEqualTo(lineup(1, 7));
+        assertThat(moved.get("lineupNote").getAsString()).contains("from 1 to 2");
+
+        final var same = new com.google.gson.JsonObject();
+        TeamTools.addLineupOutcome(same, lineup(1, 7), lineup(1, 7), false);
+        assertThat(same.get("lineupReplaced").getAsBoolean()).isFalse();
+        assertThat(same.has("hattrickOrderDiff")).isFalse();
+
+        final var none = new com.google.gson.JsonObject();
+        TeamTools.addLineupOutcome(none, null, null, false);
+        assertThat(none.get("lineupReplaced").isJsonNull()).isTrue();
     }
 
     @Test

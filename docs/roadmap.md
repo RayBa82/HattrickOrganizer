@@ -56,9 +56,9 @@ by all HO users.
    Hattrick holds per upcoming fixture (`includeOrders`, one CHPP request each, so it runs as a
    task), and per player minutes, maxed, top-3 positions and availability. It adds the level-ups
    since the last training and `sources`.
-4. **`download_team` `keepLineup`.** Do not silently replace the HO lineup with Hattrick's
-   match order, and name the match whose lineup was replaced. Default to be decided: true only
-   in the MCP tool, or in the desktop app too.
+4. Done: `download_team` `keepLineup` (default true, MCP only; the Download button still
+   replaces). HO's lineup is written back when the next match is the same one. The result
+   names `lineupMatchId` and has `hattrickOrderDiff`.
 5. **`level_up_report`** (task): after Friday's training, download and report the level-ups
    since the last training, compactly. It replaces download status polling and the per-player
    history loop in sell-trainee.

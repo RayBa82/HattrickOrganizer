@@ -31,6 +31,7 @@ import core.net.Connector;
 import core.net.OnlineWorker;
 import core.util.HODateTime;
 import core.util.HOLogger;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.EnumMap;
 import java.util.List;
@@ -190,12 +191,16 @@ public final class TeamTools {
                         "Runs HO's Download (squad, finances, matches, transfers, sub-skills), ~2 "
                                 + "min. With the MCP tasks extension the call is a task. Otherwise it "
                                 + "returns a taskId at once: call again with it until status is done "
-                                + "or failed. Not a routine refresh. It replaces HO's stored lineup "
-                                + "with Hattrick's match order: check lineupReplaced, previousLineup "
-                                + "and storedLineup in the result.",
+                                + "or failed. Not a routine refresh. HO's lineup for the next match "
+                                + "is kept unless keepLineup is false; hattrickOrderDiff shows how "
+                                + "Hattrick's held order differs from it.",
                         McpTool.schema(McpTool.properties(
                                 TASK_ID, McpTool.prop("string", "a taskId this tool returned: "
-                                        + "report that download's status instead of starting one"))),
+                                        + "report that download's status instead of starting one"),
+                                KEEP_LINEUP, McpTool.prop("boolean", "default true: write HO's "
+                                        + "lineup back after the download when it differs from "
+                                        + "Hattrick's order for the same match. false lets the "
+                                        + "download replace it, as HO's Download button does"))),
                         TeamTools::downloadTeam)
                         .asTask(args -> !args.has(TASK_ID), TeamTools::downloadTeamTask)
         );
@@ -1096,6 +1101,8 @@ public final class TeamTools {
     }
 
     private static final String TASK_ID = "taskId";
+    private static final String KEEP_LINEUP = "keepLineup";
+    private static final String MATCH_ID = "matchId";
     /** What a caller is told to expect - both of the first live downloads took about two minutes. */
     static final int EXPECTED_DOWNLOAD_SECONDS = 120;
     /** This session's downloads by taskId, the newest few only - status is asked for right after. */
@@ -1153,9 +1160,10 @@ public final class TeamTools {
             downloadTasks.put(task.id, task);
             latestDownload = task;
         }
+        final var keepLineup = McpJson.optBool(args, KEEP_LINEUP, true);
         downloadExecutor.execute(() -> {
             try {
-                task.result = runDownload();
+                task.result = runDownload(keepLineup);
             } catch (McpToolException e) {
                 task.error = e.getMessage();
             } catch (Exception e) {
@@ -1181,7 +1189,7 @@ public final class TeamTools {
                         + latestDownload.id + "); poll it with download_team taskId.");
             }
         }
-        return runDownload();
+        return runDownload(McpJson.optBool(args, KEEP_LINEUP, true));
     }
 
     /** status running / done / failed, with the runtime once it has finished. */
@@ -1274,14 +1282,20 @@ public final class TeamTools {
      * skips it when {@code xmlDownload} is unticked. A tool called {@code download_team} that
      * silently declined to download the team because of a checkbox in a dialog the agent cannot
      * see would be worse than useless.
+     * <p>
+     * The second one is {@code keepLineup}, true by default for MCP only: the button lets the
+     * download replace HO's lineup with Hattrick's held order, which silently threw away a lineup
+     * an agent had prepared but not sent yet. With it, the lineup HO held before is written back
+     * when the next match is still the same one.
      */
-    private static JsonObject runDownload() throws McpToolException {
+    private static JsonObject runDownload(boolean keepLineup) throws McpToolException {
         return LineupTools.onEdt(() -> {
             // Both before any CHPP traffic, so a refusal costs nothing.
             checkDownloadCap();
             requireTeamSelected();
 
-            final var before = lineupSnapshot();
+            final var held = storedNextLineup();
+            final var before = snapshot(held);
             // Counted around the WHOLE call, not around the incremental pass, because three
             // different things write TRANSFER during one download and only the last is ours:
             // ConvertXml2Hrf.createHrf reconciles the economy's transfer sums against the table and
@@ -1317,36 +1331,14 @@ public final class TeamTools {
                 // next match had no order yet, and the download brought in Hattrick's default -
                 // counts as replaced too: that is exactly the case an agent has to hear about.
                 // Null only when there is nothing stored either side.
-                final var after = lineupSnapshot();
-                final Boolean lineupReplaced = before == null && after == null ? null
-                        : !java.util.Objects.equals(before, after);
+                final var after = snapshot(storedNextLineup());
+                final var kept = keepLineup && heldLineupWins(before, after);
+                if (kept) {
+                    HOVerwaltung.instance().getModel().storeLineup(held);
+                }
 
                 final var model = HOVerwaltung.instance().getModel();
-                final var sections = new JsonObject();
-                OnlineWorker.downloadNtMatchesOfCappedPlayers(model);
-                sections.addProperty("nationalTeamMatches", true);
-
-                // The dialog guards everything from here on behind teamId > 0. requireTeamSelected
-                // already established it, but the model may have been swapped since.
-                if (model.getBasics().getTeamId() > 0) {
-                    OnlineWorker.downloadHallOfFameIfActive(model);
-                    sections.addProperty("hallOfFame", true);
-
-                    if (OnlineWorker.anyCurrentMatchTypeSelected()) {
-                        sections.addProperty("matches", OnlineWorker.downloadCurrentMatches(model));
-                    } else {
-                        sections.addProperty("matches", false);
-                    }
-
-                    if (UserParameter.instance().fixtures) {
-                        sections.addProperty("fixtures", OnlineWorker.downloadCurrentFixtures(model));
-                    } else {
-                        sections.addProperty("fixtures", false);
-                    }
-
-                    OnlineWorker.refreshWorldDetailsIfDue();
-                    sections.addProperty("worldDetails", true);
-                }
+                final var sections = paritySections(model);
 
                 // Without this the training tools read sub-skills computed against the previous
                 // HRF. DownloadDialog does the same after every download - and on the live
@@ -1394,11 +1386,7 @@ public final class TeamTools {
                         + "both are Download-dialog checkboxes that HO does not persist, so they "
                         + "start off, and old fixtures need a league picker the agent cannot "
                         + "answer. Ask the user to run HO's own Download for those.");
-                json.addProperty("lineupReplaced", lineupReplaced);
-                json.add("previousLineup",
-                        Boolean.TRUE.equals(lineupReplaced) && before != null ? before : JsonNull.INSTANCE);
-                json.add("storedLineup",
-                        Boolean.TRUE.equals(lineupReplaced) && after != null ? after : JsonNull.INSTANCE);
+                addLineupOutcome(json, before, after, kept);
                 return json;
             } finally {
                 Connector.instance().setSilentDownload(wasSilent);
@@ -1409,6 +1397,30 @@ public final class TeamTools {
                 HOMainFrame.setInformationCompleted();
             }
         });
+    }
+
+    /**
+     * {@code DownloadDialog.startDownload}'s sections after the team data, in its order; true or
+     * false per section for whether it ran.
+     */
+    private static JsonObject paritySections(core.model.HOModel model) {
+        final var sections = new JsonObject();
+        OnlineWorker.downloadNtMatchesOfCappedPlayers(model);
+        sections.addProperty("nationalTeamMatches", true);
+
+        // The dialog guards everything from here on behind teamId > 0. requireTeamSelected
+        // already established it, but the model may have been swapped since.
+        if (model.getBasics().getTeamId() > 0) {
+            OnlineWorker.downloadHallOfFameIfActive(model);
+            sections.addProperty("hallOfFame", true);
+            sections.addProperty("matches", OnlineWorker.anyCurrentMatchTypeSelected()
+                    && OnlineWorker.downloadCurrentMatches(model));
+            sections.addProperty("fixtures", UserParameter.instance().fixtures
+                    && OnlineWorker.downloadCurrentFixtures(model));
+            OnlineWorker.refreshWorldDetailsIfDue();
+            sections.addProperty("worldDetails", true);
+        }
+        return sections;
     }
 
     /**
@@ -1434,8 +1446,70 @@ public final class TeamTools {
     }
 
     /**
-     * The <b>stored</b> lineup's positions, or null when HO holds no team or has nothing stored -
-     * on a fresh install the first download has nothing to compare against.
+     * The lineup HO has stored for its next match, with its positions loaded, or null when HO
+     * holds no team or has nothing stored. Loaded eagerly because {@code keepLineup} writes this
+     * object back after the download has overwritten the row it would lazily load from.
+     */
+    private static core.model.match.@Nullable MatchLineupTeam storedNextLineup() {
+        final var model = HOVerwaltung.instance().getModel();
+        if (model == null || model.getBasics() == null) {
+            return null;
+        }
+        final var stored = DBManager.instance().loadNextMatchLineup(model.getBasics().getTeamId());
+        if (stored != null) {
+            stored.getLineup();
+        }
+        return stored;
+    }
+
+    /**
+     * True when the lineup HO held should replace what the download stored: both exist, they
+     * differ, and they belong to the same match. When the next match changed, the held lineup was
+     * for a match that is over, so Hattrick's order for the new one stays.
+     */
+    static boolean heldLineupWins(@Nullable JsonObject before, @Nullable JsonObject after) {
+        return before != null && after != null && !before.equals(after)
+                && java.util.Objects.equals(before.get(MATCH_ID), after.get(MATCH_ID));
+    }
+
+    /**
+     * The lineup part of the download result. {@code lineupMatchId} is the match whose lineup HO
+     * now holds; {@code hattrickOrderDiff} is how Hattrick's order differed from HO's, whether it
+     * replaced it or not. A replaced lineup comes back whole as {@code previousLineup}, because
+     * that is what an agent rebuilds it from; a kept one needs nothing.
+     */
+    static void addLineupOutcome(JsonObject json, @Nullable JsonObject before,
+            @Nullable JsonObject after, boolean kept) {
+        if (before == null && after == null) {
+            json.add("lineupReplaced", JsonNull.INSTANCE);
+            return;
+        }
+        final var differs = !java.util.Objects.equals(before, after);
+        json.addProperty("lineupReplaced", differs && !kept);
+        json.addProperty("lineupKept", kept);
+        final var held = kept ? before : after;
+        if (held != null) {
+            json.add("lineupMatchId", held.get(MATCH_ID));
+        }
+        if (!differs) {
+            return;
+        }
+        if (before != null && after != null) {
+            json.add("hattrickOrderDiff", LineupTools.lineupDiff(before, after));
+        }
+        if (!kept) {
+            json.add("previousLineup", before == null ? JsonNull.INSTANCE : before);
+        }
+        if (before != null && after != null && !kept && !before.get(MATCH_ID).equals(after.get(MATCH_ID))) {
+            json.addProperty("lineupNote", "the next match changed from " + before.get(MATCH_ID)
+                    + " to " + after.get(MATCH_ID) + ", so HO now holds Hattrick's order for "
+                    + "the new one; previousLineup was for the old match");
+        }
+    }
+
+    /**
+     * A stored lineup's positions, or null for none - on a fresh install the first download has
+     * nothing to compare against.
      * <p>
      * Read straight from the database rather than from {@code HOVerwaltung}'s live model, and that
      * is the whole point. The live model gets its lineup from one of two places: after a download
@@ -1455,18 +1529,13 @@ public final class TeamTools {
      * rating passes on the EDT to produce a field that would then have to be ignored is a poor
      * trade. The positions are also what an agent needs to rebuild a lineup a download replaced.
      */
-    private static JsonObject lineupSnapshot() {
-        final var model = HOVerwaltung.instance().getModel();
-        if (model == null || model.getBasics() == null) {
-            return null;
-        }
-        final var stored = DBManager.instance().loadNextMatchLineup(model.getBasics().getTeamId());
-        if (stored == null || stored.getLineup() == null) {
+    private static @Nullable JsonObject snapshot(core.model.match.@Nullable MatchLineupTeam stored) {
+        if (stored == null) {
             return null;
         }
         final var json = LineupTools.describe(stored.getLineup(), null);
         // The next match can change with the download; a lineup moved to another match is news.
-        json.addProperty("matchId", stored.getMatchId());
+        json.addProperty(MATCH_ID, stored.getMatchId());
         return json;
     }
 
