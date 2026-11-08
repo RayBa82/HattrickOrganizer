@@ -1000,6 +1000,16 @@ public final class TrainingTools {
         return fixtures;
     }
 
+    static final String KICKED_OFF = "kickedOff";
+
+    /**
+     * Whether a match HO still holds as unplayed has already kicked off: HO only learns the result
+     * on the next download, so a row like that is a stale snapshot, not a match still to set up.
+     */
+    static boolean kickedOff(@Nullable HODateTime schedule, HODateTime now) {
+        return schedule != null && !now.isBefore(schedule);
+    }
+
     private static JsonObject fixture(MatchKurzInfo match, boolean played, boolean lineupAvailable) {
         final var fixture = new JsonObject();
         fixture.addProperty("matchId", match.getMatchID());
@@ -1016,6 +1026,9 @@ public final class TrainingTools {
             fixture.addProperty("neutral", true);
         }
         fixture.addProperty("played", played);
+        if (!played && kickedOff(match.getMatchSchedule(), HODateTime.now())) {
+            fixture.addProperty(KICKED_OFF, true);
+        }
         fixture.addProperty("lineupAvailable", lineupAvailable);
         return fixture;
     }

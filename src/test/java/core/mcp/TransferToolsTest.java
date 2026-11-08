@@ -452,8 +452,33 @@ class TransferToolsTest {
         final var schema = tool("list_scout").inputSchema();
         assertThat(schema.getAsJsonArray("required")).isEmpty();
         assertThat(schema.getAsJsonObject("properties").keySet())
-                .containsExactlyInAnyOrder("skills", "ageMin", "ageMax", "specialty", "onlyOpen",
-                        "full", "limit", "offset", "bulk");
+                .containsExactlyInAnyOrder("playerIds", "skills", "ageMin", "ageMax", "specialty",
+                        "onlyOpen", "full", "limit", "offset", "bulk");
+    }
+
+    @Test
+    void scoutFilter_playerIdsPicksOnlyThoseEntries() {
+        final var wanted = new module.transfer.scout.ScoutEintrag();
+        wanted.setPlayerID(456953591);
+        final var other = new module.transfer.scout.ScoutEintrag();
+        other.setPlayerID(1);
+
+        final var filter = TransferTools.ScoutFilter.from(com.google.gson.JsonParser.parseString(
+                "{\"playerIds\":[456953591,465310513]}").getAsJsonObject());
+        assertThat(filter.test(wanted, java.time.Instant.now())).isTrue();
+        assertThat(filter.test(other, java.time.Instant.now())).isFalse();
+
+        final var noIds = TransferTools.ScoutFilter.from(new JsonObject());
+        assertThat(noIds.test(other, java.time.Instant.now())).isTrue();
+    }
+
+    @Test
+    void scoutFilter_rejectsAPlayerIdThatIsNotANumber() {
+        final var args = com.google.gson.JsonParser.parseString("{\"playerIds\":[\"Hager\"]}")
+                .getAsJsonObject();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> TransferTools.ScoutFilter.from(args))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("playerIds[0]");
     }
 
     @Test
@@ -1048,6 +1073,22 @@ class TransferToolsTest {
                 .map(com.google.gson.JsonElement::getAsJsonObject)
                 .filter(o -> o.get("playerId").getAsInt() == 111).findFirst().orElseThrow();
         assertThat(larry.get("highestBid").getAsLong()).isEqualTo(150_000);   // 1.5M krona / 10
+    }
+
+    /** currentbids never sends our own bid: ourBid and the autobid ceiling come from the ledger. */
+    @Test
+    void openBids_reportsOurBidAndAutobidCeilingFromTheLedger() throws Exception {
+        final var ledger = new core.db.TransferBid();
+        ledger.setPlayerId(7010);
+        ledger.setFirstSeenAt(HODateTime.now());
+        ledger.setOurBid(8_000L);
+        ledger.setOurMaxBid(400_000L);
+        core.db.DBManager.instance().storeTransferBid(ledger);
+        installBidsService(oneBid(2, 7010));
+
+        final var row = rowOf(openBidsTool().handler().call(new JsonObject()).getAsJsonArray("bids"), 7010);
+        assertThat(row.get("ourBid").getAsLong()).isEqualTo(8_000L);
+        assertThat(row.get("ourMaxBid").getAsLong()).isEqualTo(400_000L);
     }
 
     // ---- askingPrice: currentbids sends none, so it comes from what HO stored for the same listing

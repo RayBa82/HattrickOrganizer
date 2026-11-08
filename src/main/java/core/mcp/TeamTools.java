@@ -59,7 +59,8 @@ public final class TeamTools {
                         "The user's team as of the latest download: name, league, stadium, "
                                 + "team spirit and confidence, the head coach and the rest of the "
                                 + "staff, and the club's logo, kit images and colours (teamColors: "
-                                + "Supporters only, else null). Cash and the statement: get_finances.",
+                                + "Supporters only, else null); nextMatches: the next 5 own matches "
+                                + "of every type, tournaments too. Cash and the statement: get_finances.",
                         McpTool.schema(new JsonObject()),
                         args -> team()),
                 new McpTool("get_squad",
@@ -192,8 +193,8 @@ public final class TeamTools {
                                 + "min. With the MCP tasks extension the call is a task. Otherwise it "
                                 + "returns a taskId at once: call again with it until status is done "
                                 + "or failed. Not a routine refresh. HO's lineup for the next match "
-                                + "is kept unless keepLineup is false; hattrickOrderDiff shows how "
-                                + "Hattrick's held order differs from it.",
+                + "is kept unless keepLineup is false; hattrickOrderDiff shows how "
+                                + "Hattrick's held order differs. nextMatches as in get_team.",
                         McpTool.schema(McpTool.properties(
                                 TASK_ID, McpTool.prop("string", "a taskId this tool returned: "
                                         + "report that download's status instead of starting one"),
@@ -332,7 +333,39 @@ public final class TeamTools {
             }
         }
         json.add("staff", staff);
+        json.add("nextMatches", nextMatches(DBManager.instance().getMatchesKurzInfo(
+                basics.getTeamId(), MatchKurzInfo.UPCOMING), basics.getTeamId(), HODateTime.now()));
         return json;
+    }
+
+    private static final int NEXT_MATCHES = 5;
+
+    /**
+     * The soonest own matches of every competition - league, cup, friendly, tournament, ladder -
+     * so a tournament round is visible from the first call. Only what the last download knew;
+     * orders and the training week are week_brief's.
+     */
+    static JsonArray nextMatches(java.util.List<MatchKurzInfo> upcoming, int teamId, HODateTime now) {
+        final var sorted = new java.util.ArrayList<>(upcoming);
+        sorted.sort(java.util.Comparator.comparing(MatchKurzInfo::getMatchSchedule,
+                java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())));
+        final var rows = new JsonArray();
+        for (var i = 0; i < sorted.size() && i < NEXT_MATCHES; i++) {
+            final var m = sorted.get(i);
+            final var home = m.getHomeTeamID() == teamId;
+            final var row = new JsonObject();
+            row.addProperty(MATCH_ID, m.getMatchID());
+            TrainingTools.addMatchTypeFields(row, m.getMatchType());
+            row.addProperty("date", m.getMatchSchedule() == null ? null : m.getMatchSchedule().toHT());
+            row.addProperty("opponent", home ? m.getGuestTeamName() : m.getHomeTeamName());
+            final var where = home ? "home" : "away";
+            row.addProperty("location", m.isNeutral() ? "neutral" : where);
+            if (TrainingTools.kickedOff(m.getMatchSchedule(), now)) {
+                row.addProperty(TrainingTools.KICKED_OFF, true);
+            }
+            rows.add(row);
+        }
+        return rows;
     }
 
     /** An amount in the user's currency; see {@link McpJson#money}. */
@@ -682,15 +715,14 @@ public final class TeamTools {
         if (include.contains("table")) {
             if (plan == null || plan.getTable() == null) {
                 json.add("table", JsonNull.INSTANCE);
-                json.addProperty("tableNote", "HO has not stored this season's series yet - "
-                        + "download_team fetches it.");
+                json.addProperty("tableNote", seriesMissingNote(model.getBasics().getSpieltag()));
             } else {
                 json.add("table", tableRows(plan));
             }
         }
 
         final var others = ownNonLeagueUpcoming(
-                DBManager.instance().getMatchesKurzInfoUpComing(teamId), teamId);
+                DBManager.instance().getMatchesKurzInfoUpComing(teamId), teamId, HODateTime.now());
         if (include.contains("otherUpcoming")) {
             json.add("otherUpcoming", others);
         }
@@ -759,21 +791,37 @@ public final class TeamTools {
      * Our own upcoming cup, friendly and other non-league matches, soonest first, as HO last
      * downloaded them. No cup match here means eliminated - or a download older than the draw.
      */
-    static JsonArray ownNonLeagueUpcoming(java.util.List<MatchKurzInfo> upcoming, int teamId) {
+    static JsonArray ownNonLeagueUpcoming(java.util.List<MatchKurzInfo> upcoming, int teamId, HODateTime now) {
         final var sorted = new java.util.ArrayList<>(upcoming);
         sorted.sort(java.util.Comparator.comparing(MatchKurzInfo::getMatchSchedule,
                 java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())));
         final var out = new JsonArray();
-        sorted.forEach(m -> out.add(upcomingRow(m, teamId)));
+        sorted.forEach(m -> out.add(upcomingRow(m, teamId, now)));
         return out;
     }
 
-    private static JsonObject upcomingRow(MatchKurzInfo m, int teamId) {
+    /**
+     * Why get_series has no table. In week 16 the download skips the fixtures on purpose
+     * ({@code OnlineWorker.downloadCurrentFixtures}): the LeagueLevelUnitID already names next
+     * season's series, and Hattrick publishes its fixtures only when that season starts.
+     */
+    static String seriesMissingNote(int week) {
+        return week >= 16
+                ? "Season break (week " + week + "): Hattrick publishes the next series' fixtures and "
+                        + "table when the new season starts; a download before that cannot fetch them."
+                : "HO has not stored this season's series yet - download_team fetches it.";
+    }
+
+    private static JsonObject upcomingRow(MatchKurzInfo m, int teamId, HODateTime now) {
         final var home = m.getHomeTeamID() == teamId;
         final var row = new JsonObject();
         row.addProperty("matchId", m.getMatchID());
         row.addProperty("matchType", m.getMatchType().name());
         row.addProperty("date", m.getMatchSchedule() == null ? null : m.getMatchSchedule().toHT());
+        // HO only learns a match was played on the next download; until then say it has started.
+        if (TrainingTools.kickedOff(m.getMatchSchedule(), now)) {
+            row.addProperty(TrainingTools.KICKED_OFF, true);
+        }
         final var where = home ? "home" : "away";
         row.addProperty("location", m.isNeutral() ? "neutral" : where);
         row.addProperty("opponentTeamId", home ? m.getGuestTeamID() : m.getHomeTeamID());
@@ -1135,9 +1183,11 @@ public final class TeamTools {
                 task = downloadTasks.get(taskId);
             }
             if (task == null) {
-                throw new McpToolException("Unknown taskId " + taskId
-                        + ". HO keeps the last 10 downloads of this session; call download_team "
-                        + "without taskId to start one.");
+                throw new McpToolException("Unknown taskId " + taskId + (taskId.startsWith("download-")
+                        ? ". HO keeps the last 10 downloads of this session; call download_team "
+                                + "without taskId to start one."
+                        : ". download_team takes only the download-N ids it hands out itself; a task "
+                                + "handle from the MCP tasks extension is polled with tasks/get."));
             }
             return downloadStatus(task);
         }
@@ -1387,6 +1437,11 @@ public final class TeamTools {
                         + "start off, and old fixtures need a league picker the agent cannot "
                         + "answer. Ask the user to run HO's own Download for those.");
                 addLineupOutcome(json, before, after, kept);
+                // What the download just fetched, every competition, tournaments included - the
+                // first thing an agent looks at after a download, without a second call.
+                final var teamId = model.getBasics().getTeamId();
+                json.add("nextMatches", nextMatches(DBManager.instance().getMatchesKurzInfo(
+                        teamId, MatchKurzInfo.UPCOMING), teamId, HODateTime.now()));
                 return json;
             } finally {
                 Connector.instance().setSilentDownload(wasSilent);

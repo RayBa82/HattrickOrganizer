@@ -47,7 +47,8 @@ class TeamToolsTest {
     void nextCupMatchId_pointsAtTheFirstCupRowInsteadOfCopyingIt() {
         final var rows = TeamTools.ownNonLeagueUpcoming(java.util.List.of(
                 upcoming(2, core.model.enums.MatchType.CUP, "2026-10-08 18:00:00", 1, 600),
-                upcoming(1, core.model.enums.MatchType.FRIENDLYNORMAL, "2026-10-01 18:00:00", 500, 1)), 1);
+                upcoming(1, core.model.enums.MatchType.FRIENDLYNORMAL, "2026-10-01 18:00:00", 500, 1)), 1,
+                core.util.HODateTime.fromHT("2026-09-01 12:00:00"));
 
         assertThat(TeamTools.nextCupMatchId(rows).getAsInt()).isEqualTo(2);
         assertThat(TeamTools.nextCupMatchId(new com.google.gson.JsonArray()).isJsonNull()).isTrue();
@@ -110,7 +111,8 @@ class TeamToolsTest {
     void ownNonLeagueUpcoming_soonestFirstWithOpponentAndSide() {
         final var rows = TeamTools.ownNonLeagueUpcoming(java.util.List.of(
                 upcoming(2, core.model.enums.MatchType.FRIENDLYNORMAL, "2026-10-01 18:00:00", 500, 1),
-                upcoming(1, core.model.enums.MatchType.CUP, "2026-09-30 18:00:00", 1, 600)), 1);
+                upcoming(1, core.model.enums.MatchType.CUP, "2026-09-30 18:00:00", 1, 600)), 1,
+                core.util.HODateTime.fromHT("2026-09-30 20:00:00"));
 
         assertThat(rows).extracting(r -> r.getAsJsonObject().get("matchId").getAsInt())
                 .containsExactly(1, 2);
@@ -123,6 +125,34 @@ class TeamToolsTest {
         assertThat(friendly.get("location").getAsString()).isEqualTo("away");
         assertThat(friendly.get("opponentTeamName").getAsString()).isEqualTo("T500");
         assertThat(friendly.has("cupLevel")).isFalse();
+        // HO still holds the cup match as upcoming two hours after kick-off: a stale snapshot
+        assertThat(cup.get("kickedOff").getAsBoolean()).isTrue();
+        assertThat(friendly.has("kickedOff")).isFalse();
+    }
+
+    /** Every competition, soonest first, at most five - a tournament round must not hide. */
+    @Test
+    void nextMatches_soonestFiveOfEveryType() {
+        final var upcoming = new java.util.ArrayList<core.model.match.MatchKurzInfo>();
+        for (int i = 1; i <= 6; i++) {
+            upcoming.add(upcoming(i, i == 6 ? core.model.enums.MatchType.LEAGUE
+                    : core.model.enums.MatchType.TOURNAMENTGROUP, "2026-11-0" + (7 - i) + " 18:00:00", 1, 600));
+        }
+        final var rows = TeamTools.nextMatches(upcoming, 1, core.util.HODateTime.fromHT("2026-11-01 20:00:00"));
+
+        assertThat(rows).hasSize(5);
+        final var first = rows.get(0).getAsJsonObject();
+        assertThat(first.get("matchId").getAsInt()).isEqualTo(6);
+        assertThat(first.get("matchType").getAsString()).isEqualTo("LEAGUE");
+        assertThat(first.get("kickedOff").getAsBoolean()).isTrue();
+        assertThat(rows.get(1).getAsJsonObject().get("matchType").getAsString()).isEqualTo("TOURNAMENTGROUP");
+        assertThat(rows.get(1).getAsJsonObject().has("kickedOff")).isFalse();
+    }
+
+    @Test
+    void seriesMissingNote_explainsTheSeasonBreak() {
+        assertThat(TeamTools.seriesMissingNote(16)).contains("Season break");
+        assertThat(TeamTools.seriesMissingNote(7)).contains("download_team fetches it");
     }
 
     @Test

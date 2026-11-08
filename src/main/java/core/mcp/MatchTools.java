@@ -16,6 +16,7 @@ import core.model.match.MatchEvent;
 import core.model.match.MatchKurzInfo;
 import core.model.match.MatchLineupTeam;
 import core.model.match.Matchdetails;
+import core.model.player.IMatchRoleID;
 import core.model.player.MatchRoleID;
 import core.prediction.engine.MatchPredictionManager;
 import core.rating.RatingPredictionModel.RatingSector;
@@ -66,7 +67,8 @@ public final class MatchTools {
                         "The team's played matches, most recent first: result, competition, "
                                 + "location and outcome. Use it for recent form, and for the "
                                 + "matchId / matchType pair that get_match needs. CUP rows name "
-                                + "the cup (cup, cupId).",
+                                + "the cup (cup, cupId). Upcoming matches, tournaments included: "
+                                + "week_brief, get_team nextMatches.",
                         McpTool.schema(McpTool.properties(
                                 "count", McpTool.prop("integer",
                                         "how many matches to return, default " + DEFAULT_COUNT),
@@ -924,19 +926,41 @@ public final class MatchTools {
             lineupTeam.setMatchDetails(details);
         }
         final var players = new JsonArray();
-        for (final var position : DBManager.instance().getMatchLineupPlayers(matchId, matchType, teamId)) {
-            if (position.getPlayerId() <= 0) {
+        final var positions = DBManager.instance().getMatchLineupPlayers(matchId, matchType, teamId);
+        // Captain (18) and set pieces taker (17) come as rows of their own next to the player's
+        // real one; they become flags on that row instead of looking like a second player.
+        final var playersInSlots = new java.util.HashSet<Integer>();
+        var captainId = 0;
+        var setPiecesId = 0;
+        for (final var position : positions) {
+            if (position.getRoleId() == IMatchRoleID.captain) {
+                captainId = position.getPlayerId();
+            } else if (position.getRoleId() == IMatchRoleID.setPieces) {
+                setPiecesId = position.getPlayerId();
+            } else {
+                playersInSlots.add(position.getPlayerId());
+            }
+        }
+        for (final var position : positions) {
+            if (position.getPlayerId() <= 0 || (isPseudoRole(position.getRoleId())
+                    && playersInSlots.contains(position.getPlayerId()))) {
                 continue;
             }
             final var json = new JsonObject();
             json.addProperty("playerId", position.getPlayerId());
             json.addProperty("name", position.getSpielerName());
             json.addProperty("roleId", position.getRoleId());
+            if (position.getPlayerId() == captainId) {
+                json.addProperty("captain", true);
+            }
+            if (position.getPlayerId() == setPiecesId) {
+                json.addProperty("setPieces", true);
+            }
             json.addProperty("behaviour", position.getBehaviour());
             json.addProperty("rating", position.getRating());
             json.addProperty("ratingEndOfMatch", position.getRatingStarsEndOfMatch());
-            // roleId is the slot at the final whistle (19-21 replaced, 33-35 red carded, 17/18 set
-            // pieces/captain rows of their own); startRoleId the slot he kicked off in
+            // The role id is the slot at the final whistle, with 19 to 21 for a replaced player
+            // and 33 to 35 for a red-carded one. The start role id is the slot he kicked off in.
             final var started = MatchRoleID.isFieldMatchRoleId(position.getStartPosition());
             json.addProperty("started", started);
             if (started) {
@@ -949,6 +973,10 @@ public final class MatchTools {
             players.add(json);
         }
         return players;
+    }
+
+    private static boolean isPseudoRole(int roleId) {
+        return roleId == IMatchRoleID.captain || roleId == IMatchRoleID.setPieces;
     }
 
     private static void addSubstitutions(JsonObject json, MatchLineupTeam lineupTeam, int playerId) {

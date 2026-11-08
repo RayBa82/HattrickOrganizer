@@ -114,7 +114,13 @@ public final class WeekTools {
             final var teamId = model.getBasics().getTeamId();
             for (final var element : fixtures) {
                 final var fixture = element.getAsJsonObject();
-                if (!fixture.get("played").getAsBoolean()) {
+                if (fixture.has(TrainingTools.KICKED_OFF)) {
+                    // Hattrick hides a running match's order; the result comes with the next download.
+                    final var order = new JsonObject();
+                    order.addProperty(STATUS, TrainingTools.KICKED_OFF);
+                    order.addProperty(MESSAGE, "Kicked off after the snapshot; download_team fetches the result.");
+                    fixture.add("order", order);
+                } else if (!fixture.get("played").getAsBoolean()) {
                     fixture.add("order", order(fixture, teamId));
                 }
             }
@@ -222,7 +228,7 @@ public final class WeekTools {
             order.addProperty(STATUS, "ok");
             final var field = held.getAsJsonArray(POSITIONS);
             order.addProperty("fieldPlayers", field.size());
-            order.addProperty("missingFieldPlayers", Math.max(0, ELEVEN - field.size()));
+            addCompleteness(order, field.size());
             order.addProperty("benchPlayers", held.getAsJsonArray("bench").size());
             final var captain = held.get("captainId").getAsInt();
             order.addProperty("captainInStartingEleven", captain > 0 && contains(field, captain));
@@ -232,6 +238,20 @@ public final class WeekTools {
             order.addProperty(MESSAGE, e.getMessage());
         }
         return order;
+    }
+
+    /**
+     * status ok only says the order could be read. An order short of eleven is what a carry-over
+     * into a new tournament match looks like, and it agrees with HO's lineup all the same.
+     */
+    static void addCompleteness(JsonObject order, int fieldPlayers) {
+        final var missing = Math.max(0, ELEVEN - fieldPlayers);
+        order.addProperty("missingFieldPlayers", missing);
+        order.addProperty("complete", missing == 0);
+        if (missing > 0) {
+            order.addProperty("warning", "Only " + fieldPlayers + " field players: the match would "
+                    + "start with " + missing + " short. Set a full eleven with apply_lineup and send it.");
+        }
     }
 
     static void addHoComparison(JsonObject order, JsonObject held,

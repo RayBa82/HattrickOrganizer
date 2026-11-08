@@ -449,8 +449,19 @@ public final class McpHttpServer {
         result.addProperty("protocolVersion", version);
         result.add("capabilities", capabilities);
         result.add("serverInfo", serverInfo());
+        result.addProperty("instructions", INSTRUCTIONS);
         return result;
     }
+
+    /**
+     * Shown to the model by clients that load the tools themselves only on demand, so it names
+     * the entry points: without it an agent found tournament matches nowhere.
+     */
+    static final String INSTRUCTIONS = "HO holds the user's Hattrick team as of its last download. "
+            + "Start a session or a match week with week_brief: every fixture of the training week "
+            + "(league, cup, friendly, tournament, ladder) with the order Hattrick holds, training "
+            + "and per-player minutes. get_team lists the next 5 matches of every type. Data is as old "
+            + "as the last download: rows with kickedOff need download_team for the result.";
 
     /** {@code server/discover}: the versions, capabilities and identity, in one cacheable answer. */
     private static JsonObject discover() {
@@ -463,6 +474,7 @@ public final class McpHttpServer {
         final var result = new JsonObject();
         result.add("supportedVersions", supportedVersions());
         result.add("capabilities", capabilities);
+        result.addProperty("instructions", INSTRUCTIONS);
         return cacheable(result);
     }
 

@@ -44,6 +44,17 @@ class McpHttpServerTest {
                 .isEqualTo("2025-11-25");
     }
 
+    /** Clients that load tools on demand still show the instructions, so they name week_brief. */
+    @Test
+    void initialize_namesTheEntryPointsInItsInstructions() {
+        final var response = serverWithEchoTool().handle(request("""
+                {"jsonrpc":"2.0","id":1,"method":"initialize",
+                 "params":{"protocolVersion":"2025-06-18","capabilities":{}}}"""));
+
+        assertThat(response.getAsJsonObject("result").get("instructions").getAsString())
+                .contains("week_brief", "tournament");
+    }
+
     @Test
     void legacyPing_answersAnEmptyResult() {
         final var response = serverWithEchoTool().handle(request("""

@@ -60,6 +60,21 @@ class WeekToolsTest {
                 "{\"playerId\":1,\"name\":\"A\",\"levelUps\":[{\"skill\":\"STAMINA\",\"from\":3,\"to\":4}]}");
     }
 
+    /** A carried-over order short of eleven reads fine but must not look complete. */
+    @Test
+    void completeness_warnsOnAnOrderShortOfEleven() {
+        final var shortOrder = new JsonObject();
+        WeekTools.addCompleteness(shortOrder, 9);
+        assertThat(shortOrder.get("missingFieldPlayers").getAsInt()).isEqualTo(2);
+        assertThat(shortOrder.get("complete").getAsBoolean()).isFalse();
+        assertThat(shortOrder.get("warning").getAsString()).contains("2 short");
+
+        final var full = new JsonObject();
+        WeekTools.addCompleteness(full, 11);
+        assertThat(full.get("complete").getAsBoolean()).isTrue();
+        assertThat(full.has("warning")).isFalse();
+    }
+
     /** No HO lineup for the match is "unknown", not "differs" and not "agrees". */
     @Test
     void hoComparison_withoutAStoredLineupIsNull() {

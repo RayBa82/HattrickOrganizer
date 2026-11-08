@@ -70,6 +70,7 @@ public final class TransferTools {
     private static final String LIMIT = "limit";
     private static final String OFFSET = "offset";
     private static final String PLAYER_ID = "playerId";
+    private static final String PLAYER_IDS = "playerIds";
     private static final String BID_AMOUNT = "bidAmount";
     private static final String MAX_BID_AMOUNT = "maxBidAmount";
     private static final String CONFIRM_TOKEN = "confirmToken";
@@ -159,11 +160,11 @@ public final class TransferTools {
                         TransferTools::placeBid),
                 new McpTool("get_open_bids",
                         "Transfers this team has an active bid on, from Hattrick's own tracking - "
-                                + "so it sees bids placed on the website too. Each row says whether "
-                                + "you are the leading bidder, plus askingPrice and, once finished, "
-                                + "salePrice, outcome and ourBid. selling lists our own listed players "
-                                + "(sellingCount) with askingPrice and highest bid. includeAll returns "
-                                + "every tracked transfer.",
+                                + "so it sees website bids too. leading: the highest bid is ours (team "
+                                + "id match). ourBid / ourMaxBid: bid and autobid ceiling place_bid sent, "
+                                + "not the current bid. Plus askingPrice and, once finished, salePrice "
+                                + "and outcome. selling: our listed players (sellingCount), ask and "
+                                + "highest bid. includeAll: every tracked transfer.",
                         McpTool.schema(McpTool.properties(
                                 "includeAll", McpTool.prop("boolean",
                                         "return every tracked transfer, not just your open bids; "
@@ -191,8 +192,12 @@ public final class TransferTools {
                                 + "filtered total). Rows: playerId, playerName, note, age, specialty, "
                                 + "price and deadline (frozen when added), askingPrice, highestBid, "
                                 + "observedAt (newest observation), salePrice, soldAt, plus each skill "
-                                + "filtered on. full adds every frozen skill, TSI, wage and character.",
+                                + "filtered on. full adds every frozen skill, TSI, wage and character. "
+                                + "playerIds picks entries by id.",
                         McpTool.schema(McpTool.properties(
+                                PLAYER_IDS, McpTool.prop("array",
+                                        "only these player ids; ids not on the shortlist are "
+                                                + "named in missingPlayerIds"),
                                 "skills", McpTool.prop("array", "skill filters, all must hold: "
                                         + "{skill, min?, max?}, skill one of " + SKILL_NAMES
                                         + "; levels, any span"),
@@ -218,7 +223,7 @@ public final class TransferTools {
                                                 + "the MCP endpoint); the answer keeps count and a 3-row "
                                                 + "preview. Default false"))),
                         TransferTools::listScout)
-                        .withBudget("Page with a smaller limit and offset, filter with skills, "
+                        .withBudget("Page with a smaller limit and offset, filter with playerIds, skills, "
                                 + "ageMin/ageMax, specialty or onlyOpen; pass full only with a small limit."),
                 new McpTool("estimate_market_value",
                         "Value a squad player, or via profile any player, against stored "
@@ -1843,6 +1848,19 @@ public final class TransferTools {
             json.addProperty(OFFSET, offset);
             json.addProperty("returned", players.size());
             json.add("players", players);
+            if (filter.playerIds() != null) {
+                // An id the caller asked for that is not on the shortlist at all - not one the other
+                // filters dropped - so a typo or a never-added player is told apart from no match.
+                final var onList = ScoutList.entries().stream()
+                        .map(module.transfer.scout.ScoutEintrag::getPlayerID)
+                        .collect(java.util.stream.Collectors.toSet());
+                final var missing = new JsonArray();
+                filter.playerIds().stream().filter(id -> !onList.contains(id)).sorted()
+                        .forEach(missing::add);
+                if (!missing.isEmpty()) {
+                    json.add("missingPlayerIds", missing);
+                }
+            }
             return json;
         });
 
@@ -1923,8 +1941,21 @@ public final class TransferTools {
 
     /** list_scout's local filters, all ANDed; checked before paging so count is the filtered total. */
     record ScoutFilter(boolean onlyOpen, Integer ageMin, Integer ageMax, Integer specialty,
-                       List<SkillRange> skills) {
+                       List<SkillRange> skills, java.util.Set<Integer> playerIds) {
         static ScoutFilter from(JsonObject args) {
+            java.util.Set<Integer> playerIds = null;
+            if (args.has(PLAYER_IDS) && !args.get(PLAYER_IDS).isJsonNull()) {
+                final var array = McpJson.reqArray(args, PLAYER_IDS);
+                final var ids = new java.util.HashSet<Integer>();
+                for (int i = 0; i < array.size(); i++) {
+                    final var element = array.get(i);
+                    if (!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isNumber()) {
+                        throw new IllegalArgumentException("playerIds[" + i + "] must be a player id.");
+                    }
+                    ids.add(element.getAsInt());
+                }
+                playerIds = java.util.Set.copyOf(ids);
+            }
             final var skills = new java.util.ArrayList<SkillRange>();
             if (args.has("skills") && !args.get("skills").isJsonNull()) {
                 final var array = McpJson.reqArray(args, "skills");
@@ -1940,12 +1971,13 @@ public final class TransferTools {
             }
             return new ScoutFilter(McpJson.optBool(args, "onlyOpen", false),
                     McpJson.optInteger(args, AGE_MIN), McpJson.optInteger(args, AGE_MAX),
-                    McpJson.optInteger(args, "specialty"), List.copyOf(skills));
+                    McpJson.optInteger(args, "specialty"), List.copyOf(skills), playerIds);
         }
 
         /** onlyOpen = still on the market: no sale recorded and the deadline not yet passed. */
         boolean test(module.transfer.scout.ScoutEintrag e, java.time.Instant now) {
-            return (!onlyOpen || (!e.isSold()
+            return (playerIds == null || playerIds.contains(e.getPlayerID()))
+                    && (!onlyOpen || (!e.isSold()
                             && (e.getDeadline() == null || e.getDeadline().toInstant().isAfter(now))))
                     && (ageMin == null || e.getAlter() >= ageMin)
                     && (ageMax == null || e.getAlter() <= ageMax)
@@ -2061,8 +2093,10 @@ public final class TransferTools {
         out.addProperty("sellingCount", selling.size());
         out.add("selling", selling);
         if (!includeAll) {
-            out.addProperty("note", "leading_bid / losing_bid are inferred from trackingTypeId "
-                    + "2 / 8; pass includeAll to see every tracked transfer.");
+            out.addProperty("note", "leading compares the highest bidder's team with ours; only "
+                    + "category (leading_bid / losing_bid) comes from trackingTypeId 2 / 8. ourBid / "
+                    + "ourMaxBid are what place_bid sent - while leading, highestBid is our current "
+                    + "bid. Pass includeAll to see every tracked transfer.");
         }
         return out;
     }
@@ -2181,6 +2215,9 @@ public final class TransferTools {
         }
         if (ledger.getOurBid() != null) {
             json.addProperty("ourBid", McpJson.money(ledger.getOurBid()));
+        }
+        if (ledger.getOurMaxBid() != null) {
+            json.addProperty("ourMaxBid", McpJson.money(ledger.getOurMaxBid()));
         }
         if (ledger.getFinalPrice() != null) {
             json.addProperty(SALE_PRICE, McpJson.money(ledger.getFinalPrice()));
