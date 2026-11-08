@@ -7,7 +7,8 @@ import core.db.backup.RestoreHelper;
 import core.db.user.UserManager;
 import core.util.HODateTime;
 import core.util.HOLogger;
-import java.awt.GraphicsEnvironment;
+
+import java.awt.*;
 import java.io.File;
 import java.io.IOException;
 import java.time.Instant;
@@ -15,6 +16,9 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+
+import static core.mcp.McpTool.BOOLEAN;
+import static core.mcp.McpTool.STRING;
 
 /**
  * database_backup: create, list and restore archives of HO's whole database, over MCP.
@@ -45,9 +49,9 @@ final class BackupTools {
                         + "up the current DB first, then HO restarts (~30s) and swaps; without confirm "
                         + "it only says what it would do.",
                 McpTool.schema(McpTool.properties(
-                        ACTION, McpTool.prop("string", "create, list or restore"),
-                        FILE, McpTool.prop("string", "restore: an archive name exactly as list returns it"),
-                        "confirm", McpTool.prop("boolean", "restore: true to really restore")),
+                        ACTION, McpTool.prop(STRING, "create, list or restore"),
+                        FILE, McpTool.prop(STRING, "restore: an archive name exactly as list returns it"),
+                        "confirm", McpTool.prop(BOOLEAN, "restore: true to really restore")),
                         ACTION),
                 BackupTools::databaseBackup));
     }

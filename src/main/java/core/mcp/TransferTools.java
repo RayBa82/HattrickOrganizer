@@ -32,6 +32,12 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+import static core.mcp.McpTool.ARRAY;
+import static core.mcp.McpTool.BOOLEAN;
+import static core.mcp.McpTool.INTEGER;
+import static core.mcp.McpTool.OBJECT;
+import static core.mcp.McpTool.STRING;
+
 /**
  * Transfer market search and comparables.
  * <p>
@@ -44,10 +50,8 @@ public final class TransferTools {
     private static final String AGE_DAYS = "ageDays";
     private static final String AGGRESSIVENESS = "aggressiveness";
     private static final String AGREEABILITY = "agreeability";
-    private static final String ARRAY = "array";
     private static final String ASKING_PRICE = "askingPrice";
     private static final String BACK_LINE = "back_line";
-    private static final String BOOLEAN = "boolean";
     private static final String COUNT = "count";
     private static final String DEADLINE = "deadline";
     private static final String FORWARD = "forward";
@@ -96,8 +100,6 @@ public final class TransferTools {
 
     /** The argument and answer field that names a kept search result. */
     private static final String RESULT_ID = "resultId";
-    private static final String STRING = "string";
-    private static final String INTEGER = "integer";
     private static final String SKILL = "skill";
     private static final String QUERIES = "queries";
     private static final String SEASON = "season";
@@ -270,7 +272,7 @@ public final class TransferTools {
                         McpTool.schema(McpTool.properties(
                                         PLAYER_ID, McpTool.prop(INTEGER,
                                                 "the player to value - a squad player id"),
-                                        PROFILE, McpTool.prop("object",
+                                        PROFILE, McpTool.prop(OBJECT,
                                                 "value a hypothetical player instead of a squad "
                                                         + "player: {age, skills: {keeper|defending|"
                                                         + "playmaking|passing|winger|scoring -> "

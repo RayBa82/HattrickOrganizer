@@ -27,6 +27,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static core.mcp.McpTool.ARRAY;
+import static core.mcp.McpTool.BOOLEAN;
+import static core.mcp.McpTool.INTEGER;
+
 /**
  * What HO's training engine knows: the settings the team trains under, what those settings do to
  * each player over the coming weeks, and - out of the HRF snapshot history - what training has
@@ -34,12 +38,10 @@ import java.util.Set;
  */
 public final class TrainingTools {
 
-    private static final String BOOLEAN = "boolean";
     private static final String COVERAGE = "coverage";
     private static final String DAYS_SINCE_LAST_SNAPSHOT = "daysSinceLastSnapshot";
     private static final String DERIVED = "derived";
     private static final String EVENTS = "events";
-    private static final String INTEGER = "integer";
     private static final String INTENSITY = "intensity";
     private static final String LATEST_SKILLS = "latestSkills";
     private static final String LEVEL_UPS = "levelUps";
@@ -178,7 +180,7 @@ public final class TrainingTools {
                                 WEEKS, McpTool.prop(INTEGER,
                                         "how many weeks to predict, default " + DEFAULT_WEEKS
                                                 + "; capped at the number of future weeks HO has planned"),
-                                PLAYER_IDS, McpTool.prop("array",
+                                PLAYER_IDS, McpTool.prop(ARRAY,
                                         "restrict the prediction to these player ids; the whole squad if omitted. "
                                                 + "Also filters currentWeek.players unless wholeSquadWeek"),
                                 "wholeSquadWeek", McpTool.prop(BOOLEAN,
@@ -203,7 +205,7 @@ public final class TrainingTools {
                                 + "before the rate: a level-up inside a download gap cannot be dated. "
                                 + "Local unless includeEvents.",
                         McpTool.schema(McpTool.properties(
-                                PLAYER_IDS, McpTool.prop("array",
+                                PLAYER_IDS, McpTool.prop(ARRAY,
                                         "the player ids to report on; the current squad if omitted. "
                                                 + "An id that has left the squad still works - the "
                                                 + "snapshots outlive the player"),

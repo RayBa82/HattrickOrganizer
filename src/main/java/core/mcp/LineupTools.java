@@ -3,6 +3,8 @@ package core.mcp;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import core.db.DBManager;
+import core.file.xml.XMLCHPPPreParser;
+import core.file.xml.XMLMatchOrderParser;
 import core.gui.HOMainFrame;
 import core.gui.theme.GroupTeamFactory;
 import core.model.HOModel;
@@ -10,19 +12,22 @@ import core.model.match.MatchLineupPosition;
 import core.model.match.Weather;
 import core.model.player.IMatchRoleID;
 import core.model.player.Player;
-import core.file.xml.XMLCHPPPreParser;
-import core.file.xml.XMLMatchOrderParser;
 import core.net.ChppWriteService;
 import core.net.Connector;
 import core.net.OnlineWorker;
 import module.lineup.Lineup;
 import org.jetbrains.annotations.Nullable;
 
-import javax.swing.SwingUtilities;
+import javax.swing.*;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+
+import static core.mcp.McpTool.ARRAY;
+import static core.mcp.McpTool.BOOLEAN;
+import static core.mcp.McpTool.INTEGER;
+import static core.mcp.McpTool.STRING;
 
 /**
  * Scoring and setting lineups.
@@ -50,11 +55,9 @@ public final class LineupTools {
     private static final String ATTITUDE = "attitude";
     private static final String SET_PIECES_TAKER_ID = "setPiecesTakerId";
     private static final String ROLE_ID = "roleId";
-    private static final String ARRAY = "array";
     private static final String GROUP = "group";
     private static final String ASSIGNMENTS = "assignments";
     private static final String MATCH_ID = "matchId";
-    private static final String INTEGER = "integer";
     private static final String MATCH_TYPE = "matchType";
     private static final String ORDER = "order";
     private static final String UNAVAILABLE_PLAYERS = "unavailablePlayers";
@@ -100,7 +103,7 @@ public final class LineupTools {
                         McpTool.schema(McpTool.properties(
                                 "playerIds", McpTool.prop(ARRAY,
                                         "player ids to file under group; omit if using assignments"),
-                                GROUP, McpTool.prop("string",
+                                GROUP, McpTool.prop(STRING,
                                         "one of: " + String.join(", ", GroupTeamFactory.TEAMS_GROUPS)
                                                 + " (the empty one clears the group); omit if using "
                                                 + ASSIGNMENTS),
@@ -359,7 +362,7 @@ public final class LineupTools {
     /** apply_lineup takes a lineup spec plus {@code full}, which simulate_lineup has no use for. */
     private static JsonObject applySchema() {
         final var schema = lineupSchema();
-        schema.getAsJsonObject("properties").add(FULL, McpTool.prop("boolean",
+        schema.getAsJsonObject("properties").add(FULL, McpTool.prop(BOOLEAN,
                 "also return the whole lineup as HO holds it after the write. Default false: "
                         + "only what changed"));
         return schema;
@@ -372,7 +375,7 @@ public final class LineupTools {
                         TACTIC, McpTool.prop(INTEGER, "tactic type"),
                         ATTITUDE, McpTool.prop(INTEGER, ATTITUDE),
                         STYLE_OF_PLAY, McpTool.prop(INTEGER, "style of play, -10 defensive to 10 offensive"),
-                        ALLOW_UNAVAILABLE, McpTool.prop("boolean", "score the lineup even though it fields an injured or suspended player; rejected by default"),
+                        ALLOW_UNAVAILABLE, McpTool.prop(BOOLEAN, "score the lineup even though it fields an injured or suspended player; rejected by default"),
                         CAPTAIN_ID, McpTool.prop(INTEGER, "player id of the captain"),
                         SET_PIECES_TAKER_ID, McpTool.prop(INTEGER, "player id of the set pieces taker"),
                         LineupOrders.PENALTY_TAKERS, McpTool.prop(ARRAY, LineupOrders.PENALTY_TAKERS_DOC),

@@ -6,10 +6,10 @@ import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import core.file.xml.XMLTransferSearchParser;
+import core.model.UserParameter;
 import core.model.player.Specialty;
 import core.net.ChppWriteService;
 import core.net.TransferSearchService;
-import core.model.UserParameter;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -19,6 +19,13 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import static core.mcp.McpTool.ARRAY;
+import static core.mcp.McpTool.BOOLEAN;
+import static core.mcp.McpTool.INTEGER;
+import static core.mcp.McpTool.NUMBER;
+import static core.mcp.McpTool.OBJECT;
+import static core.mcp.McpTool.STRING;
 
 /**
  * screen_market: the hattrick skills' market screening in one call. It runs a batch of transfer
@@ -57,10 +64,6 @@ public final class MarketTools {
     private static final String COUNT_OPEN_BIDS = "countOpenBids";
     private static final String RESERVED_CASH = "reservedCash";
     private static final String SCOUT = "scout";
-    private static final String BOOLEAN = "boolean";
-    private static final String INTEGER = "integer";
-    private static final String ARRAY = "array";
-    private static final String NUMBER = "number";
     private static final String DEFAULT = "; default ";
     private static final String FREE_CASH = "freeCash";
     private static final String SET_PIECES = "setPieces";
@@ -162,8 +165,8 @@ public final class MarketTools {
         specialty.addProperty("description", "specialty id, or a list of ids (one search each); "
                 + "ids as in search_transfers");
         entry.add(SPECIALTY, specialty);
-        entry.add(LABEL, McpTool.prop("string", "name echoed on this query's rows"));
-        entry.add(SCREEN, McpTool.prop("object", "{skill: min} applied to the hits; skills: "
+        entry.add(LABEL, McpTool.prop(STRING, "name echoed on this query's rows"));
+        entry.add(SCREEN, McpTool.prop(OBJECT, "{skill: min} applied to the hits; skills: "
                 + "keeper, defending, playmaking, winger, passing, scoring, setPieces, experience"));
         final var queries = McpTool.prop(ARRAY, "the searches to run; ageMin, ageMax and skills "
                 + "are mandatory in each");

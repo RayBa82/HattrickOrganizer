@@ -2,53 +2,54 @@ package core.mcp;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import core.constants.player.PlayerSkill;
 import core.db.DBManager;
+import core.gui.HOMainFrame;
+import core.gui.RefreshManager;
+import core.model.HOVerwaltung;
+import core.model.UserParameter;
 import core.model.enums.MatchType;
+import core.model.match.MatchKurzInfo;
 import core.model.misc.Economy;
 import core.model.player.IMatchRoleID;
 import core.model.player.MatchRoleID;
 import core.model.player.Specialty;
+import core.net.Connector;
+import core.net.OnlineWorker;
 import core.util.AmountOfMoney;
+import core.util.HODateTime;
+import core.util.HOLogger;
 import module.opponentspy.OppPlayerSkillEstimator;
-import module.transfer.XMLParser;
 import module.teamanalyzer.ht.HattrickManager;
 import module.teamanalyzer.manager.PlayerDataManager;
 import module.teamanalyzer.vo.PlayerInfo;
+import module.transfer.XMLParser;
+import org.jetbrains.annotations.Nullable;
 import tool.arenasizer.ArenaAdmission;
 import tool.arenasizer.ArenaMaintenance;
 import tool.arenasizer.ArenaSizer;
 import tool.arenasizer.Stadium;
 
-import com.google.gson.JsonNull;
-import core.gui.HOMainFrame;
-import core.gui.RefreshManager;
-import core.model.HOVerwaltung;
-import core.model.UserParameter;
-import core.model.match.MatchKurzInfo;
-import core.net.Connector;
-import core.net.OnlineWorker;
-import core.util.HODateTime;
-import core.util.HOLogger;
-import org.jetbrains.annotations.Nullable;
-
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+
+import static core.mcp.McpTool.ARRAY;
+import static core.mcp.McpTool.BOOLEAN;
+import static core.mcp.McpTool.INTEGER;
+import static core.mcp.McpTool.STRING;
 
 /** The read only view of the team HO already knows about. */
 public final class TeamTools {
 
     /** Starts an argument description's default, e.g. "default 5". */
     private static final String DEFAULT_PREFIX = "default ";
-    private static final String ARRAY = "array";
     private static final String BASIC_SEATING = "basicSeating";
-    private static final String BOOLEAN = "boolean";
     private static final String CAPACITY = "capacity";
     private static final String CHARACTER = "character";
     private static final String INCLUDE = "include";
-    private static final String INTEGER = "integer";
     private static final String LOYALTY = "loyalty";
     private static final String MATCHES = "matches";
     private static final String MOTHERCLUB = "motherclub";
@@ -111,7 +112,7 @@ public final class TeamTools {
                                 "limit", McpTool.prop(INTEGER, "page size; default the whole squad"),
                                 OFFSET, McpTool.prop(INTEGER,
                                         "how many players to skip; default 0. count is the total"),
-                                "only", McpTool.prop("string",
+                                "only", McpTool.prop(STRING,
                                         "positionRatings: just the slot matrix, per player playerId and "
                                                 + "r (ratings in slotOrder, every player incl. unavailable)"),
                                 "bulk", McpTool.prop(BOOLEAN,
@@ -225,7 +226,7 @@ public final class TeamTools {
                 + "is kept unless keepLineup is false; hattrickOrderDiff shows how "
                                 + "Hattrick's held order differs. nextMatches as in get_team.",
                         McpTool.schema(McpTool.properties(
-                                TASK_ID, McpTool.prop("string", "a taskId this tool returned: "
+                                TASK_ID, McpTool.prop(STRING, "a taskId this tool returned: "
                                         + "report that download's status instead of starting one"),
                                 KEEP_LINEUP, McpTool.prop(BOOLEAN, "default true: write HO's "
                                         + "lineup back after the download when it differs from "

@@ -9,21 +9,20 @@ import core.file.xml.XMLMatchdetailsParser;
 import core.model.cup.CupLevel;
 import core.model.cup.CupLevelIndex;
 import core.model.enums.MatchType;
-import core.net.ChppWriteService;
-import core.net.Connector;
-import core.net.OnlineWorker;
 import core.model.match.MatchEvent;
 import core.model.match.MatchKurzInfo;
 import core.model.match.MatchLineupTeam;
 import core.model.match.Matchdetails;
 import core.model.player.IMatchRoleID;
 import core.model.player.MatchRoleID;
+import core.net.ChppWriteService;
+import core.net.Connector;
+import core.net.OnlineWorker;
 import core.prediction.engine.MatchPredictionManager;
 import core.rating.RatingPredictionModel.RatingSector;
 import core.util.HODateTime;
 import module.lineup.Lineup;
 import module.lineup.substitution.model.MatchOrderType;
-
 import org.w3c.dom.Element;
 
 import java.time.temporal.ChronoUnit;
@@ -35,6 +34,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static core.mcp.McpTool.ARRAY;
+import static core.mcp.McpTool.BOOLEAN;
+import static core.mcp.McpTool.INTEGER;
+import static core.mcp.McpTool.NUMBER;
+import static core.mcp.McpTool.STRING;
+
 /**
  * Played matches, and the Monte Carlo simulator on top of them.
  * <p>
@@ -44,23 +49,19 @@ import java.util.Set;
 public final class MatchTools {
 
     private static final String ACTION = "action";
-    private static final String ARRAY = "array";
     private static final String ATTITUDE = "attitude";
     private static final String BACKFILL = "backfill";
-    private static final String BOOLEAN = "boolean";
     private static final String CHALLENGEABLE = "challengeable";
     private static final String COUNT = "count";
     private static final String DAYS_SINCE_LOGIN = "daysSinceLogin";
     private static final String EVENTS = "events";
     private static final String FRIENDLY_TYPE = "friendlyType";
-    private static final String INTEGER = "integer";
     private static final String LOCATION = "location";
     private static final String MATCH_ID = "matchId";
     private static final String MATCH_TYPE = "matchType";
     private static final String MATCH_TYPES = "matchTypes";
     private static final String MATCHES = "matches";
     private static final String MAX_SNAPSHOT_AGE_DAYS = "maxSnapshotAgeDays";
-    private static final String NUMBER = "number";
     private static final String OPPONENT_ATTACK_CENTRAL = "opponentAttackCentral";
     private static final String OPPONENT_ATTACK_LEFT = "opponentAttackLeft";
     private static final String OPPONENT_ATTACK_RIGHT = "opponentAttackRight";
@@ -74,7 +75,6 @@ public final class MatchTools {
     private static final String OPPONENT_TEAM_ID = "opponentTeamId";
     private static final String SIMULATIONS = "simulations";
     private static final String STATUS = "status";
-    private static final String STRING = "string";
     private static final String TEAM_ID = "teamId";
     private static final String TEAM_NAME = "teamName";
     private static final String TRAINING_MATCH_ID = "trainingMatchId";

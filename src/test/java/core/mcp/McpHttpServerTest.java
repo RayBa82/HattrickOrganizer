@@ -209,14 +209,23 @@ class McpHttpServerTest {
         return server.handle(request, headersFor(request)::get);
     }
 
+    private static void awaitRelease(CountDownLatch release) {
+        try {
+            if (!release.await(10, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("never released");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("interrupted while waiting", e);
+        }
+    }
+
     /** A server with a tool that runs as a task and waits for {@code release} before it answers. */
     private static McpHttpServer serverWithSlowTool(CountDownLatch release) {
         final var server = serverWithEchoTool();
         server.register(new McpTool("slow", "Waits, then answers.", McpTool.schema(new JsonObject()),
                 args -> {
-                    if (!release.await(10, TimeUnit.SECONDS)) {
-                        throw new IllegalStateException("never released");
-                    }
+                    awaitRelease(release);
                     final var result = new JsonObject();
                     result.addProperty("done", true);
                     return result;

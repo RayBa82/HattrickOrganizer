@@ -27,6 +27,14 @@ public record McpTool(String name, String description, JsonObject inputSchema, H
                       String budgetHint, List<OptionalSection> optionalSections,
                       Predicate<JsonObject> runsAsTask, Handler taskHandler) {
 
+    /** JSON schema type names, for {@link #prop}. */
+    public static final String STRING = "string";
+    public static final String INTEGER = "integer";
+    public static final String NUMBER = "number";
+    public static final String BOOLEAN = "boolean";
+    public static final String ARRAY = "array";
+    public static final String OBJECT = "object";
+
     public McpTool(String name, String description, JsonObject inputSchema, Handler handler) {
         this(name, description, inputSchema, handler, null, List.of(), null, null);
     }
@@ -120,15 +128,16 @@ public record McpTool(String name, String description, JsonObject inputSchema, H
         /**
          * @param arguments the client's {@code arguments} object, never null (empty if omitted)
          * @return the JSON that becomes the tool result
-         * @throws McpToolException for an expected failure the model should read and act on
+         * @throws McpToolException for an expected failure the model should read and act on; bad
+         *                          arguments are an {@link IllegalArgumentException}
          */
-        JsonObject call(JsonObject arguments) throws Exception;
+        JsonObject call(JsonObject arguments) throws McpToolException;
     }
 
     /** An object schema over the given properties, with the named ones required. */
     public static JsonObject schema(JsonObject properties, String... required) {
         final var schema = new JsonObject();
-        schema.addProperty("type", "object");
+        schema.addProperty("type", OBJECT);
         schema.add("properties", properties);
         final var requiredNames = new JsonArray();
         for (final var name : required) {

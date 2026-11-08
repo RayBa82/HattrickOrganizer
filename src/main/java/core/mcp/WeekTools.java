@@ -17,6 +17,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
+import static core.mcp.McpTool.ARRAY;
+import static core.mcp.McpTool.BOOLEAN;
+import static core.mcp.McpTool.STRING;
+
 /**
  * week_brief: what the hattrick skills read at the start of every week, in one call. It replaces
  * get_training, get_series, get_squad and per-fixture get_match_order, plus the scripts that
@@ -62,13 +66,13 @@ public final class WeekTools {
                                 + "availability; level-ups since "
                                 + "the last training. sources dates every part.",
                         McpTool.schema(McpTool.properties(
-                                PLAYER_IDS, McpTool.prop("array",
+                                PLAYER_IDS, McpTool.prop(ARRAY,
                                         "only these players in players and levelUps; default "
                                                 + "the whole squad"),
-                                INCLUDE_ORDERS, McpTool.prop("boolean",
+                                INCLUDE_ORDERS, McpTool.prop(BOOLEAN,
                                         "read the order Hattrick holds for each upcoming fixture, "
                                                 + "one CHPP request each. Default true"),
-                                INCLUDE_LEVEL_UPS, McpTool.prop("boolean",
+                                INCLUDE_LEVEL_UPS, McpTool.prop(BOOLEAN,
                                         "levelUps since the last training (level_up_report has "
                                                 + "them too). Default true"))),
                         WeekTools::weekBrief)
@@ -82,9 +86,9 @@ public final class WeekTools {
                                 + "per player, unchanged count, unconfirmed players. One call "
                                 + "instead of download_team polling and a history per player.",
                         McpTool.schema(McpTool.properties(
-                                PLAYER_IDS, McpTool.prop("array",
+                                PLAYER_IDS, McpTool.prop(ARRAY,
                                         "only these players; default the whole squad"),
-                                DOWNLOAD, McpTool.prop("string", "auto (default), always or "
+                                DOWNLOAD, McpTool.prop(STRING, "auto (default), always or "
                                         + "never; auto and always spend a team download"))),
                         WeekTools::levelUpReport)
                         .asTask(args -> !NEVER.equals(McpJson.optString(args, DOWNLOAD, AUTO)))
