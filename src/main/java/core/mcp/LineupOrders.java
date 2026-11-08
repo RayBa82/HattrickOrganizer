@@ -33,6 +33,16 @@ import java.util.Locale;
  */
 final class LineupOrders {
 
+    private static final String BEHAVIOUR = "behaviour";
+    private static final String PLAYER_ID = "playerId";
+    private static final String ROLE_ID = "roleId";
+    private static final String STANDING = "standing";
+
+    /** How an error or a warning names one entry of the teamOrders argument. */
+    private static String orderAt(int index) {
+        return "teamOrders[" + index + "]";
+    }
+
     static final String PENALTY_TAKERS = "penaltyTakers";
     static final String TEAM_ORDERS = "teamOrders";
     static final int MAX_PENALTY_TAKERS = 11;
@@ -60,7 +70,7 @@ final class LineupOrders {
                 continue;
             }
             final var json = new JsonObject();
-            json.addProperty("playerId", playerId);
+            json.addProperty(PLAYER_ID, playerId);
             final var player = model != null ? model.getCurrentPlayer(playerId) : null;
             if (player != null) {
                 json.addProperty("name", player.getFullName());
@@ -82,10 +92,10 @@ final class LineupOrders {
             entry.addProperty("minute", order.getMatchMinuteCriteria());
             entry.addProperty("playerOut", order.getSubjectPlayerID());
             entry.addProperty("playerIn", order.getObjectPlayerID());
-            entry.addProperty("roleId", order.getRoleId());
-            entry.addProperty("behaviour", order.getBehaviour());
+            entry.addProperty(ROLE_ID, order.getRoleId());
+            entry.addProperty(BEHAVIOUR, order.getBehaviour());
             entry.addProperty("redCard", name(order.getRedCardCriteria()));
-            entry.addProperty("standing", name(order.getStanding()));
+            entry.addProperty(STANDING, name(order.getStanding()));
             json.add(entry);
         }
         return json;
@@ -97,7 +107,7 @@ final class LineupOrders {
         }
         return switch (type) {
             case SUBSTITUTION -> "substitution";
-            case NEW_BEHAVIOUR -> "behaviour";
+            case NEW_BEHAVIOUR -> BEHAVIOUR;
             case POSITION_SWAP -> "swap";
             case MAN_MARKING -> "manMarking";
         };
@@ -133,7 +143,7 @@ final class LineupOrders {
             if (!seen.add(playerId)) {
                 throw new IllegalArgumentException("penaltyTakers names player " + playerId + " twice.");
             }
-            requireOwnPlayer(model, playerId, "penaltyTakers");
+            requireOwnPlayer(model, playerId, PENALTY_TAKERS);
             takers.add(new MatchLineupPosition(IMatchRoleID.penaltyTaker1 + takers.size(), playerId,
                     IMatchRoleID.NORMAL));
         }
@@ -156,7 +166,7 @@ final class LineupOrders {
         final var problems = OrderLimits.check(orders, tacticalAssistantLevels);
         for (var i = 0; i < problems.size(); i++) {
             if (problems.get(i) != null) {
-                throw new IllegalArgumentException("teamOrders[" + i + "] is one order too many: "
+                throw new IllegalArgumentException(orderAt(i) + " is one order too many: "
                         + "Hattrick allows " + OrderLimits.BASE_ORDERS + " orders plus 1 per "
                         + "Tactical Assistant level (this team: " + tacticalAssistantLevels + "), "
                         + "at most " + OrderLimits.MAX_SUBSTITUTIONS + " of them substitutions, and "
@@ -168,7 +178,7 @@ final class LineupOrders {
 
     private static Substitution parseOrder(JsonObject json, int index, @Nullable HOModel model)
             throws McpToolException {
-        final var where = "teamOrders[" + index + "]";
+        final var where = orderAt(index);
         final var type = orderType(McpJson.reqString(json, "type"), where);
         final var minute = McpJson.reqInt(json, "minute");
         if (minute < 0 || minute > 119) {
@@ -188,11 +198,11 @@ final class LineupOrders {
                 throw new IllegalArgumentException(where + ".playerIn is the opponent player to mark.");
             }
         }
-        final var roleId = McpJson.optInt(json, "roleId", -1);
+        final var roleId = McpJson.optInt(json, ROLE_ID, -1);
         if (roleId != -1 && (roleId < IMatchRoleID.keeper || roleId > IMatchRoleID.leftForward)) {
             throw new IllegalArgumentException(where + ".roleId is 100-113 or -1, not " + roleId + ".");
         }
-        final var behaviour = McpJson.optInt(json, "behaviour", -1);
+        final var behaviour = McpJson.optInt(json, BEHAVIOUR, -1);
         if (behaviour < -1 || behaviour > IMatchRoleID.TOWARDS_WING) {
             throw new IllegalArgumentException(where + ".behaviour is 0-4 or -1, not " + behaviour + ".");
         }
@@ -207,14 +217,14 @@ final class LineupOrders {
         order.setRedCardCriteria(byName(RedCardCriteria.values(),
                 McpJson.optString(json, "redCard", name(RedCardCriteria.IGNORE)), where + ".redCard"));
         order.setStanding(byName(GoalDiffCriteria.values(),
-                McpJson.optString(json, "standing", name(GoalDiffCriteria.ANY_STANDING)), where + ".standing"));
+                McpJson.optString(json, STANDING, name(GoalDiffCriteria.ANY_STANDING)), where + ".standing"));
         return order;
     }
 
     private static MatchOrderType orderType(String type, String where) {
         return switch (type) {
             case "substitution" -> MatchOrderType.SUBSTITUTION;
-            case "behaviour" -> MatchOrderType.NEW_BEHAVIOUR;
+            case BEHAVIOUR -> MatchOrderType.NEW_BEHAVIOUR;
             case "swap" -> MatchOrderType.POSITION_SWAP;
             case "manMarking" -> MatchOrderType.MAN_MARKING;
             default -> throw new IllegalArgumentException(where + ".type is substitution, behaviour, "
@@ -296,11 +306,11 @@ final class LineupOrders {
             final var problem = PlausibilityCheck.checkForProblem(lineup, order);
             if (problem != null) {
                 final var comment = PlausibilityCheck.getComment(problem, order);
-                warnings.add("teamOrders[" + i + "]: "
+                warnings.add(orderAt(i) + ": "
                         + (comment != null ? comment : TranslationFacility.tr(problem.getLanguageKey())));
             }
             if (order.getOrderType() == MatchOrderType.SUBSTITUTION) {
-                warnIfTransferListed(model, order.getObjectPlayerID(), "teamOrders[" + i + "].playerIn", warnings);
+                warnIfTransferListed(model, order.getObjectPlayerID(), orderAt(i) + ".playerIn", warnings);
             }
         }
         for (final var taker : lineup.getPenaltyTakers()) {
@@ -342,9 +352,9 @@ final class LineupOrders {
             final var slot = field.get(i).getAsJsonObject();
             if (intOf(slot, "id", 0) > 0) {
                 final var json = new JsonObject();
-                json.addProperty("roleId", IMatchRoleID.keeper + i);
-                json.addProperty("playerId", intOf(slot, "id", 0));
-                json.addProperty("behaviour", intOf(slot, "behaviour", 0));
+                json.addProperty(ROLE_ID, IMatchRoleID.keeper + i);
+                json.addProperty(PLAYER_ID, intOf(slot, "id", 0));
+                json.addProperty(BEHAVIOUR, intOf(slot, BEHAVIOUR, 0));
                 positions.add(json);
             }
         }
@@ -356,8 +366,8 @@ final class LineupOrders {
             final var playerId = intOf(benchSlots.get(i).getAsJsonObject(), "id", 0);
             if (playerId > 0) {
                 final var json = new JsonObject();
-                json.addProperty("roleId", benchRoleIds.get(i));
-                json.addProperty("playerId", playerId);
+                json.addProperty(ROLE_ID, benchRoleIds.get(i));
+                json.addProperty(PLAYER_ID, playerId);
                 bench.add(json);
             }
         }
@@ -390,7 +400,7 @@ final class LineupOrders {
                     intOf(order, "min", -1), (byte) (pos >= 0 ? IMatchRoleID.keeper + pos : -1),
                     (byte) intOf(order, "beh", -1),
                     RedCardCriteria.getById((byte) intOf(order, "card", -1)),
-                    GoalDiffCriteria.getById((byte) intOf(order, "standing", -1))));
+                    GoalDiffCriteria.getById((byte) intOf(order, STANDING, -1))));
         }
         echo.add(TEAM_ORDERS, teamOrders(orders));
         return echo;

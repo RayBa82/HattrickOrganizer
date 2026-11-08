@@ -43,15 +43,52 @@ import java.util.Set;
  */
 public final class MatchTools {
 
+    private static final String ACTION = "action";
+    private static final String ARRAY = "array";
+    private static final String ATTITUDE = "attitude";
+    private static final String BACKFILL = "backfill";
+    private static final String BOOLEAN = "boolean";
+    private static final String CHALLENGEABLE = "challengeable";
+    private static final String COUNT = "count";
+    private static final String DAYS_SINCE_LOGIN = "daysSinceLogin";
+    private static final String EVENTS = "events";
+    private static final String FRIENDLY_TYPE = "friendlyType";
+    private static final String INTEGER = "integer";
+    private static final String LOCATION = "location";
+    private static final String MATCH_ID = "matchId";
+    private static final String MATCH_TYPE = "matchType";
+    private static final String MATCH_TYPES = "matchTypes";
+    private static final String MATCHES = "matches";
+    private static final String MAX_SNAPSHOT_AGE_DAYS = "maxSnapshotAgeDays";
+    private static final String NUMBER = "number";
+    private static final String OPPONENT_ATTACK_CENTRAL = "opponentAttackCentral";
+    private static final String OPPONENT_ATTACK_LEFT = "opponentAttackLeft";
+    private static final String OPPONENT_ATTACK_RIGHT = "opponentAttackRight";
+    private static final String OPPONENT_DEFENCE_CENTRAL = "opponentDefenceCentral";
+    private static final String OPPONENT_DEFENCE_LEFT = "opponentDefenceLeft";
+    private static final String OPPONENT_DEFENCE_RIGHT = "opponentDefenceRight";
+    private static final String OPPONENT_MIDFIELD = "opponentMidfield";
+    private static final String OPPONENT_NAME = "opponentName";
+    private static final String OPPONENT_TACTIC_SKILL = "opponentTacticSkill";
+    private static final String OPPONENT_TACTIC_TYPE = "opponentTacticType";
+    private static final String OPPONENT_TEAM_ID = "opponentTeamId";
+    private static final String SIMULATIONS = "simulations";
+    private static final String STATUS = "status";
+    private static final String STRING = "string";
+    private static final String TEAM_ID = "teamId";
+    private static final String TEAM_NAME = "teamName";
+    private static final String TRAINING_MATCH_ID = "trainingMatchId";
+    private static final String WEEKEND = "weekend";
+
     private static final int DEFAULT_COUNT = 10;
     private static final int DEFAULT_SIMULATIONS = 1000;
     static final int DEFAULT_OPPONENT_MATCHES = 5;
     static final int DEFAULT_OPPONENT_DAYS = 120;
 
     private static final String[] OPPONENT_SECTORS = {
-            "opponentMidfield", "opponentDefenceLeft", "opponentDefenceCentral",
-            "opponentDefenceRight", "opponentAttackLeft", "opponentAttackCentral",
-            "opponentAttackRight"};
+            OPPONENT_MIDFIELD, OPPONENT_DEFENCE_LEFT, OPPONENT_DEFENCE_CENTRAL,
+            OPPONENT_DEFENCE_RIGHT, OPPONENT_ATTACK_LEFT, OPPONENT_ATTACK_CENTRAL,
+            OPPONENT_ATTACK_RIGHT};
 
     /** The keys {@link #side} writes the same seven sectors under, in the same order. */
     private static final String[] SECTOR_KEYS = {
@@ -70,12 +107,12 @@ public final class MatchTools {
                                 + "the cup (cup, cupId). Upcoming matches, tournaments included: "
                                 + "week_brief, get_team nextMatches.",
                         McpTool.schema(McpTool.properties(
-                                "count", McpTool.prop("integer",
+                                COUNT, McpTool.prop(INTEGER,
                                         "how many matches to return, default " + DEFAULT_COUNT),
-                                "officialOnly", McpTool.prop("boolean",
+                                "officialOnly", McpTool.prop(BOOLEAN,
                                         "league, cup and qualification only, leaving out friendlies "
                                                 + "and tournaments; default true"),
-                                "bulk", McpTool.prop("boolean",
+                                "bulk", McpTool.prop(BOOLEAN,
                                         "for scripts: the matches as a JSON file to download (HTTP GET "
                                                 + "of the returned download path on the MCP endpoint), "
                                                 + "every stored one unless count is given; the answer "
@@ -89,21 +126,21 @@ public final class MatchTools {
                                 + "'ok', or 'no_match_details' when HO has the result but never "
                                 + "downloaded the details.",
                         McpTool.schema(McpTool.properties(
-                                        "matchId", McpTool.prop("integer", "the Hattrick match id"),
-                                        "matchType", McpTool.prop("integer",
+                                        MATCH_ID, McpTool.prop(INTEGER, "the Hattrick match id"),
+                                        MATCH_TYPE, McpTool.prop(INTEGER,
                                                 "the match type id from get_matches; without it the "
                                                         + "id is looked up on its own, which is "
                                                         + "ambiguous across source systems"),
-                                        "includeEvents", McpTool.prop("boolean",
+                                        "includeEvents", McpTool.prop(BOOLEAN,
                                                 "add events: per team goals, chances and special "
                                                         + "events, plus a download of every event (minute, name, "
                                                         + "team, player, objectPlayerId, goal/miss, "
                                                         + "specialEvent); default false"),
-                                        "eventTypes", McpTool.prop("array",
+                                        EVENT_TYPES_ARG, McpTool.prop(ARRAY,
                                                 "with includeEvents, only events of these types: any of "
                                                         + String.join(", ", EVENT_TYPES)
                                                         + "; default all")),
-                                "matchId"),
+                                MATCH_ID),
                         MatchTools::match),
                 new McpTool("get_match_weather",
                         "Weather of one of our fixtures, from the home team's region. forecast: "
@@ -113,10 +150,10 @@ public final class MatchTools {
                                 + "apply_lineup with this matchId use it. weatherId 0 rain, 1 overcast, "
                                 + "2 partially cloudy, 3 sunny.",
                         McpTool.schema(McpTool.properties(
-                                        "matchId", McpTool.prop("integer", "the Hattrick match id"),
-                                        "matchType", McpTool.prop("integer",
+                                        MATCH_ID, McpTool.prop(INTEGER, "the Hattrick match id"),
+                                        MATCH_TYPE, McpTool.prop(INTEGER,
                                                 "the match type id; optional")),
-                                "matchId"),
+                                MATCH_ID),
                         MatchTools::matchWeather),
                 new McpTool("get_rating_calibration",
                         "Rating model vs Hattrick on our played matches: starting eleven rated from "
@@ -125,26 +162,26 @@ public final class MatchTools {
                                 + "tactic level. rows: pred, resid, tactic [pred, real], attitude, "
                                 + "behaviours (slots 100-113, . empty), confounded = lineup changed mid-match.",
                         McpTool.schema(McpTool.properties(
-                                "matchTypes", McpTool.prop("array",
+                                MATCH_TYPES, McpTool.prop(ARRAY,
                                         "only these match type ids (1 league, 3 cup, 4/5/8/9 friendlies, "
                                                 + "as get_matches reports them); default all"),
-                                "attitude", McpTool.prop("integer",
+                                ATTITUDE, McpTool.prop(INTEGER,
                                         "only matches played with this attitude: -1 PIC, 0 normal, 1 MOTS; "
                                                 + "default all"),
-                                "maxSnapshotAgeDays", McpTool.prop("number",
+                                MAX_SNAPSHOT_AGE_DAYS, McpTool.prop(NUMBER,
                                         "stats leave out rows whose snapshot is older than this many "
                                                 + "days before the match; default 7"),
-                                "includeConfounded", McpTool.prop("boolean",
+                                "includeConfounded", McpTool.prop(BOOLEAN,
                                         "stats include matches whose lineup changed mid-match; default false"),
-                                "backfill", McpTool.prop("boolean",
+                                BACKFILL, McpTool.prop(BOOLEAN,
                                         "first rate every stored match of ours without a row and report "
                                                 + "how many were added; default false"),
-                                "recompute", McpTool.prop("boolean",
+                                "recompute", McpTool.prop(BOOLEAN,
                                         "with backfill: redo existing rows too - after a model change, or "
                                                 + "to fill the tactic level of rows from before it was stored"),
-                                "limit", McpTool.prop("integer", "rows page size, default "
+                                "limit", McpTool.prop(INTEGER, "rows page size, default "
                                         + CALIBRATION_PAGE + ", max " + CALIBRATION_MAX_PAGE),
-                                "offset", McpTool.prop("integer", "rows to skip; default 0. count is the total"))),
+                                "offset", McpTool.prop(INTEGER, "rows to skip; default 0. count is the total"))),
                         MatchTools::ratingCalibration)
                         .withBudget("Page the rows with limit/offset (count is the total), or narrow "
                                         + "them with matchTypes.",
@@ -167,9 +204,9 @@ public final class MatchTools {
                                 + "each now, manager login, supporter, bot; best first). A read - "
                                 + "does not spend the write cap.",
                         McpTool.schema(McpTool.properties(
-                                "weekend", McpTool.prop("boolean",
+                                WEEKEND, McpTool.prop(BOOLEAN,
                                         "weekend friendlies instead of midweek; default false"),
-                                CHECK_TEAM_IDS, McpTool.prop("array",
+                                CHECK_TEAM_IDS, McpTool.prop(ARRAY,
                                         "team ids to screen, 1-" + MAX_CHALLENGEABLE_TEAMS
                                                 + "; omit to skip the check"))),
                         MatchTools::listChallenges),
@@ -179,28 +216,28 @@ public final class MatchTools {
                                 + "withdraw answer one by its trainingMatchId from list_challenges. "
                                 + "Poll list_challenges afterwards for whether the opponent agreed.",
                         McpTool.schema(McpTool.properties(
-                                        "action", McpTool.prop("string",
+                                        ACTION, McpTool.prop(STRING,
                                                 "challenge, accept, decline or withdraw"),
-                                        "opponentTeamId", McpTool.prop("integer",
+                                        OPPONENT_TEAM_ID, McpTool.prop(INTEGER,
                                                 "challenge: the team to challenge (required)"),
-                                        "friendlyType", McpTool.prop("integer",
+                                        FRIENDLY_TYPE, McpTool.prop(INTEGER,
                                                 "challenge: 0 normal rules, 1 cup rules; default 0"),
-                                        "location", McpTool.prop("string",
+                                        LOCATION, McpTool.prop(STRING,
                                                 "challenge: home, away or neutral; default home"),
-                                        "neutralArenaId", McpTool.prop("integer",
+                                        "neutralArenaId", McpTool.prop(INTEGER,
                                                 "challenge: arena id, required when location is neutral"),
-                                        "weekend", McpTool.prop("boolean",
+                                        WEEKEND, McpTool.prop(BOOLEAN,
                                                 "challenge: a weekend friendly; default false"),
-                                        "trainingMatchId", McpTool.prop("integer",
+                                        TRAINING_MATCH_ID, McpTool.prop(INTEGER,
                                                 "accept / decline / withdraw: the challenge id from "
                                                         + "list_challenges (required)")),
-                                "action"),
+                                ACTION),
                         MatchTools::manageChallenge)
         );
     }
 
     private static JsonObject listChallenges(JsonObject args) throws McpToolException {
-        final var weekend = McpJson.optBool(args, "weekend", false);
+        final var weekend = McpJson.optBool(args, WEEKEND, false);
         final var checkIds = checkTeamIds(args);
         final core.file.xml.XMLChallengesParser.ChallengeLists lists;
         try {
@@ -212,7 +249,7 @@ public final class MatchTools {
         out.add("outgoing", challengeArray(lists.outgoing()));
         out.add("incoming", challengeArray(lists.incoming()));
         if (!checkIds.isEmpty()) {
-            out.add("challengeable", challengeable(checkIds, weekend));
+            out.add(CHALLENGEABLE, challengeable(checkIds, weekend));
         }
         return out;
     }
@@ -222,16 +259,16 @@ public final class MatchTools {
         final var arr = new JsonArray();
         for (final var c : challenges) {
             final var j = new JsonObject();
-            j.addProperty("trainingMatchId", c.trainingMatchId());
-            j.addProperty("opponentTeamId", c.opponentTeamId());
-            j.addProperty("opponentName", c.opponentName());
+            j.addProperty(TRAINING_MATCH_ID, c.trainingMatchId());
+            j.addProperty(OPPONENT_TEAM_ID, c.opponentTeamId());
+            j.addProperty(OPPONENT_NAME, c.opponentName());
             j.addProperty("matchTime", c.matchTime());
-            j.addProperty("friendlyType", c.friendlyType());
+            j.addProperty(FRIENDLY_TYPE, c.friendlyType());
             j.addProperty("arenaName", c.arenaName());
             j.addProperty("isAgreed", c.isAgreed());
             if (c.isAgreed() && c.matchId() > 0) {
                 // Once agreed, the real match exists - hand back its id for get_match / send_match_order.
-                j.addProperty("matchId", c.matchId());
+                j.addProperty(MATCH_ID, c.matchId());
             }
             arr.add(j);
         }
@@ -283,9 +320,9 @@ public final class MatchTools {
 
     /** Challengeable first, then the most recent login first; unknown logins last. */
     static final java.util.Comparator<JsonObject> CHALLENGEABLE_ORDER = java.util.Comparator
-            .<JsonObject, Boolean>comparing(r -> !McpJson.optBool(r, "challengeable", false))
-            .thenComparing(r -> r.get("daysSinceLogin").isJsonNull()
-                    ? Integer.MAX_VALUE : r.get("daysSinceLogin").getAsInt());
+            .<JsonObject, Boolean>comparing(r -> !McpJson.optBool(r, CHALLENGEABLE, false))
+            .thenComparing(r -> r.get(DAYS_SINCE_LOGIN).isJsonNull()
+                    ? Integer.MAX_VALUE : r.get(DAYS_SINCE_LOGIN).getAsInt());
 
     /**
      * One team's row. {@code answer} is null when Hattrick left the team out of its reply;
@@ -295,11 +332,11 @@ public final class MatchTools {
             core.file.xml.XMLChallengesParser.Challengeable answer,
             java.util.Map<String, String> details, java.time.LocalDate today) {
         final var row = new JsonObject();
-        row.addProperty("teamId", teamId);
+        row.addProperty(TEAM_ID, teamId);
         final var name = answer != null && !answer.teamName().isBlank()
                 ? answer.teamName() : details.get("TeamName");
-        row.addProperty("teamName", name);
-        row.addProperty("challengeable", answer == null ? null : answer.isChallengeable());
+        row.addProperty(TEAM_NAME, name);
+        row.addProperty(CHALLENGEABLE, answer == null ? null : answer.isChallengeable());
         row.addProperty("series", details.get("LeagueLevelUnitName"));
 
         final var lastLogin = details.get("LastLoginDate");
@@ -313,7 +350,7 @@ public final class MatchTools {
             }
         }
         row.addProperty("lastLoginDate", lastLogin);
-        row.addProperty("daysSinceLogin", days);
+        row.addProperty(DAYS_SINCE_LOGIN, days);
         row.addProperty("managerIsSupporter", details.containsKey("HasSupporter")
                 ? "True".equalsIgnoreCase(details.get("HasSupporter")) : null);
         final var isBot = "True".equalsIgnoreCase(details.get("IsBot"));
@@ -337,7 +374,7 @@ public final class MatchTools {
 
     /** manage_challenge: each branch checks its own arguments before the one CHPP write. */
     private static JsonObject manageChallenge(JsonObject args) throws McpToolException {
-        final var action = McpJson.reqString(args, "action");
+        final var action = McpJson.reqString(args, ACTION);
         return switch (action) {
             case "challenge" -> arrangeChallenge(args);
             case "accept", "decline", "withdraw" -> respondToChallenge(args);
@@ -347,9 +384,9 @@ public final class MatchTools {
     }
 
     private static JsonObject arrangeChallenge(JsonObject args) throws McpToolException {
-        final var opponentTeamId = McpJson.reqInt(args, "opponentTeamId");
-        final var friendlyType = McpJson.optInt(args, "friendlyType", 0);
-        final var location = McpJson.optString(args, "location", "home");
+        final var opponentTeamId = McpJson.reqInt(args, OPPONENT_TEAM_ID);
+        final var friendlyType = McpJson.optInt(args, FRIENDLY_TYPE, 0);
+        final var location = McpJson.optString(args, LOCATION, "home");
         final int matchPlace = switch (location) {
             case "home" -> 0;
             case "away" -> 1;
@@ -361,7 +398,7 @@ public final class MatchTools {
         if (matchPlace == 2 && neutralArenaId == null) {
             throw new IllegalArgumentException("location=neutral needs neutralArenaId.");
         }
-        final var weekend = McpJson.optBool(args, "weekend", false);
+        final var weekend = McpJson.optBool(args, WEEKEND, false);
         try {
             ChppWriteService.instance().arrangeChallengeForAgent(
                     opponentTeamId, friendlyType, matchPlace, neutralArenaId, weekend);
@@ -369,14 +406,14 @@ public final class MatchTools {
             throw new McpToolException(e.getMessage());
         }
         final var out = new JsonObject();
-        out.addProperty("status", "ok");
+        out.addProperty(STATUS, "ok");
         out.addProperty("note", "challenge sent; poll list_challenges for the opponent's response");
         return out;
     }
 
     private static JsonObject respondToChallenge(JsonObject args) throws McpToolException {
-        final var trainingMatchId = McpJson.reqLong(args, "trainingMatchId");
-        final var action = McpJson.reqString(args, "action");
+        final var trainingMatchId = McpJson.reqLong(args, TRAINING_MATCH_ID);
+        final var action = McpJson.reqString(args, ACTION);
         if (!java.util.Set.of("accept", "decline", "withdraw").contains(action)) {
             throw new IllegalArgumentException(
                     "action must be accept, decline or withdraw, was " + action);
@@ -387,9 +424,9 @@ public final class MatchTools {
             throw new McpToolException(e.getMessage());
         }
         final var out = new JsonObject();
-        out.addProperty("status", "ok");
-        out.addProperty("action", action);
-        out.addProperty("trainingMatchId", trainingMatchId);
+        out.addProperty(STATUS, "ok");
+        out.addProperty(ACTION, action);
+        out.addProperty(TRAINING_MATCH_ID, trainingMatchId);
         return out;
     }
 
@@ -397,7 +434,7 @@ public final class MatchTools {
         final var teamId = McpJson.model().getBasics().getTeamId();
         // bulk: every stored match into the download unless count says otherwise; null = no limit.
         final var bulk = McpJson.optBool(args, "bulk", false);
-        final Integer count = bulk && !args.has("count") ? null : McpJson.optInt(args, "count", DEFAULT_COUNT);
+        final Integer count = bulk && !args.has(COUNT) ? null : McpJson.optInt(args, COUNT, DEFAULT_COUNT);
         final var officialOnly = McpJson.optBool(args, "officialOnly", true);
 
         final var played = new JsonArray();
@@ -405,17 +442,17 @@ public final class MatchTools {
             played.add(summary(info, teamId));
         }
         final var json = new JsonObject();
-        json.addProperty("count", played.size());
-        json.add("matches", played);
-        return bulk ? McpDownloads.bulk(json, "matches") : json;
+        json.addProperty(COUNT, played.size());
+        json.add(MATCHES, played);
+        return bulk ? McpDownloads.bulk(json, MATCHES) : json;
     }
 
     /** Enough of a match to rank it and to ask for it in full. */
     private static JsonObject summary(MatchKurzInfo info, int teamId) {
         final var json = new JsonObject();
-        json.addProperty("matchId", info.getMatchID());
+        json.addProperty(MATCH_ID, info.getMatchID());
         json.addProperty("matchTypeId", info.getMatchType().getId());
-        json.addProperty("matchType", info.getMatchType().name());
+        json.addProperty(MATCH_TYPE, info.getMatchType().name());
         json.addProperty("date", info.getMatchSchedule() == null ? null : info.getMatchSchedule().toHT());
         json.addProperty("homeTeamId", info.getHomeTeamID());
         json.addProperty("homeTeamName", info.getHomeTeamName());
@@ -427,7 +464,7 @@ public final class MatchTools {
         final var atHome = info.getHomeTeamID() == teamId;
         final var ours = atHome ? info.getHomeTeamGoals() : info.getGuestTeamGoals();
         final var theirs = atHome ? info.getGuestTeamGoals() : info.getHomeTeamGoals();
-        json.addProperty("location", atHome ? "home" : "away");
+        json.addProperty(LOCATION, atHome ? "home" : "away");
         json.addProperty("outcome", outcome(ours, theirs));
         addCup(json, info);
         return json;
@@ -532,13 +569,13 @@ public final class MatchTools {
         if (details == null) {
             // The result row and the details are downloaded separately, so "no details" is a real
             // state the user can fix, not an empty match.
-            json.addProperty("status", "no_match_details");
+            json.addProperty(STATUS, "no_match_details");
             json.addProperty("note", "HO stored the result but not the match details. Download the "
                     + "match details for this match to get ratings, tactics and attendance.");
             return json;
         }
 
-        json.addProperty("status", "ok");
+        json.addProperty(STATUS, "ok");
         json.addProperty("attendance", details.getZuschauer());
         json.addProperty("weatherId", details.getWetterId());
         addSoldByStand(json, details);
@@ -552,13 +589,13 @@ public final class MatchTools {
             final var filtered = args.has(EVENT_TYPES_ARG) && args.get(EVENT_TYPES_ARG).isJsonArray();
             final var all = matchEventsJson(info.getHomeTeamID(), info.getGuestTeamID(), events,
                     filtered ? eventTypes(args) : null);
-            final var rows = all.remove("events").getAsJsonArray();
-            all.addProperty("count", rows.size());
+            final var rows = all.remove(EVENTS).getAsJsonArray();
+            all.addProperty(COUNT, rows.size());
             final var file = new JsonObject();
-            file.addProperty("matchId", matchId);
-            file.add("events", rows);
+            file.addProperty(MATCH_ID, matchId);
+            file.add(EVENTS, rows);
             McpDownloads.attach(all, file);
-            json.add("events", all);
+            json.add(EVENTS, all);
         }
         return json;
     }
@@ -604,8 +641,8 @@ public final class MatchTools {
 
     /** The stored row of the match {@code args} names by matchId (+ optional matchType). */
     private static MatchKurzInfo storedMatch(JsonObject args) throws McpToolException {
-        final var matchId = McpJson.reqInt(args, "matchId");
-        final var requestedType = McpJson.optInteger(args, "matchType");
+        final var matchId = McpJson.reqInt(args, MATCH_ID);
+        final var requestedType = McpJson.optInteger(args, MATCH_TYPE);
         // A null matchType makes the lookup fall back to matching on the id alone, which is all a
         // caller holding a bare id can do.
         final var info = DBManager.instance().getMatchesKurzInfoByMatchID(matchId,
@@ -634,8 +671,8 @@ public final class MatchTools {
             info = storedMatch(args);
         }
         final var json = new JsonObject();
-        json.addProperty("matchId", info.getMatchID());
-        json.addProperty("matchType", info.getMatchType().name());
+        json.addProperty(MATCH_ID, info.getMatchID());
+        json.addProperty(MATCH_TYPE, info.getMatchType().name());
         json.addProperty("date", info.getMatchSchedule() == null ? null : info.getMatchSchedule().toHT());
         json.addProperty("homeTeamName", info.getHomeTeamName());
         json.addProperty("awayTeamName", info.getGuestTeamName());
@@ -662,7 +699,7 @@ public final class MatchTools {
                 rows.add(eventRow(e, e.getTeamID() == homeTeamId || e.getTeamID() == awayTeamId));
             }
         }
-        json.add("events", rows);
+        json.add(EVENTS, rows);
         return json;
     }
 
@@ -703,7 +740,7 @@ public final class MatchTools {
         // XMLMatchdetailsParser names an id only when it is in one of the two lineups, so a
         // stored name is what tells a real player from such a value.
         final var player = side && isPlayer(e.getPlayerId(), e.getPlayerName());
-        row.addProperty("teamId", side ? e.getTeamID() : null);
+        row.addProperty(TEAM_ID, side ? e.getTeamID() : null);
         row.addProperty("playerId", player ? e.getPlayerId() : null);
         row.addProperty("playerName", player ? e.getPlayerName() : null);
         // Hattrick's ObjectPlayerID: the other player involved - the passer on some goals, but
@@ -733,7 +770,7 @@ public final class MatchTools {
             if (e.getMatchEventID() != null && e.isSE()) specials++;
         }
         final var json = new JsonObject();
-        json.addProperty("teamId", teamId);
+        json.addProperty(TEAM_ID, teamId);
         json.addProperty("goals", goals);
         json.addProperty("chances", goals + misses);
         json.addProperty("missedChances", misses);
@@ -767,8 +804,8 @@ public final class MatchTools {
      * recent matches, averaged into the arguments simulate_lineup asks for.
      */
     static JsonObject opponentRatings(JsonObject args) throws McpToolException {
-        final var teamId = McpJson.reqInt(args, "teamId");
-        final var count = Math.max(1, McpJson.optInt(args, "count", DEFAULT_OPPONENT_MATCHES));
+        final var teamId = McpJson.reqInt(args, TEAM_ID);
+        final var count = Math.max(1, McpJson.optInt(args, COUNT, DEFAULT_OPPONENT_MATCHES));
         final var days = Math.max(1, McpJson.optInt(args, "days", DEFAULT_OPPONENT_DAYS));
         final var competitiveOnly = McpJson.optBool(args, "competitiveOnly", true);
 
@@ -844,50 +881,50 @@ public final class MatchTools {
                 sums[i] += entry.get(SECTOR_KEYS[i]).getAsDouble();
             }
             final var type = d.getMatchType();
-            entry.addProperty("matchId", d.getMatchID());
+            entry.addProperty(MATCH_ID, d.getMatchID());
             if (type != null) {
                 entry.addProperty("matchTypeId", type.getId());
-                entry.addProperty("matchType", type.name());
+                entry.addProperty(MATCH_TYPE, type.name());
             }
             entry.addProperty("date", d.getMatchDate() == null ? null : d.getMatchDate().toHT());
-            entry.addProperty("location", home ? "home" : "away");
-            entry.addProperty("opponentTeamId", home ? d.getGuestTeamId() : d.getHomeTeamId());
+            entry.addProperty(LOCATION, home ? "home" : "away");
+            entry.addProperty(OPPONENT_TEAM_ID, home ? d.getGuestTeamId() : d.getHomeTeamId());
             entry.addProperty("opponentTeamName", home ? d.getGuestTeamName() : d.getHomeTeamName());
             matches.add(entry);
 
-            final var name = entry.get("teamName");
+            final var name = entry.get(TEAM_NAME);
             if (teamName == null && name != null && !name.isJsonNull()) {
                 teamName = name.getAsString();
             }
         }
 
         final var ratings = new JsonObject();
-        ratings.addProperty("opponentName", teamName == null ? "Opponent" : teamName);
+        ratings.addProperty(OPPONENT_NAME, teamName == null ? "Opponent" : teamName);
         for (int i = 0; i < SECTOR_KEYS.length; i++) {
             ratings.addProperty(OPPONENT_SECTORS[i],
                     Math.round(sums[i] / details.size() * 100.0) / 100.0);
         }
         // A tactic is a choice, not a quantity - averaging it would invent one nobody played. The
         // most recent match is the best single guess at what they will pick next.
-        ratings.addProperty("opponentTacticType",
+        ratings.addProperty(OPPONENT_TACTIC_TYPE,
                 latestHome ? latest.getHomeTacticType() : latest.getGuestTacticType());
-        ratings.addProperty("opponentTacticSkill",
+        ratings.addProperty(OPPONENT_TACTIC_SKILL,
                 latestHome ? latest.getHomeTacticSkill() : latest.getGuestTacticSkill());
 
         final var json = new JsonObject();
-        json.addProperty("teamId", teamId);
-        json.addProperty("teamName", teamName);
+        json.addProperty(TEAM_ID, teamId);
+        json.addProperty(TEAM_NAME, teamName);
         json.addProperty("matchesUsed", details.size());
         json.add("opponentRatings", ratings);
-        json.add("matches", matches);
+        json.add(MATCHES, matches);
         return json;
     }
 
     /** One side of a played match as Hattrick rated it - not a prediction. */
     private static JsonObject side(Matchdetails details, boolean home) {
         final var json = new JsonObject();
-        json.addProperty("teamId", home ? details.getHomeTeamId() : details.getGuestTeamId());
-        json.addProperty("teamName", home ? details.getHomeTeamName() : details.getGuestTeamName());
+        json.addProperty(TEAM_ID, home ? details.getHomeTeamId() : details.getGuestTeamId());
+        json.addProperty(TEAM_NAME, home ? details.getHomeTeamName() : details.getGuestTeamName());
         json.addProperty("goals", home ? details.getHomeGoals() : details.getGuestGoals());
         json.addProperty("hatStats", home ? details.getHomeHatStats() : details.getAwayHatStats());
         json.addProperty("midfield", sectorRating(home ? details.getHomeMidfield() : details.getGuestMidfield()));
@@ -899,7 +936,7 @@ public final class MatchTools {
         json.addProperty("attackRight", sectorRating(home ? details.getHomeRightAtt() : details.getGuestRightAtt()));
         json.addProperty("tacticType", home ? details.getHomeTacticType() : details.getGuestTacticType());
         json.addProperty("tacticSkill", home ? details.getHomeTacticSkill() : details.getGuestTacticSkill());
-        json.addProperty("attitude", home ? details.getHomeEinstellung() : details.getGuestEinstellung());
+        json.addProperty(ATTITUDE, home ? details.getHomeEinstellung() : details.getGuestEinstellung());
         json.addProperty("formation", details.getFormation(home));
         return json;
     }
@@ -1026,7 +1063,7 @@ public final class MatchTools {
     private static JsonObject ratingCalibration(JsonObject args) throws McpToolException {
         McpJson.model();
         JsonObject backfill = null;
-        if (McpJson.optBool(args, "backfill", false)) {
+        if (McpJson.optBool(args, BACKFILL, false)) {
             final var result = core.rating.RatingCalibration.backfill(McpJson.optBool(args, "recompute", false));
             backfill = new JsonObject();
             backfill.addProperty("matchesExamined", result.matches());
@@ -1037,13 +1074,13 @@ public final class MatchTools {
             backfill.add("notWritten", skipped);
         }
         final var matchTypes = new java.util.HashSet<Integer>();
-        if (args.has("matchTypes") && args.get("matchTypes").isJsonArray()) {
-            args.getAsJsonArray("matchTypes").forEach(e -> matchTypes.add(e.getAsInt()));
+        if (args.has(MATCH_TYPES) && args.get(MATCH_TYPES).isJsonArray()) {
+            args.getAsJsonArray(MATCH_TYPES).forEach(e -> matchTypes.add(e.getAsInt()));
         }
-        final var maxAge = args.has("maxSnapshotAgeDays") && !args.get("maxSnapshotAgeDays").isJsonNull()
-                ? args.get("maxSnapshotAgeDays").getAsDouble() : 7.0;
-        final Integer attitude = args.has("attitude") && !args.get("attitude").isJsonNull()
-                ? args.get("attitude").getAsInt() : null;
+        final var maxAge = args.has(MAX_SNAPSHOT_AGE_DAYS) && !args.get(MAX_SNAPSHOT_AGE_DAYS).isJsonNull()
+                ? args.get(MAX_SNAPSHOT_AGE_DAYS).getAsDouble() : 7.0;
+        final Integer attitude = args.has(ATTITUDE) && !args.get(ATTITUDE).isJsonNull()
+                ? args.get(ATTITUDE).getAsInt() : null;
         final var query = new CalibrationSummary.Query(matchTypes, attitude, maxAge,
                 McpJson.optBool(args, "includeConfounded", false),
                 Math.min(Math.max(McpJson.optInt(args, "limit", CALIBRATION_PAGE), 1), CALIBRATION_MAX_PAGE),
@@ -1053,13 +1090,13 @@ public final class MatchTools {
         final var teamId = McpJson.model().getBasics().getTeamId();
         for (final var element : json.getAsJsonArray("rows")) {
             final var row = element.getAsJsonObject();
-            final var matchType = MatchType.getById(row.get("matchType").getAsInt());
-            final var played = DBManager.instance().getMatchLineupPlayers(row.get("matchId").getAsInt(),
+            final var matchType = MatchType.getById(row.get(MATCH_TYPE).getAsInt());
+            final var played = DBManager.instance().getMatchLineupPlayers(row.get(MATCH_ID).getAsInt(),
                     matchType, teamId);
             row.addProperty("behaviours", CalibrationSummary.behaviours(played));
         }
         if (backfill != null) {
-            json.add("backfill", backfill);
+            json.add(BACKFILL, backfill);
         }
         return json;
     }
@@ -1097,7 +1134,7 @@ public final class MatchTools {
         final Lineup lineup;
         if (args.has("positions")) {
             lineup = LineupTools.scratchLineup(args);
-        } else if (args.has("weather") || args.has("matchId")) {
+        } else if (args.has("weather") || args.has(MATCH_ID)) {
             // The live lineup under another fixture: scored on a copy, so it stays as it is.
             lineup = LineupTools.copyOf(McpJson.model().getCurrentLineup());
             LineupTools.applyFixture(lineup, args);
@@ -1130,20 +1167,20 @@ public final class MatchTools {
                 lineup.getTacticType(), McpJson.tacticLevel(ratingModel.getTacticRating(lineup, 0)));
 
         final var theirRatings = manager.generateTeamRatings(
-                McpJson.reqDouble(args, "opponentMidfield"),
-                McpJson.reqDouble(args, "opponentDefenceLeft"),
-                McpJson.reqDouble(args, "opponentDefenceCentral"),
-                McpJson.reqDouble(args, "opponentDefenceRight"),
-                McpJson.reqDouble(args, "opponentAttackLeft"),
-                McpJson.reqDouble(args, "opponentAttackCentral"),
-                McpJson.reqDouble(args, "opponentAttackRight"));
+                McpJson.reqDouble(args, OPPONENT_MIDFIELD),
+                McpJson.reqDouble(args, OPPONENT_DEFENCE_LEFT),
+                McpJson.reqDouble(args, OPPONENT_DEFENCE_CENTRAL),
+                McpJson.reqDouble(args, OPPONENT_DEFENCE_RIGHT),
+                McpJson.reqDouble(args, OPPONENT_ATTACK_LEFT),
+                McpJson.reqDouble(args, OPPONENT_ATTACK_CENTRAL),
+                McpJson.reqDouble(args, OPPONENT_ATTACK_RIGHT));
         final var theirTeam = manager.generateTeamData(
-                McpJson.optString(args, "opponentName", "Opponent"), theirRatings,
-                McpJson.optInt(args, "opponentTacticType", 0),
-                McpJson.optInt(args, "opponentTacticSkill", 1));
+                McpJson.optString(args, OPPONENT_NAME, "Opponent"), theirRatings,
+                McpJson.optInt(args, OPPONENT_TACTIC_TYPE, 0),
+                McpJson.optInt(args, OPPONENT_TACTIC_SKILL, 1));
 
-        final var weAreHome = !"away".equalsIgnoreCase(McpJson.optString(args, "location", "home"));
-        final var simulations = Math.max(1, McpJson.optInt(args, "simulations", DEFAULT_SIMULATIONS));
+        final var weAreHome = !"away".equalsIgnoreCase(McpJson.optString(args, LOCATION, "home"));
+        final var simulations = Math.max(1, McpJson.optInt(args, SIMULATIONS, DEFAULT_SIMULATIONS));
         final var result = weAreHome
                 ? manager.calculateNMatches(simulations, ourTeam, theirTeam)
                 : manager.calculateNMatches(simulations, theirTeam, ourTeam);
@@ -1156,8 +1193,8 @@ public final class MatchTools {
         final var theirChances = weAreHome ? result.getGuestChances() : result.getHomeChances();
 
         final var json = new JsonObject();
-        json.addProperty("simulations", played);
-        json.addProperty("location", weAreHome ? "home" : "away");
+        json.addProperty(SIMULATIONS, played);
+        json.addProperty(LOCATION, weAreHome ? "home" : "away");
         json.addProperty("winProbability", (double) ourWins / played);
         json.addProperty("drawProbability", (double) result.getDraw() / played);
         json.addProperty("lossProbability",
@@ -1177,19 +1214,19 @@ public final class MatchTools {
      * required, but the seven sector ratings ({@link #OPPONENT_SECTORS}) are all-or-nothing.
      */
     private static JsonObject opponentProperties(JsonObject properties) {
-        properties.add("opponentMidfield", McpTool.prop("number", "opponent midfield rating"));
-        properties.add("opponentDefenceLeft", McpTool.prop("number", "opponent left defence rating"));
-        properties.add("opponentDefenceCentral", McpTool.prop("number", "opponent central defence rating"));
-        properties.add("opponentDefenceRight", McpTool.prop("number", "opponent right defence rating"));
-        properties.add("opponentAttackLeft", McpTool.prop("number", "opponent left attack rating"));
-        properties.add("opponentAttackCentral", McpTool.prop("number", "opponent central attack rating"));
-        properties.add("opponentAttackRight", McpTool.prop("number", "opponent right attack rating"));
-        properties.add("opponentName", McpTool.prop("string", "opponent team name, for the output only"));
-        properties.add("opponentTacticType", McpTool.prop("integer", "opponent tactic type, 0 normal"));
-        properties.add("opponentTacticSkill", McpTool.prop("integer", "opponent tactic level, default 1"));
-        properties.add("location", McpTool.prop("string",
+        properties.add(OPPONENT_MIDFIELD, McpTool.prop(NUMBER, "opponent midfield rating"));
+        properties.add(OPPONENT_DEFENCE_LEFT, McpTool.prop(NUMBER, "opponent left defence rating"));
+        properties.add(OPPONENT_DEFENCE_CENTRAL, McpTool.prop(NUMBER, "opponent central defence rating"));
+        properties.add(OPPONENT_DEFENCE_RIGHT, McpTool.prop(NUMBER, "opponent right defence rating"));
+        properties.add(OPPONENT_ATTACK_LEFT, McpTool.prop(NUMBER, "opponent left attack rating"));
+        properties.add(OPPONENT_ATTACK_CENTRAL, McpTool.prop(NUMBER, "opponent central attack rating"));
+        properties.add(OPPONENT_ATTACK_RIGHT, McpTool.prop(NUMBER, "opponent right attack rating"));
+        properties.add(OPPONENT_NAME, McpTool.prop(STRING, "opponent team name, for the output only"));
+        properties.add(OPPONENT_TACTIC_TYPE, McpTool.prop(INTEGER, "opponent tactic type, 0 normal"));
+        properties.add(OPPONENT_TACTIC_SKILL, McpTool.prop(INTEGER, "opponent tactic level, default 1"));
+        properties.add(LOCATION, McpTool.prop(STRING,
                 "'home' or 'away', from our point of view; default home"));
-        properties.add("simulations", McpTool.prop("integer",
+        properties.add(SIMULATIONS, McpTool.prop(INTEGER,
                 "how many matches to simulate, default " + DEFAULT_SIMULATIONS));
         return properties;
     }

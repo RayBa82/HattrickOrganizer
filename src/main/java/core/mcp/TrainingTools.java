@@ -34,6 +34,31 @@ import java.util.Set;
  */
 public final class TrainingTools {
 
+    private static final String BOOLEAN = "boolean";
+    private static final String COVERAGE = "coverage";
+    private static final String DAYS_SINCE_LAST_SNAPSHOT = "daysSinceLastSnapshot";
+    private static final String DERIVED = "derived";
+    private static final String EVENTS = "events";
+    private static final String INTEGER = "integer";
+    private static final String INTENSITY = "intensity";
+    private static final String LATEST_SKILLS = "latestSkills";
+    private static final String LEVEL_UPS = "levelUps";
+    private static final String PLAYER_ID = "playerId";
+    private static final String PLAYERS = "players";
+    private static final String REASON = "reason";
+    private static final String SCREEN = "screen";
+    private static final String SKILL = "skill";
+    private static final String SNAPSHOTS = "snapshots";
+    private static final String STAMINA_SHARE = "staminaShare";
+    private static final String STATUS = "status";
+    private static final String TRAINING_DATE = "trainingDate";
+    private static final String TRAINING_EVENTS = "trainingEvents";
+    private static final String TRAINING_TYPE = "trainingType";
+    private static final String TRAINING_WEEKS = "trainingWeeks";
+    private static final String WEEK_START = "weekStart";
+    private static final String WEEKS = "weeks";
+    private static final String WEEKS_AGO = "weeksAgo";
+
     /** How many weeks ahead to predict when the caller does not say. */
     private static final int DEFAULT_WEEKS = 1;
 
@@ -99,22 +124,22 @@ public final class TrainingTools {
         final var rows = new JsonArray();
         for (final var e : sorted) {
             final var row = new JsonObject();
-            row.addProperty("skill", chppSkillName(e.skillId()));
+            row.addProperty(SKILL, chppSkillName(e.skillId()));
             row.addProperty("oldLevel", e.oldLevel());
             row.addProperty("newLevel", e.newLevel());
             row.addProperty("season", e.season());
             row.addProperty("matchRound", e.matchRound());
             row.addProperty("dayNumber", e.dayNumber());
             if (seasonOffset != null && e.season() > 0 && e.matchRound() > 0) {
-                row.addProperty("weekStart", HODateTime.fromHTWeek(new HODateTime.HTWeek(
+                row.addProperty(WEEK_START, HODateTime.fromHTWeek(new HODateTime.HTWeek(
                         e.season() - seasonOffset, e.matchRound())).toHT());
             }
             rows.add(row);
         }
         final var out = new JsonObject();
-        out.addProperty("playerId", playerId);
+        out.addProperty(PLAYER_ID, playerId);
         out.addProperty("available", events.available());
-        out.add("events", rows);
+        out.add(EVENTS, rows);
         return out;
     }
 
@@ -150,17 +175,17 @@ public final class TrainingTools {
                                 + "currentWeek wins - read it before any lineup. "
                                 + "status: 'ok'|'no_future_training_plan'.",
                         McpTool.schema(McpTool.properties(
-                                "weeks", McpTool.prop("integer",
+                                WEEKS, McpTool.prop(INTEGER,
                                         "how many weeks to predict, default " + DEFAULT_WEEKS
                                                 + "; capped at the number of future weeks HO has planned"),
-                                "playerIds", McpTool.prop("array",
+                                PLAYER_IDS, McpTool.prop("array",
                                         "restrict the prediction to these player ids; the whole squad if omitted. "
                                                 + "Also filters currentWeek.players unless wholeSquadWeek"),
-                                "wholeSquadWeek", McpTool.prop("boolean",
+                                "wholeSquadWeek", McpTool.prop(BOOLEAN,
                                         "list every squad player in currentWeek.players, nothing "
                                                 + "banked included, ignoring playerIds. With "
                                                 + "playerIds [] it skips the predictions. Default false"),
-                                "bulk", McpTool.prop("boolean",
+                                "bulk", McpTool.prop(BOOLEAN,
                                         "for scripts: every player's weekly prediction as a JSON file to "
                                                 + "download (HTTP GET of the returned download path on "
                                                 + "the MCP endpoint); the answer keeps current and "
@@ -169,7 +194,7 @@ public final class TrainingTools {
                         TrainingTools::training)
                         .withBudget("Pass playerIds for the predictions you need, or a smaller weeks; "
                                         + "wholeSquadWeek with playerIds [] returns the current week alone.",
-                                McpTool.OptionalSection.top("players")),
+                                McpTool.OptionalSection.top(PLAYERS)),
                 new McpTool("get_player_history",
                         "Training already done, from HO's own snapshots (no CHPP file has it). "
                                 + "Per player: dated level-ups and latestSkills (sub-level); growth "
@@ -178,14 +203,14 @@ public final class TrainingTools {
                                 + "before the rate: a level-up inside a download gap cannot be dated. "
                                 + "Local unless includeEvents.",
                         McpTool.schema(McpTool.properties(
-                                "playerIds", McpTool.prop("array",
+                                PLAYER_IDS, McpTool.prop("array",
                                         "the player ids to report on; the current squad if omitted. "
                                                 + "An id that has left the squad still works - the "
                                                 + "snapshots outlive the player"),
-                                "weeks", McpTool.prop("integer",
+                                WEEKS, McpTool.prop(INTEGER,
                                         "how far back to look, in weeks; default "
                                                 + DEFAULT_HISTORY_WEEKS),
-                                "includeEvents", McpTool.prop("boolean",
+                                "includeEvents", McpTool.prop(BOOLEAN,
                                         "add trainingEvents per player: Hattrick's own skill changes "
                                                 + "(skill, old -> new level, season / matchRound / "
                                                 + "dayNumber, weekStart), which date level-ups a "
@@ -194,40 +219,40 @@ public final class TrainingTools {
                                                 + "empty while the player is in a match. Only events "
                                                 + "inside weeks; raise weeks for the whole career. "
                                                 + "Default false"),
-                                "includeTraining", McpTool.prop("boolean",
+                                "includeTraining", McpTool.prop(BOOLEAN,
                                         "add trainingWeeks: every stored training week in the "
                                                 + "window (type, intensity, staminaShare, coach and "
                                                 + "assistants levels) and per player the minutes each "
                                                 + "week banked (full/partly/played, maxedForWeek), "
                                                 + "rebuilt from stored lineups. Local. weeks defaults "
                                                 + "to " + DEFAULT_TRAINING_WEEKS + " with it. Default false"),
-                                "includeDerived", McpTool.prop("boolean",
+                                "includeDerived", McpTool.prop(BOOLEAN,
                                         "add derived per player (growth rate, TSI and wage drift); "
                                                 + "default true for up to " + DERIVED_PLAYERS + " players"),
-                                "includeScreen", McpTool.prop("boolean",
+                                "includeScreen", McpTool.prop(BOOLEAN,
                                         "add screen per player: levelsPerHtYear, rateBasis, "
                                                 + "weeksSinceLastLevelUp, daysSinceLastSnapshot, gapCount - "
                                                 + "the trainee screen for many players; default true "
                                                 + "where derived is left out"),
-                                "includeCoverage", McpTool.prop("boolean",
+                                "includeCoverage", McpTool.prop(BOOLEAN,
                                         "add coverage per player (snapshot dates, gaps, "
                                                 + "daysSinceLastSnapshot); default true for up to "
                                                 + COVERAGE_PLAYERS + " players"),
-                                "weeksAgo", McpTool.prop("integer",
+                                WEEKS_AGO, McpTool.prop(INTEGER,
                                         "end the window this many weeks before now, to page back "
                                                 + "through older history in weeks-long steps; default 0"),
-                                "includeSnapshots", McpTool.prop("boolean",
+                                "includeSnapshots", McpTool.prop(BOOLEAN,
                                         "add the raw dated series per player; default false, "
                                                 + "because levelUps, derived and coverage answer "
                                                 + "the growth question on their own and the series "
                                                 + "is a wall of numbers"),
-                                "sinceLastTraining", McpTool.prop("boolean",
+                                "sinceLastTraining", McpTool.prop(BOOLEAN,
                                         "instead of the history: the confirmed skill changes of "
                                                 + "the last training update, drops included - per "
                                                 + "player the newest snapshot before it against the "
                                                 + "newest overall. Lists changed players only. "
                                                 + "Default false"),
-                                "bulk", McpTool.prop("boolean",
+                                "bulk", McpTool.prop(BOOLEAN,
                                         "for scripts: every player row as a JSON file to download "
                                                 + "(HTTP GET of the returned download path on the MCP "
                                                 + "endpoint), derived, coverage and screen on by "
@@ -238,35 +263,35 @@ public final class TrainingTools {
                                         + "weeks plus weeksAgo (weeks 4, then weeksAgo 4, 8, ...); "
                                         + "snapshots, events and training weeks are per-player detail.",
                                 // What came by default goes before what the caller asked for.
-                                McpTool.OptionalSection.perItem("players", "derived", "derived"),
-                                McpTool.OptionalSection.perItem("players", "coverage", "coverage"),
-                                McpTool.OptionalSection.perItem("players", "latestSkills", "latestSkills"),
-                                McpTool.OptionalSection.perItem("players", "screen", "screen"),
-                                McpTool.OptionalSection.perItem("players", "snapshots", "snapshots"),
-                                McpTool.OptionalSection.perItem("players", "trainingEvents", "trainingEvents"),
-                                McpTool.OptionalSection.perItem("players", "trainingWeeks", "trainingWeeks"),
-                                McpTool.OptionalSection.top("trainingWeeks")),
+                                McpTool.OptionalSection.perItem(PLAYERS, DERIVED, DERIVED),
+                                McpTool.OptionalSection.perItem(PLAYERS, COVERAGE, COVERAGE),
+                                McpTool.OptionalSection.perItem(PLAYERS, LATEST_SKILLS, LATEST_SKILLS),
+                                McpTool.OptionalSection.perItem(PLAYERS, SCREEN, SCREEN),
+                                McpTool.OptionalSection.perItem(PLAYERS, SNAPSHOTS, SNAPSHOTS),
+                                McpTool.OptionalSection.perItem(PLAYERS, TRAINING_EVENTS, TRAINING_EVENTS),
+                                McpTool.OptionalSection.perItem(PLAYERS, TRAINING_WEEKS, TRAINING_WEEKS),
+                                McpTool.OptionalSection.top(TRAINING_WEEKS)),
                 new McpTool("set_training",
                         "Set the senior team's training. Call get_training first for the current "
                                 + "values and for what each trainingType id trains. This leaves the "
                                 + "machine and changes training in Hattrick immediately. HO's local "
                                 + "snapshot is NOT refreshed until the next team download.",
                         McpTool.schema(McpTool.properties(
-                                        "trainingType", McpTool.prop("integer",
+                                        TRAINING_TYPE, McpTool.prop(INTEGER,
                                                 "training type id; see get_training for the meanings"),
-                                        "intensity", McpTool.prop("integer",
+                                        INTENSITY, McpTool.prop(INTEGER,
                                                 "training intensity, 0..100"),
-                                        "staminaShare", McpTool.prop("integer",
+                                        STAMINA_SHARE, McpTool.prop(INTEGER,
                                                 "stamina share, 5..100")),
-                                "trainingType", "intensity", "staminaShare"),
+                                TRAINING_TYPE, INTENSITY, STAMINA_SHARE),
                         TrainingTools::setTraining)
         );
     }
 
     private static JsonObject setTraining(JsonObject args) throws McpToolException {
-        final var trainingType = McpJson.reqInt(args, "trainingType");
-        final var intensity = McpJson.reqInt(args, "intensity");
-        final var staminaShare = McpJson.reqInt(args, "staminaShare");
+        final var trainingType = McpJson.reqInt(args, TRAINING_TYPE);
+        final var intensity = McpJson.reqInt(args, INTENSITY);
+        final var staminaShare = McpJson.reqInt(args, STAMINA_SHARE);
         if (intensity < 0 || intensity > 100) {
             throw new IllegalArgumentException("intensity must be 0..100, was " + intensity);
         }
@@ -281,11 +306,11 @@ public final class TrainingTools {
             throw new McpToolException(e.getMessage());
         }
         final var out = new JsonObject();
-        out.addProperty("status", "ok");
+        out.addProperty(STATUS, "ok");
         final var c = new JsonObject();
-        c.addProperty("trainingType", committed.trainingType());
-        c.addProperty("intensity", committed.intensity());
-        c.addProperty("staminaShare", committed.staminaShare());
+        c.addProperty(TRAINING_TYPE, committed.trainingType());
+        c.addProperty(INTENSITY, committed.intensity());
+        c.addProperty(STAMINA_SHARE, committed.staminaShare());
         c.addProperty("intensityChangePending", committed.intensityChangePending());
         out.add("committed", c);
         final var note = new StringBuilder("HO's snapshot is not refreshed until the next team download.");
@@ -309,15 +334,15 @@ public final class TrainingTools {
         // The future training plan is what the Training tab edits; it is empty until the user has
         // opened that tab once, and then predictions are simply unavailable.
         final var plan = DBManager.instance().getFutureTrainingsVector();
-        final var weeks = Math.min(McpJson.optInt(args, "weeks", DEFAULT_WEEKS), plan.size());
+        final var weeks = Math.min(McpJson.optInt(args, WEEKS, DEFAULT_WEEKS), plan.size());
         json.addProperty("predictedWeeks", weeks);
         if (weeks <= 0) {
-            json.addProperty("status", "no_future_training_plan");
+            json.addProperty(STATUS, "no_future_training_plan");
             json.addProperty("note", "HO has no future training weeks planned, so no skill "
                     + "prediction is possible. Open the Training tab in HO once to create the plan.");
             return json;
         }
-        json.addProperty("status", "ok");
+        json.addProperty(STATUS, "ok");
 
         // A change dated on or before the last update is a stale projection, not a result - it
         // shows up when the plan was built before HO's newest download. Never worth sending.
@@ -329,10 +354,10 @@ public final class TrainingTools {
                 players.add(prediction(player, plan, weeks, lastTraining));
             }
         }
-        json.add("players", players);
+        json.add(PLAYERS, players);
         // currentWeek.players too: with wholeSquadWeek it is a row per squad player.
         return McpJson.optBool(args, "bulk", false)
-                ? McpDownloads.bulkSections(json, "players", "currentWeek.players") : json;
+                ? McpDownloads.bulkSections(json, PLAYERS, "currentWeek.players") : json;
     }
 
     /**
@@ -355,7 +380,7 @@ public final class TrainingTools {
         final var includeTraining = McpJson.optBool(args, "includeTraining", false);
         final var weeks = historyWeeks(args, includeTraining);
         final var includeSnapshots = McpJson.optBool(args, "includeSnapshots", false);
-        final var weeksAgo = Math.max(0, McpJson.optInt(args, "weeksAgo", 0));
+        final var weeksAgo = Math.max(0, McpJson.optInt(args, WEEKS_AGO, 0));
         final var asOf = HODateTime.now().minus(weeksAgo * 7, ChronoUnit.DAYS);
         final var since = asOf.minus(weeks * 7, ChronoUnit.DAYS);
         final var window = new Window(since, asOf);
@@ -369,8 +394,8 @@ public final class TrainingTools {
 
         final var json = new JsonObject();
         json.addProperty("asOf", asOf.toHT());
-        json.addProperty("weeks", weeks);
-        json.addProperty("weeksAgo", weeksAgo);
+        json.addProperty(WEEKS, weeks);
+        json.addProperty(WEEKS_AGO, weeksAgo);
         json.addProperty("currency", McpJson.currency());
         json.addProperty("trainedSkill", trained == null ? null : String.valueOf(trained));
         json.addProperty("secondarySkill", weekly == null || weekly.getSecondaryTrainingSkill() == null
@@ -394,18 +419,18 @@ public final class TrainingTools {
             final var row = history(playerId, window, trained, includeSnapshots);
             shapeRow(row, screenOn, derivedOn, coverageOn);
             if (includeEvents) {
-                row.add("trainingEvents", eventsIn(trainingEvents(playerId), window));
+                row.add(TRAINING_EVENTS, eventsIn(trainingEvents(playerId), window));
             }
             if (trainingWeeks != null) {
-                row.add("trainingWeeks", trainingWeeks.players().getOrDefault(playerId, new JsonArray()));
+                row.add(TRAINING_WEEKS, trainingWeeks.players().getOrDefault(playerId, new JsonArray()));
             }
             players.add(row);
         }
         if (trainingWeeks != null) {
-            json.add("trainingWeeks", trainingWeeks.weeks());
+            json.add(TRAINING_WEEKS, trainingWeeks.weeks());
         }
         json.addProperty("count", players.size());
-        json.add("players", players);
+        json.add(PLAYERS, players);
         json.addProperty("note", "levelsPerHtYear is the trained skill's sub-skill-inclusive gain "
                 + "between coverage.firstDate and coverage.lastDate, divided by coverage."
                 + "observedWeeks and multiplied by " + HT_WEEKS_PER_YEAR + ". It is null when "
@@ -419,8 +444,8 @@ public final class TrainingTools {
                 + "calling a player stalled. An empty levelUps over a long observedWeeks is the "
                 + "real 'growth has stopped' signal; an empty one next to a short span, or one "
                 + "with gaps, means it cannot be told.");
-        return bulk ? McpDownloads.bulk(json, "players", "trainingWeeks", "snapshots",
-                "trainingEvents") : json;
+        return bulk ? McpDownloads.bulk(json, PLAYERS, TRAINING_WEEKS, SNAPSHOTS,
+                TRAINING_EVENTS) : json;
     }
 
     /**
@@ -433,11 +458,11 @@ public final class TrainingTools {
         final var xtra = model.getXtraDaten();
         final var lastTraining = xtra == null ? null : xtra.getTrainingDateAfterWeeks(-1);
         if (lastTraining == null) {
-            json.addProperty("status", "no_training_date");
+            json.addProperty(STATUS, "no_training_date");
             json.addProperty("note", "The current snapshot has no training date.");
             return json;
         }
-        json.addProperty("status", "ok");
+        json.addProperty(STATUS, "ok");
         json.addProperty("lastTraining", lastTraining.toHT());
         final var changed = new JsonArray();
         final var unconfirmed = new JsonArray();
@@ -445,15 +470,15 @@ public final class TrainingTools {
         for (final var playerId : ids) {
             final var row = trainingDiff(playerId, DBManager.instance().loadPlayerHistory(playerId),
                     lastTraining);
-            if (row.has("reason")) {
+            if (row.has(REASON)) {
                 unconfirmed.add(row);
-            } else if (!row.getAsJsonArray("levelUps").isEmpty()) {
+            } else if (!row.getAsJsonArray(LEVEL_UPS).isEmpty()) {
                 changed.add(row);
             } else {
                 unchanged++;
             }
         }
-        json.add("players", changed);
+        json.add(PLAYERS, changed);
         json.addProperty("unchanged", unchanged);
         json.add("unconfirmed", unconfirmed);
         json.addProperty("note", "players lists only those whose skills changed, drops included; "
@@ -470,10 +495,10 @@ public final class TrainingTools {
      */
     static JsonObject trainingDiff(int playerId, List<Player> series, HODateTime lastTraining) {
         final var json = new JsonObject();
-        json.addProperty("playerId", playerId);
+        json.addProperty(PLAYER_ID, playerId);
         final var dated = series.stream().filter(p -> p.getHrfDate() != null).toList();
         if (dated.isEmpty()) {
-            json.addProperty("reason", "no snapshot");
+            json.addProperty(REASON, "no snapshot");
             return json;
         }
         final var latest = dated.get(dated.size() - 1);
@@ -485,13 +510,13 @@ public final class TrainingTools {
             }
         }
         if (latest.getHrfDate().isBefore(lastTraining)) {
-            json.addProperty("reason", "no snapshot since the last training");
+            json.addProperty(REASON, "no snapshot since the last training");
         } else if (baseline == null) {
-            json.addProperty("reason", "no snapshot from before the last training");
+            json.addProperty(REASON, "no snapshot from before the last training");
         } else {
             json.addProperty("baselineDate", baseline.getHrfDate().toHT());
             json.addProperty("latestDate", latest.getHrfDate().toHT());
-            json.add("levelUps", levelUps(List.of(baseline, latest)));
+            json.add(LEVEL_UPS, levelUps(List.of(baseline, latest)));
         }
         return json;
     }
@@ -514,13 +539,13 @@ public final class TrainingTools {
      */
     static JsonObject eventsIn(JsonObject events, Window window) {
         final var kept = new JsonArray();
-        for (final var element : events.getAsJsonArray("events")) {
-            final var weekStart = element.getAsJsonObject().get("weekStart");
+        for (final var element : events.getAsJsonArray(EVENTS)) {
+            final var weekStart = element.getAsJsonObject().get(WEEK_START);
             if (weekStart == null || window.contains(HODateTime.fromHT(weekStart.getAsString()))) {
                 kept.add(element);
             }
         }
-        events.add("events", kept);
+        events.add(EVENTS, kept);
         return events;
     }
 
@@ -531,7 +556,7 @@ public final class TrainingTools {
      */
     static void addScreen(JsonObject row) {
         final var screen = new JsonObject();
-        final var derived = row.getAsJsonObject("derived");
+        final var derived = row.getAsJsonObject(DERIVED);
         if (derived != null) {
             for (final var key : List.of("levelsPerHtYear", "rateBasis", "weeksSinceLastLevelUp")) {
                 if (derived.has(key)) {
@@ -539,13 +564,13 @@ public final class TrainingTools {
                 }
             }
         }
-        final var coverage = row.getAsJsonObject("coverage");
+        final var coverage = row.getAsJsonObject(COVERAGE);
         if (coverage != null) {
-            screen.add("daysSinceLastSnapshot", coverage.get("daysSinceLastSnapshot"));
+            screen.add(DAYS_SINCE_LAST_SNAPSHOT, coverage.get(DAYS_SINCE_LAST_SNAPSHOT));
             screen.addProperty("gapCount", coverage.getAsJsonArray("gaps").size());
         }
         if (!screen.isEmpty()) {
-            row.add("screen", screen);
+            row.add(SCREEN, screen);
         }
     }
 
@@ -555,10 +580,10 @@ public final class TrainingTools {
             addScreen(row);
         }
         if (!derived) {
-            row.remove("derived");
+            row.remove(DERIVED);
         }
         if (!coverage) {
-            row.remove("coverage");
+            row.remove(COVERAGE);
         }
     }
 
@@ -568,14 +593,14 @@ public final class TrainingTools {
      */
     private static int historyWeeks(JsonObject args, boolean includeTraining) {
         final var fallback = includeTraining ? DEFAULT_TRAINING_WEEKS : DEFAULT_HISTORY_WEEKS;
-        return Math.max(1, McpJson.optInt(args, "weeks", fallback));
+        return Math.max(1, McpJson.optInt(args, WEEKS, fallback));
     }
 
     /** The explicit ids in the caller's order, else every non-coach in the current squad. */
     static List<Integer> historyPlayerIds(JsonObject args, HOModel model) {
         final var ids = new ArrayList<Integer>();
-        if (args.has("playerIds") && !args.get("playerIds").isJsonNull()) {
-            for (final var element : args.getAsJsonArray("playerIds")) {
+        if (args.has(PLAYER_IDS) && !args.get(PLAYER_IDS).isJsonNull()) {
+            for (final var element : args.getAsJsonArray(PLAYER_IDS)) {
                 ids.add(element.getAsInt());
             }
             return ids;
@@ -604,9 +629,9 @@ public final class TrainingTools {
     static JsonObject historyOf(int playerId, List<Player> series, PlayerSkill trained,
                                 boolean includeSnapshots) {
         final var json = new JsonObject();
-        json.addProperty("playerId", playerId);
+        json.addProperty(PLAYER_ID, playerId);
         if (series.isEmpty()) {
-            json.addProperty("status", "no_history");
+            json.addProperty(STATUS, "no_history");
             json.addProperty("note", "HO holds no snapshot of this player inside the window. Either "
                     + "the id is wrong, or he arrived and left before it, or no team download "
                     + "happened in it.");
@@ -618,25 +643,25 @@ public final class TrainingTools {
         final var observedWeeks = weeksBetween(first.getHrfDate(), last.getHrfDate());
 
         // Identity off the newest snapshot, so a player who has since been sold still has a name.
-        json.addProperty("status", series.size() < 2 ? "single_snapshot" : "ok");
+        json.addProperty(STATUS, series.size() < 2 ? "single_snapshot" : "ok");
         json.addProperty("name", last.getFullName());
         json.addProperty("age", last.getAge());
         json.addProperty("ageDays", last.getAgeDays());
 
-        json.add("levelUps", levelUps(series));
+        json.add(LEVEL_UPS, levelUps(series));
         final var latestSkills = new JsonObject();
         for (final var skill : TRACKED_SKILLS) {
             latestSkills.addProperty(String.valueOf(skill), round2(precise(last, skill)));
         }
-        json.add("latestSkills", latestSkills);
-        json.add("derived", derived(series, trained, observedWeeks));
-        json.add("coverage", coverage(series, first, last, observedWeeks));
+        json.add(LATEST_SKILLS, latestSkills);
+        json.add(DERIVED, derived(series, trained, observedWeeks));
+        json.add(COVERAGE, coverage(series, first, last, observedWeeks));
         if (includeSnapshots) {
             final var snapshots = new JsonArray();
             for (final var snapshot : series) {
                 snapshots.add(snapshot(snapshot));
             }
-            json.add("snapshots", snapshots);
+            json.add(SNAPSHOTS, snapshots);
         }
         return json;
     }
@@ -657,7 +682,7 @@ public final class TrainingTools {
                     continue;
                 }
                 final var change = new JsonObject();
-                change.addProperty("skill", String.valueOf(skill));
+                change.addProperty(SKILL, String.valueOf(skill));
                 change.addProperty("from", from);
                 change.addProperty("to", to);
                 // The date of the snapshot that first showed it, which is the earliest the change
@@ -716,7 +741,7 @@ public final class TrainingTools {
                 return "subskill";
             }
         }
-        return "integer";
+        return INTEGER;
     }
 
     /**
@@ -758,7 +783,7 @@ public final class TrainingTools {
         json.addProperty("firstDate", first.getHrfDate().toHT());
         json.addProperty("lastDate", last.getHrfDate().toHT());
         json.addProperty("observedWeeks", round2(observedWeeks));
-        json.addProperty("daysSinceLastSnapshot",
+        json.addProperty(DAYS_SINCE_LAST_SNAPSHOT,
                 round2(weeksBetween(last.getHrfDate(), HODateTime.now()) * 7));
 
         final var gaps = new JsonArray();
@@ -832,21 +857,21 @@ public final class TrainingTools {
         final var json = new JsonObject();
         final var training = model.getTraining();
         if (training == null) {
-            json.addProperty("status", "no_training_settings");
+            json.addProperty(STATUS, "no_training_settings");
             json.addProperty("note", "No training settings in the current snapshot.");
             return json;
         }
-        json.addProperty("status", "ok");
-        json.addProperty("trainingType", training.getTrainingType());
-        json.addProperty("intensity", training.getTrainingIntensity());
-        json.addProperty("staminaShare", training.getStaminaShare());
+        json.addProperty(STATUS, "ok");
+        json.addProperty(TRAINING_TYPE, training.getTrainingType());
+        json.addProperty(INTENSITY, training.getTrainingIntensity());
+        json.addProperty(STAMINA_SHARE, training.getStaminaShare());
         json.addProperty("coachLevel", training.getCoachLevel());
         json.addProperty("assistantsLevel", training.getTrainingAssistantsLevel());
         // trainingDate is the update that CLOSED the week reported here - HOModel.getTraining()
         // deliberately steps back one week. The week now in progress is under "currentWeek".
         final var trainingDate = training.getTrainingDate();
-        json.addProperty("trainingDate", trainingDate == null ? null : trainingDate.toHT());
-        json.addProperty("weekStart",
+        json.addProperty(TRAINING_DATE, trainingDate == null ? null : trainingDate.toHT());
+        json.addProperty(WEEK_START,
                 trainingDate == null ? null : trainingDate.minus(7, ChronoUnit.DAYS).toHT());
         json.addProperty("weekEnd", trainingDate == null ? null : trainingDate.toHT());
         final var xtra = model.getXtraDaten();
@@ -901,7 +926,7 @@ public final class TrainingTools {
         final var weekly = team == null
                 ? null : WeeklyTrainingType.instance(team.getTrainingsArtAsInt());
         if (weekEnd == null || weekly == null) {
-            json.addProperty("status", "no_training_settings");
+            json.addProperty(STATUS, "no_training_settings");
             json.addProperty("note", "No training settings in the current snapshot, so minutes "
                     + "already played cannot be attributed to a trained sector.");
             return json;
@@ -915,8 +940,8 @@ public final class TrainingTools {
                 team.getTrainingslevel(), team.getStaminaTrainingPart(),
                 club == null ? 0 : club.getCoTrainer(),
                 trainer.getCoachSkill());   // never null: a team without a coach gets a stand-in
-        json.addProperty("status", "ok");
-        json.addProperty("weekStart", weekEnd.minus(7, ChronoUnit.DAYS).toHT());
+        json.addProperty(STATUS, "ok");
+        json.addProperty(WEEK_START, weekEnd.minus(7, ChronoUnit.DAYS).toHT());
         json.addProperty("weekEnd", weekEnd.toHT());
         json.add("fullTrainingRoleIds", roleIds(weekly.getTrainingSkillPositions()));
 
@@ -935,7 +960,7 @@ public final class TrainingTools {
         for (final var entry : banked.entrySet()) {
             players.add(entry.getValue().toJson(entry.getKey()));
         }
-        json.add("players", players);
+        json.add(PLAYERS, players);
         json.addProperty("lineupDataComplete", missingLineups == 0);
         json.addProperty("note", missingLineups == 0
                 ? "Minutes already banked in the week now in progress; a player not listed here "
@@ -1061,11 +1086,11 @@ public final class TrainingTools {
             }
             final var weekly = WeeklyTrainingType.instance(week.getTrainingType());
             final var row = new JsonObject();
-            row.addProperty("trainingDate", date.toHT());
-            row.addProperty("trainingType", week.getTrainingType());
+            row.addProperty(TRAINING_DATE, date.toHT());
+            row.addProperty(TRAINING_TYPE, week.getTrainingType());
             row.addProperty("trainingName", weekly == null ? null : weekly.getName());
-            row.addProperty("intensity", week.getTrainingIntensity());
-            row.addProperty("staminaShare", week.getStaminaShare());
+            row.addProperty(INTENSITY, week.getTrainingIntensity());
+            row.addProperty(STAMINA_SHARE, week.getStaminaShare());
             row.addProperty("coachLevel", week.getCoachLevel());
             row.addProperty("assistantsLevel", week.getTrainingAssistantsLevel());
             final var banked = new LinkedHashMap<Integer, WeekMinutes>();
@@ -1074,12 +1099,12 @@ public final class TrainingTools {
             weeks.add(row);
             for (final var entry : banked.entrySet()) {
                 final var minutes = entry.getValue().toJson(entry.getKey());
-                minutes.remove("playerId");
+                minutes.remove(PLAYER_ID);
                 minutes.remove("name");
                 // Kept compact: the match ids and start positions are what currentWeek is for.
                 minutes.remove("matchIds");
                 minutes.remove("startRoleIds");
-                minutes.addProperty("trainingDate", date.toHT());
+                minutes.addProperty(TRAINING_DATE, date.toHT());
                 players.computeIfAbsent(entry.getKey(), k -> new JsonArray()).add(minutes);
             }
         }
@@ -1143,7 +1168,7 @@ public final class TrainingTools {
 
         JsonObject toJson(int playerId) {
             final var json = new JsonObject();
-            json.addProperty("playerId", playerId);
+            json.addProperty(PLAYER_ID, playerId);
             json.addProperty("name", this.name);
             json.addProperty("fullTrainingMinutes", this.full);
             json.addProperty("partlyTrainingMinutes", this.partly);
@@ -1181,7 +1206,7 @@ public final class TrainingTools {
         manager.previewPlayer(weeks);
 
         final var json = new JsonObject();
-        json.addProperty("playerId", player.getPlayerId());
+        json.addProperty(PLAYER_ID, player.getPlayerId());
         json.addProperty("name", player.getFullName());
         json.addProperty("trainingSpeed", manager.getTrainingSpeed());
 
@@ -1193,7 +1218,7 @@ public final class TrainingTools {
             }
             final var changeJson = new JsonObject();
             changeJson.addProperty("date", change.getDate() == null ? null : change.getDate().toHT());
-            changeJson.addProperty("skill", String.valueOf(change.getType()));
+            changeJson.addProperty(SKILL, String.valueOf(change.getType()));
             changeJson.addProperty("newValue", change.getValue());
             changeJson.addProperty("change", change.getChange());
             changes.add(changeJson);

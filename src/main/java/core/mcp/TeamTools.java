@@ -40,6 +40,35 @@ import java.util.Map;
 /** The read only view of the team HO already knows about. */
 public final class TeamTools {
 
+    /** Starts an argument description's default, e.g. "default 5". */
+    private static final String DEFAULT_PREFIX = "default ";
+    private static final String ARRAY = "array";
+    private static final String BASIC_SEATING = "basicSeating";
+    private static final String BOOLEAN = "boolean";
+    private static final String CAPACITY = "capacity";
+    private static final String CHARACTER = "character";
+    private static final String INCLUDE = "include";
+    private static final String INTEGER = "integer";
+    private static final String LOYALTY = "loyalty";
+    private static final String MATCHES = "matches";
+    private static final String MOTHERCLUB = "motherclub";
+    private static final String OFFSET = "offset";
+    private static final String OTHER_UPCOMING = "otherUpcoming";
+    private static final String PENALTY_STRENGTH = "penaltyStrength";
+    private static final String PLAYER_ID = "playerId";
+    private static final String PLAYER_IDS = "playerIds";
+    private static final String PLAYERS = "players";
+    private static final String POSITION_RATINGS = "positionRatings";
+    private static final String RATINGS = "ratings";
+    private static final String SQUAD = "squad";
+    private static final String SUPPORTERS = "supporters";
+    private static final String TABLE = "table";
+    private static final String TEAM_ID = "teamId";
+    private static final String TERRACES = "terraces";
+    private static final String UNDER_ROOF_SEATING = "underRoofSeating";
+    private static final String VIP_BOXES = "vipBoxes";
+    private static final String WEEKLY_MAINTENANCE = "weeklyMaintenance";
+
     private static final int DEFAULT_HOME_MATCHES = 5;
 
     /** The seven skills the opponent estimator fills in, and the names {@code get_squad} uses. */
@@ -72,20 +101,20 @@ public final class TeamTools {
                                 + "positionRatings (slots 100-113): only = squad matrix; include = in "
                                 + "rows (auto for up to " + FULL_SQUAD_RECORDS + " playerIds).",
                         McpTool.schema(McpTool.properties(
-                                "playerIds", McpTool.prop("array",
+                                PLAYER_IDS, McpTool.prop(ARRAY,
                                         "only these players; the whole squad if omitted. An id not "
                                                 + "in the squad is an error"),
-                                "include", McpTool.prop("array",
+                                INCLUDE, McpTool.prop(ARRAY,
                                         "any of " + String.join(", ", SQUAD_PARTS)
                                                 + "; default none, all for up to " + FULL_SQUAD_RECORDS
                                                 + " playerIds"),
-                                "limit", McpTool.prop("integer", "page size; default the whole squad"),
-                                "offset", McpTool.prop("integer",
+                                "limit", McpTool.prop(INTEGER, "page size; default the whole squad"),
+                                OFFSET, McpTool.prop(INTEGER,
                                         "how many players to skip; default 0. count is the total"),
                                 "only", McpTool.prop("string",
                                         "positionRatings: just the slot matrix, per player playerId and "
                                                 + "r (ratings in slotOrder, every player incl. unavailable)"),
-                                "bulk", McpTool.prop("boolean",
+                                "bulk", McpTool.prop(BOOLEAN,
                                         "for scripts: the rows with every include part as a JSON file "
                                                 + "to download (HTTP GET of the returned download path "
                                                 + "on the MCP endpoint); the answer keeps the header, "
@@ -93,11 +122,11 @@ public final class TeamTools {
                         TeamTools::squad)
                         .withBudget("Page with limit/offset (count is the total) or name playerIds; "
                                         + "for the whole squad's position ratings pass only positionRatings.",
-                                McpTool.OptionalSection.perItem("players", "positionRatings", "positionRatings"),
-                                McpTool.OptionalSection.perItem("players", "tsiAndWage", "tsi", "wage"),
-                                McpTool.OptionalSection.perItem("players", "penaltyStrength", "penaltyStrength"),
-                                McpTool.OptionalSection.perItem("players", "loyalty", "loyalty", "motherclub"),
-                                McpTool.OptionalSection.perItem("players", "character", "character")),
+                                McpTool.OptionalSection.perItem(PLAYERS, POSITION_RATINGS, POSITION_RATINGS),
+                                McpTool.OptionalSection.perItem(PLAYERS, "tsiAndWage", "tsi", "wage"),
+                                McpTool.OptionalSection.perItem(PLAYERS, PENALTY_STRENGTH, PENALTY_STRENGTH),
+                                McpTool.OptionalSection.perItem(PLAYERS, LOYALTY, LOYALTY, MOTHERCLUB),
+                                McpTool.OptionalSection.perItem(PLAYERS, CHARACTER, CHARACTER)),
                 new McpTool("analyze_opponent",
                         "Pre-match scouting of another team. ratings: the sector ratings it earned "
                                 + "in recent matches, averaged and named as simulate_lineup wants "
@@ -105,29 +134,29 @@ public final class TeamTools {
                                 + "injuries, cards, lastMatch per player (highest matchId = last "
                                 + "eleven); estimatedSkills is HO's guess (1 request).",
                         McpTool.schema(McpTool.properties(
-                                        "teamId", McpTool.prop("integer",
+                                        TEAM_ID, McpTool.prop(INTEGER,
                                                 "the Hattrick team id, e.g. an opponent id from "
                                                         + "get_series"),
-                                        "include", McpTool.prop("array",
+                                        INCLUDE, McpTool.prop(ARRAY,
                                                 "ratings and/or squad; default both"),
-                                        "count", McpTool.prop("integer",
+                                        "count", McpTool.prop(INTEGER,
                                                 "ratings: how many recent matches to average, "
-                                                        + "default " + MatchTools.DEFAULT_OPPONENT_MATCHES + "; keep it small"),
-                                        "competitiveOnly", McpTool.prop("boolean",
+                                                        + DEFAULT_PREFIX + MatchTools.DEFAULT_OPPONENT_MATCHES + "; keep it small"),
+                                        "competitiveOnly", McpTool.prop(BOOLEAN,
                                                 "ratings: league, cup, qualification and masters "
                                                         + "only, leaving out friendlies and "
                                                         + "tournaments; default true"),
-                                        "days", McpTool.prop("integer",
+                                        "days", McpTool.prop(INTEGER,
                                                 "ratings: how far back to search, in days; "
-                                                        + "default " + MatchTools.DEFAULT_OPPONENT_DAYS),
-                                        "bulk", McpTool.prop("boolean",
+                                                        + DEFAULT_PREFIX + MatchTools.DEFAULT_OPPONENT_DAYS),
+                                        "bulk", McpTool.prop(BOOLEAN,
                                                 "for scripts: the whole report as a JSON file to "
                                                         + "download (HTTP GET of the returned download "
                                                         + "path on the MCP endpoint); the answer keeps the "
                                                         + "averages and a 3-row preview of matches and "
                                                         + "players. Costs the same CHPP requests as "
                                                         + "without it. Default false")),
-                                "teamId"),
+                                TEAM_ID),
                         TeamTools::scoutOpponent)
                         // one CHPP request per match averaged, plus the squad: seconds to a minute
                         .asTask(args -> true),
@@ -140,15 +169,15 @@ public final class TeamTools {
                                 + "the cup. Our upcoming rows carry the stored weather forecast. As of "
                                 + "HO's last download; get_match_weather refreshes a forecast.",
                         McpTool.schema(McpTool.properties(
-                                "include", McpTool.prop("array",
+                                INCLUDE, McpTool.prop(ARRAY,
                                         "any of matches, table, otherUpcoming; default all"),
-                                "upcomingOnly", McpTool.prop("boolean",
+                                "upcomingOnly", McpTool.prop(BOOLEAN,
                                         "matches: only our own fixtures not yet played; "
                                                 + "default false, the whole season"),
-                                "allTeams", McpTool.prop("boolean",
+                                "allTeams", McpTool.prop(BOOLEAN,
                                         "matches: every pairing of the series, not only ours - to "
                                                 + "look up another team's fixtures; default false"),
-                                "bulk", McpTool.prop("boolean",
+                                "bulk", McpTool.prop(BOOLEAN,
                                         "for scripts: the answer as a JSON file to download (HTTP GET "
                                                 + "of the returned download path on the MCP endpoint), "
                                                 + "by default every part and allTeams; the answer keeps "
@@ -165,22 +194,22 @@ public final class TeamTools {
                                 + "costs to build and to keep. forecastWeeks projects cash week by "
                                 + "week. Amounts are in the currency field's currency.",
                         McpTool.schema(McpTool.properties(
-                                "homeMatches", McpTool.prop("integer",
+                                "homeMatches", McpTool.prop(INTEGER,
                                         "how many recent home matches to read the attendance of, "
-                                                + "default " + DEFAULT_HOME_MATCHES),
-                                "sizeArena", McpTool.prop("boolean",
+                                                + DEFAULT_PREFIX + DEFAULT_HOME_MATCHES),
+                                "sizeArena", McpTool.prop(BOOLEAN,
                                         "add the arena sizer block: three target sizes "
                                                 + "(pessimistic, normal, optimistic - attendance "
                                                 + "swings with form and opponent), each with its "
                                                 + "rebuild cost, weekly maintenance and sold-out "
                                                 + "gate; default false"),
-                                "supporters", McpTool.prop("integer",
+                                SUPPORTERS, McpTool.prop(INTEGER,
                                         "size the arena for this fan club instead of the current "
                                                 + "one; implies sizeArena"),
-                                "capacity", McpTool.prop("integer",
+                                CAPACITY, McpTool.prop(INTEGER,
                                         "price this exact total capacity instead of the three "
                                                 + "scenarios; implies sizeArena"),
-                                "forecastWeeks", McpTool.prop("integer",
+                                "forecastWeeks", McpTool.prop(INTEGER,
                                         "add a cash projection for this many weeks after the "
                                                 + "next economy update, 1-" + FinanceForecast.MAX_WEEKS
                                                 + ": sponsors, wages, staff, youth and arena "
@@ -198,7 +227,7 @@ public final class TeamTools {
                         McpTool.schema(McpTool.properties(
                                 TASK_ID, McpTool.prop("string", "a taskId this tool returned: "
                                         + "report that download's status instead of starting one"),
-                                KEEP_LINEUP, McpTool.prop("boolean", "default true: write HO's "
+                                KEEP_LINEUP, McpTool.prop(BOOLEAN, "default true: write HO's "
                                         + "lineup back after the download when it differs from "
                                         + "Hattrick's order for the same match. false lets the "
                                         + "download replace it, as HO's Download button does"))),
@@ -216,13 +245,13 @@ public final class TeamTools {
      */
     private static JsonObject arenaSizer(Stadium current, int currentFans, JsonObject args) {
         final var json = new JsonObject();
-        json.addProperty("weeklyMaintenance", money(ArenaMaintenance.calculateCosts(current)));
+        json.addProperty(WEEKLY_MAINTENANCE, money(ArenaMaintenance.calculateCosts(current)));
         json.addProperty("soldOutGateReceipts", money(ArenaAdmission.calculateIncome(current)));
 
-        final var supporters = McpJson.optInt(args, "supporters", currentFans);
-        json.addProperty("supporters", supporters);
+        final var supporters = McpJson.optInt(args, SUPPORTERS, currentFans);
+        json.addProperty(SUPPORTERS, supporters);
 
-        final var capacity = McpJson.optInteger(args, "capacity");
+        final var capacity = McpJson.optInteger(args, CAPACITY);
         final var plans = new JsonArray();
         if (capacity != null) {
             // The sizer only knows how to build three at once; ask it for the same size thrice.
@@ -242,17 +271,17 @@ public final class TeamTools {
     static JsonObject plan(String scenario, Stadium sized) {
         final var json = new JsonObject();
         json.addProperty("scenario", scenario);
-        json.addProperty("capacity", sized.getTotalSize());
-        json.addProperty("terraces", sized.getTerraces());
-        json.addProperty("basicSeating", sized.getBasicSeating());
-        json.addProperty("underRoofSeating", sized.getUnderRoofSeating());
-        json.addProperty("vipBoxes", sized.getVipBox());
+        json.addProperty(CAPACITY, sized.getTotalSize());
+        json.addProperty(TERRACES, sized.getTerraces());
+        json.addProperty(BASIC_SEATING, sized.getBasicSeating());
+        json.addProperty(UNDER_ROOF_SEATING, sized.getUnderRoofSeating());
+        json.addProperty(VIP_BOXES, sized.getVipBox());
         json.addProperty("terracesToBuild", sized.getTerracesUnderConstruction());
         json.addProperty("basicSeatingToBuild", sized.getBasicSeatingUnderConstruction());
         json.addProperty("underRoofSeatingToBuild", sized.getUnderRoofSeatingUnderConstruction());
         json.addProperty("vipBoxesToBuild", sized.getVipBoxUnderConstruction());
         json.addProperty("rebuildCost", money(sized.getExpansionCosts()));
-        json.addProperty("weeklyMaintenance", money(ArenaMaintenance.calculateCosts(sized)));
+        json.addProperty(WEEKLY_MAINTENANCE, money(ArenaMaintenance.calculateCosts(sized)));
         json.addProperty("soldOutGateReceipts", money(ArenaAdmission.calculateIncome(sized)));
         return json;
     }
@@ -264,7 +293,7 @@ public final class TeamTools {
         final var stadium = model.getStadium();
 
         final var json = new JsonObject();
-        json.addProperty("teamId", basics.getTeamId());
+        json.addProperty(TEAM_ID, basics.getTeamId());
         json.addProperty("teamName", basics.getTeamName());
         json.addProperty("manager", basics.getManager());
         json.addProperty("season", basics.getSeason());
@@ -287,7 +316,7 @@ public final class TeamTools {
         if (stadium != null) {
             final var stadiumJson = new JsonObject();
             stadiumJson.addProperty("name", stadium.getStadiumName());
-            stadiumJson.addProperty("capacity", stadium.getTotalSize());
+            stadiumJson.addProperty(CAPACITY, stadium.getTotalSize());
             json.add("stadium", stadiumJson);
         }
 
@@ -308,7 +337,7 @@ public final class TeamTools {
         // coach - so a team with no coach shows up as coachSkill 0 rather than a missing block.
         final var trainer = model.getTrainer();
         final var coachJson = new JsonObject();
-        coachJson.addProperty("playerId", trainer.getPlayerId());
+        coachJson.addProperty(PLAYER_ID, trainer.getPlayerId());
         coachJson.addProperty("name", trainer.getFullName());
         coachJson.addProperty("coachSkill", trainer.getCoachSkill());
         coachJson.addProperty("leadership", trainer.getLeadership());
@@ -376,8 +405,8 @@ public final class TeamTools {
     private static JsonObject squad(JsonObject args) throws McpToolException {
         final var model = McpJson.model();
         final var wanted = new java.util.LinkedHashSet<Integer>();
-        if (args.has("playerIds") && args.get("playerIds").isJsonArray()) {
-            args.getAsJsonArray("playerIds").forEach(e -> wanted.add(e.getAsInt()));
+        if (args.has(PLAYER_IDS) && args.get(PLAYER_IDS).isJsonArray()) {
+            args.getAsJsonArray(PLAYER_IDS).forEach(e -> wanted.add(e.getAsInt()));
         }
         final var bulk = McpJson.optBool(args, "bulk", false);
         final var include = squadParts(args, bulk ? 1 : wanted.size());
@@ -387,11 +416,11 @@ public final class TeamTools {
         final var selected = new java.util.ArrayList<>(onlyWanted(model.getCurrentPlayers(), wanted,
                 core.model.player.Player::getPlayerId));
         // Paging, so the whole squad stays reachable whatever its size: count is the total.
-        final var offset = Math.max(McpJson.optInt(args, "offset", 0), 0);
+        final var offset = Math.max(McpJson.optInt(args, OFFSET, 0), 0);
         final var limit = Math.max(McpJson.optInt(args, "limit", selected.size()), 1);
         // only positionRatings: the slot matrix lineup work reads squad-wide, ~90 chars a player.
         final var only = McpJson.optString(args, "only", "");
-        if (!only.isEmpty() && !"positionRatings".equals(only)) {
+        if (!only.isEmpty() && !POSITION_RATINGS.equals(only)) {
             throw new IllegalArgumentException("only takes positionRatings; had " + only);
         }
         final var ratingsOnly = !only.isEmpty();
@@ -408,7 +437,7 @@ public final class TeamTools {
             if (injury != null && player.getInjuryWeeks() <= 0) {
                 // Hattrick has not caught up yet: the match says injured, injuryWeeks still 0.
                 final var flag = new JsonObject();
-                flag.addProperty("matchId", injury[0]);
+                flag.addProperty(MATCH_ID, injury[0]);
                 flag.addProperty("minute", injury[1]);
                 compact.add("injuredInLastMatch", flag);
             }
@@ -433,21 +462,21 @@ public final class TeamTools {
             json.add("specialtyNames", specialtyNames);
         }
         json.addProperty("count", selected.size());
-        json.addProperty("offset", offset);
+        json.addProperty(OFFSET, offset);
         json.addProperty("returned", players.size());
-        json.add("players", players);
-        return bulk ? McpDownloads.bulk(json, "players") : json;
+        json.add(PLAYERS, players);
+        return bulk ? McpDownloads.bulk(json, PLAYERS) : json;
     }
 
     /** A get_squad only-positionRatings row: playerId and the ratings in FIELD_ROLES order, 1 decimal. */
     static JsonObject ratingsRow(JsonObject player) {
-        final var ratings = player.getAsJsonObject("positionRatings");
+        final var ratings = player.getAsJsonObject(POSITION_RATINGS);
         final var r = new JsonArray();
         for (final var roleId : McpJson.FIELD_ROLES) {
             r.add(Math.round(ratings.get(String.valueOf(roleId)).getAsDouble() * 10) / 10.0);
         }
         final var row = new JsonObject();
-        row.add("playerId", player.get("playerId"));
+        row.add(PLAYER_ID, player.get(PLAYER_ID));
         row.add("r", r);
         return row;
     }
@@ -455,8 +484,8 @@ public final class TeamTools {
     /** get_squad's include parts; none by default, all of them for a handful of named players. */
     static java.util.Set<String> squadParts(JsonObject args, int wantedPlayers) {
         final var include = new java.util.HashSet<String>();
-        if (args.has("include") && args.get("include").isJsonArray()) {
-            args.getAsJsonArray("include").forEach(e -> include.add(e.getAsString()));
+        if (args.has(INCLUDE) && args.get(INCLUDE).isJsonArray()) {
+            args.getAsJsonArray(INCLUDE).forEach(e -> include.add(e.getAsString()));
         }
         ALWAYS_IN_ROW.forEach(include::remove);
         if (!java.util.Set.copyOf(SQUAD_PARTS).containsAll(include)) {
@@ -490,32 +519,32 @@ public final class TeamTools {
             for (final var name : CHARACTER_ORDER) {
                 character.add(row.remove(name));
             }
-            row.add("character", character);
+            row.add(CHARACTER, character);
         }
-        for (final var flag : new String[]{"motherclub", "transferListed"}) {
+        for (final var flag : new String[]{MOTHERCLUB, "transferListed"}) {
             final var value = row.remove(flag);
             if (value != null && value.getAsBoolean()) {
                 row.addProperty(flag, true);
             }
         }
-        final var penalty = row.get("penaltyStrength");
+        final var penalty = row.get(PENALTY_STRENGTH);
         if (penalty != null) {
-            row.addProperty("penaltyStrength", Math.round(penalty.getAsDouble() * 10) / 10.0);
+            row.addProperty(PENALTY_STRENGTH, Math.round(penalty.getAsDouble() * 10) / 10.0);
         }
         // specialty as its number, named once in specialtyNames; available false with no injury
         // says suspended.
         row.remove("specialtyName");
         row.remove("suspended");
-        if (!include.contains("positionRatings")) {
-            row.remove("positionRatings");
+        if (!include.contains(POSITION_RATINGS)) {
+            row.remove(POSITION_RATINGS);
         }
         return row;
     }
 
     /** get_squad's include parts: the only part kept out of the default row. */
-    static final List<String> SQUAD_PARTS = List.of("positionRatings");
+    static final List<String> SQUAD_PARTS = List.of(POSITION_RATINGS);
     /** Former include parts, now in every row; still accepted so older callers keep working. */
-    private static final List<String> ALWAYS_IN_ROW = List.of("character", "loyalty", "penaltyStrength");
+    private static final List<String> ALWAYS_IN_ROW = List.of(CHARACTER, LOYALTY, PENALTY_STRENGTH);
     /** The order of get_squad's character array, sent once as characterOrder. */
     static final List<String> CHARACTER_ORDER = List.of("leadership", "agreeability", "aggressiveness",
             "honesty");
@@ -563,7 +592,7 @@ public final class TeamTools {
         // The estimator and the Team Analyzer store both read the current season and week off the
         // loaded snapshot, so fail with the usual message rather than a NullPointerException.
         McpJson.model();
-        final var teamId = McpJson.reqInt(args, "teamId");
+        final var teamId = McpJson.reqInt(args, TEAM_ID);
 
         final var players = HattrickManager.downloadPlayers(teamId);
         if (players == null || players.isEmpty()) {
@@ -578,10 +607,10 @@ public final class TeamTools {
         }
 
         final var json = new JsonObject();
-        json.addProperty("teamId", teamId);
+        json.addProperty(TEAM_ID, teamId);
         json.addProperty("playerCount", players.size());
         json.addProperty("currency", McpJson.currency());
-        json.add("players", squad);
+        json.add(PLAYERS, squad);
         json.addProperty("note", "Hattrick publishes no skills for another team's players. "
                 + "estimatedSkills is HO's opponent-spy estimate from age, wage, TSI, form, "
                 + "stamina, specialty and the position the player last played (estimatedForRoleId) "
@@ -594,24 +623,24 @@ public final class TeamTools {
     private static JsonObject scoutOpponent(JsonObject args) throws McpToolException {
         final var include = includeParts(args, SCOUT_PARTS);
         final var json = new JsonObject();
-        if (include.contains("ratings")) {
-            json.add("ratings", MatchTools.opponentRatings(args));
+        if (include.contains(RATINGS)) {
+            json.add(RATINGS, MatchTools.opponentRatings(args));
         }
-        if (include.contains("squad")) {
-            json.add("squad", opponentSquad(args));
+        if (include.contains(SQUAD)) {
+            json.add(SQUAD, opponentSquad(args));
         }
         return McpJson.optBool(args, "bulk", false)
                 ? McpDownloads.bulkSections(json, "ratings.matches", "squad.players") : json;
     }
 
-    private static final List<String> SCOUT_PARTS = List.of("ratings", "squad");
-    private static final List<String> SERIES_PARTS = List.of("matches", "table", "otherUpcoming");
+    private static final List<String> SCOUT_PARTS = List.of(RATINGS, SQUAD);
+    private static final List<String> SERIES_PARTS = List.of(MATCHES, TABLE, OTHER_UPCOMING);
 
     /** The include argument: every part when absent or empty, refused when it names an unknown one. */
     static java.util.Set<String> includeParts(JsonObject args, List<String> allowed) {
         final var include = new java.util.LinkedHashSet<String>();
-        if (args.has("include") && args.get("include").isJsonArray()) {
-            args.getAsJsonArray("include").forEach(e -> include.add(e.getAsString()));
+        if (args.has(INCLUDE) && args.get(INCLUDE).isJsonArray()) {
+            args.getAsJsonArray(INCLUDE).forEach(e -> include.add(e.getAsString()));
         }
         if (include.isEmpty()) {
             include.addAll(allowed);
@@ -624,7 +653,7 @@ public final class TeamTools {
 
     static JsonObject opponentPlayer(PlayerInfo info, OppPlayerSkillEstimator estimator) {
         final var json = new JsonObject();
-        json.addProperty("playerId", info.getPlayerId());
+        json.addProperty(PLAYER_ID, info.getPlayerId());
         json.addProperty("name", info.getName());
         json.addProperty("age", info.getAge());
         json.addProperty("tsi", info.getTsi());
@@ -632,8 +661,8 @@ public final class TeamTools {
         json.addProperty("form", info.getForm());
         json.addProperty("stamina", info.getStamina());
         json.addProperty("experience", info.getExperience());
-        json.addProperty("loyalty", info.getLoyalty());
-        json.addProperty("motherclub", info.isMotherClubBonus());
+        json.addProperty(LOYALTY, info.getLoyalty());
+        json.addProperty(MOTHERCLUB, info.isMotherClubBonus());
         json.addProperty("specialty", info.getSpecialEvent());
         final var specialty = Specialty.getSpecialty(info.getSpecialEvent());
         json.addProperty("specialtyName", specialty == null ? null : specialty.toString());
@@ -647,7 +676,7 @@ public final class TeamTools {
         // Where and how well he last played: the only performance data Hattrick publishes about
         // another team's player, and collectively the eleven that started their last match.
         final var last = new JsonObject();
-        last.addProperty("matchId", info.getLastMatchId());
+        last.addProperty(MATCH_ID, info.getLastMatchId());
         last.addProperty("date",
                 info.getLastMatchDate() == null ? null : info.getLastMatchDate().toHT());
         last.addProperty("roleId", info.getLastMatchPosition());
@@ -693,7 +722,7 @@ public final class TeamTools {
     private static JsonObject series(JsonObject args) throws McpToolException {
         // bulk: every part and, unless the caller says otherwise, every pairing of the series.
         final var bulk = McpJson.optBool(args, "bulk", false);
-        final var include = bulk && !args.has("include") ? java.util.Set.copyOf(SERIES_PARTS)
+        final var include = bulk && !args.has(INCLUDE) ? java.util.Set.copyOf(SERIES_PARTS)
                 : includeParts(args, SERIES_PARTS);
         final var model = McpJson.model();
         final var teamId = model.getBasics().getTeamId();
@@ -708,26 +737,26 @@ public final class TeamTools {
             json.addProperty("leagueLevelUnitId", plan.getLigaId());
             json.addProperty("season", plan.getSaison());
         }
-        if (include.contains("matches")) {
-            json.add("matches", fixtures(plan, teamId, McpJson.optBool(args, "upcomingOnly", false),
+        if (include.contains(MATCHES)) {
+            json.add(MATCHES, fixtures(plan, teamId, McpJson.optBool(args, "upcomingOnly", false),
                     McpJson.optBool(args, "allTeams", bulk)));
         }
-        if (include.contains("table")) {
+        if (include.contains(TABLE)) {
             if (plan == null || plan.getTable() == null) {
-                json.add("table", JsonNull.INSTANCE);
+                json.add(TABLE, JsonNull.INSTANCE);
                 json.addProperty("tableNote", seriesMissingNote(model.getBasics().getSpieltag()));
             } else {
-                json.add("table", tableRows(plan));
+                json.add(TABLE, tableRows(plan));
             }
         }
 
         final var others = ownNonLeagueUpcoming(
                 DBManager.instance().getMatchesKurzInfoUpComing(teamId), teamId, HODateTime.now());
-        if (include.contains("otherUpcoming")) {
-            json.add("otherUpcoming", others);
+        if (include.contains(OTHER_UPCOMING)) {
+            json.add(OTHER_UPCOMING, others);
         }
         json.add("nextCupMatchId", nextCupMatchId(others));
-        return bulk && json.has("matches") ? McpDownloads.bulk(json, "matches") : json;
+        return bulk && json.has(MATCHES) ? McpDownloads.bulk(json, MATCHES) : json;
     }
 
     private static JsonArray fixtures(module.series.MatchFixtures plan, int teamId, boolean upcomingOnly,
@@ -753,7 +782,7 @@ public final class TeamTools {
     static JsonElement nextCupMatchId(JsonArray upcoming) {
         for (final var m : upcoming) {
             if ("CUP".equals(m.getAsJsonObject().get("matchType").getAsString())) {
-                return m.getAsJsonObject().get("matchId");
+                return m.getAsJsonObject().get(MATCH_ID);
             }
         }
         return JsonNull.INSTANCE;
@@ -768,7 +797,7 @@ public final class TeamTools {
     /** One series fixture; {@code ownUpcoming} is our stored match for it, null for any other. */
     static JsonObject fixtureRow(core.model.series.Paarung pairing, MatchKurzInfo ownUpcoming) {
         final var matchJson = new JsonObject();
-        matchJson.addProperty("matchId", pairing.getMatchId());
+        matchJson.addProperty(MATCH_ID, pairing.getMatchId());
         matchJson.addProperty("matchDay", pairing.getSpieltag());
         matchJson.addProperty("date", pairing.getDatum() == null ? null : pairing.getDatum().toHT());
         matchJson.addProperty("homeTeamId", pairing.getHeimId());
@@ -815,7 +844,7 @@ public final class TeamTools {
     private static JsonObject upcomingRow(MatchKurzInfo m, int teamId, HODateTime now) {
         final var home = m.getHomeTeamID() == teamId;
         final var row = new JsonObject();
-        row.addProperty("matchId", m.getMatchID());
+        row.addProperty(MATCH_ID, m.getMatchID());
         row.addProperty("matchType", m.getMatchType().name());
         row.addProperty("date", m.getMatchSchedule() == null ? null : m.getMatchSchedule().toHT());
         // HO only learns a match was played on the next download; until then say it has started.
@@ -837,7 +866,7 @@ public final class TeamTools {
             final var row = new JsonObject();
             row.addProperty("position", entry.getPosition());
             row.addProperty("previousPosition", entry.getPreviousPosition());
-            row.addProperty("teamId", entry.getTeamId());
+            row.addProperty(TEAM_ID, entry.getTeamId());
             row.addProperty("teamName", entry.getTeamName());
             row.addProperty("played", entry.getAnzSpiele());
             row.addProperty("won", entry.getG_Siege());
@@ -890,7 +919,7 @@ public final class TeamTools {
             // Off by default - the sizer is three more objects of arithmetic nobody asked for when
             // the question was "how much cash do we have". Naming either knob implies wanting it.
             if (McpJson.optBool(args, "sizeArena", false)
-                    || args.has("supporters") || args.has("capacity")) {
+                    || args.has(SUPPORTERS) || args.has(CAPACITY)) {
                 json.add("arenaSizer", arenaSizer(model.getStadium(),
                         model.getClub() == null ? 0 : model.getClub().getFans(), args));
             }
@@ -1067,28 +1096,28 @@ public final class TeamTools {
     private static JsonObject stadium(Stadium stadium, int teamId, int homeMatches) {
         final var json = new JsonObject();
         json.addProperty("name", stadium.getStadiumName());
-        json.addProperty("capacity", stadium.getTotalSize());
-        json.addProperty("terraces", stadium.getTerraces());
-        json.addProperty("basicSeating", stadium.getBasicSeating());
-        json.addProperty("underRoofSeating", stadium.getUnderRoofSeating());
-        json.addProperty("vipBoxes", stadium.getVipBox());
+        json.addProperty(CAPACITY, stadium.getTotalSize());
+        json.addProperty(TERRACES, stadium.getTerraces());
+        json.addProperty(BASIC_SEATING, stadium.getBasicSeating());
+        json.addProperty(UNDER_ROOF_SEATING, stadium.getUnderRoofSeating());
+        json.addProperty(VIP_BOXES, stadium.getVipBox());
         stadium.getTotalSizeUnderConstruction()
                 .ifPresent(size -> json.addProperty("capacityUnderConstruction", size));
         stadium.getFutureTotalSize().ifPresent(size -> json.addProperty("futureCapacity", size));
         if (stadium.getTotalSizeUnderConstruction().isPresent()) {
             // Which stands are growing decides the new upkeep: a VIP box costs five terraces.
             final var building = new JsonObject();
-            building.addProperty("terraces", stadium.getTerracesUnderConstruction());
-            building.addProperty("basicSeating", stadium.getBasicSeatingUnderConstruction());
-            building.addProperty("underRoofSeating", stadium.getUnderRoofSeatingUnderConstruction());
-            building.addProperty("vipBoxes", stadium.getVipBoxUnderConstruction());
+            building.addProperty(TERRACES, stadium.getTerracesUnderConstruction());
+            building.addProperty(BASIC_SEATING, stadium.getBasicSeatingUnderConstruction());
+            building.addProperty(UNDER_ROOF_SEATING, stadium.getUnderRoofSeatingUnderConstruction());
+            building.addProperty(VIP_BOXES, stadium.getVipBoxUnderConstruction());
             json.add("underConstruction", building);
             if (stadium.getExpansionDate() != null) {
                 json.addProperty("expansionDate", stadium.getExpansionDate().toHT());
             }
             json.addProperty("weeklyMaintenanceAfterExpansion", money(maintenanceAfterExpansion(stadium)));
         }
-        json.addProperty("weeklyMaintenance", money(ArenaMaintenance.calculateCosts(stadium)));
+        json.addProperty(WEEKLY_MAINTENANCE, money(ArenaMaintenance.calculateCosts(stadium)));
         if (stadium.getExpansionCostsInSwedishKrona() != null) {
             json.addProperty("expansionCosts",
                     money(new AmountOfMoney(stadium.getExpansionCostsInSwedishKrona())));
@@ -1425,7 +1454,7 @@ public final class TeamTools {
                 // false means the download stored an HRF that is not newer than the one HO already
                 // held, so nothing became live - do not report that as a refresh.
                 json.addProperty("becameCurrent", download.becameCurrent());
-                json.addProperty("players", download.model().getCurrentPlayers().size());
+                json.addProperty(PLAYERS, download.model().getCurrentPlayers().size());
                 json.addProperty("subskillsRecalculated", true);
                 json.addProperty("newTransfers",
                         DBManager.instance().getTransfers(0, true, true).size() - transfersBefore);
@@ -1466,7 +1495,7 @@ public final class TeamTools {
         if (model.getBasics().getTeamId() > 0) {
             OnlineWorker.downloadHallOfFameIfActive(model);
             sections.addProperty("hallOfFame", true);
-            sections.addProperty("matches", OnlineWorker.anyCurrentMatchTypeSelected()
+            sections.addProperty(MATCHES, OnlineWorker.anyCurrentMatchTypeSelected()
                     && OnlineWorker.downloadCurrentMatches(model));
             sections.addProperty("fixtures", UserParameter.instance().fixtures
                     && OnlineWorker.downloadCurrentFixtures(model));

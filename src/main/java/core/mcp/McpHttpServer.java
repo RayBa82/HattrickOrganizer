@@ -62,6 +62,9 @@ import java.util.function.UnaryOperator;
  */
 public final class McpHttpServer {
 
+    private static final String PARAMS = "params";
+    private static final String TOOLS = "tools";
+
     /** The current MCP revision, served statelessly. */
     static final String LATEST_VERSION = "2026-07-28";
     static final List<String> MODERN_VERSIONS = List.of(LATEST_VERSION);
@@ -309,8 +312,8 @@ public final class McpHttpServer {
             return new Reply(202, null);     // notifications/initialized and friends
         }
         final var method = request.has("method") ? request.get("method").getAsString() : "";
-        final var params = request.has("params") && request.get("params").isJsonObject()
-                ? request.getAsJsonObject("params")
+        final var params = request.has(PARAMS) && request.get(PARAMS).isJsonObject()
+                ? request.getAsJsonObject(PARAMS)
                 : new JsonObject();
         final var meta = params.has(META) && params.get(META).isJsonObject()
                 ? params.getAsJsonObject(META)
@@ -451,7 +454,7 @@ public final class McpHttpServer {
         }
 
         final var capabilities = new JsonObject();
-        capabilities.add("tools", new JsonObject());
+        capabilities.add(TOOLS, new JsonObject());
 
         final var result = new JsonObject();
         result.addProperty("protocolVersion", version);
@@ -476,7 +479,7 @@ public final class McpHttpServer {
         final var extensions = new JsonObject();
         extensions.add(TASKS_EXTENSION, new JsonObject());
         final var capabilities = new JsonObject();
-        capabilities.add("tools", new JsonObject());
+        capabilities.add(TOOLS, new JsonObject());
         capabilities.add(EXTENSIONS, extensions);
 
         final var result = new JsonObject();
@@ -504,7 +507,7 @@ public final class McpHttpServer {
             list.add(entry);
         }
         final var result = new JsonObject();
-        result.add("tools", list);
+        result.add(TOOLS, list);
         return result;
     }
 

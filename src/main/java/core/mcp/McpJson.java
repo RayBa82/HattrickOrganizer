@@ -25,6 +25,24 @@ import java.math.RoundingMode;
  */
 public final class McpJson {
 
+    private static final String AGE_DAYS = "ageDays";
+    private static final String AGGRESSIVENESS = "aggressiveness";
+    private static final String AGREEABILITY = "agreeability";
+    private static final String CARDS = "cards";
+    private static final String DEADLINE = "deadline";
+    private static final String EXPERIENCE_KEY = "experience";
+    private static final String HONESTY = "honesty";
+    private static final String KEEPER_KEY = "keeper";
+    private static final String LEADERSHIP = "leadership";
+    private static final String PASSING_KEY = "passing";
+    private static final String PLAYER_ID = "playerId";
+    private static final String PLAYER_NAME = "playerName";
+    private static final String SALARY = "salary";
+    private static final String SET_PIECES = "setPieces";
+    private static final String SPECIALTY = "specialty";
+    private static final String STAMINA = "stamina";
+    private static final String WINGER_KEY = "winger";
+
     /** The fourteen field slots Hattrick numbers, keeper (100) through left forward (113). */
     public static final java.util.List<Integer> FIELD_ROLES = java.util.List.of(
             IMatchRoleID.keeper, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112,
@@ -103,8 +121,8 @@ public final class McpJson {
     };
 
     private static final String[] SKILL_NAMES = {
-            "keeper", "defending", "playmaking", "winger",
-            "passing", "scoring", "setPieces", "experience"
+            KEEPER_KEY, "defending", "playmaking", WINGER_KEY,
+            PASSING_KEY, "scoring", SET_PIECES, EXPERIENCE_KEY
     };
 
     /** Whether the player may be fielded: not injured and not suspended. */
@@ -114,27 +132,27 @@ public final class McpJson {
 
     public static JsonObject player(Player p) {
         final var json = new JsonObject();
-        json.addProperty("playerId", p.getPlayerId());
+        json.addProperty(PLAYER_ID, p.getPlayerId());
         json.addProperty("name", p.getFullName());
         json.addProperty("ageYears", p.getAge());
-        json.addProperty("ageDays", p.getAgeDays());
+        json.addProperty(AGE_DAYS, p.getAgeDays());
         json.addProperty("tsi", p.getTsi());
         json.addProperty("wage", money(p.getWage()));
         json.addProperty("form", p.getForm());
-        json.addProperty("stamina", p.getStamina());
+        json.addProperty(STAMINA, p.getStamina());
         json.addProperty("loyalty", p.getLoyalty());
-        json.addProperty("leadership", p.getLeadership());
+        json.addProperty(LEADERSHIP, p.getLeadership());
         // Character, 0-5 each. HO's field names are the legacy German ones and do not line up with
         // Hattrick's: getGentleness() is Agreeability and getHonesty() is Honesty - see
         // HRFStringBuilder:492-497, which pairs each with its own label table. Do not "fix" these.
-        json.addProperty("agreeability", p.getGentleness());
-        json.addProperty("aggressiveness", p.getAggressivity());
-        json.addProperty("honesty", p.getHonesty());
+        json.addProperty(AGREEABILITY, p.getGentleness());
+        json.addProperty(AGGRESSIVENESS, p.getAggressivity());
+        json.addProperty(HONESTY, p.getHonesty());
         json.addProperty("motherclub", p.isHomeGrown());
-        json.addProperty("specialty", p.getSpecialty());
+        json.addProperty(SPECIALTY, p.getSpecialty());
         json.addProperty("specialtyName", p.getSpecialtyName());
         json.addProperty("injuryWeeks", p.getInjuryWeeks());
-        json.addProperty("cards", p.getTotalCards());
+        json.addProperty(CARDS, p.getTotalCards());
         json.addProperty("suspended", p.isRedCarded());
         json.addProperty("available", isAvailable(p));
         json.addProperty("transferListed", p.getTransferListed() > 0);
@@ -175,8 +193,8 @@ public final class McpJson {
     /** One transfer market hit. Details are null once the deadline has passed. */
     public static JsonObject hit(Hit hit) {
         final var json = new JsonObject();
-        json.addProperty("playerId", hit.playerId());
-        json.addProperty("playerName", hit.playerName());
+        json.addProperty(PLAYER_ID, hit.playerId());
+        json.addProperty(PLAYER_NAME, hit.playerName());
         json.addProperty("nativeCountryId", hit.nativeCountryId());
         json.addProperty("askingPrice", money(hit.askingPrice()));
         json.addProperty("highestBid", money(hit.highestBid()));
@@ -184,7 +202,7 @@ public final class McpJson {
         json.addProperty("sellerTeamId", hit.sellerTeamId());
         json.addProperty("sellerTeamName", hit.sellerTeamName());
         json.addProperty("sellerLeagueId", hit.sellerLeagueId());
-        json.addProperty("deadline", hit.deadline() == null ? null : hit.deadline().toHT());
+        json.addProperty(DEADLINE, hit.deadline() == null ? null : hit.deadline().toHT());
 
         final var d = hit.details();
         if (d == null) {
@@ -193,23 +211,23 @@ public final class McpJson {
         }
         final var details = new JsonObject();
         details.addProperty("age", d.age());
-        details.addProperty("ageDays", d.ageDays());
-        details.addProperty("salary", money(d.salary()));
+        details.addProperty(AGE_DAYS, d.ageDays());
+        details.addProperty(SALARY, money(d.salary()));
         details.addProperty("tsi", d.tsi());
         details.addProperty("form", d.form());
-        details.addProperty("experience", d.experience());
-        details.addProperty("leadership", d.leadership());
-        details.addProperty("specialty", d.specialty());
-        details.addProperty("cards", d.cards());
+        details.addProperty(EXPERIENCE_KEY, d.experience());
+        details.addProperty(LEADERSHIP, d.leadership());
+        details.addProperty(SPECIALTY, d.specialty());
+        details.addProperty(CARDS, d.cards());
         details.addProperty("injuryLevel", d.injuryLevel());
-        details.addProperty("stamina", d.stamina());
-        details.addProperty("keeper", d.keeper());
+        details.addProperty(STAMINA, d.stamina());
+        details.addProperty(KEEPER_KEY, d.keeper());
         details.addProperty("playmaker", d.playmaker());
         details.addProperty("scorer", d.scorer());
-        details.addProperty("passing", d.passing());
-        details.addProperty("winger", d.winger());
+        details.addProperty(PASSING_KEY, d.passing());
+        details.addProperty(WINGER_KEY, d.winger());
         details.addProperty("defender", d.defender());
-        details.addProperty("setPieces", d.setPieces());
+        details.addProperty(SET_PIECES, d.setPieces());
         json.add("details", details);
         return json;
     }
@@ -222,10 +240,10 @@ public final class McpJson {
      */
     public static JsonObject listing(core.db.TransferListing l) {
         final var json = new JsonObject();
-        json.addProperty("playerId", l.getPlayerId());
-        json.addProperty("playerName", l.getPlayerName());
+        json.addProperty(PLAYER_ID, l.getPlayerId());
+        json.addProperty(PLAYER_NAME, l.getPlayerName());
         json.addProperty("observedAt", l.getObservedAt() == null ? null : l.getObservedAt().toHT());
-        json.addProperty("deadline", l.getDeadline() == null ? null : l.getDeadline().toHT());
+        json.addProperty(DEADLINE, l.getDeadline() == null ? null : l.getDeadline().toHT());
         json.addProperty("askingPrice", money(l.getAskingPrice()));
         json.addProperty("highestBid", money(l.getHighestBid()));
         // Who was leading when this was observed. The seller is not kept - a listing snapshot
@@ -235,30 +253,30 @@ public final class McpJson {
         json.addProperty("sold", l.getSalePrice() != null);
         json.addProperty("salePrice", l.getSalePrice() == null ? null : money(l.getSalePrice()));
         json.addProperty("age", l.getAge());
-        json.addProperty("ageDays", l.getAgeDays());
-        json.addProperty("salary", l.getSalary() == null ? null : money(l.getSalary()));
+        json.addProperty(AGE_DAYS, l.getAgeDays());
+        json.addProperty(SALARY, l.getSalary() == null ? null : money(l.getSalary()));
         json.addProperty("tsi", l.getTsi());
         json.addProperty("form", l.getForm());
-        json.addProperty("experience", l.getExperience());
-        json.addProperty("leadership", l.getLeadership());
+        json.addProperty(EXPERIENCE_KEY, l.getExperience());
+        json.addProperty(LEADERSHIP, l.getLeadership());
         // Character, 0-5 each. Null on a row observed through transfersearch or currentbids, which
         // carry none - only a playerdetails observation of him fills these in.
-        json.addProperty("agreeability", l.getAgreeability());
-        json.addProperty("aggressiveness", l.getAggressiveness());
-        json.addProperty("honesty", l.getHonesty());
-        json.addProperty("specialty", l.getSpecialty());
-        json.addProperty("cards", l.getCards());
+        json.addProperty(AGREEABILITY, l.getAgreeability());
+        json.addProperty(AGGRESSIVENESS, l.getAggressiveness());
+        json.addProperty(HONESTY, l.getHonesty());
+        json.addProperty(SPECIALTY, l.getSpecialty());
+        json.addProperty(CARDS, l.getCards());
         json.addProperty("injuryLevel", l.getInjuryLevel());
-        json.addProperty("stamina", l.getStamina());
+        json.addProperty(STAMINA, l.getStamina());
         // Under get_squad's names, not the CHPP's own (playmaker / scorer / defender), so a
         // comparable and the player it is compared to can be read side by side.
-        json.addProperty("keeper", l.getKeeper());
+        json.addProperty(KEEPER_KEY, l.getKeeper());
         json.addProperty("defending", l.getDefender());
         json.addProperty("playmaking", l.getPlaymaker());
-        json.addProperty("passing", l.getPassing());
-        json.addProperty("winger", l.getWinger());
+        json.addProperty(PASSING_KEY, l.getPassing());
+        json.addProperty(WINGER_KEY, l.getWinger());
         json.addProperty("scoring", l.getScorer());
-        json.addProperty("setPieces", l.getSetPieces());
+        json.addProperty(SET_PIECES, l.getSetPieces());
         return json;
     }
 
@@ -271,13 +289,13 @@ public final class McpJson {
      */
     public static JsonObject scoutEntry(module.transfer.scout.ScoutEintrag entry) {
         final var json = new JsonObject();
-        json.addProperty("playerId", entry.getPlayerID());
-        json.addProperty("playerName", entry.getName());
+        json.addProperty(PLAYER_ID, entry.getPlayerID());
+        json.addProperty(PLAYER_NAME, entry.getName());
         // The scout's single price column is max(asking price, highest bid) - it is what it would
         // cost to take the player now, not what the seller asked. TransferTools.listScout adds the
         // two apart from the listing snapshot the entry was built from.
         json.addProperty("price", money(entry.getPrice()));
-        json.addProperty("deadline", entry.getDeadline() == null ? null
+        json.addProperty(DEADLINE, entry.getDeadline() == null ? null
                 : HODateTime.fromDbTimestamp(entry.getDeadline()).toHT());
         json.addProperty("note", entry.getInfo());
         // Filled in once the watched transfer completed; null while he is still listed.
@@ -285,29 +303,29 @@ public final class McpJson {
         json.addProperty("soldAt", entry.getSoldAt() == null ? null
                 : HODateTime.fromDbTimestamp(entry.getSoldAt()).toHT());
         json.addProperty("age", entry.getAlter());
-        json.addProperty("ageDays", entry.getAgeDays());
-        json.addProperty("salary", money(entry.getbaseWage()));
+        json.addProperty(AGE_DAYS, entry.getAgeDays());
+        json.addProperty(SALARY, money(entry.getbaseWage()));
         json.addProperty("tsi", entry.getTSI());
         json.addProperty("form", entry.getForm());
-        json.addProperty("experience", entry.getErfahrung());
-        json.addProperty("leadership", entry.getLeadership());
+        json.addProperty(EXPERIENCE_KEY, entry.getErfahrung());
+        json.addProperty(LEADERSHIP, entry.getLeadership());
         // Character, 0-5 each, from the playerdetails fetch manage_scout add makes. All three null when
         // nobody has looked: the honesty column is the one that only this fetch ever writes, so it
         // is what says whether the older, always-present agreeability column holds an observation
         // or its 0 default - and 0 is "nasty fellow", a claim we would not be entitled to make.
         final var observed = entry.getHonesty() != null;
-        json.addProperty("agreeability", observed ? entry.getAgreeability() : null);
-        json.addProperty("aggressiveness", entry.getAggressiveness());
-        json.addProperty("honesty", entry.getHonesty());
-        json.addProperty("specialty", entry.getSpeciality());
-        json.addProperty("stamina", entry.getKondition());
-        json.addProperty("keeper", entry.getTorwart());
+        json.addProperty(AGREEABILITY, observed ? entry.getAgreeability() : null);
+        json.addProperty(AGGRESSIVENESS, entry.getAggressiveness());
+        json.addProperty(HONESTY, entry.getHonesty());
+        json.addProperty(SPECIALTY, entry.getSpeciality());
+        json.addProperty(STAMINA, entry.getKondition());
+        json.addProperty(KEEPER_KEY, entry.getTorwart());
         json.addProperty("playmaker", entry.getSpielaufbau());
         json.addProperty("scorer", entry.getTorschuss());
-        json.addProperty("passing", entry.getPasspiel());
-        json.addProperty("winger", entry.getFluegelspiel());
+        json.addProperty(PASSING_KEY, entry.getPasspiel());
+        json.addProperty(WINGER_KEY, entry.getFluegelspiel());
         json.addProperty("defender", entry.getVerteidigung());
-        json.addProperty("setPieces", entry.getStandards());
+        json.addProperty(SET_PIECES, entry.getStandards());
         return json;
     }
 
