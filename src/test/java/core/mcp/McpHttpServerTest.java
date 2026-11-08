@@ -389,6 +389,32 @@ class McpHttpServerTest {
         assertThat(JsonParser.parseString(text).getAsJsonObject().get("done").getAsBoolean()).isTrue();
     }
 
+    /** download_team's case: a two-minute task must not keep a plain call waiting into a timeout. */
+    @Test
+    void anUnlockedTaskLetsPlainCallsAnswerWhileItWorks() throws Exception {
+        final var started = new CountDownLatch(1);
+        final var release = new CountDownLatch(1);
+        final var server = serverWithEchoTool();
+        server.register(new McpTool("download", "Waits, then answers.", McpTool.schema(new JsonObject()),
+                args -> {
+                    started.countDown();
+                    awaitRelease(release);
+                    return new JsonObject();
+                }).asTask(args -> true).taskOutsideToolLock());
+
+        final var taskId = send(server, modern(50, "tools/call", "{\"name\":\"download\"}", WITH_TASKS))
+                .body().getAsJsonObject("result").get("taskId").getAsString();
+        assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
+
+        final var echo = java.util.concurrent.CompletableFuture.supplyAsync(() -> send(server, modern(51,
+                "tools/call", "{\"name\":\"echo\",\"arguments\":{\"text\":\"hi\"}}", NO_TASKS)));
+        final var answer = echo.get(5, TimeUnit.SECONDS).body().getAsJsonObject("result");
+        assertThat(answer.get("isError").getAsBoolean()).isFalse();
+
+        release.countDown();
+        assertThat(pollUntilTerminal(server, taskId).get("status").getAsString()).isEqualTo("completed");
+    }
+
     @Test
     void aToolErrorCompletesTheTaskAndACrashFailsIt() throws Exception {
         final var server = new McpHttpServer();

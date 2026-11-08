@@ -234,6 +234,7 @@ public final class TeamTools {
                                         + "download replace it, as HO's Download button does"))),
                         TeamTools::downloadTeam)
                         .asTask(args -> !args.has(TASK_ID), TeamTools::downloadTeamTask)
+                        .taskOutsideToolLock()
         );
     }
 

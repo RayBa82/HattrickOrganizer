@@ -582,7 +582,12 @@ public final class McpHttpServer {
      * {@code isError}, bad arguments and crashes are JSON-RPC errors.
      */
     private McpTasks.Outcome runTool(McpTool tool, JsonObject arguments, boolean asTask, boolean modern) {
-        toolLock.lock();
+        // download_team's task: two minutes under the lock kept every plain call waiting into a
+        // client timeout. It serializes itself, like its taskId form, which never took the lock.
+        final var locked = !(asTask && tool.taskUnlocked());
+        if (locked) {
+            toolLock.lock();
+        }
         try {
             final var answer = tool.handlerFor(asTask).call(arguments);
             return McpTasks.Outcome.result(toolResult(McpBudget.fit(tool, answer), false, modern));
@@ -594,7 +599,9 @@ public final class McpHttpServer {
             HOLogger.instance().error(getClass(), e);      // no stack trace crosses the wire
             return McpTasks.Outcome.error(errorObject(-32603, "Internal error in tool " + tool.name()));
         } finally {
-            toolLock.unlock();
+            if (locked) {
+                toolLock.unlock();
+            }
         }
     }
 
