@@ -63,7 +63,7 @@ import java.util.function.UnaryOperator;
 public final class McpHttpServer {
 
     private static final String PARAMS = "params";
-    private static final String TOOLS = "tools";
+    private static final String TOOLS_KEY = "tools";
 
     /** The current MCP revision, served statelessly. */
     static final String LATEST_VERSION = "2026-07-28";
@@ -454,7 +454,7 @@ public final class McpHttpServer {
         }
 
         final var capabilities = new JsonObject();
-        capabilities.add(TOOLS, new JsonObject());
+        capabilities.add(TOOLS_KEY, new JsonObject());
 
         final var result = new JsonObject();
         result.addProperty("protocolVersion", version);
@@ -479,7 +479,7 @@ public final class McpHttpServer {
         final var extensions = new JsonObject();
         extensions.add(TASKS_EXTENSION, new JsonObject());
         final var capabilities = new JsonObject();
-        capabilities.add(TOOLS, new JsonObject());
+        capabilities.add(TOOLS_KEY, new JsonObject());
         capabilities.add(EXTENSIONS, extensions);
 
         final var result = new JsonObject();
@@ -507,7 +507,7 @@ public final class McpHttpServer {
             list.add(entry);
         }
         final var result = new JsonObject();
-        result.add(TOOLS, list);
+        result.add(TOOLS_KEY, list);
         return result;
     }
 

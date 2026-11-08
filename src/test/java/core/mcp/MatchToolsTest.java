@@ -407,7 +407,11 @@ class MatchToolsTest {
 
     /** Newest first, the way {@link MatchTools#opponentReport} is given them. */
     private static List<Matchdetails> twoMatchesOfTargetTeam() {
-        // Newest: the scouted team at home, midfield 12, on a tactic at level 7.
+        return List.of(newestAtHome(), olderAway());
+    }
+
+    /** Newest: the scouted team at home, midfield 12, on a tactic at level 7. */
+    private static Matchdetails newestAtHome() {
         final var atHome = new Matchdetails();
         atHome.setMatchID(1);
         atHome.setMatchType(MatchType.LEAGUE);
@@ -434,8 +438,11 @@ class MatchToolsTest {
         atHome.setGuestRightAtt(2);
         atHome.setGuestTacticType(9);
         atHome.setGuestTacticSkill(1);
+        return atHome;
+    }
 
-        // Older: the same team away, midfield 8 - so the average midfield is 10.
+    /** Older: the same team away, midfield 8 - so the average midfield is 10. */
+    private static Matchdetails olderAway() {
         final var away = new Matchdetails();
         away.setMatchID(2);
         away.setMatchType(MatchType.CUP);
@@ -457,8 +464,7 @@ class MatchToolsTest {
         away.setHomeLeftAtt(20);
         away.setHomeMidAtt(20);
         away.setHomeRightAtt(20);
-
-        return List.of(atHome, away);
+        return away;
     }
 
     @Test

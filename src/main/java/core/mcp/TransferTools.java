@@ -396,20 +396,14 @@ public final class TransferTools {
     static JsonObject corpusStats(List<TransferListing> rows, HODateTime now, int days) {
         final var since = new HODateTime(now.getInstant().minus(java.time.Duration.ofDays(days)));
         final var listings = new LinkedHashMap<String, List<TransferListing>>();
-        HODateTime oldest = null;
-        HODateTime newest = null;
-        int windowObservations = 0;
         for (final var r : rows) {
-            final var deadline = r.getDeadline() == null ? "" : r.getDeadline().toHT();
-            listings.computeIfAbsent(r.getPlayerId() + "@" + deadline, k -> new ArrayList<>()).add(r);
-            final var at = r.getObservedAt();
-            if (at == null) {
-                continue;
-            }
-            if (oldest == null || at.isBefore(oldest)) oldest = at;
-            if (newest == null || newest.isBefore(at)) newest = at;
-            if (!at.isBefore(since)) windowObservations++;
+            listings.computeIfAbsent(listingKey(r), k -> new ArrayList<>()).add(r);
         }
+        final var observedAt = rows.stream().map(TransferListing::getObservedAt)
+                .filter(java.util.Objects::nonNull).toList();
+        final var oldest = observedAt.stream().min(Comparator.naturalOrder()).orElse(null);
+        final var newest = observedAt.stream().max(Comparator.naturalOrder()).orElse(null);
+        final var windowObservations = observedAt.stream().filter(at -> !at.isBefore(since)).count();
 
         final var outcomes = new LinkedHashMap<String, Integer>();
         List.of("sold", "open", NO_SALE_FOUND, "awaitingResolve").forEach(k -> outcomes.put(k, 0));
@@ -430,7 +424,7 @@ public final class TransferTools {
             final var suspect = outcome.equals(NO_SALE_FOUND)
                     && observations.stream().anyMatch(o -> o.getHighestBid() > 0);
             if (suspect) suspectedLostSales++;
-            if (observations.stream().noneMatch(o -> o.getObservedAt() != null && !o.getObservedAt().isBefore(since))) {
+            if (!seenSince(observations, since)) {
                 continue;
             }
             final var isSold = outcome.equals("sold");
@@ -439,10 +433,7 @@ public final class TransferTools {
             if (suspect) windowSuspected++;
             final var rep = observations.stream().filter(o -> o.getPlaymaker() != null).min(newestFirst)
                     .orElse(observations.stream().min(newestFirst).orElseThrow());
-            count(byAge, ageBucket(rep.getAge()), isSold, suspect);
-            final var levels = listingSkillLevels(rep);
-            count(byGroup, levels.containsValue(null) ? UNKNOWN : derivePositionGroup(levels), isSold, suspect);
-            count(bySpecialty, rep.getSpecialty() == null ? UNKNOWN : rep.getSpecialty().toString(), isSold, suspect);
+            countWindowListing(rep, isSold, suspect, byAge, byGroup, bySpecialty);
         }
 
         final var window = new JsonObject();
@@ -464,6 +455,25 @@ public final class TransferTools {
         json.addProperty("newestObservedAt", newest == null ? null : newest.toHT());
         json.add("window", window);
         return json;
+    }
+
+    /** One listing is one player at one deadline; every observation of it shares the key. */
+    private static String listingKey(TransferListing r) {
+        return r.getPlayerId() + "@" + (r.getDeadline() == null ? "" : r.getDeadline().toHT());
+    }
+
+    private static boolean seenSince(List<TransferListing> observations, HODateTime since) {
+        return observations.stream()
+                .anyMatch(o -> o.getObservedAt() != null && !o.getObservedAt().isBefore(since));
+    }
+
+    /** Files a window listing under its age, position group and specialty, by its representative row. */
+    private static void countWindowListing(TransferListing rep, boolean isSold, boolean suspect,
+                                           JsonObject byAge, JsonObject byGroup, JsonObject bySpecialty) {
+        count(byAge, ageBucket(rep.getAge()), isSold, suspect);
+        final var levels = listingSkillLevels(rep);
+        count(byGroup, levels.containsValue(null) ? UNKNOWN : derivePositionGroup(levels), isSold, suspect);
+        count(bySpecialty, rep.getSpecialty() == null ? UNKNOWN : rep.getSpecialty().toString(), isSold, suspect);
     }
 
     /** sold, open, noSaleFound or awaitingResolve - see {@link #corpusStats}. */
@@ -975,29 +985,11 @@ public final class TransferTools {
     }
 
     private static JsonObject valuation(JsonObject args) throws McpToolException {
-        final var hasPlayerId = args.has(PLAYER_ID) && !args.get(PLAYER_ID).isJsonNull();
-        final var hasProfile = args.has(PROFILE) && !args.get(PROFILE).isJsonNull();
-        if (!hasPlayerId && !hasProfile) {
-            throw new McpToolException(
-                    "Provide either playerId (a squad player) or profile (age + skills) to value.");
-        }
-        if (hasPlayerId && hasProfile) {
-            throw new McpToolException("Provide playerId or profile, not both.");
-        }
-
+        final var hasPlayerId = hasValue(args, PLAYER_ID);
+        final var hasProfile = hasValue(args, PROFILE);
+        requireOneTarget(hasPlayerId, hasProfile);
         final JsonObject profile = hasProfile ? args.getAsJsonObject(PROFILE) : null;
-        final Player player;
-        if (hasProfile) {
-            player = playerFromProfile(profile);
-            requireThirdSkill(profile);
-        } else {
-            final var playerId = McpJson.reqInt(args, PLAYER_ID);
-            player = McpJson.model().getCurrentPlayer(playerId);
-            if (player == null) {
-                throw new McpToolException("No player with id " + playerId + " is in the squad. "
-                        + "Call get_squad for the ids HO knows about.");
-            }
-        }
+        final Player player = hasProfile ? profilePlayer(profile) : squadPlayer(McpJson.reqInt(args, PLAYER_ID));
         // A profile with both playerId and salePrice is a real, already-known data point (the
         // motivating case: a player sold this season, gone from the squad, that HO never tracked
         // as a listing) - record it once so it teaches future valuations something too, rather
@@ -1006,12 +998,7 @@ public final class TransferTools {
         final var requestedGroup = positionGroupOrNull(args);
         final var hardSpecialtyFilter = args.has(SPECIALTY_FILTER) && args.get(SPECIALTY_FILTER).getAsBoolean();
         final var targetSpecialty = corpusSpecialtyFilter(hasProfile, profile, player);
-        // Unset: the age window stays the whole years of ageTolerance. Negative is refused, not
-        // clamped - a window that silently became 0 days would match next to nobody.
-        final Integer ageWindowDays = args.has(AGE_WINDOW_DAYS) ? McpJson.optInt(args, AGE_WINDOW_DAYS, 0) : null;
-        if (ageWindowDays != null && ageWindowDays < 0) {
-            throw new McpToolException("ageWindowDays must be 0 or more.");
-        }
+        final Integer ageWindowDays = ageWindowDays(args);
         final var query = comparableQuery(player,
                 McpJson.optInt(args, "ageTolerance", 1),
                 McpJson.optInt(args, "primarySkillTolerance", 0),
@@ -1034,13 +1021,7 @@ public final class TransferTools {
         // search above asks for any specialty (comparableQuery sets none - see its doc), so it
         // cannot skew the corpus toward the target's own; only this local read can filter, and only
         // on request - see loadComparables's doc for the null/0/positive distinction.
-        final var observations = DBManager.instance().loadComparableTransferListings(
-                query.ageMin(), query.ageMax(),
-                column(query.skillType1()), query.minSkillValue1(), query.maxSkillValue1(),
-                query.skillType2() == null ? null : column(query.skillType2()),
-                query.skillType2() == null ? 0 : query.minSkillValue2(),
-                query.skillType2() == null ? 0 : query.maxSkillValue2(),
-                hardSpecialtyFilter ? targetSpecialty : null, since);
+        final var observations = loadObservations(query, hardSpecialtyFilter ? targetSpecialty : null, since);
 
 
         // One vote per player. The corpus appends on every observation, so a player who turned up
@@ -1067,11 +1048,7 @@ public final class TransferTools {
         final var playerCSkill = thirdHighestOrNull(playerLevels.values());
         final var positionGroup = requestedGroup != null ? requestedGroup : derivePositionGroup(playerLevels);
         final var playerAgeDays = totalAgeDays(player.getAge(), player.getAgeDays());
-        final var hasFullCharacter = !hasProfile
-                || (profile.has(AGREEABILITY) && profile.has(AGGRESSIVENESS) && profile.has(HONESTY));
-        final var playerChar = hasFullCharacter
-                ? new int[]{player.getGentleness(), player.getAggressivity(), player.getHonesty()}
-                : null;
+        final var playerChar = targetCharacter(profile, player);
         final var ageSigma = ageSigmaDays(player.getAge());
 
         final var salesPriced = comparables.stream()
@@ -1095,25 +1072,11 @@ public final class TransferTools {
         final var useSales = salesPriced.size() >= MIN_RESOLVED_SAMPLE;
         // Only the ask/bid fallback gets the climb adjustment - a resolved sale already is what it
         // went for, nothing to nudge.
-        final var sample = useSales ? salesPriced
-                : asksPriced.stream()
-                        .map(pc -> new PricedComparable(pc.listing(),
-                                Math.round(pc.price() * fallbackClimb(pc.listing())), pc.weight()))
-                        .sorted(Comparator.comparingLong(PricedComparable::price))
-                        .toList();
+        final var sample = useSales ? salesPriced : climbed(asksPriced);
 
         final var json = new JsonObject();
         json.addProperty(CURRENCY, McpJson.currency());
-        // The player being valued, so the comparison is self-contained in one call.
-        json.add(PLAYER, hasProfile
-                ? profilePlayerJson(profile)
-                : topSkillsOnly(McpJson.player(player), playerLevels));
-        if (hasProfile) {
-            // True only when profile carried both playerId and salePrice - see
-            // recordProfileObservation's doc for why the other cases stay false rather than
-            // erroring, and for what "recorded" actually writes.
-            json.addProperty("recordedToCorpus", recordedToCorpus);
-        }
+        addTarget(json, profile, player, playerLevels, recordedToCorpus);
         json.addProperty("basis", basis(salesPriced.size()));
         json.addProperty("sampleSize", sample.size());
         json.addProperty("resolvedSalesAvailable", salesPriced.size());
@@ -1127,15 +1090,7 @@ public final class TransferTools {
         if (ageWindowDays != null) {
             json.addProperty(AGE_WINDOW_DAYS, ageWindowDays);
         }
-        if (liveSearch != null) {
-            // The raw hits beside the corpus view of them: itemCount says how much of the market
-            // matched, which the deduplicated comparables list below can no longer tell you.
-            json.add("liveSearch", liveSearch);
-        }
-        if (liveSearchSkipped != null) {
-            // Only ever set when live was defaulted, not asked for - see the comment above.
-            json.addProperty("liveSearchSkipped", liveSearchSkipped);
-        }
+        addLiveSearch(json, liveSearch, liveSearchSkipped);
 
         // The evidence, not just the summary. The median below is a crude anchor: it collapses
         // wage, TSI, form, the other skills and how long ago each was seen, all of which change
@@ -1154,67 +1109,37 @@ public final class TransferTools {
         for (final var l : comparables) {
             final var breakdown = comparableWeightBreakdown(
                     l, playerAgeDays, ageSigma, playerCSkill, playerChar, targetSpecialty, positionGroup);
-            final var row = McpJson.listing(l);
-            row.addProperty("weight", round2(breakdown.combined()));
-            final var weightBreakdown = new JsonObject();
-            weightBreakdown.addProperty("age", round2(breakdown.age()));
-            weightBreakdown.addProperty(SKILL, round2(breakdown.skill()));
-            weightBreakdown.addProperty("character", round2(breakdown.character()));
-            weightBreakdown.addProperty(SPECIALTY, round2(breakdown.specialty()));
-            row.add("weightBreakdown", weightBreakdown);
-            final var rawPrice = l.getSalePrice() != null ? l.getSalePrice()
-                    : Math.max(l.getAskingPrice(), l.getHighestBid());
-            final var adjustedPrice = l.getSalePrice() != null ? rawPrice
-                    : Math.round(rawPrice * fallbackClimb(l));
-            row.addProperty("adjustedPrice", McpJson.money(adjustedPrice));
-            row.addProperty("inSample", sampleByListing.containsKey(l));
+            final var row = evidenceRow(l, breakdown, sampleByListing.containsKey(l));
             groups.computeIfAbsent(skillPair(listingSkillLevels(l)), k -> new ArrayList<>())
                     .add(new EvidenceRow(l, row, breakdown.combined(), sampleByListing.get(l)));
         }
-        final var summary = new JsonArray();
-        final var fileGroups = new JsonArray();
-        groups.entrySet().stream()
-                .sorted(Comparator.comparingDouble(e -> -e.getValue().stream().mapToDouble(EvidenceRow::weight).sum()))
-                .forEach(e -> {
-                    final var head = skillGroupSummary(e.getKey(), e.getValue());
-                    summary.add(head);
-                    final var group = head.deepCopy();
-                    final var rows = new JsonArray();
-                    e.getValue().stream()
-                            .sorted(Comparator.comparingDouble(EvidenceRow::weight).reversed())
-                            .forEach(r -> rows.add(r.json()));
-                    group.add("comparables", rows);
-                    fileGroups.add(group);
-                });
-        json.add(SKILL_GROUPS, summary);
+        attachEvidence(json, groups, positionGroup);
         json.addProperty("comparablesMatched", comparables.size());
         // How many rows those distinct players were collapsed from, so the gap is visible.
         json.addProperty("observationsMatched", observations.size());
-        final var file = new JsonObject();
-        file.addProperty(CURRENCY, McpJson.currency());
-        file.add(PLAYER, json.get(PLAYER).deepCopy());
-        file.addProperty(POSITION_GROUP, positionGroup);
-        file.add(SKILL_GROUPS, fileGroups);
-        McpDownloads.attach(json, file);
 
         if (!useSales) {
-            // Resolved sales are the truth: below MIN_RESOLVED_SAMPLE they are neither blended with
-            // asks nor dropped, but listed one by one beside the listings figure.
-            final var sales = new JsonArray();
-            salesPriced.forEach(pc -> sales.add(
-                    topSkillsOnly(McpJson.listing(pc.listing()), listingSkillLevels(pc.listing()))));
-            json.add("resolvedSales", sales);
+            addResolvedSales(json, salesPriced);
         }
         if (sample.isEmpty()) {
-            json.add(ESTIMATE, com.google.gson.JsonNull.INSTANCE);
-            json.addProperty("note", (salesPriced.isEmpty() ? "Nothing comparable in the corpus yet."
-                    : "Only the resolvedSales above, too few for an estimate, and no listings.")
-                    + " Widen primarySkillTolerance / skillTolerance / ageTolerance (or ageWindowDays),"
-                    + " or run search_transfers over this profile - "
-                    + "every hit it returns is stored and becomes a comparable.");
+            addNoEstimate(json, salesPriced.isEmpty());
             return json;
         }
+        addEstimate(json, sample, salesPriced.size(), useSales);
+        final var spNote = setPiecesNote(targetSetPieces(hasProfile, profile, player),
+                comparables.stream().map(TransferListing::getSetPieces).toList());
+        if (spNote != null) {
+            json.addProperty("setPiecesNote", spNote);
+        }
+        return json;
+    }
 
+    /**
+     * The figure, its range and middle half: as {@code estimate} when resolved sales carry it, as
+     * {@code listingsEstimate} when only asks and bids do.
+     */
+    private static void addEstimate(JsonObject json, List<PricedComparable> sample, int resolvedSales,
+                                    boolean useSales) {
         // Winsorized against the sample's own weighted center before the weighted median is
         // computed - see clampedWeightedMedian's doc. The reported range below is the real,
         // un-clamped spread.
@@ -1240,9 +1165,9 @@ public final class TransferTools {
             listingsEstimate.add(MIDDLE_HALF, middleHalf);
             listingsEstimate.addProperty("label", "listings only, not sale prices - approximate");
             json.add("listingsEstimate", listingsEstimate);
-            json.addProperty("note", (salesPriced.isEmpty()
+            json.addProperty("note", (resolvedSales == 0
                     ? "No resolved sale prices for this profile yet."
-                    : salesPriced.size() + " resolved sale(s) is too thin for an estimate - they are "
+                    : resolvedSales + " resolved sale(s) is too thin for an estimate - they are "
                     + "listed in resolvedSales, read them first.")
                     + " listingsEstimate is what sellers asked and bidders bid, nudged up (at most "
                     + "1.5x) for time still left on the clock when each was observed - an "
@@ -1257,12 +1182,182 @@ public final class TransferTools {
                 + "weight (weightBreakdown says which of age/skill/character/specialty pulled it "
                 + "down) and adjustedPrice (what it actually contributed, after the time-left climb "
                 + "where that applies) - check the number instead of trusting it.");
-        final var spNote = setPiecesNote(targetSetPieces(hasProfile, profile, player),
-                comparables.stream().map(TransferListing::getSetPieces).toList());
-        if (spNote != null) {
-            json.addProperty("setPiecesNote", spNote);
+    }
+
+    /** The ask/bid fallback sample, each price nudged by fallbackClimb for time still left on the clock. */
+    private static List<PricedComparable> climbed(List<PricedComparable> asksPriced) {
+        return asksPriced.stream()
+                .map(pc -> new PricedComparable(pc.listing(),
+                        Math.round(pc.price() * fallbackClimb(pc.listing())), pc.weight()))
+                .sorted(Comparator.comparingLong(PricedComparable::price))
+                .toList();
+    }
+
+    private static void addLiveSearch(JsonObject json, JsonObject liveSearch, String liveSearchSkipped) {
+        if (liveSearch != null) {
+            // The raw hits beside the corpus view of them: itemCount says how much of the market
+            // matched, which the deduplicated comparables list can no longer tell you.
+            json.add("liveSearch", liveSearch);
         }
-        return json;
+        if (liveSearchSkipped != null) {
+            // Only ever set when live was defaulted, not asked for - see runLiveSearch.
+            json.addProperty("liveSearchSkipped", liveSearchSkipped);
+        }
+    }
+
+    /**
+     * One summary line per A/B skill group in the answer, heaviest first; the groups with every
+     * comparable go into the download.
+     */
+    private static void attachEvidence(JsonObject json, Map<String, List<EvidenceRow>> groups,
+                                       String positionGroup) {
+        final var summary = new JsonArray();
+        final var fileGroups = new JsonArray();
+        groups.entrySet().stream()
+                .sorted(Comparator.comparingDouble(e -> -e.getValue().stream().mapToDouble(EvidenceRow::weight).sum()))
+                .forEach(e -> {
+                    final var head = skillGroupSummary(e.getKey(), e.getValue());
+                    summary.add(head);
+                    final var group = head.deepCopy();
+                    group.add("comparables", evidenceRows(e.getValue()));
+                    fileGroups.add(group);
+                });
+        json.add(SKILL_GROUPS, summary);
+        final var file = new JsonObject();
+        file.addProperty(CURRENCY, McpJson.currency());
+        file.add(PLAYER, json.get(PLAYER).deepCopy());
+        file.addProperty(POSITION_GROUP, positionGroup);
+        file.add(SKILL_GROUPS, fileGroups);
+        McpDownloads.attach(json, file);
+    }
+
+    private static JsonArray evidenceRows(List<EvidenceRow> group) {
+        final var rows = new JsonArray();
+        group.stream()
+                .sorted(Comparator.comparingDouble(EvidenceRow::weight).reversed())
+                .forEach(r -> rows.add(r.json()));
+        return rows;
+    }
+
+    /**
+     * Resolved sales are the truth: below MIN_RESOLVED_SAMPLE they are neither blended with asks
+     * nor dropped, but listed one by one beside the listings figure.
+     */
+    private static void addResolvedSales(JsonObject json, List<PricedComparable> salesPriced) {
+        final var sales = new JsonArray();
+        salesPriced.forEach(pc -> sales.add(
+                topSkillsOnly(McpJson.listing(pc.listing()), listingSkillLevels(pc.listing()))));
+        json.add("resolvedSales", sales);
+    }
+
+    private static void addNoEstimate(JsonObject json, boolean noSales) {
+        json.add(ESTIMATE, com.google.gson.JsonNull.INSTANCE);
+        json.addProperty("note", (noSales ? "Nothing comparable in the corpus yet."
+                : "Only the resolvedSales above, too few for an estimate, and no listings.")
+                + " Widen primarySkillTolerance / skillTolerance / ageTolerance (or ageWindowDays),"
+                + " or run search_transfers over this profile - "
+                + "every hit it returns is stored and becomes a comparable.");
+    }
+
+    private static boolean hasValue(JsonObject args, String key) {
+        return args.has(key) && !args.get(key).isJsonNull();
+    }
+
+    /**
+     * The player being valued, so the comparison is self-contained in one call. recordedToCorpus is
+     * true only when a profile carried both playerId and salePrice - see recordProfileObservation's
+     * doc for why the other cases stay false rather than erroring, and for what it writes.
+     */
+    private static void addTarget(JsonObject json, JsonObject profile, Player player,
+                                  Map<String, Integer> playerLevels, boolean recordedToCorpus) {
+        if (profile == null) {
+            json.add(PLAYER, topSkillsOnly(McpJson.player(player), playerLevels));
+        } else {
+            json.add(PLAYER, profilePlayerJson(profile));
+            json.addProperty("recordedToCorpus", recordedToCorpus);
+        }
+    }
+
+    private static void requireOneTarget(boolean hasPlayerId, boolean hasProfile) throws McpToolException {
+        if (!hasPlayerId && !hasProfile) {
+            throw new McpToolException(
+                    "Provide either playerId (a squad player) or profile (age + skills) to value.");
+        }
+        if (hasPlayerId && hasProfile) {
+            throw new McpToolException("Provide playerId or profile, not both.");
+        }
+    }
+
+    private static Player profilePlayer(JsonObject profile) throws McpToolException {
+        final var player = playerFromProfile(profile);
+        requireThirdSkill(profile);
+        return player;
+    }
+
+    private static Player squadPlayer(int playerId) throws McpToolException {
+        final var player = McpJson.model().getCurrentPlayer(playerId);
+        if (player == null) {
+            throw new McpToolException("No player with id " + playerId + " is in the squad. "
+                    + "Call get_squad for the ids HO knows about.");
+        }
+        return player;
+    }
+
+    /**
+     * Unset: the age window stays the whole years of ageTolerance. Negative is refused, not
+     * clamped - a window that silently became 0 days would match next to nobody.
+     */
+    private static Integer ageWindowDays(JsonObject args) throws McpToolException {
+        if (!args.has(AGE_WINDOW_DAYS)) {
+            return null;
+        }
+        final var days = McpJson.optInt(args, AGE_WINDOW_DAYS, 0);
+        if (days < 0) {
+            throw new McpToolException("ageWindowDays must be 0 or more.");
+        }
+        return days;
+    }
+
+    /** The stored listings inside the query's age and skill windows; a one-skill query has no second band. */
+    private static List<TransferListing> loadObservations(TransferSearchQuery query, Integer specialty,
+                                                         HODateTime since) {
+        final var second = query.skillType2();
+        return DBManager.instance().loadComparableTransferListings(
+                query.ageMin(), query.ageMax(),
+                column(query.skillType1()), query.minSkillValue1(), query.maxSkillValue1(),
+                second == null ? null : column(second),
+                second == null ? 0 : query.minSkillValue2(),
+                second == null ? 0 : query.maxSkillValue2(),
+                specialty, since);
+    }
+
+    /** The target's character for the weight, null when a profile left part of it out. */
+    private static int[] targetCharacter(JsonObject profile, Player player) {
+        final var hasFullCharacter = profile == null
+                || (profile.has(AGREEABILITY) && profile.has(AGGRESSIVENESS) && profile.has(HONESTY));
+        return hasFullCharacter
+                ? new int[]{player.getGentleness(), player.getAggressivity(), player.getHonesty()}
+                : null;
+    }
+
+    /**
+     * One comparable of the download: its listing, the weight it carried and why, and adjustedPrice -
+     * the sale price unchanged, or an ask/bid nudged by fallbackClimb for time still left.
+     */
+    private static JsonObject evidenceRow(TransferListing l, WeightBreakdown breakdown, boolean inSample) {
+        final var row = McpJson.listing(l);
+        row.addProperty("weight", round2(breakdown.combined()));
+        final var weightBreakdown = new JsonObject();
+        weightBreakdown.addProperty("age", round2(breakdown.age()));
+        weightBreakdown.addProperty(SKILL, round2(breakdown.skill()));
+        weightBreakdown.addProperty("character", round2(breakdown.character()));
+        weightBreakdown.addProperty(SPECIALTY, round2(breakdown.specialty()));
+        row.add("weightBreakdown", weightBreakdown);
+        final var adjustedPrice = l.getSalePrice() != null ? l.getSalePrice()
+                : Math.round(Math.max(l.getAskingPrice(), l.getHighestBid()) * fallbackClimb(l));
+        row.addProperty("adjustedPrice", McpJson.money(adjustedPrice));
+        row.addProperty("inSample", inSample);
+        return row;
     }
 
     /**
@@ -1696,8 +1791,7 @@ public final class TransferTools {
     private static JsonObject refreshScout(JsonObject args) throws McpToolException {
         final var wanted = new java.util.LinkedHashSet<Integer>();
         if (args.has(PLAYERS) && args.get(PLAYERS).isJsonArray()) {
-            args.getAsJsonArray(PLAYERS).forEach(e -> wanted.add(e.isJsonObject()
-                    ? e.getAsJsonObject().get(PLAYER_ID).getAsInt() : e.getAsInt()));
+            args.getAsJsonArray(PLAYERS).forEach(e -> wanted.add(scoutPlayerId(e)));
         }
         final var now = new java.sql.Timestamp(System.currentTimeMillis());
         // onEdt hands back JSON only, so the ids travel as an array.
@@ -1705,8 +1799,7 @@ public final class TransferTools {
             final var json = new JsonObject();
             final var array = new JsonArray();
             ScoutList.entries().stream()
-                    .filter(e -> wanted.isEmpty() ? !e.isSold() && e.getDeadline() != null && e.getDeadline().after(now)
-                            : wanted.contains(e.getPlayerID()))
+                    .filter(e -> isRefreshCandidate(e, wanted, now))
                     .forEach(e -> array.add(e.getPlayerID()));
             json.add("ids", array);
             return json;
@@ -1741,15 +1834,41 @@ public final class TransferTools {
                 // Sold, withdrawn, or the read failed (HO's log says which); the entry is unchanged.
                 out.add("notListed", notListed);
             }
-            if (!wanted.isEmpty()) {
-                final var notOnList = new JsonArray();
-                wanted.stream().filter(id -> !ids.contains(id)).forEach(notOnList::add);
-                if (!notOnList.isEmpty()) {
-                    out.add("notOnList", notOnList);
-                }
-            }
+            addNotOnList(out, wanted, ids);
             return out;
         });
+    }
+
+    /** A players element: a bare id or a {playerId, note} object. */
+    private static int scoutPlayerId(com.google.gson.JsonElement e) {
+        return e.isJsonObject() ? e.getAsJsonObject().get(PLAYER_ID).getAsInt() : e.getAsInt();
+    }
+
+    /** The named players, or without names every entry not sold whose deadline is still ahead. */
+    private static boolean isRefreshCandidate(ScoutEintrag e, java.util.Set<Integer> wanted,
+                                              java.sql.Timestamp now) {
+        if (!wanted.isEmpty()) {
+            return wanted.contains(e.getPlayerID());
+        }
+        return !e.isSold() && e.getDeadline() != null && e.getDeadline().after(now);
+    }
+
+    /** Named players that are not on the shortlist at all. */
+    private static void addNotOnList(JsonObject out, java.util.Set<Integer> wanted, List<Integer> ids) {
+        final var notOnList = new JsonArray();
+        wanted.stream().filter(id -> !ids.contains(id)).forEach(notOnList::add);
+        if (!notOnList.isEmpty()) {
+            out.add("notOnList", notOnList);
+        }
+    }
+
+    /** The note of a {playerId, note} element, appended to the entry's notes column. */
+    private static void addScoutNote(ScoutEintrag entry, com.google.gson.JsonElement element) {
+        final var note = element.isJsonObject()
+                ? McpJson.optString(element.getAsJsonObject(), "note", null) : null;
+        if (note != null && !note.isBlank()) {
+            entry.setInfo(truncateInfo(entry.getInfo() + note));
+        }
     }
 
     private static JsonObject addToScout(JsonObject args) throws McpToolException {
@@ -1762,27 +1881,17 @@ public final class TransferTools {
         final var entries = new java.util.LinkedHashMap<Integer, ScoutEintrag>();
         final var notFound = new JsonArray();
         for (final var element : requested) {
-            final int playerId;
-            final String note;
-            if (element.isJsonObject()) {
-                final var object = element.getAsJsonObject();
-                playerId = McpJson.reqInt(object, PLAYER_ID);
-                note = McpJson.optString(object, "note", null);
-            } else {
-                playerId = element.getAsInt();
-                note = null;
-            }
+            final var playerId = element.isJsonObject()
+                    ? McpJson.reqInt(element.getAsJsonObject(), PLAYER_ID) : element.getAsInt();
             final var listing = DBManager.instance().loadLatestTransferListing(playerId);
             if (listing == null) {
                 notFound.add(playerId);
-                continue;
+            } else {
+                final var entry = TransferSearchConverter.toScoutEintrag(listing);
+                observeForScout(entry);
+                addScoutNote(entry, element);
+                entries.put(playerId, entry);
             }
-            final var entry = TransferSearchConverter.toScoutEintrag(listing);
-            observeForScout(entry);
-            if (note != null && !note.isBlank()) {
-                entry.setInfo(truncateInfo(entry.getInfo() + note));
-            }
-            entries.put(playerId, entry);
         }
 
         return LineupTools.onEdt(() -> {
@@ -1891,17 +2000,7 @@ public final class TransferTools {
             json.addProperty(RETURNED, players.size());
             json.add(PLAYERS, players);
             if (filter.playerIds() != null) {
-                // An id the caller asked for that is not on the shortlist at all - not one the other
-                // filters dropped - so a typo or a never-added player is told apart from no match.
-                final var onList = ScoutList.entries().stream()
-                        .map(module.transfer.scout.ScoutEintrag::getPlayerID)
-                        .collect(java.util.stream.Collectors.toSet());
-                final var missing = new JsonArray();
-                filter.playerIds().stream().filter(id -> !onList.contains(id)).sorted()
-                        .forEach(missing::add);
-                if (!missing.isEmpty()) {
-                    json.add("missingPlayerIds", missing);
-                }
+                addMissingPlayerIds(json, filter.playerIds());
             }
             return json;
         });
@@ -1919,23 +2018,7 @@ public final class TransferTools {
         // pair on the scout entry instead would need a SCOUT column and a DBVersion migration to buy
         // a staler answer.
         for (final var element : out.getAsJsonArray(PLAYERS)) {
-            final var player = element.getAsJsonObject();
-            final var listing = DBManager.instance()
-                    .loadLatestTransferListing(player.get(PLAYER_ID).getAsInt());
-            if (listing == null) {
-                continue;
-            }
-            player.addProperty("observedAt",
-                    listing.getObservedAt() == null ? null : listing.getObservedAt().toHT());
-            // A stored 0 means Hattrick sent no AskingPrice for this listing, not that the seller
-            // asked nothing - about 6% of observed search hits, plus every snapshot that came from
-            // currentbids, which carries no asking price at all. Leave the key out rather than
-            // publish a zero the model would read as a price. A highestBid of 0 is left in: there,
-            // zero really does mean nobody has bid yet.
-            if (listing.getAskingPrice() > 0) {
-                player.addProperty(ASKING_PRICE, McpJson.money(listing.getAskingPrice()));
-            }
-            player.addProperty(HIGHEST_BID, McpJson.money(listing.getHighestBid()));
+            addLatestObservation(element.getAsJsonObject());
         }
         if (!full) {
             final var keys = new java.util.ArrayList<>(COMPACT_SCOUT_KEYS);
@@ -2871,32 +2954,7 @@ public final class TransferTools {
 
         final var transfers = new JsonArray();
         for (final var t : page) {
-            final var isBuy = t.getBuyerid() == teamId;
-            final var json = new JsonObject();
-            json.addProperty(TRANSFER_ID, t.getTransferId());
-            json.addProperty("date", t.getDate() == null ? null : t.getDate().toHT());
-            json.addProperty("week", t.getWeek());
-            json.addProperty(SEASON, t.getSeason());
-            json.addProperty(DIRECTION, isBuy ? "buy" : "sell");
-            json.addProperty(PLAYER_ID, t.getPlayerId());
-            json.addProperty(PLAYER_NAME, t.getPlayerName());
-            json.addProperty(PRICE, McpJson.money(t.getPrice()));
-            json.addProperty("tsi", t.getTsi());
-            json.addProperty("counterpartyTeamId", isBuy ? t.getSellerid() : t.getBuyerid());
-            json.addProperty("counterpartyTeamName", isBuy ? t.getSellerName() : t.getBuyerName());
-            json.addProperty("motherClubFee", McpJson.money(t.getMotherClubFee()));
-            json.addProperty("previousClubCommission", McpJson.money(t.getPreviousClubFee()));
-            // HO's own snapshot of him: the last download before a sale, the first after a buy.
-            final var snapshot = t.getDate() == null ? null
-                    : DBManager.instance().getSpielerAtDate(t.getPlayerId(), t.getDate().toDbTimestamp());
-            if (snapshot != null) {
-                json.addProperty(SPECIALTY, snapshot.getSpecialty());
-                final var skills = new JsonObject();
-                playerSkillLevels(snapshot).forEach(skills::addProperty);
-                skills.addProperty(SET_PIECES, snapshot.getValue4Skill(core.constants.player.PlayerSkill.SETPIECES));
-                json.add(SKILLS, skills);
-            }
-            transfers.add(json);
+            transfers.add(transferRow(t, teamId));
         }
 
         final var json = new JsonObject();
@@ -2909,6 +2967,70 @@ public final class TransferTools {
         json.addProperty("totalEarned", McpJson.money(DBManager.instance().getSumTransferPrices(teamId, true)));
         json.add(TRANSFERS, transfers);
         return bulk ? McpDownloads.bulk(json, TRANSFERS) : json;
+    }
+
+    /** list_scout's newest corpus observation of one entry: when, the asking price and the highest bid. */
+    private static void addLatestObservation(JsonObject player) {
+        final var listing = DBManager.instance()
+                .loadLatestTransferListing(player.get(PLAYER_ID).getAsInt());
+        if (listing == null) {
+            return;
+        }
+        player.addProperty("observedAt",
+                listing.getObservedAt() == null ? null : listing.getObservedAt().toHT());
+        // A stored 0 means Hattrick sent no AskingPrice for this listing, not that the seller
+        // asked nothing - about 6% of observed search hits, plus every snapshot that came from
+        // currentbids, which carries no asking price at all. Leave the key out rather than
+        // publish a zero the model would read as a price. A highestBid of 0 is left in: there,
+        // zero really does mean nobody has bid yet.
+        if (listing.getAskingPrice() > 0) {
+            player.addProperty(ASKING_PRICE, McpJson.money(listing.getAskingPrice()));
+        }
+        player.addProperty(HIGHEST_BID, McpJson.money(listing.getHighestBid()));
+    }
+
+    private static JsonObject transferRow(PlayerTransfer t, int teamId) {
+        final var isBuy = t.getBuyerid() == teamId;
+        final var json = new JsonObject();
+        json.addProperty(TRANSFER_ID, t.getTransferId());
+        json.addProperty("date", t.getDate() == null ? null : t.getDate().toHT());
+        json.addProperty("week", t.getWeek());
+        json.addProperty(SEASON, t.getSeason());
+        json.addProperty(DIRECTION, isBuy ? "buy" : "sell");
+        json.addProperty(PLAYER_ID, t.getPlayerId());
+        json.addProperty(PLAYER_NAME, t.getPlayerName());
+        json.addProperty(PRICE, McpJson.money(t.getPrice()));
+        json.addProperty("tsi", t.getTsi());
+        json.addProperty("counterpartyTeamId", isBuy ? t.getSellerid() : t.getBuyerid());
+        json.addProperty("counterpartyTeamName", isBuy ? t.getSellerName() : t.getBuyerName());
+        json.addProperty("motherClubFee", McpJson.money(t.getMotherClubFee()));
+        json.addProperty("previousClubCommission", McpJson.money(t.getPreviousClubFee()));
+        // HO's own snapshot of him: the last download before a sale, the first after a buy.
+        final var snapshot = t.getDate() == null ? null
+                : DBManager.instance().getSpielerAtDate(t.getPlayerId(), t.getDate().toDbTimestamp());
+        if (snapshot != null) {
+            json.addProperty(SPECIALTY, snapshot.getSpecialty());
+            final var skills = new JsonObject();
+            playerSkillLevels(snapshot).forEach(skills::addProperty);
+            skills.addProperty(SET_PIECES, snapshot.getValue4Skill(core.constants.player.PlayerSkill.SETPIECES));
+            json.add(SKILLS, skills);
+        }
+        return json;
+    }
+
+    /**
+     * The ids the caller asked list_scout for that are not on the shortlist at all - not ones the
+     * other filters dropped - so a typo or a never-added player is told apart from no match.
+     */
+    private static void addMissingPlayerIds(JsonObject json, java.util.Set<Integer> playerIds) {
+        final var onList = ScoutList.entries().stream()
+                .map(ScoutEintrag::getPlayerID)
+                .collect(Collectors.toSet());
+        final var missing = new JsonArray();
+        playerIds.stream().filter(id -> !onList.contains(id)).sorted().forEach(missing::add);
+        if (!missing.isEmpty()) {
+            json.add("missingPlayerIds", missing);
+        }
     }
 
     /** Both skill windows alike and an age window in whole years - see the full overload. */

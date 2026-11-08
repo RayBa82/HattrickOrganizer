@@ -428,20 +428,8 @@ public final class TeamTools {
         final var players = new JsonArray();
         for (final var player : selected.stream().skip(offset).limit(limit).toList()) {
             final var row = McpJson.player(player, ratingModel);
-            if (ratingsOnly) {
-                players.add(ratingsRow(row));
-                continue;
-            }
-            final var compact = compactSquadRow(row, include);
-            final var injury = injuredLastMatch.get(player.getPlayerId());
-            if (injury != null && player.getInjuryWeeks() <= 0) {
-                // Hattrick has not caught up yet: the match says injured, injuryWeeks still 0.
-                final var flag = new JsonObject();
-                flag.addProperty(MATCH_ID, injury[0]);
-                flag.addProperty("minute", injury[1]);
-                compact.add("injuredInLastMatch", flag);
-            }
-            players.add(compact);
+            players.add(ratingsOnly ? ratingsRow(row)
+                    : squadRow(row, include, player, injuredLastMatch.get(player.getPlayerId())));
         }
         final var json = new JsonObject();
         if (ratingsOnly) {
@@ -880,6 +868,36 @@ public final class TeamTools {
         return rows;
     }
 
+    /** The staff levels next door on Verein: they are what drives the statement's cost line. */
+    private static JsonObject clubStaff(core.model.misc.Verein club) {
+        final var clubJson = new JsonObject();
+        clubJson.addProperty("fans", club.getFans());
+        clubJson.addProperty("doctors", club.getAerzte());
+        clubJson.addProperty("sportPsychologists", club.getPsychologen());
+        clubJson.addProperty("spokespersons", club.getPRManager());
+        clubJson.addProperty("assistantCoaches", club.getCoTrainer());
+        clubJson.addProperty("financialDirectors", club.getFinancialDirectorLevels());
+        clubJson.addProperty("formCoaches", club.getFormCoachLevels());
+        clubJson.addProperty("tacticalAssistants", club.getTacticalAssistantLevels());
+        return clubJson;
+    }
+
+    /**
+     * A compact get_squad row. {@code injury} is the last match's [matchId, minute] when he was
+     * injured in it: flagged while Hattrick has not caught up yet and injuryWeeks still reads 0.
+     */
+    private static JsonObject squadRow(JsonObject row, java.util.Set<String> include,
+                                       core.model.player.Player player, int[] injury) {
+        final var compact = compactSquadRow(row, include);
+        if (injury != null && player.getInjuryWeeks() <= 0) {
+            final var flag = new JsonObject();
+            flag.addProperty(MATCH_ID, injury[0]);
+            flag.addProperty("minute", injury[1]);
+            compact.add("injuredInLastMatch", flag);
+        }
+        return compact;
+    }
+
     private static JsonObject finances(JsonObject args) throws McpToolException {
         final var model = McpJson.model();
         final var economy = model.getEconomy();
@@ -900,17 +918,7 @@ public final class TeamTools {
 
         final var club = model.getClub();
         if (club != null) {
-            // The staff levels next door on Verein are what drives the cost line above.
-            final var clubJson = new JsonObject();
-            clubJson.addProperty("fans", club.getFans());
-            clubJson.addProperty("doctors", club.getAerzte());
-            clubJson.addProperty("sportPsychologists", club.getPsychologen());
-            clubJson.addProperty("spokespersons", club.getPRManager());
-            clubJson.addProperty("assistantCoaches", club.getCoTrainer());
-            clubJson.addProperty("financialDirectors", club.getFinancialDirectorLevels());
-            clubJson.addProperty("formCoaches", club.getFormCoachLevels());
-            clubJson.addProperty("tacticalAssistants", club.getTacticalAssistantLevels());
-            json.add("club", clubJson);
+            json.add("club", clubStaff(club));
         }
 
         if (model.getStadium() != null) {

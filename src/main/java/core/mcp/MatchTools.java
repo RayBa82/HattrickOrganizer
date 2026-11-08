@@ -683,12 +683,11 @@ public final class MatchTools {
         return json;
     }
 
-
     /**
      * Per-team goals / missed chances / special events, then every event in match order.
      * Event ids 100-199 are goals and 200-299 missed chances (Hattrick's own ranges).
+     * {@code types}: only rows of these {@link #EVENT_TYPES}, null for all; the counts stay whole.
      */
-    /** {@code types}: only rows of these {@link #EVENT_TYPES}, null for all; the counts stay whole. */
     static JsonObject matchEventsJson(int homeTeamId, int awayTeamId, List<MatchEvent> events, Set<String> types) {
         final var json = new JsonObject();
         json.add("home", eventCounts(homeTeamId, events));
@@ -875,26 +874,13 @@ public final class MatchTools {
         String teamName = null;
 
         for (final var d : details) {
-            final var home = d.getHomeTeamId() == teamId;
-            final var entry = side(d, home);
+            final var entry = reportEntry(d, teamId);
             for (int i = 0; i < SECTOR_KEYS.length; i++) {
                 sums[i] += entry.get(SECTOR_KEYS[i]).getAsDouble();
             }
-            final var type = d.getMatchType();
-            entry.addProperty(MATCH_ID, d.getMatchID());
-            if (type != null) {
-                entry.addProperty("matchTypeId", type.getId());
-                entry.addProperty(MATCH_TYPE, type.name());
-            }
-            entry.addProperty("date", d.getMatchDate() == null ? null : d.getMatchDate().toHT());
-            entry.addProperty(LOCATION, home ? "home" : "away");
-            entry.addProperty(OPPONENT_TEAM_ID, home ? d.getGuestTeamId() : d.getHomeTeamId());
-            entry.addProperty("opponentTeamName", home ? d.getGuestTeamName() : d.getHomeTeamName());
             matches.add(entry);
-
-            final var name = entry.get(TEAM_NAME);
-            if (teamName == null && name != null && !name.isJsonNull()) {
-                teamName = name.getAsString();
+            if (teamName == null) {
+                teamName = teamName(entry);
             }
         }
 
@@ -920,7 +906,33 @@ public final class MatchTools {
         return json;
     }
 
-    /** One side of a played match as Hattrick rated it - not a prediction. */
+    /**
+     * One match of the opponent report: the team's side of it, plus when, where and against whom.
+     */
+    private static JsonObject reportEntry(Matchdetails d, int teamId) {
+        final var home = d.getHomeTeamId() == teamId;
+        final var entry = side(d, home);
+        final var type = d.getMatchType();
+        entry.addProperty(MATCH_ID, d.getMatchID());
+        if (type != null) {
+            entry.addProperty("matchTypeId", type.getId());
+            entry.addProperty(MATCH_TYPE, type.name());
+        }
+        entry.addProperty("date", d.getMatchDate() == null ? null : d.getMatchDate().toHT());
+        entry.addProperty(LOCATION, home ? "home" : "away");
+        entry.addProperty(OPPONENT_TEAM_ID, home ? d.getGuestTeamId() : d.getHomeTeamId());
+        entry.addProperty("opponentTeamName", home ? d.getGuestTeamName() : d.getHomeTeamName());
+        return entry;
+    }
+
+    private static String teamName(JsonObject entry) {
+        final var name = entry.get(TEAM_NAME);
+        return name == null || name.isJsonNull() ? null : name.getAsString();
+    }
+
+    /**
+     * One side of a played match as Hattrick rated it - not a prediction.
+     */
     private static JsonObject side(Matchdetails details, boolean home) {
         final var json = new JsonObject();
         json.addProperty(TEAM_ID, home ? details.getHomeTeamId() : details.getGuestTeamId());
@@ -984,37 +996,43 @@ public final class MatchTools {
             }
         }
         for (final var position : positions) {
-            if (position.getPlayerId() <= 0 || (isPseudoRole(position.getRoleId())
-                    && playersInSlots.contains(position.getPlayerId()))) {
-                continue;
+            if (position.getPlayerId() > 0 && !(isPseudoRole(position.getRoleId())
+                && playersInSlots.contains(position.getPlayerId()))) {
+                final var json = playerRow(position, captainId, setPiecesId);
+                if (lineupTeam != null) {
+                    addSubstitutions(json, lineupTeam, position.getPlayerId());
+                }
+                addIncidents(json, events, teamId, position.getPlayerId());
+                players.add(json);
             }
-            final var json = new JsonObject();
-            json.addProperty("playerId", position.getPlayerId());
-            json.addProperty("name", position.getSpielerName());
-            json.addProperty("roleId", position.getRoleId());
-            if (position.getPlayerId() == captainId) {
-                json.addProperty("captain", true);
-            }
-            if (position.getPlayerId() == setPiecesId) {
-                json.addProperty("setPieces", true);
-            }
-            json.addProperty("behaviour", position.getBehaviour());
-            json.addProperty("rating", position.getRating());
-            json.addProperty("ratingEndOfMatch", position.getRatingStarsEndOfMatch());
-            // The role id is the slot at the final whistle, with 19 to 21 for a replaced player
-            // and 33 to 35 for a red-carded one. The start role id is the slot he kicked off in.
-            final var started = MatchRoleID.isFieldMatchRoleId(position.getStartPosition());
-            json.addProperty("started", started);
-            if (started) {
-                json.addProperty("startRoleId", position.getStartPosition());
-            }
-            if (lineupTeam != null) {
-                addSubstitutions(json, lineupTeam, position.getPlayerId());
-            }
-            addIncidents(json, events, teamId, position.getPlayerId());
-            players.add(json);
         }
         return players;
+    }
+
+    /** A player's rating row, with the captain and set-pieces roles folded in as flags. */
+    private static JsonObject playerRow(core.model.match.MatchLineupPosition position, int captainId,
+                                        int setPiecesId) {
+        final var json = new JsonObject();
+        json.addProperty("playerId", position.getPlayerId());
+        json.addProperty("name", position.getSpielerName());
+        json.addProperty("roleId", position.getRoleId());
+        if (position.getPlayerId() == captainId) {
+            json.addProperty("captain", true);
+        }
+        if (position.getPlayerId() == setPiecesId) {
+            json.addProperty("setPieces", true);
+        }
+        json.addProperty("behaviour", position.getBehaviour());
+        json.addProperty("rating", position.getRating());
+        json.addProperty("ratingEndOfMatch", position.getRatingStarsEndOfMatch());
+        // The role id is the slot at the final whistle, with 19 to 21 for a replaced player
+        // and 33 to 35 for a red-carded one. The start role id is the slot he kicked off in.
+        final var started = MatchRoleID.isFieldMatchRoleId(position.getStartPosition());
+        json.addProperty("started", started);
+        if (started) {
+            json.addProperty("startRoleId", position.getStartPosition());
+        }
+        return json;
     }
 
     private static boolean isPseudoRole(int roleId) {
@@ -1185,6 +1203,13 @@ public final class MatchTools {
                 ? manager.calculateNMatches(simulations, ourTeam, theirTeam)
                 : manager.calculateNMatches(simulations, theirTeam, ourTeam);
 
+        final var json = simulationJson(result, weAreHome);
+        json.add("ourRatings", McpJson.ratings(ratingModel, lineup));
+        return json;
+    }
+
+    /** The Monte Carlo outcome from our side: win/draw/loss shares and goals and chances per match. */
+    private static JsonObject simulationJson(core.prediction.engine.MatchResult result, boolean weAreHome) {
         final var played = Math.max(1, result.getMatchNumber());
         final var ourWins = weAreHome ? result.getHomeWin() : result.getAwayWin();
         final var ourGoals = weAreHome ? result.getHomeGoals() : result.getGuestGoals();
@@ -1203,11 +1228,9 @@ public final class MatchTools {
         json.addProperty("chancesPerMatch", (double) ourChances / played);
         json.addProperty("opponentGoalsPerMatch", (double) theirGoals / played);
         json.addProperty("opponentChancesPerMatch", (double) theirChances / played);
-        json.add("ourRatings", McpJson.ratings(ratingModel, lineup));
         return json;
     }
 
-    /**
     /**
      * Adds the opponent side and the simulation controls to a properties object - the half of
      * simulate_lineup's schema that turns a scoring call into a simulation. Nothing here is

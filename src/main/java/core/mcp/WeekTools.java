@@ -11,7 +11,6 @@ import core.rating.RatingPredictionModel;
 import core.util.HODateTime;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;

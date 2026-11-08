@@ -305,6 +305,11 @@ public final class TrainingTools {
         } catch (ChppWriteService.ChppWriteException e) {
             throw new McpToolException(e.getMessage());
         }
+        return committedJson(committed);
+    }
+
+    /** set_training's answer: what Hattrick confirmed, and when it takes effect. */
+    private static JsonObject committedJson(ChppWriteService.TrainingCommitted committed) {
         final var out = new JsonObject();
         out.addProperty(STATUS, "ok");
         final var c = new JsonObject();
@@ -385,28 +390,18 @@ public final class TrainingTools {
         final var since = asOf.minus(weeks * 7, ChronoUnit.DAYS);
         final var window = new Window(since, asOf);
 
-        // What is being trained now, which is the skill a growth rate is worth quoting for. It can
-        // have been something else earlier in the window - levelUps shows where the growth went.
-        final var training = model.getTraining();
-        final var weekly = training == null
-                ? null : WeeklyTrainingType.instance(training.getTrainingType());
-        final var trained = weekly == null ? null : weekly.getPrimaryTrainingSkill();
-
         final var json = new JsonObject();
         json.addProperty("asOf", asOf.toHT());
         json.addProperty(WEEKS, weeks);
         json.addProperty(WEEKS_AGO, weeksAgo);
         json.addProperty("currency", McpJson.currency());
-        json.addProperty("trainedSkill", trained == null ? null : String.valueOf(trained));
-        json.addProperty("secondarySkill", weekly == null || weekly.getSecondaryTrainingSkill() == null
-                ? null : String.valueOf(weekly.getSecondaryTrainingSkill()));
+        final var trained = addTrainedSkills(json, model);
 
         final var players = new JsonArray();
         final var ids = historyPlayerIds(args, model);
         final var includeEvents = McpJson.optBool(args, "includeEvents", false);
-        if (includeEvents && ids.size() > MAX_EVENT_PLAYERS) {
-            throw new IllegalArgumentException("includeEvents costs one CHPP request per player, so "
-                    + "it takes at most " + MAX_EVENT_PLAYERS + " playerIds, had " + ids.size() + ".");
+        if (includeEvents) {
+            requireEventPlayerCap(ids.size());
         }
         final var trainingWeeks = includeTraining
                 ? trainingHistory(model, window, new HashSet<>(ids)) : null;
@@ -446,6 +441,30 @@ public final class TrainingTools {
                 + "with gaps, means it cannot be told.");
         return bulk ? McpDownloads.bulk(json, PLAYERS, TRAINING_WEEKS, SNAPSHOTS,
                 TRAINING_EVENTS) : json;
+    }
+
+    private static void requireEventPlayerCap(int players) {
+        if (players > MAX_EVENT_PLAYERS) {
+            throw new IllegalArgumentException("includeEvents costs one CHPP request per player, so "
+                    + "it takes at most " + MAX_EVENT_PLAYERS + " playerIds, had " + players + ".");
+        }
+    }
+
+    /**
+     * What is being trained now, which is the skill a growth rate is worth quoting for. It can have
+     * been something else earlier in the window - levelUps shows where the growth went.
+     *
+     * @return the primary trained skill, null without training settings
+     */
+    private static PlayerSkill addTrainedSkills(JsonObject json, HOModel model) {
+        final var training = model.getTraining();
+        final var weekly = training == null
+                ? null : WeeklyTrainingType.instance(training.getTrainingType());
+        final var trained = weekly == null ? null : weekly.getPrimaryTrainingSkill();
+        final var secondary = weekly == null ? null : weekly.getSecondaryTrainingSkill();
+        json.addProperty("trainedSkill", trained == null ? null : String.valueOf(trained));
+        json.addProperty("secondarySkill", secondary == null ? null : String.valueOf(secondary));
+        return trained;
     }
 
     /**
@@ -1134,11 +1153,16 @@ public final class TrainingTools {
                 final var minutes = banked.computeIfAbsent(playerId,
                         key -> new WeekMinutes(player.getFullName()));
                 minutes.add(fullMinutes, partlyMinutes, playedMinutes, match.getMatchID());
-                final var position = lineup.getPlayerByID(playerId, true);
-                if (position != null && position.getStartPosition() >= 0) {
-                    minutes.startRoleIds.add(position.getStartPosition());
-                }
+                addStartRole(minutes, lineup, playerId);
             }
+        }
+    }
+
+    /** The slot he kicked off in, when he started the match. */
+    private static void addStartRole(WeekMinutes minutes, MatchLineupTeam lineup, int playerId) {
+        final var position = lineup.getPlayerByID(playerId, true);
+        if (position != null && position.getStartPosition() >= 0) {
+            minutes.startRoleIds.add(position.getStartPosition());
         }
     }
 
