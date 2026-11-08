@@ -615,7 +615,7 @@ public final class TeamTools {
         }
         if (include.isEmpty()) {
             include.addAll(allowed);
-        } else if (!allowed.containsAll(include)) {
+        } else if (!java.util.Set.copyOf(allowed).containsAll(include)) {
             throw new IllegalArgumentException("include takes " + String.join(", ", allowed)
                     + "; had " + include);
         }
@@ -1097,27 +1097,23 @@ public final class TeamTools {
         var sum = 0;
         final var attendances = new JsonArray();
         // Scan wider than we need: only about half of the played matches are at home.
-        for (final var info : DBManager.instance().getOwnPlayedMatchInfo(homeMatches * 4, true)) {
-            if (attendances.size() >= homeMatches) {
-                break;
-            }
-            if (info.getHomeTeamID() != teamId) {
-                continue;
-            }
+        final var homeInfos = DBManager.instance().getOwnPlayedMatchInfo(homeMatches * 4, true).stream()
+                .filter(info -> info.getHomeTeamID() == teamId).toList();
+        for (var i = 0; i < homeInfos.size() && attendances.size() < homeMatches; i++) {
+            final var info = homeInfos.get(i);
             final var details = DBManager.instance()
                     .loadMatchDetails(info.getMatchType().getId(), info.getMatchID());
-            if (details == null || details.getZuschauer() <= 0) {
-                continue;
+            if (details != null && details.getZuschauer() > 0) {
+                final var entry = new JsonObject();
+                entry.addProperty(MATCH_ID, info.getMatchID());
+                entry.addProperty("date",
+                        info.getMatchSchedule() == null ? null : info.getMatchSchedule().toHT());
+                entry.addProperty("attendance", details.getZuschauer());
+                entry.addProperty("weatherId", details.getWetterId());
+                MatchTools.addSoldByStand(entry, details);
+                attendances.add(entry);
+                sum += details.getZuschauer();
             }
-            final var entry = new JsonObject();
-            entry.addProperty("matchId", info.getMatchID());
-            entry.addProperty("date",
-                    info.getMatchSchedule() == null ? null : info.getMatchSchedule().toHT());
-            entry.addProperty("attendance", details.getZuschauer());
-            entry.addProperty("weatherId", details.getWetterId());
-            MatchTools.addSoldByStand(entry, details);
-            attendances.add(entry);
-            sum += details.getZuschauer();
         }
         json.add("recentHomeAttendance", attendances);
         if (!attendances.isEmpty()) {
@@ -1138,10 +1134,12 @@ public final class TeamTools {
         final String id;
         final HODateTime startedAt = HODateTime.now();
         final long startNanos = System.nanoTime();
-        volatile JsonObject result;
+        final java.util.concurrent.atomic.AtomicReference<JsonObject> result =
+                new java.util.concurrent.atomic.AtomicReference<>();
         volatile String error;
         volatile long runtimeMs;
-        volatile HODateTime finishedAt;
+        final java.util.concurrent.atomic.AtomicReference<HODateTime> finishedAt =
+                new java.util.concurrent.atomic.AtomicReference<>();
 
         DownloadTask(String id) {
             this.id = id;
@@ -1192,7 +1190,7 @@ public final class TeamTools {
             return downloadStatus(task);
         }
         synchronized (downloadTasks) {
-            if (latestDownload != null && latestDownload.finishedAt == null) {
+            if (latestDownload != null && latestDownload.finishedAt.get() == null) {
                 final var json = downloadStatus(latestDownload);
                 json.addProperty("alreadyRunning", true);
                 return json;
@@ -1213,7 +1211,7 @@ public final class TeamTools {
         final var keepLineup = McpJson.optBool(args, KEEP_LINEUP, true);
         downloadExecutor.execute(() -> {
             try {
-                task.result = runDownload(keepLineup);
+                task.result.set(runDownload(keepLineup));
             } catch (McpToolException e) {
                 task.error = e.getMessage();
             } catch (Exception e) {
@@ -1221,7 +1219,7 @@ public final class TeamTools {
                 task.error = "The download failed: " + e;
             }
             task.runtimeMs = (System.nanoTime() - task.startNanos) / 1_000_000;
-            task.finishedAt = HODateTime.now();
+            task.finishedAt.set(HODateTime.now());
         });
         return downloadStatus(task);
     }
@@ -1234,7 +1232,7 @@ public final class TeamTools {
      */
     static JsonObject downloadTeamTask(JsonObject args) throws McpToolException {
         synchronized (downloadTasks) {
-            if (latestDownload != null && latestDownload.finishedAt == null) {
+            if (latestDownload != null && latestDownload.finishedAt.get() == null) {
                 throw new McpToolException("A download is already running (taskId "
                         + latestDownload.id + "); poll it with download_team taskId.");
             }
@@ -1247,7 +1245,7 @@ public final class TeamTools {
         final var json = new JsonObject();
         json.addProperty(TASK_ID, task.id);
         json.addProperty("startedAt", task.startedAt.toHT());
-        final var finishedAt = task.finishedAt;
+        final var finishedAt = task.finishedAt.get();
         if (finishedAt == null) {
             json.addProperty("status", "running");
             json.addProperty("elapsedSeconds", (System.nanoTime() - task.startNanos) / 1_000_000_000L);
@@ -1259,7 +1257,7 @@ public final class TeamTools {
         json.addProperty("finishedAt", finishedAt.toHT());
         json.addProperty("runtimeSeconds", task.runtimeMs / 1000.0);
         if (task.error == null) {
-            json.add("result", task.result);
+            json.add("result", task.result.get());
         } else {
             json.addProperty("error", task.error);
         }

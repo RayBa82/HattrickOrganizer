@@ -26,10 +26,9 @@ import java.math.RoundingMode;
 public final class McpJson {
 
     /** The fourteen field slots Hattrick numbers, keeper (100) through left forward (113). */
-    public static final int[] FIELD_ROLES = {
+    public static final java.util.List<Integer> FIELD_ROLES = java.util.List.of(
             IMatchRoleID.keeper, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112,
-            IMatchRoleID.leftForward
-    };
+            IMatchRoleID.leftForward);
 
     private McpJson() {
     }

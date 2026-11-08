@@ -40,11 +40,12 @@ class TrainingToolsTest {
         ChppWriteService.setInstanceForTest(stub);
     }
 
-    private static JsonObject args(int type, int intensity, int stamina) {
+    /** set_training's arguments: training type 3, stamina share 10, the given intensity. */
+    private static JsonObject args(int intensity) {
         final var a = new JsonObject();
-        a.addProperty("trainingType", type);
+        a.addProperty("trainingType", 3);
         a.addProperty("intensity", intensity);
-        a.addProperty("staminaShare", stamina);
+        a.addProperty("staminaShare", 10);
         return a;
     }
 
@@ -107,8 +108,10 @@ class TrainingToolsTest {
                 throw new AssertionError("service must not be called");
             }
         });
+        final var handler = tool("set_training").handler();
+        final var tooIntense = args(150);
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> tool("set_training").handler().call(args(3, 150, 10)))
+                .isThrownBy(() -> handler.call(tooIntense))
                 .withMessageContaining("0..100");
     }
 
@@ -120,7 +123,7 @@ class TrainingToolsTest {
                 return new TrainingCommitted(t, i, s, false);
             }
         });
-        final var result = tool("set_training").handler().call(args(3, 40, 10));
+        final var result = tool("set_training").handler().call(args(40));
         assertThat(result.get("status").getAsString()).isEqualTo("ok");
         assertThat(result.getAsJsonObject("committed").get("intensity").getAsInt()).isEqualTo(40);
         assertThat(result.get("note").getAsString()).contains("not refreshed");

@@ -358,8 +358,8 @@ public final class WeekTools {
      */
     private static JsonObject bestPositions(Player player, RatingPredictionModel ratingModel) {
         final var best = new JsonObject();
-        Arrays.stream(McpJson.FIELD_ROLES)
-                .mapToObj(roleId -> new RoleRating(roleId,
+        McpJson.FIELD_ROLES.stream()
+                .map(roleId -> new RoleRating(roleId,
                         ratingModel.getPlayerRatingMatchBeginning(player, roleId, IMatchRoleID.NORMAL)))
                 .sorted(Comparator.comparingDouble(RoleRating::rating).reversed())
                 .limit(TOP_POSITIONS)

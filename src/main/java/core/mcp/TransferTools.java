@@ -617,9 +617,14 @@ public final class TransferTools {
     /**
      * How good each specialty is for a position, 0 (liability) - 1 (perfect). The ORDER comes from the
      * team's buy tables and the wiki; the spacing is an ordinal placeholder, not fitted to prices - tune
-     * against resolved sales. Args are in specialty-id order: none, Technical, Quick, Powerful,
-     * Unpredictable, Head, Resilient (6), Support (8).
+     * against resolved sales. Scores are in SPECIALTY_ORDER: none, Technical, Quick,
+     * Powerful, Unpredictable, Head, Resilient (6), Support (8).
      */
+    private static final List<Integer> SPECIALTY_ORDER = List.of(PlayerSpeciality.NO_SPECIALITY,
+            PlayerSpeciality.TECHNICAL, PlayerSpeciality.QUICK, PlayerSpeciality.POWERFUL,
+            PlayerSpeciality.UNPREDICTABLE, PlayerSpeciality.HEAD, PlayerSpeciality.REGAINER,
+            PlayerSpeciality.SUPPORT);
+
     private static final Map<String, Map<Integer, Double>> POSITION_SCORE = Map.of(
             "back_line", specialtyScores(0.3, 0.8, 0.6, 1.0, 0.2, 0.25, 0.4, 0.1),
             "winger", specialtyScores(0.2, 0.4, 0.8, 0.4, 1.0, 0.9, 0.4, 0.1),
@@ -627,13 +632,15 @@ public final class TransferTools {
             "forward", specialtyScores(0.2, 0.7, 0.85, 0.6, 1.0, 0.95, 0.4, 0.1),
             "keeper", specialtyScores(0.5, 0.4, 0.6, 0.4, 0.3, 0.1, 0.4, 0.1));
 
-    private static Map<Integer, Double> specialtyScores(double none, double technical, double quick,
-                                                        double powerful, double unpredictable, double head,
-                                                        double resilient, double support) {
-        return Map.of(PlayerSpeciality.NO_SPECIALITY, none, PlayerSpeciality.TECHNICAL, technical,
-                PlayerSpeciality.QUICK, quick, PlayerSpeciality.POWERFUL, powerful,
-                PlayerSpeciality.UNPREDICTABLE, unpredictable, PlayerSpeciality.HEAD, head,
-                PlayerSpeciality.REGAINER, resilient, PlayerSpeciality.SUPPORT, support);
+    private static Map<Integer, Double> specialtyScores(double... scores) {
+        if (scores.length != SPECIALTY_ORDER.size()) {
+            throw new IllegalArgumentException("one score per specialty in SPECIALTY_ORDER");
+        }
+        final var map = new java.util.HashMap<Integer, Double>();
+        for (var i = 0; i < scores.length; i++) {
+            map.put(SPECIALTY_ORDER.get(i), scores[i]);
+        }
+        return Map.copyOf(map);
     }
 
     /**
@@ -717,7 +724,7 @@ public final class TransferTools {
                 : gaussianWeight(Math.abs(listingCSkill - targetCSkill), C_SKILL_SIGMA);
 
         final var charWeight = listing.getAgreeability() == null || targetChar == null ? 1.0
-                : gaussianWeight(Math.abs(listing.getAgreeability() - targetChar[0])
+                : gaussianWeight((double) Math.abs(listing.getAgreeability() - targetChar[0])
                         + Math.abs(listing.getAggressiveness() - targetChar[1])
                         + Math.abs(listing.getHonesty() - targetChar[2]), CHARACTER_SIGMA);
 
@@ -2022,6 +2029,21 @@ public final class TransferTools {
         return info.length() <= 256 ? info : info.substring(0, 256);
     }
 
+    /**
+     * A bid of ours still worth reporting. Leading bids drop the moment they expire; losing bids
+     * linger a day so a recent loss is still reported on the next check.
+     */
+    private static boolean isOpenOwnBid(XMLCurrentBidsParser.BidItem item, HODateTime now) {
+        if (!isOwnBidCategory(item.trackingTypeId())) {
+            return false;
+        }
+        final var deadline = HODateTime.fromHT(item.deadline());
+        final var cutoff = item.trackingTypeId() == 8
+                ? new HODateTime(now.getInstant().minus(LOSING_BID_GRACE))
+                : now;
+        return deadline == null || !deadline.isBefore(cutoff);
+    }
+
     /** trackingTypeId 2 (leading bid) / 8 (losing bid) are the ones you have actually bid on. */
     static boolean isOwnBidCategory(int trackingTypeId) {
         return trackingTypeId == 2 || trackingTypeId == 8;
@@ -2056,19 +2078,8 @@ public final class TransferTools {
 
         final var bids = new JsonArray();
         for (final var item : current.items()) {
-            if (!includeAll) {
-                if (!isOwnBidCategory(item.trackingTypeId())) {
-                    continue;
-                }
-                final var deadline = HODateTime.fromHT(item.deadline());
-                // Leading bids drop the moment they expire; losing bids linger a day so a recent
-                // loss is still reported on the next check.
-                final var cutoff = item.trackingTypeId() == 8
-                        ? new HODateTime(now.getInstant().minus(LOSING_BID_GRACE))
-                        : now;
-                if (deadline != null && deadline.isBefore(cutoff)) {
-                    continue;
-                }
+            if (!includeAll && !isOpenOwnBid(item, now)) {
+                continue;
             }
             final var json = new JsonObject();
             json.addProperty(PLAYER_ID, item.playerId());

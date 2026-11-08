@@ -54,7 +54,7 @@ class LineupApplyOrderTest {
 
     private static void assertApplied(Lineup lineup, Map<Integer, Integer> wanted) {
         for (final var slot : wanted.entrySet()) {
-            assertThat(lineup.getPositionById(slot.getKey()).getPlayerId())
+            assertThat(java.util.Objects.requireNonNull(lineup.getPositionById(slot.getKey())).getPlayerId())
                     .as("roleId " + slot.getKey())
                     .isEqualTo(slot.getValue());
         }
@@ -88,7 +88,7 @@ class LineupApplyOrderTest {
         assertThat(lineup.getPositionByPlayerId(486058977)).isNull();
 
         lineup.setSpielerAtPosition(200, 486058977);
-        assertThat(lineup.getPositionById(200).getPlayerId()).isEqualTo(486058977);
+        assertThat(java.util.Objects.requireNonNull(lineup.getPositionById(200)).getPlayerId()).isEqualTo(486058977);
         assertThatCode(() -> LineupTools.requireSlot(lineup, 200)).doesNotThrowAnyException();
         assertThatCode(() -> LineupTools.requireSlot(lineup, 213)).doesNotThrowAnyException();
     }
@@ -99,7 +99,7 @@ class LineupApplyOrderTest {
      * apply_lineup refreshes the tab and then reports what survived rather than what was asked for.
      */
     @Test
-    void aPositionHoRefusedToKeepIsReported() throws Exception {
+    void aPositionHoRefusedToKeepIsReported() {
         final var lineup = broken340();
         final var positions = new JsonArray();
         positions.add(requested(111, 511469860));

@@ -428,9 +428,16 @@ public final class MatchTools {
         final var ours = atHome ? info.getHomeTeamGoals() : info.getGuestTeamGoals();
         final var theirs = atHome ? info.getGuestTeamGoals() : info.getHomeTeamGoals();
         json.addProperty("location", atHome ? "home" : "away");
-        json.addProperty("outcome", ours > theirs ? "win" : ours < theirs ? "loss" : "draw");
+        json.addProperty("outcome", outcome(ours, theirs));
         addCup(json, info);
         return json;
+    }
+
+    private static String outcome(int ours, int theirs) {
+        if (ours == theirs) {
+            return "draw";
+        }
+        return ours > theirs ? "win" : "loss";
     }
 
     /** One cup of our league, as worlddetails lists it. */
@@ -542,7 +549,9 @@ public final class MatchTools {
         json.add("ourPlayers", playerRatings(matchId, info.getMatchType(), teamId, details, events));
         if (McpJson.optBool(args, "includeEvents", false)) {
             // Per-team counts in the answer, every event row in a download - always, whatever the size.
-            final var all = matchEventsJson(info.getHomeTeamID(), info.getGuestTeamID(), events, eventTypes(args));
+            final var filtered = args.has(EVENT_TYPES_ARG) && args.get(EVENT_TYPES_ARG).isJsonArray();
+            final var all = matchEventsJson(info.getHomeTeamID(), info.getGuestTeamID(), events,
+                    filtered ? eventTypes(args) : null);
             final var rows = all.remove("events").getAsJsonArray();
             all.addProperty("count", rows.size());
             final var file = new JsonObject();
@@ -642,10 +651,6 @@ public final class MatchTools {
      * Per-team goals / missed chances / special events, then every event in match order.
      * Event ids 100-199 are goals and 200-299 missed chances (Hattrick's own ranges).
      */
-    static JsonObject matchEventsJson(int homeTeamId, int awayTeamId, List<MatchEvent> events) {
-        return matchEventsJson(homeTeamId, awayTeamId, events, null);
-    }
-
     /** {@code types}: only rows of these {@link #EVENT_TYPES}, null for all; the counts stay whole. */
     static JsonObject matchEventsJson(int homeTeamId, int awayTeamId, List<MatchEvent> events, Set<String> types) {
         final var json = new JsonObject();
@@ -663,12 +668,12 @@ public final class MatchTools {
 
     static final List<String> EVENT_TYPES = List.of("goal", "chance", "card", "injury", "substitution", "special");
 
+    private static final String EVENT_TYPES_ARG = "eventTypes";
+
+    /** The eventTypes argument, validated; the caller checks it is there. */
     private static Set<String> eventTypes(JsonObject args) {
-        if (!args.has("eventTypes") || !args.get("eventTypes").isJsonArray()) {
-            return null;
-        }
         final var types = new HashSet<String>();
-        args.getAsJsonArray("eventTypes").forEach(e -> types.add(e.getAsString()));
+        args.getAsJsonArray(EVENT_TYPES_ARG).forEach(e -> types.add(e.getAsString()));
         if (!Set.copyOf(EVENT_TYPES).containsAll(types)) {
             throw new IllegalArgumentException("eventTypes takes " + String.join(", ", EVENT_TYPES)
                     + "; had " + types);

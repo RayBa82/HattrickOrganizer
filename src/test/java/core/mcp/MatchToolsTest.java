@@ -80,7 +80,7 @@ class MatchToolsTest {
     void matchEventsJson_countsGoalsChancesAndSpecialEventsPerTeam() {
         // 105 = SE goal, 101 = normal goal, 200 = missed chance
         final var json = MatchTools.matchEventsJson(1, 2,
-                List.of(event(12, 105, 1), event(30, 101, 2), event(55, 200, 1)));
+                List.of(event(12, 105, 1), event(30, 101, 2), event(55, 200, 1)), null);
 
         final var home = json.getAsJsonObject("home");
         assertThat(home.get("goals").getAsInt()).isEqualTo(1);
@@ -119,7 +119,7 @@ class MatchToolsTest {
         final var venue = event(0, 30, 72500);   // weather/venue event, SubjectTeamID is not a team
         venue.setPlayerId(99);
         venue.setAssistingPlayerId(98);
-        final var row = MatchTools.matchEventsJson(1, 2, List.of(venue))
+        final var row = MatchTools.matchEventsJson(1, 2, List.of(venue), null)
                 .getAsJsonArray("events").get(0).getAsJsonObject();
         assertThat(row.get("teamId").isJsonNull()).isTrue();
         assertThat(row.get("playerId").isJsonNull()).isTrue();
@@ -136,7 +136,7 @@ class MatchToolsTest {
         goal.setPlayerName("Delura");
         goal.setAssistingPlayerId(88);
 
-        final var events = MatchTools.matchEventsJson(1, 2, List.of(tactic, goal)).getAsJsonArray("events");
+        final var events = MatchTools.matchEventsJson(1, 2, List.of(tactic, goal), null).getAsJsonArray("events");
         assertThat(events.get(0).getAsJsonObject().get("playerId").isJsonNull()).isTrue();
         final var scorer = events.get(1).getAsJsonObject();
         assertThat(scorer.get("playerId").getAsInt()).isEqualTo(515791597);
@@ -216,16 +216,17 @@ class MatchToolsTest {
 
     @Test
     void listChallenges_rejectsAnEmptyOrOversizedCheckList() {
+        final var handler = tool("list_challenges").handler();
         final var none = JsonParser.parseString("{\"checkTeamIds\":[]}").getAsJsonObject();
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> tool("list_challenges").handler().call(none));
+                .isThrownBy(() -> handler.call(none));
 
         final var many = new com.google.gson.JsonArray();
         for (int i = 1; i <= MatchTools.MAX_CHALLENGEABLE_TEAMS + 1; i++) many.add(i);
         final var tooMany = new JsonObject();
         tooMany.add("checkTeamIds", many);
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> tool("list_challenges").handler().call(tooMany));
+                .isThrownBy(() -> handler.call(tooMany));
     }
 
     @Test
@@ -243,7 +244,7 @@ class MatchToolsTest {
         final var getMatch = tool("get_match");
 
         assertThat(getMatch.inputSchema().getAsJsonArray("required"))
-                .extracting(element -> element.getAsString())
+                .extracting(com.google.gson.JsonElement::getAsString)
                 .containsExactly("matchId");
         assertThat(getMatch.inputSchema().getAsJsonObject("properties").has("matchType")).isTrue();
     }
@@ -284,8 +285,9 @@ class MatchToolsTest {
                  "opponentDefenceRight":40,"opponentAttackLeft":30,"opponentAttackCentral":35}
                 """).getAsJsonObject();
 
+        final var handler = tool("simulate_lineup").handler();
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> tool("simulate_lineup").handler().call(args))
+                .isThrownBy(() -> handler.call(args))
                 .withMessageContaining("opponentAttackRight");
     }
 
@@ -296,8 +298,9 @@ class MatchToolsTest {
                 {"teamOrders":[{"type":"behaviour","minute":60,"playerOut":1,"behaviour":1}]}
                 """).getAsJsonObject();
 
+        final var handler = tool("simulate_lineup").handler();
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> tool("simulate_lineup").handler().call(args))
+                .isThrownBy(() -> handler.call(args))
                 .withMessageContaining("teamOrders need positions");
     }
 
@@ -330,8 +333,9 @@ class MatchToolsTest {
         a.addProperty("opponentTeamId", 999);
         a.addProperty("location", "neutral");
         a.addProperty("action", "challenge");
+        final var handler = tool("manage_challenge").handler();
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> tool("manage_challenge").handler().call(a));
+                .isThrownBy(() -> handler.call(a));
     }
 
     @Test
@@ -363,15 +367,16 @@ class MatchToolsTest {
                 throw new AssertionError("must not be called");
             }
         });
+        final var handler = tool("manage_challenge").handler();
         final var acceptWithoutId = JsonParser.parseString("{\"action\":\"accept\"}").getAsJsonObject();
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> tool("manage_challenge").handler().call(acceptWithoutId));
+                .isThrownBy(() -> handler.call(acceptWithoutId));
         final var challengeWithoutTeam = JsonParser.parseString("{\"action\":\"challenge\"}").getAsJsonObject();
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> tool("manage_challenge").handler().call(challengeWithoutTeam));
+                .isThrownBy(() -> handler.call(challengeWithoutTeam));
         final var unknown = JsonParser.parseString("{\"action\":\"cancel\",\"trainingMatchId\":1}").getAsJsonObject();
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> tool("manage_challenge").handler().call(unknown));
+                .isThrownBy(() -> handler.call(unknown));
     }
 
     @Test

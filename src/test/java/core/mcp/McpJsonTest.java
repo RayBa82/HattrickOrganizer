@@ -27,7 +27,7 @@ class McpJsonTest {
     void money_isTheUsersCurrencyRatherThanTheStoredSwedishKrona() {
         assertThat(McpJson.money(new AmountOfMoney(268_000L))).isEqualTo(26_800L);
         assertThat(McpJson.money(268_000L)).isEqualTo(26_800L);
-        assertThat(McpJson.money((AmountOfMoney) null)).isZero();
+        assertThat(McpJson.money(null)).isZero();
         assertThat(McpJson.swedishKrona(2_000_000)).isEqualTo(20_000_000);
     }
 
@@ -145,8 +145,9 @@ class McpJsonTest {
 
     @Test
     void reqInt_rejectsAMissingArgument() {
+        final var empty = new JsonObject();
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> McpJson.reqInt(new JsonObject(), "playerId"))
+                .isThrownBy(() -> McpJson.reqInt(empty, "playerId"))
                 .withMessageContaining("playerId");
     }
 

@@ -108,10 +108,9 @@ final class FinanceForecast {
         var counted = 0;
         var notCounted = 0;
         var homeLeague = false;
-        for (final var fixture : in.fixtures()) {
-            if (fixture.date().isBefore(from) || !fixture.date().isBefore(to)) {
-                continue;
-            }
+        final var inWeek = in.fixtures().stream()
+                .filter(f -> !f.date().isBefore(from) && f.date().isBefore(to)).toList();
+        for (final var fixture : inWeek) {
             final var kind = fixture.kind();
             final var share = fixture.home() ? kind.homeShare : kind.awayShare;
             if (share == 0) {
@@ -120,11 +119,11 @@ final class FinanceForecast {
             final var gate = in.homeGates().get(kind);
             if (gate == null) {
                 notCounted++;
-                continue;
+            } else {
+                income += Math.round(gate * share);
+                counted++;
+                homeLeague |= fixture.home() && kind == Kind.LEAGUE;
             }
-            income += Math.round(gate * share);
-            counted++;
-            homeLeague |= fixture.home() && kind == Kind.LEAGUE;
         }
         return new WeekGates(income, counted, notCounted, homeLeague);
     }

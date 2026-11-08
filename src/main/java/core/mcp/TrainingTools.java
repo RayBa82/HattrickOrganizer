@@ -300,7 +300,8 @@ public final class TrainingTools {
     private static JsonObject training(JsonObject args) throws McpToolException {
         final var model = McpJson.model();
         final var json = new JsonObject();
-        final var wanted = wantedPlayerIds(args);
+        final var wanted = args.has(PLAYER_IDS) && !args.get(PLAYER_IDS).isJsonNull()
+                ? wantedPlayerIds(args) : null;
         json.add("current", current(model));
         final var wholeSquad = McpJson.optBool(args, "wholeSquadWeek", false);
         json.add("currentWeek", currentWeek(model, wholeSquad ? null : wanted, wholeSquad));
@@ -324,13 +325,9 @@ public final class TrainingTools {
         final var lastTraining = xtra == null ? null : xtra.getTrainingDateAfterWeeks(-1);
         final var players = new JsonArray();
         for (final var player : model.getCurrentPlayers()) {
-            if (player.isCoach()) {
-                continue;
+            if (!player.isCoach() && (wanted == null || wanted.contains(player.getPlayerId()))) {
+                players.add(prediction(player, plan, weeks, lastTraining));
             }
-            if (wanted != null && !wanted.contains(player.getPlayerId())) {
-                continue;
-            }
-            players.add(prediction(player, plan, weeks, lastTraining));
         }
         json.add("players", players);
         // currentWeek.players too: with wholeSquadWeek it is a row per squad player.
@@ -819,12 +816,12 @@ public final class TrainingTools {
         return Math.round(value * 100.0) / 100.0;
     }
 
+    private static final String PLAYER_IDS = "playerIds";
+
+    /** The playerIds argument; the caller checks it is there. */
     private static Set<Integer> wantedPlayerIds(JsonObject args) {
-        if (!args.has("playerIds") || args.get("playerIds").isJsonNull()) {
-            return null;
-        }
         final var ids = new HashSet<Integer>();
-        for (final var element : args.getAsJsonArray("playerIds")) {
+        for (final var element : args.getAsJsonArray(PLAYER_IDS)) {
             ids.add(element.getAsInt());
         }
         return ids;
@@ -917,7 +914,7 @@ public final class TrainingTools {
         final var week = new TrainingPerWeek(weekEnd, team.getTrainingsArtAsInt(),
                 team.getTrainingslevel(), team.getStaminaTrainingPart(),
                 club == null ? 0 : club.getCoTrainer(),
-                trainer == null ? 0 : trainer.getCoachSkill());
+                trainer.getCoachSkill());   // never null: a team without a coach gets a stand-in
         json.addProperty("status", "ok");
         json.addProperty("weekStart", weekEnd.minus(7, ChronoUnit.DAYS).toHT());
         json.addProperty("weekEnd", weekEnd.toHT());
@@ -959,7 +956,6 @@ public final class TrainingTools {
      */
     private static int bankWeek(HOModel model, Set<Integer> wanted, TrainingPerWeek week,
             WeeklyTrainingType weekly, Map<Integer, WeekMinutes> banked) {
-        final var teamId = model.getBasics().getTeamId();
         var missingLineups = 0;
         for (final var match : week.getMatches()) {
             final var played = match.getMatchStatus() == MatchKurzInfo.FINISHED;
@@ -971,7 +967,7 @@ public final class TrainingTools {
                 }
                 continue;
             }
-            addMatchMinutes(model, wanted, banked, match, details, lineup, weekly, teamId);
+            addMatchMinutes(model, wanted, banked, match, details, lineup, weekly);
         }
         return missingLineups;
     }
@@ -1093,8 +1089,8 @@ public final class TrainingTools {
     /** Adds one match's minutes to the running per-player totals. */
     private static void addMatchMinutes(HOModel model, Set<Integer> wanted,
             Map<Integer, WeekMinutes> banked, MatchKurzInfo match, Matchdetails details,
-            MatchLineupTeam lineup, WeeklyTrainingType weekly, int teamId) {
-        final var walkover = details.isWalkoverMatchWin(teamId);
+            MatchLineupTeam lineup, WeeklyTrainingType weekly) {
+        final var walkover = details.isWalkoverMatchWin(model.getBasics().getTeamId());
         // Masters counts for experience only, never for training.
         final var trains = match.getMatchType() != MatchType.MASTERS;
         for (final var player : model.getCurrentPlayers()) {
@@ -1105,19 +1101,18 @@ public final class TrainingTools {
             // A walkover win reports 90 trained minutes but no played minutes, so all three have
             // to be read before deciding the player did not appear.
             final var playedMinutes = lineup.getTrainingMinutesPlayedInSectors(playerId, null, walkover);
-            final var fullMinutes = !trains ? 0 : lineup.getTrainingMinutesPlayedInSectors(
-                    playerId, weekly.getFullTrainingSectors(), walkover);
-            final var partlyMinutes = !trains ? 0 : lineup.getTrainingMinutesPlayedInSectors(
-                    playerId, weekly.getPartlyTrainingSectors(), walkover);
-            if (playedMinutes <= 0 && fullMinutes <= 0 && partlyMinutes <= 0) {
-                continue;
-            }
-            final var minutes = banked.computeIfAbsent(playerId,
-                    key -> new WeekMinutes(player.getFullName()));
-            minutes.add(fullMinutes, partlyMinutes, playedMinutes, match.getMatchID());
-            final var position = lineup.getPlayerByID(playerId, true);
-            if (position != null && position.getStartPosition() >= 0) {
-                minutes.startRoleIds.add(position.getStartPosition());
+            final var fullMinutes = trains ? lineup.getTrainingMinutesPlayedInSectors(
+                    playerId, weekly.getFullTrainingSectors(), walkover) : 0;
+            final var partlyMinutes = trains ? lineup.getTrainingMinutesPlayedInSectors(
+                    playerId, weekly.getPartlyTrainingSectors(), walkover) : 0;
+            if (playedMinutes > 0 || fullMinutes > 0 || partlyMinutes > 0) {
+                final var minutes = banked.computeIfAbsent(playerId,
+                        key -> new WeekMinutes(player.getFullName()));
+                minutes.add(fullMinutes, partlyMinutes, playedMinutes, match.getMatchID());
+                final var position = lineup.getPlayerByID(playerId, true);
+                if (position != null && position.getStartPosition() >= 0) {
+                    minutes.startRoleIds.add(position.getStartPosition());
+                }
             }
         }
     }

@@ -2,6 +2,7 @@ package core.mcp;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import core.model.match.MatchLineupPosition;
 import core.model.player.IMatchRoleID;
 import org.junit.jupiter.api.Test;
 
@@ -121,8 +122,9 @@ class LineupToolsTest {
         final var a = new JsonObject();
         a.addProperty("matchId", 12345);
         a.addProperty("matchType", 999);   // not a MatchType id
+        final var handler = sendTool.handler();
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> sendTool.handler().call(a))
+                .isThrownBy(() -> handler.call(a))
                 .withMessageContaining("get_matches");
     }
 
@@ -195,9 +197,11 @@ class LineupToolsTest {
 
         final var lineup = LineupTools.scratchLineup(spec);
 
-        assertThat(lineup.getPositionById(IMatchRoleID.keeper).getPlayerId()).isEqualTo(11);
-        assertThat(lineup.getPositionById(IMatchRoleID.leftForward).getPlayerId()).isEqualTo(22);
-        assertThat((int) lineup.getPositionById(IMatchRoleID.leftForward).getBehaviour()).isEqualTo(1);
+        final var leftForward = java.util.Objects.requireNonNull(lineup.getPositionById(IMatchRoleID.leftForward));
+        assertThat(java.util.Objects.requireNonNull(lineup.getPositionById(IMatchRoleID.keeper)).getPlayerId())
+                .isEqualTo(11);
+        assertThat(leftForward.getPlayerId()).isEqualTo(22);
+        assertThat((int) leftForward.getBehaviour()).isEqualTo(1);
         assertThat(lineup.getTacticType()).isEqualTo(3);
         assertThat(lineup.getAttitude()).isEqualTo(1);
         assertThat(lineup.getCaptain()).isEqualTo(11);
@@ -214,8 +218,10 @@ class LineupToolsTest {
                 .getAsJsonObject());
 
         assertThat(lineup.getSubstitutionList()).hasSize(1);
-        assertThat(lineup.getFieldPlayers(59)).extracting(p -> p.getPlayerId()).contains(22).doesNotContain(33);
-        assertThat(lineup.getFieldPlayers(60)).extracting(p -> p.getPlayerId()).contains(33).doesNotContain(22);
+        assertThat(lineup.getFieldPlayers(59)).extracting(MatchLineupPosition::getPlayerId)
+                .contains(22).doesNotContain(33);
+        assertThat(lineup.getFieldPlayers(60)).extracting(MatchLineupPosition::getPlayerId)
+                .contains(33).doesNotContain(22);
     }
 
     @Test
@@ -224,9 +230,10 @@ class LineupToolsTest {
                 {"positions":[{"roleId":100,"playerId":11}],"weather":3}""").getAsJsonObject());
         assertThat(sunny.getWeather()).isEqualTo(core.model.match.Weather.SUNNY);
 
+        final var unknownWeather = JsonParser.parseString("""
+                {"positions":[],"weather":4}""").getAsJsonObject();
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> LineupTools.scratchLineup(JsonParser.parseString("""
-                        {"positions":[],"weather":4}""").getAsJsonObject()))
+                .isThrownBy(() -> LineupTools.scratchLineup(unknownWeather))
                 .withMessageContaining("3 sunny");
     }
 
@@ -243,8 +250,8 @@ class LineupToolsTest {
                 {"positions":[{"roleId":100,"playerId":22}]}""").getAsJsonObject());
 
         assertThat(a).isNotSameAs(b);
-        assertThat(a.getPositionById(IMatchRoleID.keeper).getPlayerId()).isEqualTo(11);
-        assertThat(b.getPositionById(IMatchRoleID.keeper).getPlayerId()).isEqualTo(22);
+        assertThat(java.util.Objects.requireNonNull(a.getPositionById(IMatchRoleID.keeper)).getPlayerId()).isEqualTo(11);
+        assertThat(java.util.Objects.requireNonNull(b.getPositionById(IMatchRoleID.keeper)).getPlayerId()).isEqualTo(22);
     }
 
     /** apply_lineup answers with the diff alone, so it has to name every kind of change. */

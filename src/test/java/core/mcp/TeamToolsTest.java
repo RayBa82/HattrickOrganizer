@@ -219,8 +219,7 @@ class TeamToolsTest {
                 .filter(t -> t.name().equals("get_series") || t.name().equals("get_finances"))
                 .toList();
 
-        assertThat(byName).hasSize(2);
-        assertThat(byName).allSatisfy(
+        assertThat(byName).hasSize(2).allSatisfy(
                 t -> assertThat(t.inputSchema().getAsJsonArray("required")).isEmpty());
         assertThat(byName.get(0).inputSchema().getAsJsonObject("properties").has("upcomingOnly"))
                 .isTrue();
@@ -240,7 +239,7 @@ class TeamToolsTest {
         final var scout = TeamTools.tools().stream()
                 .filter(t -> t.name().equals("analyze_opponent")).findFirst().orElseThrow();
         assertThat(scout.inputSchema().getAsJsonArray("required"))
-                .extracting(element -> element.getAsString())
+                .extracting(com.google.gson.JsonElement::getAsString)
                 .containsExactly("teamId");
         assertThat(scout.inputSchema().getAsJsonObject("properties").has("include")).isTrue();
     }
@@ -251,8 +250,9 @@ class TeamToolsTest {
                 .filter(t -> t.name().equals("analyze_opponent")).findFirst().orElseThrow();
         final var args = com.google.gson.JsonParser.parseString(
                 "{\"teamId\":1,\"include\":[\"lineup\"]}").getAsJsonObject();
+        final var handler = scout.handler();
         org.assertj.core.api.Assertions.assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> scout.handler().call(args));
+                .isThrownBy(() -> handler.call(args));
     }
 
     @Test
@@ -510,9 +510,9 @@ class TeamToolsTest {
 
         final var result = new com.google.gson.JsonObject();
         result.addProperty("hrfId", 151);
-        task.result = result;
+        task.result.set(result);
         task.runtimeMs = 118_342;
-        task.finishedAt = core.util.HODateTime.now();
+        task.finishedAt.set(core.util.HODateTime.now());
         final var done = TeamTools.downloadStatus(task);
         assertThat(done.get("status").getAsString()).isEqualTo("done");
         assertThat(done.get("runtimeSeconds").getAsDouble()).isEqualTo(118.342);
@@ -582,7 +582,7 @@ class TeamToolsTest {
         final var row = TeamTools.ratingsRow(player);
 
         assertThat(row.keySet()).containsExactly("playerId", "r");
-        assertThat(row.getAsJsonArray("r")).hasSize(McpJson.FIELD_ROLES.length)
+        assertThat(row.getAsJsonArray("r")).hasSize(McpJson.FIELD_ROLES.size())
                 .first().extracting(com.google.gson.JsonElement::getAsDouble).isEqualTo(10.0);
         assertThat(row.getAsJsonArray("r").get(13).getAsDouble()).isEqualTo(11.3);
     }

@@ -46,7 +46,7 @@ class McpServerToolsTest {
                         {"jsonrpc":"2.0","id":1,"method":"tools/list"}""").getAsJsonObject())
                 .getAsJsonObject("result").getAsJsonArray("tools");
 
-        assertThat(tools).allSatisfy(t -> assertThat(
+        assertThat(tools).isNotEmpty().allSatisfy(t -> assertThat(
                 t.getAsJsonObject().get("description").getAsString().length())
                 .as("description of %s", t.getAsJsonObject().get("name").getAsString())
                 .isLessThanOrEqualTo(400));

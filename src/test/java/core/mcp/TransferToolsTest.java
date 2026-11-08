@@ -80,14 +80,15 @@ class TransferToolsTest {
         assertThat(TransferTools.betterObservation(sold, newer)).isSameAs(sold);
     }
 
-    private static TransferListing listingWithSkillsAndCharacter(int age, int ageDays,
-            int keeper, int defending, int playmaking, int passing, int winger, int scoring,
+    /** An outfield listing: age days 0, keeper 1. */
+    private static TransferListing listingWithSkillsAndCharacter(int age,
+            int defending, int playmaking, int passing, int winger, int scoring,
             Integer agreeability, Integer aggressiveness, Integer honesty) {
         final var l = new TransferListing();
         l.setPlayerId(2);
         l.setAge(age);
-        l.setAgeDays(ageDays);
-        l.setKeeper(keeper);
+        l.setAgeDays(0);
+        l.setKeeper(1);
         l.setDefender(defending);
         l.setPlaymaker(playmaking);
         l.setPassing(passing);
@@ -154,7 +155,7 @@ class TransferToolsTest {
     void comparableWeight_isMaximalWhenAgeSkillAndCharacterAllMatch() {
         // 20 years, 0 days = 2240 total days (HATTRICK_YEAR_DAYS=112); third-best skill 10; matched
         // exactly by the listing below, so all three kernels sit at diff=0.
-        final var listing = listingWithSkillsAndCharacter(20, 0, 1, 10, 15, 8, 6, 20, 2, 2, 2);
+        final var listing = listingWithSkillsAndCharacter(20, 10, 15, 8, 6, 20, 2, 2, 2);
 
         final var weight = TransferTools.comparableWeight(listing, 2240,
                 TransferTools.ageSigmaDays(20), 10, new int[]{2, 2, 2});
@@ -166,7 +167,7 @@ class TransferToolsTest {
     void comparableWeight_decaysWithAgeGapButNeverBelowTheFloor() {
         // Same skill/character match as above, but 10 years and 0 days older - far past any of the
         // age kernel's sigma bands.
-        final var listing = listingWithSkillsAndCharacter(30, 0, 1, 10, 15, 8, 6, 20, 2, 2, 2);
+        final var listing = listingWithSkillsAndCharacter(30, 10, 15, 8, 6, 20, 2, 2, 2);
 
         final var weight = TransferTools.comparableWeight(listing, 2240,
                 TransferTools.ageSigmaDays(20), 10, new int[]{2, 2, 2});
@@ -255,8 +256,8 @@ class TransferToolsTest {
     /** A candidate whose own two best skills are exactly the target's queried pair is a match. */
     @Test
     void sameArchetype_isTrueWhenOwnTopTwoMatchesTheTargetPair() {
-        final var listing = listingWithSkillsAndCharacter(20, 0,
-                1, 2, 15, 3, 10, 4, null, null, null);   // playmaking 15, winger 10 are the top two
+        final var listing = listingWithSkillsAndCharacter(20,
+                2, 15, 3, 10, 4, null, null, null);   // playmaking 15, winger 10 are the top two
 
         assertThat(TransferTools.sameArchetype(listing,
                 TransferSearchQuery.Skill.PLAYMAKING, TransferSearchQuery.Skill.WINGER)).isTrue();
@@ -265,8 +266,8 @@ class TransferToolsTest {
     /** The pair's order doesn't matter - only which two skills they are. */
     @Test
     void sameArchetype_isOrderIndependent() {
-        final var listing = listingWithSkillsAndCharacter(20, 0,
-                1, 2, 15, 3, 10, 4, null, null, null);   // same listing: playmaking 15, winger 10
+        final var listing = listingWithSkillsAndCharacter(20,
+                2, 15, 3, 10, 4, null, null, null);   // same listing: playmaking 15, winger 10
 
         assertThat(TransferTools.sameArchetype(listing,
                 TransferSearchQuery.Skill.WINGER, TransferSearchQuery.Skill.PLAYMAKING)).isTrue();
@@ -278,8 +279,8 @@ class TransferToolsTest {
      */
     @Test
     void sameArchetype_isFalseWhenOwnTopTwoIsADifferentPair() {
-        final var listing = listingWithSkillsAndCharacter(18, 0,
-                1, 2, 7, 5, 3, 8, null, null, null);   // scoring 8, playmaking 7 are the top two
+        final var listing = listingWithSkillsAndCharacter(18,
+                2, 7, 5, 3, 8, null, null, null);   // scoring 8, playmaking 7 are the top two
 
         assertThat(TransferTools.sameArchetype(listing,
                 TransferSearchQuery.Skill.PLAYMAKING, TransferSearchQuery.Skill.WINGER)).isFalse();
@@ -548,8 +549,9 @@ class TransferToolsTest {
         final var args = new JsonObject();
         args.add("queries", new JsonArray());
 
+        final var handler = tool("search_transfers").handler();
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> tool("search_transfers").handler().call(args));
+                .isThrownBy(() -> handler.call(args));
     }
 
     /**
@@ -722,7 +724,7 @@ class TransferToolsTest {
      */
     @Test
     void comparableWeightBreakdown_ignoresCharacterWhenTargetCharIsNull() {
-        final var listing = listingWithSkillsAndCharacter(20, 0, 1, 15, 12, 8, 3, 2, 3, 2, 4);
+        final var listing = listingWithSkillsAndCharacter(20, 15, 12, 8, 3, 2, 3, 2, 4);
 
         final var breakdown = TransferTools.comparableWeightBreakdown(listing, 2240,
                 TransferTools.ageSigmaDays(20), 10, null);
@@ -822,7 +824,7 @@ class TransferToolsTest {
                 .getAsJsonObject();
         final var player = TransferTools.playerFromProfile(profile);
 
-        final var listing = TransferTools.listingFromProfile(profile, player);
+        final var listing = java.util.Objects.requireNonNull(TransferTools.listingFromProfile(profile, player));
 
         assertThat(listing.getPlaymaker()).isEqualTo(14);
         assertThat(listing.getScorer()).isNull();
@@ -846,7 +848,7 @@ class TransferToolsTest {
                 .getAsJsonObject();
         final var player = TransferTools.playerFromProfile(profile);
 
-        final var listing = TransferTools.listingFromProfile(profile, player);
+        final var listing = java.util.Objects.requireNonNull(TransferTools.listingFromProfile(profile, player));
 
         assertThat(listing.getSalePrice()).isEqualTo(6_770_000L);
     }

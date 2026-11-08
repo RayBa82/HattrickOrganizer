@@ -2,12 +2,16 @@ package core.mcp;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import core.model.match.MatchLineupPosition;
 import core.model.player.IMatchRoleID;
 import module.lineup.Lineup;
 import module.lineup.substitution.model.GoalDiffCriteria;
 import module.lineup.substitution.model.MatchOrderType;
 import module.lineup.substitution.model.RedCardCriteria;
+import module.lineup.substitution.model.Substitution;
 import org.junit.jupiter.api.Test;
+
+import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -29,30 +33,31 @@ class LineupOrdersTest {
     @Test
     void penaltyTakers_inKickingOrder_atMostElevenAndNoneTwice() throws McpToolException {
         final var takers = LineupOrders.parsePenaltyTakers(spec("{\"penaltyTakers\":[7,3]}"), null);
-        assertThat(takers).extracting(t -> t.getRoleId(), t -> t.getPlayerId())
+        assertThat(takers).extracting(MatchLineupPosition::getRoleId, MatchLineupPosition::getPlayerId)
                 .containsExactly(org.assertj.core.groups.Tuple.tuple(IMatchRoleID.penaltyTaker1, 7),
                         org.assertj.core.groups.Tuple.tuple(IMatchRoleID.penaltyTaker1 + 1, 3));
 
+        final var twelve = spec("{\"penaltyTakers\":[1,2,3,4,5,6,7,8,9,10,11,12]}");
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> LineupOrders.parsePenaltyTakers(
-                        spec("{\"penaltyTakers\":[1,2,3,4,5,6,7,8,9,10,11,12]}"), null))
+                .isThrownBy(() -> LineupOrders.parsePenaltyTakers(twelve, null))
                 .withMessageContaining("at most 11");
+        final var twice = spec("{\"penaltyTakers\":[4,4]}");
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> LineupOrders.parsePenaltyTakers(spec("{\"penaltyTakers\":[4,4]}"), null))
+                .isThrownBy(() -> LineupOrders.parsePenaltyTakers(twice, null))
                 .withMessageContaining("twice");
     }
 
     @Test
     void teamOrders_readBackAsTheyWereWritten() throws McpToolException {
-        final var orders = LineupOrders.parseTeamOrders(spec("""
+        final var orders = Objects.requireNonNull(LineupOrders.parseTeamOrders(spec("""
                 {"teamOrders":[
                   {"type":"substitution","minute":60,"playerOut":1,"playerIn":2,"roleId":111,
                    "behaviour":1,"redCard":"myPlayer","standing":"down"},
                   {"type":"behaviour","minute":70,"playerOut":3,"behaviour":2},
                   {"type":"swap","minute":80,"playerOut":4,"playerIn":5},
-                  {"type":"manMarking","minute":0,"playerOut":6,"playerIn":99999}]}"""), null, 0);
+                  {"type":"manMarking","minute":0,"playerOut":6,"playerIn":99999}]}"""), null, 0));
 
-        assertThat(orders).extracting(o -> o.getOrderType()).containsExactly(MatchOrderType.SUBSTITUTION,
+        assertThat(orders).extracting(Substitution::getOrderType).containsExactly(MatchOrderType.SUBSTITUTION,
                 MatchOrderType.NEW_BEHAVIOUR, MatchOrderType.POSITION_SWAP, MatchOrderType.MAN_MARKING);
         assertThat(orders.get(0).getRedCardCriteria()).isEqualTo(RedCardCriteria.MY_PLAYER);
         assertThat(orders.get(0).getStanding()).isEqualTo(GoalDiffCriteria.DOWN);
@@ -91,18 +96,21 @@ class LineupOrdersTest {
 
     @Test
     void teamOrders_refuseWhatHattrickDoesNotKnow() {
+        final var unknownType = spec("""
+                {"teamOrders":[{"type":"sub","minute":46,"playerOut":1,"playerIn":2}]}""");
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> LineupOrders.parseTeamOrders(spec("""
-                        {"teamOrders":[{"type":"sub","minute":46,"playerOut":1,"playerIn":2}]}"""), null, 0))
+                .isThrownBy(() -> LineupOrders.parseTeamOrders(unknownType, null, 0))
                 .withMessageContaining("substitution, behaviour, swap or manMarking");
+        final var unknownStanding = spec("""
+                {"teamOrders":[{"type":"swap","minute":46,"playerOut":1,"playerIn":2,
+                                "standing":"winning"}]}""");
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> LineupOrders.parseTeamOrders(spec("""
-                        {"teamOrders":[{"type":"swap","minute":46,"playerOut":1,"playerIn":2,
-                                        "standing":"winning"}]}"""), null, 0))
+                .isThrownBy(() -> LineupOrders.parseTeamOrders(unknownStanding, null, 0))
                 .withMessageContaining("inTheLead");
+        final var lateMinute = spec("""
+                {"teamOrders":[{"type":"swap","minute":120,"playerOut":1,"playerIn":2}]}""");
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> LineupOrders.parseTeamOrders(spec("""
-                        {"teamOrders":[{"type":"swap","minute":120,"playerOut":1,"playerIn":2}]}"""), null, 0))
+                .isThrownBy(() -> LineupOrders.parseTeamOrders(lateMinute, null, 0))
                 .withMessageContaining("0-119");
     }
 
@@ -135,13 +143,13 @@ class LineupOrdersTest {
         }
         final var echo = LineupOrders.echo(lineup.toJson(), benchRoleIds);
 
-        assertThat(echo.getAsJsonArray("positions").toString())
-                .isEqualTo("[{\"roleId\":100,\"playerId\":11,\"behaviour\":0},"
+        assertThat(echo.getAsJsonArray("positions"))
+                .hasToString("[{\"roleId\":100,\"playerId\":11,\"behaviour\":0},"
                         + "{\"roleId\":113,\"playerId\":22,\"behaviour\":1}]");
-        assertThat(echo.getAsJsonArray("bench").toString()).isEqualTo("[{\"roleId\":204,\"playerId\":33}]");
+        assertThat(echo.getAsJsonArray("bench")).hasToString("[{\"roleId\":204,\"playerId\":33}]");
         assertThat(echo.get("captainId").getAsInt()).isEqualTo(22);
         assertThat(echo.get("setPiecesTakerId").getAsInt()).isEqualTo(22);
-        assertThat(echo.getAsJsonArray("penaltyTakers").toString()).isEqualTo("[22,11]");
+        assertThat(echo.getAsJsonArray("penaltyTakers")).hasToString("[22,11]");
         assertThat(echo.get("penaltySlotsSent").getAsInt()).isEqualTo(11);
         final var orders = echo.getAsJsonArray("teamOrders");
         assertThat(orders.get(0).getAsJsonObject().get("type").getAsString()).isEqualTo("substitution");
@@ -156,7 +164,7 @@ class LineupOrdersTest {
         final var sent = JsonParser.parseString(lineup.toJson()).getAsJsonObject();
         assertThat(sent.getAsJsonArray("kickers")).hasSize(11);
         // the padding keeps the penalty slots' role ids, never 0
-        assertThat(lineup.getPenaltyTakers()).extracting(p -> p.getRoleId())
+        assertThat(lineup.getPenaltyTakers()).extracting(MatchLineupPosition::getRoleId)
                 .containsExactlyElementsOf(java.util.stream.IntStream.rangeClosed(
                         IMatchRoleID.penaltyTaker1, IMatchRoleID.penaltyTaker11).boxed().toList());
     }
@@ -172,7 +180,8 @@ class LineupOrdersTest {
                             + "\"standing\":\"notInTheLeadByMoreThanOne\"}");
         }
         orders.append("]}");
-        final var json = LineupOrders.teamOrders(LineupOrders.parseTeamOrders(spec(orders.toString()), null, 5));
+        final var json = LineupOrders.teamOrders(
+                Objects.requireNonNull(LineupOrders.parseTeamOrders(spec(orders.toString()), null, 5)));
         assertThat(json.toString().length()).isLessThan(2_500);
         assertThat(json).hasSize(10);
     }

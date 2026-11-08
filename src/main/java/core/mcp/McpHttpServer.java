@@ -184,7 +184,8 @@ public final class McpHttpServer {
         server.setExecutor(executor);
         server.createContext("/mcp", this::serve);
         server.start();
-        HOLogger.instance().info(getClass(), "MCP server listening on http://" + address.getHostAddress() + ":" + port() + "/mcp");
+        HOLogger.instance().info(getClass(), "MCP server listening on " + address.getHostAddress() + ":" + port()
+                + "/mcp (plain HTTP, loopback guard)");
     }
 
     public synchronized void stop() {
@@ -198,7 +199,7 @@ public final class McpHttpServer {
         HOLogger.instance().info(getClass(), "MCP server stopped");
     }
 
-    private void serve(HttpExchange exchange) throws IOException {
+    private void serve(HttpExchange exchange) {
         try {
             if (exchange.getRequestHeaders().getFirst("Origin") != null) {
                 respond(exchange, 403, "{\"error\":\"Origin header not accepted\"}");
@@ -222,10 +223,8 @@ public final class McpHttpServer {
             }
 
             final var body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-            final JsonObject request;
-            try {
-                request = JsonParser.parseString(body).getAsJsonObject();
-            } catch (Exception e) {
+            final var request = parseRequest(body);
+            if (request == null) {
                 respond(exchange, 200, GSON.toJson(error(null, -32700, "Parse error")));
                 return;
             }
@@ -243,6 +242,15 @@ public final class McpHttpServer {
             } catch (Exception alreadyAnswered) {
                 exchange.close();     // headers were already sent, there is nothing left to say
             }
+        }
+    }
+
+    /** The request body as a JSON object, or null when it is not one: a JSON-RPC parse error. */
+    private static JsonObject parseRequest(String body) {
+        try {
+            return JsonParser.parseString(body).getAsJsonObject();
+        } catch (RuntimeException e) {
+            return null;
         }
     }
 

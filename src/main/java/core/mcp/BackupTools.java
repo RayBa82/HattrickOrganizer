@@ -100,12 +100,17 @@ final class BackupTools {
         }
         // By name: keep is canonical, the listing may not be (symlinked paths).
         archives.stream().skip(KEPT).filter(f -> keep == null || !f.getName().equals(keep.getName())).forEach(f -> {
-            if (!f.delete()) {
-                HOLogger.instance().warning(BackupTools.class, "Could not delete old backup " + f);
+            try {
+                java.nio.file.Files.delete(f.toPath());
+            } catch (java.io.IOException e) {
+                HOLogger.instance().warning(BackupTools.class, "Could not delete old backup " + f + ": " + e);
             }
         });
         return archives.get(0);
     }
+
+    /** Docker creates this file in every container: the restart policy brings HO back after a restore. */
+    private static final String DOCKER_ENV_MARKER = "/.dockerenv";
 
     /** A folder's archives, newest first. */
     private static List<File> archives(File dir) {
@@ -174,7 +179,7 @@ final class BackupTools {
             throw new McpToolException("Restore runs only on the headless server. In desktop HO, "
                     + "close HO and extract the archive into the db folder by hand.");
         }
-        final var restarts = new File("/.dockerenv").exists();
+        final var restarts = new File(DOCKER_ENV_MARKER).exists();
         final var json = new JsonObject();
         json.addProperty("restoring", name(archive));
         json.addProperty("restartsAutomatically", restarts);
