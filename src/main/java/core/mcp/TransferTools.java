@@ -962,18 +962,9 @@ public final class TransferTools {
     static JsonObject summary(JsonObject valuation) {
         final var summary = new JsonObject();
         if (valuation.has(PLAYER)) {
-            final var player = valuation.getAsJsonObject(PLAYER);
-            for (final var key : List.of(PLAYER_ID, "name")) {
-                if (player.has(key)) {
-                    summary.add(key, player.get(key));
-                }
-            }
+            McpJson.copyPresent(valuation.getAsJsonObject(PLAYER), summary, List.of(PLAYER_ID, "name"));
         }
-        for (final var key : SUMMARY_KEYS) {
-            if (valuation.has(key)) {
-                summary.add(key, valuation.get(key));
-            }
-        }
+        McpJson.copyPresent(valuation, summary, SUMMARY_KEYS);
         if (valuation.has(SKILL_GROUPS)) {
             final var groups = new JsonArray();
             final var all = valuation.getAsJsonArray(SKILL_GROUPS);

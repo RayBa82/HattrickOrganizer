@@ -525,6 +525,35 @@ class TeamToolsTest {
         assertThat(failed.has("result")).isFalse();
     }
 
+    /** level_up_report and the task form join a running download and get its result or error. */
+    @Test
+    void awaitingADownloadTaskAnswersOnceItHasFinished() throws Exception {
+        final var task = new TeamTools.DownloadTask("download-8");
+        final var waiter = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            try {
+                return task.await();
+            } catch (McpToolException e) {
+                throw new java.util.concurrent.CompletionException(e);
+            }
+        });
+        assertThat(waiter).isNotDone();
+
+        final var result = new com.google.gson.JsonObject();
+        result.addProperty("hrfId", 152);
+        task.result.set(result);
+        task.finish();
+        assertThat(waiter.get(5, java.util.concurrent.TimeUnit.SECONDS).get("hrfId").getAsInt())
+                .isEqualTo(152);
+        assertThat(TeamTools.downloadStatus(task).get("status").getAsString()).isEqualTo("done");
+
+        final var failed = new TeamTools.DownloadTask("download-9");
+        failed.error = "CHPP login expired";
+        failed.finish();
+        org.assertj.core.api.Assertions.assertThatThrownBy(failed::await)
+                .isInstanceOf(McpToolException.class)
+                .hasMessage("CHPP login expired");
+    }
+
     /** A squad-wide get_squad is the core every lineup reads; a handful of named players get it all. */
     @Test
     void squadParts_noneByDefaultAllForAFewNamedPlayers() {

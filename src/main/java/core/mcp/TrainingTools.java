@@ -579,11 +579,8 @@ public final class TrainingTools {
         final var screen = new JsonObject();
         final var derived = row.getAsJsonObject(DERIVED);
         if (derived != null) {
-            for (final var key : List.of("levelsPerHtYear", "rateBasis", "weeksSinceLastLevelUp")) {
-                if (derived.has(key)) {
-                    screen.add(key, derived.get(key));
-                }
-            }
+            McpJson.copyPresent(derived, screen,
+                    List.of("levelsPerHtYear", "rateBasis", "weeksSinceLastLevelUp"));
         }
         final var coverage = row.getAsJsonObject(COVERAGE);
         if (coverage != null) {

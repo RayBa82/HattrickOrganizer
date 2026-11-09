@@ -82,6 +82,15 @@ public final class McpJson {
                 .multiply(AmountOfMoney.Companion.getExchangeRate()).longValue();
     }
 
+    /** Copies those of {@code keys} that {@code from} has into {@code to}. */
+    public static void copyPresent(JsonObject from, JsonObject to, Iterable<String> keys) {
+        for (final var key : keys) {
+            if (from.has(key)) {
+                to.add(key, from.get(key));
+            }
+        }
+    }
+
     /** The loaded team snapshot. */
     public static HOModel model() throws McpToolException {
         final var model = HOVerwaltung.instance().getModel();

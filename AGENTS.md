@@ -237,13 +237,16 @@ out its own polling handle for older clients, as `download_team` does, passes a 
 handler. A tool error (`isError`) completes the task. Only a JSON-RPC error fails it. Tasks are
 kept in memory: 1 h TTL, the newest 50.
 
-**One tool handler at a time.** Plain calls and tasks share `McpHttpServer.toolLock`, because
-HO's DB layer shares one JDBC statement. The HTTP pool has several threads only so that polls and
-downloads never wait behind a running tool. The one exception is `download_team`'s task
-(`McpTool.taskOutsideToolLock`): under the lock its two minutes kept every plain call waiting into
-a client timeout. It runs unlocked like its old taskId form, its work is serialized on the EDT,
-and a read during it may see a half-written download. Tasks still run one at a time
-(`McpTasks` has one thread), so other tasks wait for it.
+**One tool handler at a time.** Plain calls and tasks share `McpToolLock`, because HO's DB layer
+shares one JDBC statement. The HTTP pool has several threads only so that polls and downloads
+never wait behind a running tool. The exceptions are the tools that download the team,
+`download_team` and `level_up_report` (`McpTool.outsideToolLock`): under the lock a download's
+two minutes kept every plain call waiting into a client timeout. Their handlers run unlocked and
+take `McpToolLock.hold` themselves around their database reads. Every team download goes through
+`TeamTools.downloadAndWait` or the taskId form, which share one registry: a second request joins
+the running download instead of starting another, and the work itself is serialized on the EDT.
+A read during a download may see it half-written. Tasks still run one at a time (`McpTasks` has
+one thread), so other tasks wait for it.
 
 **Every tool must be token-efficient. This is a project-wide rule, not a per-tool preference.**
 The point of the server is that an agent can learn everything about the team, and that only

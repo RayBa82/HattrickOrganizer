@@ -391,7 +391,7 @@ class McpHttpServerTest {
 
     /** download_team's case: a two-minute task must not keep a plain call waiting into a timeout. */
     @Test
-    void anUnlockedTaskLetsPlainCallsAnswerWhileItWorks() throws Exception {
+    void aSelfLockingTaskLetsPlainCallsAnswerWhileItWorks() throws Exception {
         final var started = new CountDownLatch(1);
         final var release = new CountDownLatch(1);
         final var server = serverWithEchoTool();
@@ -400,7 +400,7 @@ class McpHttpServerTest {
                     started.countDown();
                     awaitRelease(release);
                     return new JsonObject();
-                }).asTask(args -> true).taskOutsideToolLock());
+                }).asTask(args -> true).outsideToolLock());
 
         final var taskId = send(server, modern(50, "tools/call", "{\"name\":\"download\"}", WITH_TASKS))
                 .body().getAsJsonObject("result").get("taskId").getAsString();
@@ -413,6 +413,40 @@ class McpHttpServerTest {
 
         release.countDown();
         assertThat(pollUntilTerminal(server, taskId).get("status").getAsString()).isEqualTo("completed");
+    }
+
+    /** level_up_report's case: the long part runs beside a plain call, the reads wait for it. */
+    @Test
+    void aSelfLockingToolTakesTheLockOnlyForItsLockedPart() throws Exception {
+        final var slowStarted = new CountDownLatch(1);
+        final var release = new CountDownLatch(1);
+        final var unlockedPartRan = new CountDownLatch(1);
+        final var server = new McpHttpServer();
+        server.register(new McpTool("slow", "Waits, then answers.", McpTool.schema(new JsonObject()),
+                args -> {
+                    slowStarted.countDown();
+                    awaitRelease(release);
+                    return new JsonObject();
+                }));
+        server.register(new McpTool("report", "Downloads, then reads.", McpTool.schema(new JsonObject()),
+                args -> {
+                    unlockedPartRan.countDown();
+                    return McpToolLock.hold(JsonObject::new);
+                }).outsideToolLock());
+
+        final var slow = java.util.concurrent.CompletableFuture.supplyAsync(() -> send(server,
+                modern(60, "tools/call", "{\"name\":\"slow\"}", NO_TASKS)));
+        assertThat(slowStarted.await(5, TimeUnit.SECONDS)).isTrue();
+        final var report = java.util.concurrent.CompletableFuture.supplyAsync(() -> send(server,
+                modern(61, "tools/call", "{\"name\":\"report\"}", NO_TASKS)));
+
+        assertThat(unlockedPartRan.await(5, TimeUnit.SECONDS)).isTrue();
+        assertThat(report).isNotDone();
+        release.countDown();
+        assertThat(report.get(5, TimeUnit.SECONDS).body().getAsJsonObject("result")
+                .get("isError").getAsBoolean()).isFalse();
+        assertThat(slow.get(5, TimeUnit.SECONDS).body().getAsJsonObject("result")
+                .get("isError").getAsBoolean()).isFalse();
     }
 
     @Test

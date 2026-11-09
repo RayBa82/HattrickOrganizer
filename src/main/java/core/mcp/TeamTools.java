@@ -223,7 +223,7 @@ public final class TeamTools {
                                 + "min. With the MCP tasks extension the call is a task. Otherwise it "
                                 + "returns a taskId at once: call again with it until status is done "
                                 + "or failed. Not a routine refresh. HO's lineup for the next match "
-                + "is kept unless keepLineup is false; hattrickOrderDiff shows how "
+                                + "is kept unless keepLineup is false; hattrickOrderDiff shows how "
                                 + "Hattrick's held order differs. nextMatches as in get_team.",
                         McpTool.schema(McpTool.properties(
                                 TASK_ID, McpTool.prop(STRING, "a taskId this tool returned: "
@@ -234,7 +234,10 @@ public final class TeamTools {
                                         + "download replace it, as HO's Download button does"))),
                         TeamTools::downloadTeam)
                         .asTask(args -> !args.has(TASK_ID), TeamTools::downloadTeamTask)
-                        .taskOutsideToolLock()
+                        // Two minutes under the tool lock kept every plain call waiting into a
+                        // client timeout. The download serializes itself on the EDT, and nothing
+                        // else here reads the database.
+                        .outsideToolLock()
         );
     }
 
@@ -1166,8 +1169,8 @@ public final class TeamTools {
     }
 
     /**
-     * One background {@code download_team} run. {@code finishedAt} is written last, so a non-null
-     * value means {@code result} or {@code error} is already set.
+     * One team download, whichever tool started it. {@code finishedAt} is written last, so a
+     * non-null value means {@code result} or {@code error} is already set.
      */
     static final class DownloadTask {
         final String id;
@@ -1179,10 +1182,38 @@ public final class TeamTools {
         volatile long runtimeMs;
         final java.util.concurrent.atomic.AtomicReference<HODateTime> finishedAt =
                 new java.util.concurrent.atomic.AtomicReference<>();
+        private final java.util.concurrent.CountDownLatch finished =
+                new java.util.concurrent.CountDownLatch(1);
 
         DownloadTask(String id) {
             this.id = id;
         }
+
+        /** Marks it finished, after {@code result} or {@code error} was set. */
+        void finish() {
+            runtimeMs = (System.nanoTime() - startNanos) / 1_000_000;
+            finishedAt.set(HODateTime.now());
+            finished.countDown();
+        }
+
+        /** Waits until it has finished: its result, or its error as a tool error. */
+        JsonObject await() throws McpToolException {
+            try {
+                finished.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new McpToolException("Stopped waiting for download " + id + "; it goes on, "
+                        + "poll it with download_team taskId.");
+            }
+            if (error != null) {
+                throw new McpToolException(error);
+            }
+            return result.get();
+        }
+    }
+
+    /** A download to report: the one already running, or a new one this caller has to run. */
+    private record Claim(DownloadTask task, boolean isNew) {
     }
 
     private static final String TASK_ID = "taskId";
@@ -1199,7 +1230,7 @@ public final class TeamTools {
     };
     private static DownloadTask latestDownload;
     private static int downloadTaskCounter;
-    /** One at a time: a second start while one runs gets the running task back. */
+    /** Runs the taskId form's downloads; one at a time, see {@link #claimDownload}. */
     private static final java.util.concurrent.ExecutorService downloadExecutor =
             java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
                 final var t = new Thread(r, "mcp-download-team");
@@ -1228,12 +1259,9 @@ public final class TeamTools {
             }
             return downloadStatus(task);
         }
-        synchronized (downloadTasks) {
-            if (latestDownload != null && latestDownload.finishedAt.get() == null) {
-                final var json = downloadStatus(latestDownload);
-                json.addProperty("alreadyRunning", true);
-                return json;
-            }
+        final var running = runningDownload();
+        if (running != null) {
+            return alreadyRunning(running);
         }
         // Refusals come back now, not only when the caller polls. runDownload checks again.
         LineupTools.onEdt(() -> {
@@ -1241,42 +1269,77 @@ public final class TeamTools {
             requireTeamSelected();
             return null;
         });
-        final DownloadTask task;
-        synchronized (downloadTasks) {
-            task = new DownloadTask("download-" + (++downloadTaskCounter));
-            downloadTasks.put(task.id, task);
-            latestDownload = task;
+        final var claim = claimDownload();
+        if (!claim.isNew()) {
+            return alreadyRunning(claim.task());
         }
         final var keepLineup = McpJson.optBool(args, KEEP_LINEUP, true);
-        downloadExecutor.execute(() -> {
-            try {
-                task.result.set(runDownload(keepLineup));
-            } catch (McpToolException e) {
-                task.error = e.getMessage();
-            } catch (Exception e) {
-                HOLogger.instance().error(TeamTools.class, e);
-                task.error = "The download failed: " + e;
-            }
-            task.runtimeMs = (System.nanoTime() - task.startNanos) / 1_000_000;
-            task.finishedAt.set(HODateTime.now());
-        });
-        return downloadStatus(task);
+        downloadExecutor.execute(() -> run(claim.task(), keepLineup));
+        return downloadStatus(claim.task());
     }
 
     /**
      * {@code download_team} as a task of the MCP tasks extension: the task is the handle, so the
      * download runs inside it and answers what a finished {@link #downloadTeam} reports as
-     * {@code result}. One at a time with the taskId form - both end on the EDT anyway, but a second
-     * download straight after the first would only spend the session's cap.
+     * {@code result}.
      */
     static JsonObject downloadTeamTask(JsonObject args) throws McpToolException {
-        synchronized (downloadTasks) {
-            if (latestDownload != null && latestDownload.finishedAt.get() == null) {
-                throw new McpToolException("A download is already running (taskId "
-                        + latestDownload.id + "); poll it with download_team taskId.");
-            }
+        return downloadAndWait(McpJson.optBool(args, KEEP_LINEUP, true));
+    }
+
+    /**
+     * A finished download's result: runs one in this thread, or, when one is already running,
+     * waits for that one and answers its result, keepLineup and all. Registered like the taskId
+     * form's, so no two downloads ever overlap - they would end on the EDT one after the other
+     * anyway, and the second would only spend the session's cap.
+     */
+    static JsonObject downloadAndWait(boolean keepLineup) throws McpToolException {
+        final var claim = claimDownload();
+        if (claim.isNew()) {
+            run(claim.task(), keepLineup);
         }
-        return runDownload(McpJson.optBool(args, KEEP_LINEUP, true));
+        return claim.task().await();
+    }
+
+    /** Runs {@code task}'s download in this thread and records how it ended. */
+    private static void run(DownloadTask task, boolean keepLineup) {
+        try {
+            task.result.set(runDownload(keepLineup));
+        } catch (McpToolException e) {
+            task.error = e.getMessage();
+        } catch (Exception e) {
+            HOLogger.instance().error(TeamTools.class, e);
+            task.error = "The download failed: " + e;
+        } finally {
+            task.finish();
+        }
+    }
+
+    private static @Nullable DownloadTask runningDownload() {
+        synchronized (downloadTasks) {
+            return latestDownload != null && latestDownload.finishedAt.get() == null
+                    ? latestDownload : null;
+        }
+    }
+
+    /** The running download, or a new one registered as the latest, in one step. */
+    private static Claim claimDownload() {
+        synchronized (downloadTasks) {
+            final var running = runningDownload();
+            if (running != null) {
+                return new Claim(running, false);
+            }
+            final var task = new DownloadTask("download-" + (++downloadTaskCounter));
+            downloadTasks.put(task.id, task);
+            latestDownload = task;
+            return new Claim(task, true);
+        }
+    }
+
+    private static JsonObject alreadyRunning(DownloadTask task) {
+        final var json = downloadStatus(task);
+        json.addProperty("alreadyRunning", true);
+        return json;
     }
 
     /** status running / done / failed, with the runtime once it has finished. */

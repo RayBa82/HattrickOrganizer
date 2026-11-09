@@ -22,13 +22,14 @@ import java.util.function.Predicate;
  * @param taskHandler      what a call that runs as a task executes instead of {@code handler};
  *                         null = the same handler. For a tool whose plain form already hands
  *                         out its own polling handle and has to keep doing so for older clients.
- * @param taskUnlocked     the task runs outside McpHttpServer's tool lock, so plain calls answer
- *                         while it works. Only for a task that serializes its own work and
- *                         whose plain form already runs unlocked: download_team.
+ * @param locksItself      the handlers run outside {@link McpToolLock} and take it themselves
+ *                         around what reads the database, so a long CHPP part does not keep
+ *                         every other call waiting. Only for work that serializes itself, as a
+ *                         team download does on the EDT: download_team, level_up_report.
  */
 public record McpTool(String name, String description, JsonObject inputSchema, Handler handler,
                       String budgetHint, List<OptionalSection> optionalSections,
-                      Predicate<JsonObject> runsAsTask, Handler taskHandler, boolean taskUnlocked) {
+                      Predicate<JsonObject> runsAsTask, Handler taskHandler, boolean locksItself) {
 
     /** JSON schema type names, for {@link #prop}. */
     public static final String STRING = "string";
@@ -45,7 +46,7 @@ public record McpTool(String name, String description, JsonObject inputSchema, H
     /** This tool with its own over-budget hint and the sections it may shed, in drop order. */
     public McpTool withBudget(String hint, OptionalSection... sections) {
         return new McpTool(name, description, inputSchema, handler, hint, List.of(sections),
-                runsAsTask, taskHandler, taskUnlocked);
+                runsAsTask, taskHandler, locksItself);
     }
 
     /**
@@ -60,11 +61,11 @@ public record McpTool(String name, String description, JsonObject inputSchema, H
     /** {@link #asTask(Predicate)}, running {@code taskHandler} instead of the plain handler. */
     public McpTool asTask(Predicate<JsonObject> when, Handler taskHandler) {
         return new McpTool(name, description, inputSchema, handler, budgetHint, optionalSections,
-                when, taskHandler, taskUnlocked);
+                when, taskHandler, locksItself);
     }
 
-    /** This tool's task outside the tool lock - see {@code taskUnlocked}. */
-    public McpTool taskOutsideToolLock() {
+    /** This tool with handlers that take the tool lock themselves - see {@code locksItself}. */
+    public McpTool outsideToolLock() {
         return new McpTool(name, description, inputSchema, handler, budgetHint, optionalSections,
                 runsAsTask, taskHandler, true);
     }

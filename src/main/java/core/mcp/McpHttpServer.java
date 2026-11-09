@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.UnaryOperator;
 
 /**
@@ -112,14 +111,6 @@ public final class McpHttpServer {
 
     private final Map<String, McpTool> tools = new LinkedHashMap<>();
     private final McpTasks tasks = new McpTasks();
-    /**
-     * One tool handler at a time, plain call or task. Handlers reach straight into DBManager, and
-     * HO's ConnectionManager shares one JDBC Statement and one StatementCache across every table,
-     * so two tool calls in parallel would interleave on it. The HTTP side has several threads only
-     * so that a {@code tasks/get} poll never waits behind a running tool; a plain call that arrives
-     * while a task runs waits for it. Fair, so calls run in the order they arrived.
-     */
-    private final ReentrantLock toolLock = new ReentrantLock(true);
     private HttpServer server;
     private ExecutorService executor;
 
@@ -182,7 +173,8 @@ public final class McpHttpServer {
         final var bind = System.getProperty("ho.mcpBind");
         final var address = bind == null ? InetAddress.getLoopbackAddress() : InetAddress.getByName(bind);
         server = HttpServer.create(new InetSocketAddress(address, port), 0);
-        // Several threads, but tool handlers still run one at a time: see toolLock.
+        // Several threads, so that a tasks/get poll never waits behind a running tool. Tool
+        // handlers still run one at a time: see McpToolLock.
         executor = Executors.newFixedThreadPool(HTTP_THREADS);
         server.setExecutor(executor);
         server.createContext("/mcp", this::serve);
@@ -578,18 +570,15 @@ public final class McpHttpServer {
     }
 
     /**
-     * Run one tool call under the tool lock. Never throws: an expected failure is a result with
-     * {@code isError}, bad arguments and crashes are JSON-RPC errors.
+     * Run one tool call under {@link McpToolLock}, unless the tool takes it itself. Never throws:
+     * an expected failure is a result with {@code isError}, bad arguments and crashes are JSON-RPC
+     * errors.
      */
     private McpTasks.Outcome runTool(McpTool tool, JsonObject arguments, boolean asTask, boolean modern) {
-        // download_team's task: two minutes under the lock kept every plain call waiting into a
-        // client timeout. It serializes itself, like its taskId form, which never took the lock.
-        final var locked = !(asTask && tool.taskUnlocked());
-        if (locked) {
-            toolLock.lock();
-        }
+        final var handler = tool.handlerFor(asTask);
         try {
-            final var answer = tool.handlerFor(asTask).call(arguments);
+            final var answer = tool.locksItself() ? handler.call(arguments)
+                    : McpToolLock.hold(() -> handler.call(arguments));
             return McpTasks.Outcome.result(toolResult(McpBudget.fit(tool, answer), false, modern));
         } catch (McpToolException e) {
             return McpTasks.Outcome.result(toolResult(e.getMessage(), true, modern));
@@ -598,10 +587,6 @@ public final class McpHttpServer {
         } catch (Exception e) {
             HOLogger.instance().error(getClass(), e);      // no stack trace crosses the wire
             return McpTasks.Outcome.error(errorObject(-32603, "Internal error in tool " + tool.name()));
-        } finally {
-            if (locked) {
-                toolLock.unlock();
-            }
         }
     }
 

@@ -28,7 +28,7 @@ numbers below against the code first, because they were taken from `b4f11eff`.
 3. **Plugin settings.** A plugin stores its own keys, prefixed with its id, in HO's configuration
    table.
 4. **DB lock in the API.** HO's DB layer shares one JDBC statement, so HO offers the lock that is
-   `McpHttpServer.toolLock` today, and GUI and plugins use the same one.
+   `McpToolLock` today, and GUI and plugins use the same one.
 5. **CHPP gateway instead of plugin-specific calls in HO.**
    - **The risk:** every plugin runs under HO's consumer key, which all HO users share. A
      misbehaving plugin can get the key blocked for everyone, so HO controls *how* plugins

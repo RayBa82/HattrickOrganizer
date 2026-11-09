@@ -40,6 +40,7 @@ public final class WeekTools {
     private static final String BEST_POSITIONS = "bestPositions";
     private static final String MESSAGE = "message";
     private static final String LEVEL_UPS = "levelUps";
+    private static final String SNAPSHOT = "snapshot";
     private static final int TOP_POSITIONS = 3;
     private static final int SHOWN_DIFFERENCES = 5;
     private static final int ELEVEN = 11;
@@ -92,6 +93,9 @@ public final class WeekTools {
                                         + "never; auto and always spend a team download"))),
                         WeekTools::levelUpReport)
                         .asTask(args -> !NEVER.equals(McpJson.optString(args, DOWNLOAD, AUTO)))
+                        // The download takes the lock for none of its two minutes, the report
+                        // for its reads only.
+                        .outsideToolLock()
                         .withBudget("Pass playerIds for fewer rows.")
         );
     }
@@ -144,21 +148,29 @@ public final class WeekTools {
             throw new McpToolException("download must be auto, always or never, not '" + mode + "'");
         }
         final var json = new JsonObject();
-        final var nextTraining = nextTraining(McpJson.model());
-        if (ALWAYS.equals(mode) || AUTO.equals(mode) && trainedSince(nextTraining, HODateTime.now())) {
-            json.add(DOWNLOAD, downloadSummary(TeamTools.downloadTeamTask(new JsonObject())));
+        // Outside the tool lock: the next training date is in memory, and the download serializes
+        // itself on the EDT, joining one that already runs.
+        if (ALWAYS.equals(mode) || AUTO.equals(mode)
+                && trainedSince(nextTraining(McpJson.model()), HODateTime.now())) {
+            json.add(DOWNLOAD, downloadSummary(TeamTools.downloadAndWait(true)));
         } else {
             final var skipped = new JsonObject();
             skipped.addProperty(STATUS, NEVER.equals(mode) ? "not asked"
                     : "skipped: no training since HO's snapshot");
             json.add(DOWNLOAD, skipped);
         }
-        final var model = McpJson.model();
-        json.addProperty("snapshot", model.getBasics() == null || model.getBasics().getDatum() == null
-                ? null : model.getBasics().getDatum().toHT());
-        json.add(LEVEL_UPS, compactLevelUps(
-                TrainingTools.sinceLastTraining(model, TrainingTools.historyPlayerIds(args, model))));
-        return json;
+        return McpToolLock.hold(() -> {
+            final var model = McpJson.model();
+            json.addProperty(SNAPSHOT, snapshotDate(model));
+            json.add(LEVEL_UPS, compactLevelUps(TrainingTools.sinceLastTraining(model,
+                    TrainingTools.historyPlayerIds(args, model))));
+            return json;
+        });
+    }
+
+    private static @Nullable String snapshotDate(HOModel model) {
+        final var date = model.getBasics().getDatum();
+        return date == null ? null : date.toHT();
     }
 
     private static @Nullable HODateTime nextTraining(HOModel model) {
@@ -179,20 +191,14 @@ public final class WeekTools {
     static JsonObject downloadSummary(JsonObject result) {
         final var summary = new JsonObject();
         summary.addProperty(STATUS, "done");
-        for (final var key : DOWNLOAD_KEYS) {
-            if (result.has(key)) {
-                summary.add(key, result.get(key));
-            }
-        }
+        McpJson.copyPresent(result, summary, DOWNLOAD_KEYS);
         return summary;
     }
 
     /** Where each part comes from, so the agent does not have to re-check a number. */
     private static JsonObject sources(HOModel model, boolean includeOrders) {
         final var sources = new JsonObject();
-        final var basics = model.getBasics();
-        sources.addProperty("snapshot", basics == null || basics.getDatum() == null
-                ? null : basics.getDatum().toHT());
+        sources.addProperty(SNAPSHOT, snapshotDate(model));
         sources.addProperty("training", "HO snapshot (get_training current)");
         sources.addProperty("minutes", "HO's stored match lineups (get_training currentWeek)");
         sources.addProperty("orders", includeOrders
@@ -204,12 +210,8 @@ public final class WeekTools {
     private static JsonObject training(HOModel model) {
         final var current = TrainingTools.current(model);
         final var training = new JsonObject();
-        for (final var key : List.of(STATUS, "trainingType", "trainingName", "intensity",
-                "staminaShare", "nextTrainingDate")) {
-            if (current.has(key)) {
-                training.add(key, current.get(key));
-            }
-        }
+        McpJson.copyPresent(current, training, List.of(STATUS, "trainingType", "trainingName",
+                "intensity", "staminaShare", "nextTrainingDate"));
         return training;
     }
 
