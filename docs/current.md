@@ -18,7 +18,7 @@ Committed on `master` with the tournament-week follow-ups below; image pushed. U
   training drop, not ageing), and resolved sale prices for old players in
   `estimate_market_value` (workaround: get_player_transfer_history per comparable, fed back via
   profile + playerId + salePrice).
-- Follow-up (not yet in a pushed image): `download_team` and `level_up_report` run outside the
+- Follow-up (image pushed): `download_team` and `level_up_report` run outside the
   tool lock (`McpTool.outsideToolLock`, `McpToolLock`), so plain calls answer during a download.
   level_up_report locks only its reads, and every download shares one registry: a second
   request joins the running one (`TeamTools.downloadAndWait`).
