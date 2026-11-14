@@ -23,6 +23,10 @@ the columns. The hattrick session was told (tools, currency of the search filter
 - teamhistory 1.0: `XMLTeamHistoryParser`, `ChppWriteService.teamHistoryForAgent`,
   analyze_opponent `include: ["history"]` (opt-in, 1 request): newest 10 seasons as rows,
   newest 10 trophies, counts.
+- Follow-up after the hattrick session's live test (image pushed): nextMatches rows carry
+  `opponentTeamId`, so analyze_opponent can be called from get_team. Transfer price/salary
+  filters, playerstats, training history and the scout estimate worked live; staff contract
+  ends and fan expectations fill only from the first download with the new image.
 - Side fixes for diagnostics on touched code: `DBManager` constants `DB_VERSION` /
   `PREVIOUS_DB_VERSION`, `instance()` split up (the backup dialog is now modal instead of a
   busy-wait), `XMLPlayersParser.parseMarketPlayerFromString` split up.

@@ -50,6 +50,7 @@ public final class TeamTools {
     private static final String CAPACITY = "capacity";
     private static final String CHARACTER = "character";
     private static final String INCLUDE = "include";
+    private static final String OPPONENT_TEAM_ID = "opponentTeamId";
     private static final String LOYALTY = "loyalty";
     private static final String MATCHES = "matches";
     private static final String MOTHERCLUB = "motherclub";
@@ -399,6 +400,7 @@ public final class TeamTools {
             TrainingTools.addMatchTypeFields(row, m.getMatchType());
             row.addProperty("date", m.getMatchSchedule() == null ? null : m.getMatchSchedule().toHT());
             row.addProperty("opponent", home ? m.getGuestTeamName() : m.getHomeTeamName());
+            row.addProperty(OPPONENT_TEAM_ID, home ? m.getGuestTeamID() : m.getHomeTeamID());
             final var where = home ? "home" : "away";
             row.addProperty("location", m.isNeutral() ? "neutral" : where);
             McpJson.addFanExpectation(row, m.getFanMatchExpectation());
@@ -930,7 +932,7 @@ public final class TeamTools {
         }
         final var where = home ? "home" : "away";
         row.addProperty("location", m.isNeutral() ? "neutral" : where);
-        row.addProperty("opponentTeamId", home ? m.getGuestTeamID() : m.getHomeTeamID());
+        row.addProperty(OPPONENT_TEAM_ID, home ? m.getGuestTeamID() : m.getHomeTeamID());
         row.addProperty("opponentTeamName", home ? m.getGuestTeamName() : m.getHomeTeamName());
         addStoredWeather(row, m);
         MatchTools.addCup(row, m);

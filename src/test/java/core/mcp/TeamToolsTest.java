@@ -161,6 +161,7 @@ class TeamToolsTest {
         assertThat(first.get("matchId").getAsInt()).isEqualTo(6);
         assertThat(first.get("matchType").getAsString()).isEqualTo("LEAGUE");
         assertThat(first.get("kickedOff").getAsBoolean()).isTrue();
+        assertThat(first.get("opponentTeamId").getAsInt()).isEqualTo(600);
         assertThat(rows.get(1).getAsJsonObject().get("matchType").getAsString()).isEqualTo("TOURNAMENTGROUP");
         assertThat(rows.get(1).getAsJsonObject().has("kickedOff")).isFalse();
     }
