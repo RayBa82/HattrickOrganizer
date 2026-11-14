@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 import core.constants.player.PlayerSkill;
 import core.model.enums.MatchType;
 import core.model.player.Player;
+import core.model.player.SkillChange;
 import core.net.ChppWriteService;
 import core.util.AmountOfMoney;
 import core.util.HODateTime;
@@ -202,6 +203,25 @@ class TrainingToolsTest {
         player.setTsi(tsi);
         player.setWage(new AmountOfMoney(wage));
         return player;
+    }
+
+    private static SkillChange change(PlayerSkill skill, int delta) {
+        final var change = new SkillChange();
+        change.setType(skill);
+        change.setChange(delta);
+        return change;
+    }
+
+    @Test
+    void isGuessedDrop_onlyDropsOnASkillWithoutSubskill() {
+        final var player = snapshot("2026-11-13 00:30:00", 30, 7, 0.4, 2000, 5000);
+        player.setValue4Skill(PlayerSkill.KEEPER, 1);
+
+        // keeper: never trained, HO holds .0 - the drop is HO's assumption
+        assertThat(TrainingTools.isGuessedDrop(player, change(PlayerSkill.KEEPER, -1))).isTrue();
+        // passing has a real subskill, and a gain is never a guess
+        assertThat(TrainingTools.isGuessedDrop(player, change(PlayerSkill.PASSING, -1))).isFalse();
+        assertThat(TrainingTools.isGuessedDrop(player, change(PlayerSkill.KEEPER, 1))).isFalse();
     }
 
     /** Seventeen weekly snapshots - exactly one Hattrick year - with passing climbing 5.0 to 7.0. */

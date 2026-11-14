@@ -10,6 +10,7 @@ import core.model.match.MatchKurzInfo;
 import core.model.match.MatchLineupTeam;
 import core.model.match.Matchdetails;
 import core.model.player.Player;
+import core.model.player.SkillChange;
 import core.net.ChppWriteService;
 import core.training.FutureTrainingManager;
 import core.training.FutureTrainingPlan;
@@ -69,6 +70,8 @@ public final class TrainingTools {
 
     /** How many weeks ahead to predict when the caller does not say. */
     private static final int DEFAULT_WEEKS = 1;
+    private static final String SKILL_CHANGES = "skillChanges";
+    private static final String UNCERTAIN = "uncertain";
 
     /** Ten Hattrick seasons; rows are one per change, so even this many stay small. */
     private static final int MAX_HISTORY_WEEKS = 160;
@@ -384,6 +387,11 @@ public final class TrainingTools {
             }
         }
         json.add(PLAYERS, players);
+        if (anyUncertain(players)) {
+            json.addProperty("uncertainNote", "uncertain: a drop on a skill HO has no subskill "
+                    + "for (shown as .0). HO assumes .0, so it predicts the drop at once; the real "
+                    + "subskill is unknown and the drop may be weeks away.");
+        }
         // currentWeek.players too: with wholeSquadWeek it is a row per squad player.
         return McpJson.optBool(args, "bulk", false)
                 ? McpDownloads.bulkSections(json, PLAYERS, "currentWeek.players") : json;
@@ -1318,9 +1326,32 @@ public final class TrainingTools {
             changeJson.addProperty(SKILL, String.valueOf(change.getType()));
             changeJson.addProperty("newValue", change.getValue());
             changeJson.addProperty("change", change.getChange());
+            if (isGuessedDrop(player, change)) {
+                changeJson.addProperty(UNCERTAIN, true);
+            }
             changes.add(changeJson);
         }
-        json.add("skillChanges", changes);
+        json.add(SKILL_CHANGES, changes);
         return json;
+    }
+
+    /**
+     * A drop on a skill HO holds no subskill for. HO only learns a subskill from the training it
+     * sees, so an untrained skill sits at exactly .0 - an assumption, not a value - and the first
+     * age drop takes it below zero. The real subskill can be anywhere up to .99.
+     */
+    static boolean isGuessedDrop(Player player, SkillChange change) {
+        return change.getChange() < 0 && player.getSub4Skill(change.getType()) <= 0;
+    }
+
+    private static boolean anyUncertain(JsonArray players) {
+        for (final var player : players) {
+            for (final var change : player.getAsJsonObject().getAsJsonArray(SKILL_CHANGES)) {
+                if (change.getAsJsonObject().has(UNCERTAIN)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }
