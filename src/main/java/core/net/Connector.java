@@ -556,10 +556,10 @@ public class Connector {
 		String url = htUrl + "?file=players&version=2.8&includeMatchInfo=true&teamID=" + teamId;
 		return getCHPPWebFile(url);
 	}
-	public String downloadPlayerDetails(String playerID) {
-			// 3.3: TransferCompareAverage(+Date), the site's transfer estimate; 3.1 brought the assists
-			// the parser already read. Nothing between 3.0 and 3.3 was removed.
-			return getCHPPWebFile(htUrl+"?file=playerdetails&version=3.3&includeMatchInfo=true&playerID=" + playerID);
+	public String downloadPlayerDetails(String playerId) {
+		// 3.3: TransferCompareAverage(+Date), the site's transfer estimate; 3.1 brought the assists
+		// the parser already read. Nothing between 3.0 and 3.3 was removed.
+		return getCHPPWebFile(htUrl+"?file=playerdetails&version=3.3&includeMatchInfo=true&playerID=" + playerId);
 	}
 
 	public String downloadYouthPlayers(int youthteamId) {

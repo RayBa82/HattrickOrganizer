@@ -635,12 +635,12 @@ class TeamToolsTest {
 
     /** get_team #2429: CHPP ids as words, nothing for a snapshot from before the fields existed. */
     @Test
-    void addGender_namesTheIdAndSkipsMissingOrUnknownOnes() {
+    void addGender_namesTheValueAndSkipsMissingOrUnknownOnes() {
         final var json = new com.google.gson.JsonObject();
-        TeamTools.addGender(json, "gender", 2);
-        TeamTools.addGender(json, "leagueSystem", 1);
+        TeamTools.addGender(json, "gender", core.model.enums.Gender.FEMALE);
+        TeamTools.addGender(json, "leagueSystem", core.model.enums.Gender.MALE);
         TeamTools.addGender(json, "missing", null);
-        TeamTools.addGender(json, "unknown", 7);
+        TeamTools.addGender(json, "unknown", core.model.enums.Gender.fromId(7));
 
         assertThat(json.get("gender").getAsString()).isEqualTo("female");
         assertThat(json.get("leagueSystem").getAsString()).isEqualTo("male");

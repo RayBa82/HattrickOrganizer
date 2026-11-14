@@ -10,6 +10,7 @@ import core.gui.HOMainFrame;
 import core.gui.RefreshManager;
 import core.model.HOVerwaltung;
 import core.model.UserParameter;
+import core.model.enums.Gender;
 import core.model.enums.MatchType;
 import core.model.match.MatchKurzInfo;
 import core.model.misc.Economy;
@@ -296,16 +297,15 @@ public final class TeamTools {
         return json;
     }
 
-    /** CHPP GenderID / LeagueSystemID: 1 male, 2 female; nothing for a missing or unknown id. */
-    static void addGender(JsonObject json, String key, Integer id) {
-        if (id == null) {
+    /** CHPP GenderID / LeagueSystemID; nothing for a missing or unknown id (null). */
+    static void addGender(JsonObject json, String key, Gender gender) {
+        if (gender == null) {
             return;
         }
-        switch (id) {
-            case 1 -> json.addProperty(key, "male");
-            case 2 -> json.addProperty(key, "female");
-            default -> { /* unknown id: leave it out rather than guess */ }
-        }
+        json.addProperty(key, switch (gender) {
+            case MALE -> "male";
+            case FEMALE -> "female";
+        });
     }
 
     private static JsonObject team() throws McpToolException {
@@ -324,8 +324,8 @@ public final class TeamTools {
         json.addProperty("leagueId", basics.getLiga());
         json.addProperty("countryId", basics.getCountryId());
         // #2429 Hattrick's women's leagues; absent on a snapshot downloaded before CHPP had the fields
-        addGender(json, "gender", basics.getGenderId());
-        addGender(json, "leagueSystem", basics.getLeagueSystemId());
+        addGender(json, "gender", basics.getGender());
+        addGender(json, "leagueSystem", basics.getLeagueSystem());
         addKit(json, model.getXtraDaten());
 
         if (league != null) {
