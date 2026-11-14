@@ -635,9 +635,13 @@ tasks.register("dockerImage", Exec) {
     dependsOn tasks.createDistribution
     // -PdockerPlatform=linux/amd64 when the server's CPU differs from this machine's (Apple silicon -> x86 server)
     def platform = project.findProperty('dockerPlatform')
-    commandLine(['docker', 'build'] + (platform ? ['--platform', platform] : []) +
-            ['-f', "${projectDir}/utils/buildResources/Dockerfile",
-             '-t', "ho-headless:${version}", '-t', 'ho-headless:latest', "${buildDir}/install/XXX"])
+    // In doFirst, not at configuration: createVersion sets the four-part version only when it runs.
+    doFirst { Exec task ->
+        task.commandLine((['docker', 'build'] + (platform ? ['--platform', platform] : []) +
+                ['-f', "${projectDir}/utils/buildResources/Dockerfile",
+                 '-t', "ho-headless:${project.version}", '-t', 'ho-headless:latest',
+                 layout.buildDirectory.dir('install/XXX').get().asFile.path]).collect { it.toString() })
+    }
 }
 
 tasks.register("docker", GradleBuild) {
@@ -656,10 +660,14 @@ tasks.register("dockerPushImage", Exec) {
     dependsOn tasks.createDistribution
     // -PdockerRegistry=host[:port] (default docker.rayba.de), -PdockerPlatforms=linux/amd64 to narrow it
     def image = "${project.findProperty('dockerRegistry') ?: 'docker.rayba.de'}/ho-headless"
-    commandLine 'docker', 'buildx', 'build', '--push',
-            '--platform', project.findProperty('dockerPlatforms') ?: 'linux/amd64,linux/arm64',
-            '-f', "${projectDir}/utils/buildResources/Dockerfile",
-            '-t', "${image}:${version}", '-t', "${image}:latest", "${buildDir}/install/XXX"
+    // the tag is read in doFirst, after createVersion, see dockerImage
+    doFirst { Exec task ->
+        task.commandLine 'docker', 'buildx', 'build', '--push',
+                '--platform', project.findProperty('dockerPlatforms') ?: 'linux/amd64,linux/arm64',
+                '-f', "${projectDir}/utils/buildResources/Dockerfile",
+                '-t', "${image}:${project.version}", '-t', "${image}:latest",
+                layout.buildDirectory.dir('install/XXX').get().asFile.path
+    }
 }
 
 tasks.register("dockerPush", GradleBuild) {
