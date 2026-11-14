@@ -5,6 +5,7 @@ import core.constants.player.PlayerSkill;
 import core.model.enums.MatchType;
 import core.model.player.Player;
 import core.model.player.SkillChange;
+import core.model.player.TrainerType;
 import core.net.ChppWriteService;
 import core.util.AmountOfMoney;
 import core.util.HODateTime;
@@ -185,6 +186,21 @@ class TrainingToolsTest {
      * One snapshot: passing at {@code level + sub}, taken {@code daysAgo} before now so the window
      * arithmetic is relative to something stable.
      */
+    @Test
+    void listed_leavesTheCoachOutByDefaultButNotWhenNamed() {
+        final var coach = new Player();
+        coach.setPlayerId(486069728);
+        coach.setCoachSkill(5);
+        coach.setTrainerType(TrainerType.Balanced);
+        final var player = new Player();
+        player.setPlayerId(475805295);
+
+        assertThat(TrainingTools.listed(coach, null)).isFalse();
+        assertThat(TrainingTools.listed(player, null)).isTrue();
+        assertThat(TrainingTools.listed(coach, java.util.Set.of(486069728))).isTrue();
+        assertThat(TrainingTools.listed(player, java.util.Set.of(486069728))).isFalse();
+    }
+
     private static Player snapshot(String date, int age, int passing, double sub, int tsi, long wage) {
         return snapshot(HODateTime.fromHT(date), age, passing, sub, tsi, wage);
     }

@@ -194,7 +194,8 @@ public final class TrainingTools {
                                                 + "; capped at the number of future weeks HO has planned"),
                                 PLAYER_IDS, McpTool.prop(ARRAY,
                                         "restrict the prediction to these player ids; the whole squad if omitted. "
-                                                + "Also filters currentWeek.players unless wholeSquadWeek"),
+                                                + "Also filters currentWeek.players unless wholeSquadWeek. "
+                                                + "The coach (a player-manager too) is left out unless named here"),
                                 HISTORY_WEEKS, McpTool.prop(INTEGER,
                                         "add " + HATTRICK_HISTORY + ": Hattrick's record of the "
                                                 + "training settings over this many weeks back, one "
@@ -382,7 +383,7 @@ public final class TrainingTools {
         final var lastTraining = xtra == null ? null : xtra.getTrainingDateAfterWeeks(-1);
         final var players = new JsonArray();
         for (final var player : model.getCurrentPlayers()) {
-            if (!player.isCoach() && (wanted == null || wanted.contains(player.getPlayerId()))) {
+            if (listed(player, wanted)) {
                 players.add(prediction(player, plan, weeks, lastTraining));
             }
         }
@@ -642,6 +643,15 @@ public final class TrainingTools {
     private static int historyWeeks(JsonObject args, boolean includeTraining) {
         final var fallback = includeTraining ? DEFAULT_TRAINING_WEEKS : DEFAULT_HISTORY_WEEKS;
         return Math.max(1, McpJson.optInt(args, WEEKS, fallback));
+    }
+
+    /**
+     * Whether a squad player belongs in a per-player list: without explicit ids (null) every
+     * player but the coach, with them exactly the named ones, so a player-manager asked for by id
+     * is not silently dropped.
+     */
+    static boolean listed(Player player, Set<Integer> wanted) {
+        return wanted == null ? !player.isCoach() : wanted.contains(player.getPlayerId());
     }
 
     /** The explicit ids in the caller's order, else every non-coach in the current squad. */
@@ -1220,7 +1230,7 @@ public final class TrainingTools {
         final var trains = match.getMatchType() != MatchType.MASTERS;
         for (final var player : model.getCurrentPlayers()) {
             final var playerId = player.getPlayerId();
-            if (player.isCoach() || (wanted != null && !wanted.contains(playerId))) {
+            if (!listed(player, wanted)) {
                 continue;
             }
             // A walkover win reports 90 trained minutes but no played minutes, so all three have

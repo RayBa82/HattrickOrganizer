@@ -70,7 +70,8 @@ public final class WeekTools {
                         McpTool.schema(McpTool.properties(
                                 PLAYER_IDS, McpTool.prop(ARRAY,
                                         "only these players in players and levelUps; default "
-                                                + "the whole squad"),
+                                                + "the whole squad but the coach (a player-manager "
+                                                + "too), who is listed only when named here"),
                                 INCLUDE_ORDERS, McpTool.prop(BOOLEAN,
                                         "read the order Hattrick holds for each upcoming fixture, "
                                                 + "one CHPP request each. Default true"),
@@ -131,6 +132,9 @@ public final class WeekTools {
         final var model = McpJson.model();
         final var includeOrders = McpJson.optBool(args, INCLUDE_ORDERS, true);
         final var ids = TrainingTools.historyPlayerIds(args, model);
+        // null without playerIds: the default leaves the coach out, a named id never is
+        final java.util.Set<Integer> named = args.has(PLAYER_IDS) && !args.get(PLAYER_IDS).isJsonNull()
+                ? new HashSet<>(ids) : null;
         final var json = new JsonObject();
         json.add("sources", sources(model, includeOrders));
         json.add("training", training(model));
@@ -139,7 +143,7 @@ public final class WeekTools {
             json.add("staffContractsEnding", ending);
         }
 
-        final var week = TrainingTools.currentWeek(model, null, true);
+        final var week = TrainingTools.currentWeek(model, named, named == null);
         if (!"ok".equals(week.get(STATUS).getAsString())) {
             json.add("week", week);
             return json;
@@ -165,7 +169,7 @@ public final class WeekTools {
         }
         json.add(FIXTURES, fixtures);
         json.add("lineupDataComplete", week.get("lineupDataComplete"));
-        json.add(PLAYERS, players(model, week.getAsJsonArray(PLAYERS), new HashSet<>(ids)));
+        json.add(PLAYERS, players(model, week.getAsJsonArray(PLAYERS), named));
 
         if (McpJson.optBool(args, INCLUDE_LEVEL_UPS, true)) {
             json.add(LEVEL_UPS, compactLevelUps(TrainingTools.sinceLastTraining(model, ids)));
@@ -334,7 +338,7 @@ public final class WeekTools {
         final var plan = FutureTrainingPlan.current();
         final var rows = new JsonArray();
         for (final var player : model.getCurrentPlayers()) {
-            if (!player.isCoach() && wanted.contains(player.getPlayerId())) {
+            if (TrainingTools.listed(player, wanted)) {
                 final var row = playerRow(player, minutes.get(player.getPlayerId()), ratingModel);
                 final var speed = TrainingTools.nextWeekTrainingSpeed(player, plan);
                 if (speed > 0) {
