@@ -55,6 +55,10 @@
 ### Arena Sizer
 
 
+### Team Spirit Prediction
+
+* Fix exception in forecast curve if match details were not downloaded (#2580)
+
 ### Misc
 
 
