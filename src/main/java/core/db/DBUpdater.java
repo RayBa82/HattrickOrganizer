@@ -23,6 +23,9 @@ import java.util.HashMap;
 import java.util.Locale;
 
 final class DBUpdater {
+	private static final String GENDER_ID = "GenderID";
+	private static final String SQL_INTEGER = "INTEGER";
+
 	ConnectionManager connectionManager;
 	DBManager dbManager;
 
@@ -106,6 +109,8 @@ final class DBUpdater {
 								updateDBv1008(DBVersion);
 							case 1008:
 								updateDBv1009(DBVersion);
+							case 1009:
+								updateDBv1100(DBVersion);
 								// the newest step: the next one replaces this break with its own case
 								break;
 				}
@@ -116,6 +121,18 @@ final class DBUpdater {
 		} else {
 			HOLogger.instance().log(getClass(), "No DB update necessary.");
 		}
+	}
+
+	private void updateDBv1100(int dbVersion) throws SQLException {
+		// #2429: gender and league system of the women's leagues (1 male, 2 female)
+		var basicsTable = dbManager.getTable(BasicsTable.TABLENAME);
+		basicsTable.tryAddColumn(GENDER_ID, SQL_INTEGER);
+		basicsTable.tryAddColumn("LeagueSystemID", SQL_INTEGER);
+		dbManager.getTable(SpielerTable.TABLENAME).tryAddColumn(GENDER_ID, SQL_INTEGER);
+		dbManager.getTable(YouthPlayerTable.TABLENAME).tryAddColumn(GENDER_ID, SQL_INTEGER);
+		dbManager.getTable(WorldDetailsTable.TABLENAME).tryAddColumn("LEAGUE_SYSTEM_ID", SQL_INTEGER);
+
+		updateDBVersion(dbVersion, 1100);
 	}
 
 	private void updateDBv1000(int dbVersion) throws  SQLException {

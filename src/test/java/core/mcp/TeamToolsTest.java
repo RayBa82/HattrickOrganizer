@@ -632,4 +632,19 @@ class TeamToolsTest {
                 .first().extracting(com.google.gson.JsonElement::getAsDouble).isEqualTo(10.0);
         assertThat(row.getAsJsonArray("r").get(13).getAsDouble()).isEqualTo(11.3);
     }
+
+    /** get_team #2429: CHPP ids as words, nothing for a snapshot from before the fields existed. */
+    @Test
+    void addGender_namesTheIdAndSkipsMissingOrUnknownOnes() {
+        final var json = new com.google.gson.JsonObject();
+        TeamTools.addGender(json, "gender", 2);
+        TeamTools.addGender(json, "leagueSystem", 1);
+        TeamTools.addGender(json, "missing", null);
+        TeamTools.addGender(json, "unknown", 7);
+
+        assertThat(json.get("gender").getAsString()).isEqualTo("female");
+        assertThat(json.get("leagueSystem").getAsString()).isEqualTo("male");
+        assertThat(json.has("missing")).isFalse();
+        assertThat(json.has("unknown")).isFalse();
+    }
 }

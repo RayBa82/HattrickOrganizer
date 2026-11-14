@@ -87,12 +87,13 @@ public final class TeamTools {
     public static List<McpTool> tools() {
         return List.of(
                 new McpTool("get_team",
-                        "The user's team as of the latest download: name, league, stadium, "
-                                + "team spirit and confidence, the head coach and the rest of the "
-                                + "staff (contractExpires), and the club's logo, kit images and colours "
+                        "The user's team as of the latest download: name, league, "
+                                + "gender/leagueSystem (male/female), stadium, "
+                                + "team spirit and confidence, the head coach and other "
+                                + "staff (contractExpires), the club's logo, kit images and colours "
                                 + "(teamColors: Supporters only, else null); nextMatches: the next 5 own "
                                 + "matches of every type, tournaments too, with fanExpectation. Cash "
-                                + "and the statement: get_finances.",
+                                + "and statement: get_finances.",
                         McpTool.schema(new JsonObject()),
                         args -> team()),
                 new McpTool("get_squad",
@@ -295,6 +296,18 @@ public final class TeamTools {
         return json;
     }
 
+    /** CHPP GenderID / LeagueSystemID: 1 male, 2 female; nothing for a missing or unknown id. */
+    static void addGender(JsonObject json, String key, Integer id) {
+        if (id == null) {
+            return;
+        }
+        switch (id) {
+            case 1 -> json.addProperty(key, "male");
+            case 2 -> json.addProperty(key, "female");
+            default -> { /* unknown id: leave it out rather than guess */ }
+        }
+    }
+
     private static JsonObject team() throws McpToolException {
         final var model = McpJson.model();
         final var basics = model.getBasics();
@@ -310,6 +323,9 @@ public final class TeamTools {
 
         json.addProperty("leagueId", basics.getLiga());
         json.addProperty("countryId", basics.getCountryId());
+        // #2429 Hattrick's women's leagues; absent on a snapshot downloaded before CHPP had the fields
+        addGender(json, "gender", basics.getGenderId());
+        addGender(json, "leagueSystem", basics.getLeagueSystemId());
         addKit(json, model.getXtraDaten());
 
         if (league != null) {

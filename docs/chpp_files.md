@@ -74,28 +74,29 @@ and the data types are captured under [`raw/chpp/`](raw/chpp/README.md), one fil
 `worlddetails` 1.8 is still requested by the national-team HRF converter (`NthrfConvertXml2Hrf`);
 `playerdetails` 3.2 only for the `placeBid` write, reads are on 3.3.
 
-## Changelog 2025-09 to 2026-02 — not picked up by HO yet
+## Changelog 2025-09 to 2026-02
 
-From the changelog on the CHPP docs index. None of these fields is parsed by HO.
+From the changelog on the CHPP docs index. "Stored" means HO parses the field into the HRF and
+the database (#2429, DB step 1100); the rest is not parsed.
 
-| Date       | File - version         | Added output / input        |
-|------------|------------------------|-----------------------------|
-| 2025-09-17 | tournamentfixtures 1.1 | input `matchRound`          |
-| 2026-02-09 | worlddetails 2.0       | `LeagueSystemID` per league |
-| 2026-02-10 | teamdetails 3.8        | `GenderID`                  |
-| 2026-02-10 | youthplayerdetails 1.3 | `GenderID`                  |
-| 2026-02-10 | youthteamdetails 1.3   | `GenderID`                  |
-| 2026-02-11 | managercompendium 1.6  | `GenderID` per team         |
-| 2026-02-11 | players 2.8            | `GenderID`                  |
-| 2026-02-11 | youthplayerlist 1.3    | `GenderID`                  |
-| 2026-02-26 | managercompendium 1.7  | `LeagueSystemID`            |
-| 2026-02-26 | teamdetails 3.9        | `LeagueSystemID`            |
-| 2026-02-26 | youthleaguedetails 1.1 | `LeagueSystemID`            |
-| 2026-02-26 | youthteamdetails 1.4   | `LeagueSystemID`            |
+| Date       | File - version         | Added output / input        | HO                                         |
+|------------|------------------------|-----------------------------|--------------------------------------------|
+| 2025-09-17 | tournamentfixtures 1.1 | input `matchRound`          | -                                          |
+| 2026-02-09 | worlddetails 2.0       | `LeagueSystemID` per league | stored (`WorldDetailLeague`)               |
+| 2026-02-10 | teamdetails 3.8        | `GenderID`                  | stored (`Basics`), get_team `gender`       |
+| 2026-02-10 | youthplayerdetails 1.3 | `GenderID`                  | -                                          |
+| 2026-02-10 | youthteamdetails 1.3   | `GenderID`                  | -                                          |
+| 2026-02-11 | managercompendium 1.6  | `GenderID` per team         | -                                          |
+| 2026-02-11 | players 2.8            | `GenderID`                  | stored (`Player`, also from playerdetails) |
+| 2026-02-11 | youthplayerlist 1.3    | `GenderID`                  | stored (`YouthPlayer`)                     |
+| 2026-02-26 | managercompendium 1.7  | `LeagueSystemID`            | -                                          |
+| 2026-02-26 | teamdetails 3.9        | `LeagueSystemID`            | stored (`Basics`), get_team `leagueSystem` |
+| 2026-02-26 | youthleaguedetails 1.1 | `LeagueSystemID`            | -                                          |
+| 2026-02-26 | youthteamdetails 1.4   | `LeagueSystemID`            | -                                          |
 
 `GenderID` and `LeagueSystemID` share one value set: 1 male, 2 female. This is Hattrick's women's
-league system. Until HO reads them, a women's team or a league in the women's system is
-indistinguishable from a men's one.
+league system. A null column means the snapshot was downloaded before HO read the field. The
+per-player `GenderID` is not in the MCP player rows: a squad has one gender, get_team says which.
 
 ## Changelog 2026-11-10 — what HO picked up so far
 
