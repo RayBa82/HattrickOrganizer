@@ -1135,7 +1135,11 @@ public final class TrainingTools {
         if (!played && kickedOff(match.getMatchSchedule(), HODateTime.now())) {
             fixture.addProperty(KICKED_OFF, true);
         }
-        fixture.addProperty("lineupAvailable", lineupAvailable);
+        // Whether the played lineup the banked minutes count from is downloaded. An upcoming
+        // match has none by nature; its order state is week_brief's order block.
+        if (played) {
+            fixture.addProperty("lineupAvailable", lineupAvailable);
+        }
         return fixture;
     }
 
