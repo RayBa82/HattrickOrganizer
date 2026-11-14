@@ -625,10 +625,36 @@ public class Connector {
 	}
 
 	/**
+	 * The team's training changes since {@code fromDate} (training 2.3, actionType=history). Gold
+	 * supporter only, and only for an own or mentored senior team; otherwise Hattrick answers
+	 * with an AccessDenied error file.
+	 *
+	 * @param fromDate null for Hattrick's default, 16 weeks back
+	 */
+	public String getTrainingHistory(int teamId, HODateTime fromDate) {
+		final var url = new StringBuilder(htUrl)
+				.append("?file=training&version=2.3&actionType=history&teamId=").append(teamId);
+		if (fromDate != null) {
+			url.append("&fromDate=").append(URLEncoder.encode(fromDate.toHT(), StandardCharsets.UTF_8));
+		}
+		return getCHPPWebFile(url.toString());
+	}
+
+	/**
 	 * Get the transfer data for a player
 	 */
 	public String getTransfersForPlayer(int playerId) {
 		final String url = htUrl + "?file=transfersPlayer&playerID=" + playerId;
+
+		return getCHPPWebFile(url);
+	}
+
+	/**
+	 * A player's state and performance per match (playerstats, new in the 2026-11-10 changelog),
+	 * for any player, ours or not.
+	 */
+	public String getPlayerStats(int playerId) {
+		final String url = htUrl + "?file=playerstats&version=1.0&playerID=" + playerId;
 
 		return getCHPPWebFile(url);
 	}
@@ -640,7 +666,7 @@ public class Connector {
 	 * called on an explicit user request, never from a timer or a background refresh.
 	 */
 	public String getTransferSearch(TransferSearchQuery query) {
-		final String url = htUrl + "?file=transfersearch&version=1.1" + query.toQueryString();
+		final String url = htUrl + "?file=transfersearch&version=1.2" + query.toQueryString();
 
 		return getCHPPWebFile(url);
 	}

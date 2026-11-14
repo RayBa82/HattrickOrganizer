@@ -149,7 +149,7 @@ public class TransferSearchPanel extends ImagePanel {
                 .minSkillValue1(skills.get(0).min())
                 .maxSkillValue1(skills.get(0).max())
                 .specialty(c.specialityId() == PlayerSpeciality.NO_SPECIALITY ? null : c.specialityId())
-                .priceMax(form.maxPriceLocal())
+                .priceMax(c.maxPriceSek() == null ? null : c.maxPriceSek().longValue())
                 .pageIndex(0);
         if (skills.size() > 1) {
             final var s = skills.get(1);

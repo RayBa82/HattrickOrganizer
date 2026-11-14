@@ -74,6 +74,12 @@ public final class MatchTools {
     private static final String OPPONENT_TACTIC_TYPE = "opponentTacticType";
     private static final String OPPONENT_TEAM_ID = "opponentTeamId";
     private static final String SIMULATIONS = "simulations";
+    private static final String GOALS = "goals";
+    private static final String INJURY = "injury";
+    private static final String LIMIT = "limit";
+    private static final String OFFSET = "offset";
+    private static final String PLAYER_ID = "playerId";
+    private static final String POSITIONS = "positions";
     private static final String STATUS = "status";
     private static final String TEAM_ID = "teamId";
     private static final String TEAM_NAME = "teamName";
@@ -81,6 +87,9 @@ public final class MatchTools {
     private static final String WEEKEND = "weekend";
 
     private static final int DEFAULT_COUNT = 10;
+    private static final int DEFAULT_PLAYER_MATCHES = 20;
+    // A full row is about 330 characters, so 25 stay under the 10k budget.
+    private static final int MAX_PLAYER_MATCHES = 25;
     private static final int DEFAULT_SIMULATIONS = 1000;
     static final int DEFAULT_OPPONENT_MATCHES = 5;
     static final int DEFAULT_OPPONENT_DAYS = 120;
@@ -179,7 +188,7 @@ public final class MatchTools {
                                 "recompute", McpTool.prop(BOOLEAN,
                                         "with backfill: redo existing rows too - after a model change, or "
                                                 + "to fill the tactic level of rows from before it was stored"),
-                                "limit", McpTool.prop(INTEGER, "rows page size, default "
+                                LIMIT, McpTool.prop(INTEGER, "rows page size, default "
                                         + CALIBRATION_PAGE + ", max " + CALIBRATION_MAX_PAGE),
                                 "offset", McpTool.prop(INTEGER, "rows to skip; default 0. count is the total"))),
                         MatchTools::ratingCalibration)
@@ -232,8 +241,110 @@ public final class MatchTools {
                                                 "accept / decline / withdraw: the challenge id from "
                                                         + "list_challenges (required)")),
                                 ACTION),
-                        MatchTools::manageChallenge)
+                        MatchTools::manageChallenge),
+                new McpTool("get_player_match_stats",
+                        "One player's matches from Hattrick, any player, ours or not, newest "
+                                + "first: date, teams, minutes, positions, rating and end rating, "
+                                + "goals, cards, injury, and his age, TSI, form, stamina, loyalty and "
+                                + "experience at that match. One CHPP request per call; the whole "
+                                + "list Hattrick keeps comes back, paged with limit/offset.",
+                        McpTool.schema(McpTool.properties(
+                                        PLAYER_ID, McpTool.prop(INTEGER, "the Hattrick player id"),
+                                        "playedOnly", McpTool.prop(BOOLEAN,
+                                                "only matches he was on the pitch in; default false"),
+                                        LIMIT, McpTool.prop(INTEGER, "matches per answer, default "
+                                                + DEFAULT_PLAYER_MATCHES + ", max " + MAX_PLAYER_MATCHES),
+                                        OFFSET, McpTool.prop(INTEGER,
+                                                "newest matches to skip; default 0. count is the total")),
+                                PLAYER_ID),
+                        MatchTools::playerMatchStats)
+                        .withBudget("Page with a smaller limit and offset, or pass playedOnly.",
+                                McpTool.OptionalSection.perItem(MATCHES, POSITIONS, POSITIONS))
         );
+    }
+
+    private static JsonObject playerMatchStats(JsonObject args) throws McpToolException {
+        final var playerId = McpJson.reqInt(args, PLAYER_ID);
+        final core.file.xml.XMLPlayerStatsParser.PlayerStats stats;
+        try {
+            stats = ChppWriteService.instance().playerStatsForAgent(playerId);
+        } catch (ChppWriteService.ChppWriteException e) {
+            throw new McpToolException(e.getMessage());
+        }
+        return playerMatchStatsJson(playerId, stats, McpJson.optBool(args, "playedOnly", false),
+                Math.min(Math.max(McpJson.optInt(args, LIMIT, DEFAULT_PLAYER_MATCHES), 1), MAX_PLAYER_MATCHES),
+                Math.max(McpJson.optInt(args, OFFSET, 0), 0));
+    }
+
+    /**
+     * Newest first. Values that carry nothing are left out to keep the rows small: stamina and
+     * loyalty when Hattrick has none, walkover when false, the source system when it is plain
+     * Hattrick, and the positions of a match he did not play in.
+     */
+    static JsonObject playerMatchStatsJson(int playerId,
+            core.file.xml.XMLPlayerStatsParser.PlayerStats stats, boolean playedOnly, int limit,
+            int offset) {
+        final var all = stats.matches().stream()
+                .filter(m -> !playedOnly || m.playedMinutes() > 0)
+                .sorted(Comparator.comparing(core.file.xml.XMLPlayerStatsParser.MatchStat::matchDate,
+                        Comparator.nullsLast(Comparator.reverseOrder())))
+                .toList();
+        final var rows = new JsonArray();
+        for (final var m : all.subList(Math.min(offset, all.size()), Math.min(offset + limit, all.size()))) {
+            rows.add(playerMatchRow(m));
+        }
+        final var out = new JsonObject();
+        out.addProperty(PLAYER_ID, playerId);
+        out.addProperty("name", java.util.stream.Stream.of(stats.firstName(), stats.lastName())
+                .filter(s -> s != null && !s.isBlank()).collect(java.util.stream.Collectors.joining(" ")));
+        out.addProperty(TEAM_ID, stats.owningTeamId());
+        out.addProperty(TEAM_NAME, stats.owningTeamName());
+        out.addProperty(COUNT, all.size());
+        out.addProperty("returned", rows.size());
+        out.addProperty(OFFSET, offset);
+        out.add(MATCHES, rows);
+        return out;
+    }
+
+    private static JsonObject playerMatchRow(core.file.xml.XMLPlayerStatsParser.MatchStat m) {
+        final var row = new JsonObject();
+        row.addProperty(MATCH_ID, m.matchId());
+        final var type = MatchType.getById(m.matchType());
+        row.addProperty(MATCH_TYPE, type == null ? String.valueOf(m.matchType()) : type.name());
+        if (m.sourceSystem() != null && !m.sourceSystem().isBlank()
+                && !"hattrick".equalsIgnoreCase(m.sourceSystem())) {
+            row.addProperty("sourceSystem", m.sourceSystem());
+        }
+        row.addProperty("date", m.matchDate());
+        row.addProperty("home", m.homeTeamName());
+        row.addProperty("away", m.awayTeamName());
+        if (m.walkover()) {
+            row.addProperty("walkover", true);
+        }
+        row.addProperty("age", m.age());
+        row.addProperty("ageDays", m.ageDays());
+        row.addProperty("tsi", m.tsi());
+        row.addProperty("form", m.form());
+        if (m.stamina() != null) {
+            row.addProperty("stamina", m.stamina());
+        }
+        if (m.loyalty() != null) {
+            row.addProperty("loyalty", m.loyalty());
+        }
+        row.addProperty("experience", m.experience());
+        row.addProperty("minutes", m.playedMinutes());
+        row.addProperty("rating", m.rating());
+        row.addProperty("ratingEnd", m.ratingEndOfGame());
+        row.addProperty(GOALS, m.goals());
+        row.addProperty("yellow", m.yellowCards());
+        row.addProperty("red", m.redCards());
+        row.addProperty(INJURY, m.injuryLevel());
+        if (!m.positions().isEmpty()) {
+            final var positions = new JsonObject();
+            m.positions().forEach((code, minutes) -> positions.addProperty(String.valueOf(code), minutes));
+            row.add(POSITIONS, positions);
+        }
+        return row;
     }
 
     private static JsonObject listChallenges(JsonObject args) throws McpToolException {
@@ -702,7 +813,7 @@ public final class MatchTools {
         return json;
     }
 
-    static final List<String> EVENT_TYPES = List.of("goal", "chance", "card", "injury", "substitution", "special");
+    static final List<String> EVENT_TYPES = List.of("goal", "chance", "card", INJURY, "substitution", "special");
 
     private static final String EVENT_TYPES_ARG = "eventTypes";
 
@@ -721,7 +832,7 @@ public final class MatchTools {
         return types.contains("goal") && e.isGoalEvent()
                 || types.contains("chance") && e.isNonGoalEvent()
                 || types.contains("card") && e.isBooked()
-                || types.contains("injury") && e.isBruisedOrInjured()
+                || types.contains(INJURY) && e.isBruisedOrInjured()
                 || types.contains("substitution") && e.isSubstitution()
                 || types.contains("special") && e.getMatchEventID() != null && e.isSE();
     }
@@ -770,7 +881,7 @@ public final class MatchTools {
         }
         final var json = new JsonObject();
         json.addProperty(TEAM_ID, teamId);
-        json.addProperty("goals", goals);
+        json.addProperty(GOALS, goals);
         json.addProperty("chances", goals + misses);
         json.addProperty("missedChances", misses);
         json.addProperty("specialEvents", specials);
@@ -937,7 +1048,7 @@ public final class MatchTools {
         final var json = new JsonObject();
         json.addProperty(TEAM_ID, home ? details.getHomeTeamId() : details.getGuestTeamId());
         json.addProperty(TEAM_NAME, home ? details.getHomeTeamName() : details.getGuestTeamName());
-        json.addProperty("goals", home ? details.getHomeGoals() : details.getGuestGoals());
+        json.addProperty(GOALS, home ? details.getHomeGoals() : details.getGuestGoals());
         json.addProperty("hatStats", home ? details.getHomeHatStats() : details.getAwayHatStats());
         json.addProperty("midfield", sectorRating(home ? details.getHomeMidfield() : details.getGuestMidfield()));
         json.addProperty("defenceLeft", sectorRating(home ? details.getHomeLeftDef() : details.getGuestLeftDef()));
@@ -1101,7 +1212,7 @@ public final class MatchTools {
                 ? args.get(ATTITUDE).getAsInt() : null;
         final var query = new CalibrationSummary.Query(matchTypes, attitude, maxAge,
                 McpJson.optBool(args, "includeConfounded", false),
-                Math.min(Math.max(McpJson.optInt(args, "limit", CALIBRATION_PAGE), 1), CALIBRATION_MAX_PAGE),
+                Math.min(Math.max(McpJson.optInt(args, LIMIT, CALIBRATION_PAGE), 1), CALIBRATION_MAX_PAGE),
                 Math.max(McpJson.optInt(args, "offset", 0), 0));
         final var json = CalibrationSummary.summarize(DBManager.instance().loadRatingCalibrations(), query);
         // Read per page row from the stored match lineup: not a calibration column, so no migration.

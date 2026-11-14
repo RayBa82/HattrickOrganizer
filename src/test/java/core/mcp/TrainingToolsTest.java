@@ -66,6 +66,32 @@ class TrainingToolsTest {
                     new core.file.xml.XMLTrainingEventsParser.TrainingEvent(8, 6, 7, 92, 5, 5)));
 
     @Test
+    void hattrickHistoryJson_listsEveryChangeWithTheTrainingName() {
+        final var json = TrainingTools.hattrickHistoryJson(
+                new core.file.xml.XMLTrainingHistoryParser.TrainingHistory(true, 123,
+                        "2026-07-20 00:00:00", List.of(
+                        new core.file.xml.XMLTrainingHistoryParser.TrainingChange(92, 3, 8, 100, 15,
+                                "2026-07-23 10:00:00"))));
+
+        assertThat(json.get("available").getAsBoolean()).isTrue();
+        final var change = json.getAsJsonArray("changes").get(0).getAsJsonObject();
+        assertThat(change.get("season").getAsInt()).isEqualTo(92);
+        assertThat(change.get("trainingType").getAsInt()).isEqualTo(8);
+        assertThat(change.has("trainingName")).isTrue();
+        assertThat(change.get("staminaShare").getAsInt()).isEqualTo(15);
+    }
+
+    @Test
+    void hattrickHistoryJson_explainsAMissingHistory() {
+        final var json = TrainingTools.hattrickHistoryJson(
+                new core.file.xml.XMLTrainingHistoryParser.TrainingHistory(false, 0, null, List.of()));
+
+        assertThat(json.get("available").getAsBoolean()).isFalse();
+        assertThat(json.get("note").getAsString()).contains("Gold");
+        assertThat(json.has("changes")).isFalse();
+    }
+
+    @Test
     void trainingEventsJson_newestFirstWithChppSkillNames() {
         final var events = TrainingTools.trainingEventsJson(4711, TWO_EVENTS, 0)
                 .getAsJsonArray("events");

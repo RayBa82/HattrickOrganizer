@@ -1538,8 +1538,8 @@ public final class TransferTools {
         }
         // salePrice arrives in the user's local currency, same as every other amount this MCP
         // surface hands the model (get_team_transfers included) - swedishKrona converts it to
-        // what TransferListing's own column actually holds, same as queryFrom does for priceMin/
-        // priceMax. Storing the raw local-currency number here corrupted every stored row by the
+        // what TransferListing's own column actually holds, same as queryFrom does for its money
+        // bounds. Storing the raw local-currency number here corrupted every stored row by the
         // league's exchange rate once McpJson.money() converted it back for display.
         listing.setSalePrice(McpJson.swedishKrona(profile.get(SALE_PRICE).getAsLong()));
         return listing;
@@ -2560,7 +2560,11 @@ public final class TransferTools {
                 "tsiMin", McpTool.prop(INTEGER, "minimum TSI"),
                 "tsiMax", McpTool.prop(INTEGER, "maximum TSI"),
                 "priceMin", McpTool.prop(INTEGER, "minimum current price (highest bid, else asking price), in the user's currency"),
-                "priceMax", McpTool.prop(INTEGER, "maximum current price (highest bid, else asking price), in the user's currency"));
+                "priceMax", McpTool.prop(INTEGER, "maximum current price (highest bid, else asking price), in the user's currency"),
+                "salaryMin", McpTool.prop(INTEGER, "minimum weekly base salary (without the 20% for foreigners), in the user's currency"),
+                "salaryMax", McpTool.prop(INTEGER, "maximum weekly base salary (without the 20% for foreigners), in the user's currency"),
+                "estimateMin", McpTool.prop(INTEGER, "minimum transfer estimate saved at listing, in the user's currency; leaves out players without one"),
+                "estimateMax", McpTool.prop(INTEGER, "maximum transfer estimate saved at listing, in the user's currency"));
     }
 
     private static JsonObject searchSchema() {
@@ -2612,15 +2616,24 @@ public final class TransferTools {
                 .nativeCountryId(McpJson.optInteger(args, NATIVE_COUNTRY_ID))
                 .tsiMin(McpJson.optInteger(args, "tsiMin"))
                 .tsiMax(McpJson.optInteger(args, "tsiMax"))
-                // Passed through unconverted: transfersearch reads these in the user's currency,
-                // unlike every other CHPP money value (PlayerFilterForm.maxPriceLocal).
-                .priceMin(McpJson.optInteger(args, "priceMin"))
-                .priceMax(McpJson.optInteger(args, "priceMax"))
+                // The model passes the user's currency, transfersearch 1.2 reads krona.
+                .priceMin(krona(args, "priceMin"))
+                .priceMax(krona(args, "priceMax"))
+                .salaryMin(krona(args, "salaryMin"))
+                .salaryMax(krona(args, "salaryMax"))
+                .transferCompareAvgMin(krona(args, "estimateMin"))
+                .transferCompareAvgMax(krona(args, "estimateMax"))
                 // Paging is not exposed: ItemCount comes back as -1 once more than 100 players
                 // match, so a second page buys little and would eat the per session cap.
                 .pageSize(Math.min(McpJson.optInt(args, PAGE_SIZE, MAX_PAGE_SIZE), MAX_PAGE_SIZE));
         applySkills(builder, McpJson.reqArray(args, SKILLS));
         return builder.build();
+    }
+
+    /** An optional amount in the user's currency, as krona, or null if the argument is absent. */
+    private static Long krona(JsonObject args, String name) {
+        final var local = McpJson.optInteger(args, name);
+        return local == null ? null : McpJson.swedishKrona(local);
     }
 
     /**

@@ -3,6 +3,7 @@ package core.mcp;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import core.file.xml.XMLChallengesParser;
+import core.file.xml.XMLPlayerStatsParser;
 import core.model.enums.MatchType;
 import core.model.match.Matchdetails;
 import core.net.ChppWriteService;
@@ -65,7 +66,8 @@ class MatchToolsTest {
     void tools_areTheMatchTools() {
         assertThat(MatchTools.tools()).extracting(McpTool::name)
                 .containsExactly("get_matches", "get_match", "get_match_weather", "get_rating_calibration",
-                        "simulate_lineup", "list_challenges", "manage_challenge");
+                        "simulate_lineup", "list_challenges", "manage_challenge",
+                        "get_player_match_stats");
     }
 
     private static core.model.match.MatchEvent event(int minute, int eventId, int teamId) {
@@ -184,6 +186,41 @@ class MatchToolsTest {
         assertThat(row.get("daysSinceLogin").isJsonNull()).isTrue();
         assertThat(row.get("managerIsSupporter").isJsonNull()).isTrue();
         assertThat(row.get("note").getAsString()).contains("did not answer");
+    }
+
+    @Test
+    void getPlayerMatchStats_newestFirstPagedAndWithoutEmptyValues() throws Exception {
+        final var played = new XMLPlayerStatsParser.MatchStat(900, 1, "Hattrick",
+                "2026-11-01 15:00:00", "Ducks FC", "Geese", false, 21, 34, 5400, 6, 7, 12, 4, 1,
+                0, 0, -1, 90, 3.5, 3.0, java.util.Map.of(107, 60));
+        final var benched = new XMLPlayerStatsParser.MatchStat(901, 4, "Hattrick",
+                "2026-11-05 19:00:00", "Swans", "Ducks FC", false, 21, 38, 5450, 6, null, null, 4,
+                0, 0, 0, -1, 0, 0, 0, java.util.Map.of());
+        install(new ChppWriteService() {
+            @Override
+            public XMLPlayerStatsParser.PlayerStats playerStatsForAgent(int playerId) {
+                return new XMLPlayerStatsParser.PlayerStats(playerId, "Kalle", "", "Anka", 123,
+                        "Ducks FC", List.of(played, benched));
+            }
+        });
+        final var args = JsonParser.parseString("{\"playerId\":4711,\"limit\":1}").getAsJsonObject();
+        final var json = tool("get_player_match_stats").handler().call(args);
+
+        assertThat(json.get("name").getAsString()).isEqualTo("Kalle Anka");
+        assertThat(json.get("count").getAsInt()).isEqualTo(2);
+        final var newest = json.getAsJsonArray("matches").get(0).getAsJsonObject();
+        assertThat(newest.get("matchId").getAsInt()).isEqualTo(901);
+        assertThat(newest.get("matchType").getAsString()).isEqualTo(MatchType.getById(4).name());
+        assertThat(newest.has("stamina")).isFalse();
+        assertThat(newest.has("positions")).isFalse();
+        assertThat(newest.has("sourceSystem")).isFalse();
+
+        final var onlyPlayed = tool("get_player_match_stats").handler().call(JsonParser.parseString(
+                "{\"playerId\":4711,\"playedOnly\":true}").getAsJsonObject());
+        assertThat(onlyPlayed.get("count").getAsInt()).isEqualTo(1);
+        final var row = onlyPlayed.getAsJsonArray("matches").get(0).getAsJsonObject();
+        assertThat(row.getAsJsonObject("positions").get("107").getAsInt()).isEqualTo(60);
+        assertThat(row.get("rating").getAsDouble()).isEqualTo(3.5);
     }
 
     @Test

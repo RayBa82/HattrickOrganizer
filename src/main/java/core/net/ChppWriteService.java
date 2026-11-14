@@ -352,6 +352,51 @@ public class ChppWriteService {
         }
     }
 
+    // ===================== training history =====================
+
+    /**
+     * A read, like {@link #trainingEventsForAgent}. Gold supporter only: without it Hattrick
+     * answers with AccessDenied, which comes back here as {@code available == false}.
+     */
+    public core.file.xml.XMLTrainingHistoryParser.TrainingHistory trainingHistoryForAgent(
+            int teamId, core.util.HODateTime fromDate) throws ChppWriteException {
+        final var xml = fetchTrainingHistory(teamId, fromDate);
+        if (xml == null || xml.isBlank()) {
+            throw new ChppWriteException(null, "Hattrick rejected the training history: " + reason());
+        }
+        return core.file.xml.XMLTrainingHistoryParser.parse(xml);
+    }
+
+    protected String fetchTrainingHistory(int teamId, core.util.HODateTime fromDate) {
+        final var was = Connector.instance().setSilentDownload(true);
+        try {
+            return Connector.instance().getTrainingHistory(teamId, fromDate);
+        } finally {
+            Connector.instance().setSilentDownload(was);
+        }
+    }
+
+    // ===================== player stats =====================
+
+    /** A read, like {@link #trainingEventsForAgent}. */
+    public core.file.xml.XMLPlayerStatsParser.PlayerStats playerStatsForAgent(int playerId)
+            throws ChppWriteException {
+        final var xml = fetchPlayerStats(playerId);
+        if (xml == null || xml.isBlank()) {
+            throw new ChppWriteException(null, "Hattrick rejected the player's match stats: " + reason());
+        }
+        return core.file.xml.XMLPlayerStatsParser.parse(xml);
+    }
+
+    protected String fetchPlayerStats(int playerId) {
+        final var was = Connector.instance().setSilentDownload(true);
+        try {
+            return Connector.instance().getPlayerStats(playerId);
+        } finally {
+            Connector.instance().setSilentDownload(was);
+        }
+    }
+
     // ===================== match order =====================
 
     /**

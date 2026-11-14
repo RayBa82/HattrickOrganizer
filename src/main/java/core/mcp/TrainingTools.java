@@ -38,8 +38,11 @@ import static core.mcp.McpTool.INTEGER;
  */
 public final class TrainingTools {
 
+    private static final String AVAILABLE = "available";
     private static final String COVERAGE = "coverage";
     private static final String DAYS_SINCE_LAST_SNAPSHOT = "daysSinceLastSnapshot";
+    private static final String HATTRICK_HISTORY = "hattrickHistory";
+    private static final String HISTORY_WEEKS = "historyWeeks";
     private static final String DERIVED = "derived";
     private static final String EVENTS = "events";
     private static final String INTENSITY = "intensity";
@@ -55,6 +58,7 @@ public final class TrainingTools {
     private static final String STATUS = "status";
     private static final String TRAINING_DATE = "trainingDate";
     private static final String TRAINING_EVENTS = "trainingEvents";
+    private static final String TRAINING_NAME = "trainingName";
     private static final String TRAINING_TYPE = "trainingType";
     private static final String TRAINING_WEEKS = "trainingWeeks";
     private static final String WEEK_START = "weekStart";
@@ -63,6 +67,9 @@ public final class TrainingTools {
 
     /** How many weeks ahead to predict when the caller does not say. */
     private static final int DEFAULT_WEEKS = 1;
+
+    /** Ten Hattrick seasons; rows are one per change, so even this many stay small. */
+    private static final int MAX_HISTORY_WEEKS = 160;
 
     /** How far back {@code get_player_history} looks when the caller does not say. */
     private static final int DEFAULT_HISTORY_WEEKS = 26;
@@ -140,7 +147,7 @@ public final class TrainingTools {
         }
         final var out = new JsonObject();
         out.addProperty(PLAYER_ID, playerId);
-        out.addProperty("available", events.available());
+        out.addProperty(AVAILABLE, events.available());
         out.add(EVENTS, rows);
         return out;
     }
@@ -183,6 +190,12 @@ public final class TrainingTools {
                                 PLAYER_IDS, McpTool.prop(ARRAY,
                                         "restrict the prediction to these player ids; the whole squad if omitted. "
                                                 + "Also filters currentWeek.players unless wholeSquadWeek"),
+                                HISTORY_WEEKS, McpTool.prop(INTEGER,
+                                        "add " + HATTRICK_HISTORY + ": Hattrick's record of the "
+                                                + "training settings over this many weeks back, one "
+                                                + "row per change, oldest first, global season. One "
+                                                + "CHPP request; Gold supporter only. Max "
+                                                + MAX_HISTORY_WEEKS + "; default off"),
                                 "wholeSquadWeek", McpTool.prop(BOOLEAN,
                                         "list every squad player in currentWeek.players, nothing "
                                                 + "banked included, ignoring playerIds. With "
@@ -196,7 +209,8 @@ public final class TrainingTools {
                         TrainingTools::training)
                         .withBudget("Pass playerIds for the predictions you need, or a smaller weeks; "
                                         + "wholeSquadWeek with playerIds [] returns the current week alone.",
-                                McpTool.OptionalSection.top(PLAYERS)),
+                                McpTool.OptionalSection.top(PLAYERS),
+                                McpTool.OptionalSection.top(HATTRICK_HISTORY)),
                 new McpTool("get_player_history",
                         "Training already done, from HO's own snapshots (no CHPP file has it). "
                                 + "Per player: dated level-ups and latestSkills (sub-level); growth "
@@ -337,6 +351,11 @@ public final class TrainingTools {
         json.add("current", current(model));
         final var wholeSquad = McpJson.optBool(args, "wholeSquadWeek", false);
         json.add("currentWeek", currentWeek(model, wholeSquad ? null : wanted, wholeSquad));
+        final var historyWeeks = McpJson.optInteger(args, HISTORY_WEEKS);
+        if (historyWeeks != null) {
+            json.add(HATTRICK_HISTORY, hattrickHistory(model.getBasics().getTeamId(),
+                    Math.min(Math.max(historyWeeks, 1), MAX_HISTORY_WEEKS)));
+        }
 
         // The future training plan is what the Training tab edits; it is empty until the user has
         // opened that tab once, and then predictions are simply unavailable.
@@ -870,6 +889,54 @@ public final class TrainingTools {
         return ids;
     }
 
+    /**
+     * Hattrick's own record of the team's training settings over the last {@code weeks} (training
+     * 2.3 history): one row per change, oldest first, with the global season. A CHPP failure or a
+     * refusal - Gold supporter only - is reported inside the section, so the rest of get_training
+     * still answers.
+     */
+    private static JsonObject hattrickHistory(int teamId, int weeks) {
+        final core.file.xml.XMLTrainingHistoryParser.TrainingHistory history;
+        try {
+            history = ChppWriteService.instance().trainingHistoryForAgent(teamId,
+                    HODateTime.now().minus(weeks * 7, ChronoUnit.DAYS));
+        } catch (ChppWriteService.ChppWriteException e) {
+            final var failed = new JsonObject();
+            failed.addProperty(AVAILABLE, false);
+            failed.addProperty("note", e.getMessage());
+            return failed;
+        }
+        return hattrickHistoryJson(history);
+    }
+
+    static JsonObject hattrickHistoryJson(core.file.xml.XMLTrainingHistoryParser.TrainingHistory history) {
+        final var json = new JsonObject();
+        json.addProperty(AVAILABLE, history.available());
+        if (!history.available()) {
+            json.addProperty("note", "Hattrick sent no training history: it needs Gold supporter "
+                    + "and the user's own or mentored senior team.");
+            return json;
+        }
+        json.addProperty("fromDate", history.fromDate());
+        final var rows = new JsonArray();
+        for (final var c : history.changes()) {
+            final var row = new JsonObject();
+            row.addProperty("season", c.season());
+            row.addProperty("week", c.week());
+            row.addProperty(TRAINING_TYPE, c.trainingType());
+            final var weekly = WeeklyTrainingType.instance(c.trainingType());
+            if (weekly != null) {
+                row.addProperty(TRAINING_NAME, weekly.getName());
+            }
+            row.addProperty(INTENSITY, c.intensity());
+            row.addProperty(STAMINA_SHARE, c.staminaShare());
+            row.addProperty(TRAINING_DATE, c.trainingDate());
+            rows.add(row);
+        }
+        json.add("changes", rows);
+        return json;
+    }
+
     /** The training settings themselves, as HO derived them from the latest download. */
     static JsonObject current(HOModel model) {
         final var json = new JsonObject();
@@ -899,7 +966,7 @@ public final class TrainingTools {
 
         final var weekly = WeeklyTrainingType.instance(training.getTrainingType());
         if (weekly != null) {
-            json.addProperty("trainingName", weekly.getName());
+            json.addProperty(TRAINING_NAME, weekly.getName());
             json.addProperty("primarySkill", String.valueOf(weekly.getPrimaryTrainingSkill()));
             json.addProperty("secondarySkill", weekly.getSecondaryTrainingSkill() == null
                     ? null : weekly.getSecondaryTrainingSkill().toString());
@@ -1106,7 +1173,7 @@ public final class TrainingTools {
             final var row = new JsonObject();
             row.addProperty(TRAINING_DATE, date.toHT());
             row.addProperty(TRAINING_TYPE, week.getTrainingType());
-            row.addProperty("trainingName", weekly == null ? null : weekly.getName());
+            row.addProperty(TRAINING_NAME, weekly == null ? null : weekly.getName());
             row.addProperty(INTENSITY, week.getTrainingIntensity());
             row.addProperty(STAMINA_SHARE, week.getStaminaShare());
             row.addProperty("coachLevel", week.getCoachLevel());

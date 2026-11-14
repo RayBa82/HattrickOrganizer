@@ -5,7 +5,11 @@ import lombok.Builder;
 import lombok.NonNull;
 
 /**
- * Search parameters of the CHPP <code>transfersearch</code> file, version 1.1.
+ * Search parameters of the CHPP <code>transfersearch</code> file, version 1.2.
+ * <p>
+ * Every money value - price, salary, transfer estimate - is in swedish krona, like everywhere else
+ * in CHPP. Version 1.1 read priceMin/priceMax in the manager's own currency instead; 1.2 fixed
+ * that and added the salary and transfer-estimate bounds.
  * <p>
  * Age and one skill are mandatory, everything else narrows the search down. Hattrick enforces
  * a few rules server side, so an invalid combination comes back as an error file, not as an
@@ -44,8 +48,14 @@ public record TransferSearchQuery(
         Integer nativeCountryId,
         Integer tsiMin,
         Integer tsiMax,
-        Integer priceMin,
-        Integer priceMax,
+        Long priceMin,
+        Long priceMax,
+        // the base salary, without the 20% foreigners get on top - the same value as the hit's Salary
+        Long salaryMin,
+        Long salaryMax,
+        // the estimate saved when the player was listed; a minimum leaves out players without one
+        Long transferCompareAvgMin,
+        Long transferCompareAvgMax,
         Integer pageSize,
         Integer pageIndex
 ) {
@@ -168,6 +178,10 @@ public record TransferSearchQuery(
         append(query, "tsiMax", tsiMax);
         append(query, "priceMin", priceMin);
         append(query, "priceMax", priceMax);
+        append(query, "salaryMin", salaryMin);
+        append(query, "salaryMax", salaryMax);
+        append(query, "transferCompareAvgMin", transferCompareAvgMin);
+        append(query, "transferCompareAvgMax", transferCompareAvgMax);
         // Always sent, never omitted: Hattrick does not reliably apply its own documented
         // defaults for these two, so a query without them is not the query it looks like.
         query.append("&pageSize=").append(pageSize == null ? DEFAULT_PAGE_SIZE : pageSize);
@@ -181,7 +195,7 @@ public record TransferSearchQuery(
         }
     }
 
-    private static void append(StringBuilder query, String name, Integer value) {
+    private static void append(StringBuilder query, String name, Number value) {
         if (value != null) {
             query.append('&').append(name).append('=').append(value);
         }

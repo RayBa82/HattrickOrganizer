@@ -43,7 +43,7 @@ and the data types are captured under [`raw/chpp/`](raw/chpp/README.md), one fil
 | players                 | Players                                                                                     | 2.8 (2026-02-11)         | 2.7          |
 | playerdetails           | Detailed information for a player                                                           | 3.3 (2026-11-10)         | 3.0, 3.2     |
 | playerevents            | Player events                                                                               | 1.3 (2013-03-04)         | -            |
-| playerstats             | Detailed player development history.                                                        | 1.0 (2026-11-10)         | -            |
+| playerstats             | Detailed player development history.                                                        | 1.0 (2026-11-10)         | 1.0          |
 | regiondetails           | Detailed information about a region                                                         | 1.2                      | 1.2          |
 | search                  | Search                                                                                      | 1.2                      | -            |
 | staffavatars            | Avatars for all staff members.                                                              | 1.1 (2023-09-07)         | -            |
@@ -55,9 +55,9 @@ and the data types are captured under [`raw/chpp/`](raw/chpp/README.md), one fil
 | tournamentfixtures      | Information about matches for a tournament.                                                 | 1.1 (2025-09-17)         | -            |
 | tournamentleaguetables  | League tables for a tournament.                                                             | 1.1 (2021-06-01)         | -            |
 | tournamentlist          | Information about tournaments that the user is currently playing in.                        | 1.0 (2013-10-17)         |              |
-| training                | Training                                                                                    | 2.3 (2026-11-10)         | 2.1, 2.2     |
+| training                | Training                                                                                    | 2.3 (2026-11-10)         | 2.1 - 2.3    |
 | trainingevents          | Get training events for a player.                                                           | 1.3 (2013-03-04)         | 1.3          |
-| transfersearch          | Search the transfer market.                                                                 | 1.2 (2026-11-10)         | 1.1          |
+| transfersearch          | Search the transfer market.                                                                 | 1.2 (2026-11-10)         | 1.2          |
 | transfersteam           | Get the transfer history of a team                                                          | 1.2 (2011-04-13)         | 1.1          |
 | transfersplayer         | Get all transfers of a player                                                               | 1.1                      | 1.1          |
 | translations            | Translations for the denominations in the game.                                             | 1.2 (2022-03-04)         | -            |
@@ -98,7 +98,7 @@ From the changelog on the CHPP docs index. None of these fields is parsed by HO.
 league system. Until HO reads them, a women's team or a league in the women's system is
 indistinguishable from a men's one.
 
-## Changelog 2026-11-10 — not picked up by HO yet
+## Changelog 2026-11-10 — what HO picked up so far
 
 Every request carries a fixed `version`, so none of this changes what HO gets today; it matters
 when a request moves to the new version. Full trees in `raw/chpp/`.
@@ -106,9 +106,9 @@ when a request moves to the new version. Full trees in `raw/chpp/`.
 | File - version                    | Change                                                                                                                                                                                                                                                                                 | For HO                                         |
 |-----------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------|
 | matchlineup 2.2, live 2.4         | a behaviour change without a substitution has `OrderType` 4, before 1 like a substitution                                                                                                                                                                                              | **trap**, see below                            |
-| transfersearch 1.2                | `priceMin`/`priceMax` read in SEK (1.1 read them in the manager's own currency); new inputs `salaryMin`/`salaryMax` (base salary, without the 20 % abroad surcharge) and `transferCompareAvgMin`/`transferCompareAvgMax` (estimate saved at listing; players without one are left out) | prices must be converted to SEK on the upgrade |
-| training 2.3                      | `actionType=history`, inputs `teamId`, `fromDate` (default 16 weeks back): one `Training` row per change of type, intensity or stamina share, with `HattrickSeason`, `HattrickWeek`, `TrainingDate`. Gold supporter, own or mentored team, else AccessDenied                           | fills training weeks HO never downloaded       |
-| playerstats 1.0 (new)             | per match of one player: age, TSI, form, stamina, loyalty, experience, goals, cards, injury, played minutes, rating (average and end of game), minutes per position group                                                                                                              | match history without lineup reconstruction    |
+| transfersearch 1.2                | `priceMin`/`priceMax` read in SEK (1.1 read them in the manager's own currency); new inputs `salaryMin`/`salaryMax` (base salary, without the 20 % abroad surcharge) and `transferCompareAvgMin`/`transferCompareAvgMax` (estimate saved at listing; players without one are left out) | used since 2026-11-14, HO converts to SEK      |
+| training 2.3                      | `actionType=history`, inputs `teamId`, `fromDate` (default 16 weeks back): one `Training` row per change of type, intensity or stamina share, with `HattrickSeason`, `HattrickWeek`, `TrainingDate`. Gold supporter, own or mentored team, else AccessDenied                           | used: get_training `historyWeeks`              |
+| playerstats 1.0 (new)             | per match of one player: age, TSI, form, stamina, loyalty, experience, goals, cards, injury, played minutes, rating (average and end of game), minutes per position group                                                                                                              | used: `get_player_match_stats`                 |
 | matchdetails 3.2                  | `HasReplay`/`NrOfReplays` per team; `ExpectedResult` with the simulated replays (win/draw/loss, average goals, goal distribution, win margin, over/under 0.5-4.5). Only where the site shows it: national team matches, Diamond, or bought replay credits                              | yardstick for the match predictor              |
 | playerdetails 3.3                 | `TransferCompareAverage`(+`Date`): the site's transfer estimate, only with visible skills; `FamilyRelation`; `TrophyList` (Gold club only)                                                                                                                                             | comparison for `estimate_market_value`         |
 | teamdetails 4.0                   | `Currency` (`CurrencyName`, `CurrencyRate` to SEK) the requesting user chose, only for that user                                                                                                                                                                                       | HO takes the rate from the league today        |
@@ -222,37 +222,39 @@ There is **no** CHPP action for Hattrick's friendly pool, in `challenges` or any
 docs index also states that CHPP products may only use the documented interfaces, so joining
 the pool stays a manual step on the website.
 
-## transfersearch — input parameters (version 1.1)
+## transfersearch — input parameters (version 1.2)
 
-Taken from the rendered CHPP docs page, saved under
-`docs/raw/Transfer Search » CHPP Files help » CHPP » Community » Hattrick_files/transfersearch.html`.
+Taken from the rendered CHPP docs page (now `raw/chpp/transfersearch.md`).
 
-| Parameter           | Req. | Type             | Default       | Notes                |
-|---------------------|------|------------------|---------------|----------------------|
-| `file`              | yes  | `transfersearch` |               |                      |
-| `version`           | no   | `1.1` / `1.0`    | 1.0           |                      |
-| `ageMin`            | yes  | unsigned int     |               | minimum age in years |
-| `ageDaysMin`        | no   | unsigned int     | 0             |                      |
-| `ageMax`            | yes  | unsigned int     |               | maximum age in years |
-| `ageDaysMax`        | no   | unsigned int     | 111           |                      |
-| `skillType1`        | yes  | SkillID          |               | main skill           |
-| `minSkillValue1`    | yes  | SkillLevel       |               |                      |
-| `maxSkillValue1`    | yes  | SkillLevel       |               |                      |
-| `skillType2..4`     | no   | SkillID          | not specified | further skills       |
-| `minSkillValue2..4` | no   | SkillLevel       | not specified |                      |
-| `maxSkillValue2..4` | no   | SkillLevel       | not specified |                      |
-| `specialty`         | no   | SpecialtyID      | not specified |                      |
-| `nativeCountryId`   | no   | unsigned int     | not specified | country of birth     |
-| `tsiMin`            | no   | unsigned int     | not specified |                      |
-| `tsiMax`            | no   | unsigned int     | not specified |                      |
-| `priceMin`          | no   | Money            | not specified |                      |
-| `priceMax`          | no   | Money            | not specified |                      |
-| `pageSize`          | no   | unsigned int     | 25            | max 100              |
-| `pageIndex`         | no   | unsigned int     | 0             | zero based           |
+| Parameter                     | Req. | Type                  | Default       | Notes                    |
+|-------------------------------|------|-----------------------|---------------|--------------------------|
+| `file`                        | yes  | `transfersearch`      |               |                          |
+| `version`                     | no   | `1.2` / `1.1` / `1.0` | 1.0           |                          |
+| `ageMin`                      | yes  | unsigned int          |               | minimum age in years     |
+| `ageDaysMin`                  | no   | unsigned int          | 0             |                          |
+| `ageMax`                      | yes  | unsigned int          |               | maximum age in years     |
+| `ageDaysMax`                  | no   | unsigned int          | 111           |                          |
+| `skillType1`                  | yes  | SkillID               |               | main skill               |
+| `minSkillValue1`              | yes  | SkillLevel            |               |                          |
+| `maxSkillValue1`              | yes  | SkillLevel            |               |                          |
+| `skillType2..4`               | no   | SkillID               | not specified | further skills           |
+| `minSkillValue2..4`           | no   | SkillLevel            | not specified |                          |
+| `maxSkillValue2..4`           | no   | SkillLevel            | not specified |                          |
+| `specialty`                   | no   | SpecialtyID           | not specified |                          |
+| `nativeCountryId`             | no   | unsigned int          | not specified | country of birth         |
+| `tsiMin`                      | no   | unsigned int          | not specified |                          |
+| `tsiMax`                      | no   | unsigned int          | not specified |                          |
+| `priceMin`                    | no   | Money                 | not specified | SEK since 1.2            |
+| `priceMax`                    | no   | Money                 | not specified | SEK since 1.2            |
+| `salaryMin`/`salaryMax`       | no   | Money                 | not specified | base salary, 1.2         |
+| `transferCompareAvgMin`/`Max` | no   | Money                 | not specified | estimate at listing, 1.2 |
+| `pageSize`                    | no   | unsigned int          | 25            | max 100                  |
+| `pageIndex`                   | no   | unsigned int          | 0             | zero based               |
 
-Version 1.2 (not used yet) reads `priceMin`/`priceMax` in SEK instead of the manager's currency
-and adds `salaryMin`/`salaryMax` and `transferCompareAvgMin`/`transferCompareAvgMax`, all Money;
-see the 2026-11-10 changelog above.
+Version 1.1 read `priceMin`/`priceMax` in the manager's own currency (a 407000 euro bid matched
+only 40600-40800, 2026-10-03); 1.2 reads them in SEK like every other Money value. The salary
+bounds are the base salary without the 20 % foreigners get, the same value as the hit's `Salary`.
+A `transferCompareAvgMin` leaves out players without an estimate, a max keeps them.
 
 Server-side rules, per skill pair: the window may span at most 4 levels **counted inclusively**, so
 max and min may differ by at most **3** — the docs say "up to 4 levels", but `minSkillValue1=7&maxSkillValue1=11`

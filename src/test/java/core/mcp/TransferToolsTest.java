@@ -1482,17 +1482,19 @@ class TransferToolsTest {
     void queryFrom_readsSkillNamesRatherThanChppNumbers() {
         final var args = JsonParser.parseString("""
                 {"ageMin":20,"ageMax":22,"skills":[{"skill":"PLAYMAKING","min":7,"max":9}],
-                 "priceMax":2000000}""").getAsJsonObject();
+                 "priceMax":200000,"salaryMin":1000,"estimateMin":150000}""").getAsJsonObject();
 
         AmountOfMoney.Companion.setExchangeRate(BigDecimal.TEN);   // a euro league
 
         final var query = TransferTools.queryFrom(args);
 
         assertThat(query.skillType1()).isEqualTo(TransferSearchQuery.Skill.PLAYMAKING);
-        // transfersearch takes its price bounds in the user's currency, unlike every other CHPP
-        // money value: a live search found a 407000 euro bid only with priceMin/Max 40600/40800
-        // while HO still converted them to krona (2026-10-03).
-        assertThat(query.priceMax()).isEqualTo(2_000_000);
+        // transfersearch 1.2 reads its money bounds in krona; 1.1 read prices in the user's currency
+        assertThat(query.priceMax()).isEqualTo(2_000_000L);
+        assertThat(query.priceMin()).isNull();
+        assertThat(query.salaryMin()).isEqualTo(10_000L);
+        assertThat(query.transferCompareAvgMin()).isEqualTo(1_500_000L);
+        assertThat(query.transferCompareAvgMax()).isNull();
         assertThat(query.pageSize()).isEqualTo(100);           // default
     }
 

@@ -37,13 +37,16 @@ class TransferSearchQueryTest {
                 .minSkillValue2(8)
                 .maxSkillValue2(12)
                 .specialty(PlayerSpeciality.QUICK)
-                .priceMax(2000000)
+                .priceMax(2_000_000L)
+                .salaryMax(50_000L)
+                .transferCompareAvgMin(1_500_000L)
                 .pageSize(100)
                 .build();
 
         assertThat(query.toQueryString()).isEqualTo("&ageMin=17&ageMax=19&skillType1=5"
                 + "&minSkillValue1=10&maxSkillValue1=14&skillType2=6&minSkillValue2=8"
-                + "&maxSkillValue2=12&specialty=2&priceMax=2000000&pageSize=100&pageIndex=0");
+                + "&maxSkillValue2=12&specialty=2&priceMax=2000000&salaryMax=50000"
+                + "&transferCompareAvgMin=1500000&pageSize=100&pageIndex=0");
     }
 
     @Test
