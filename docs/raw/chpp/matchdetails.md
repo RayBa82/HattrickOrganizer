@@ -3,10 +3,67 @@
 Detailed match information
 
 ## Changelog
+### Version 3.2 (2026-11-10)
+- Added HasReplay and NrOfReplays to HomeTeam and AwayTeam, and ExpectedResult with the statistics of the simulated replays.
+- Added Output: HattrickData → Match → HomeTeam → HasReplay (Element)
+- Added Output: HattrickData → Match → HomeTeam → NrOfReplays (Element)
+- Added Output: HattrickData → Match → AwayTeam → HasReplay (Element)
+- Added Output: HattrickData → Match → AwayTeam → NrOfReplays (Element)
+- Added Output: HattrickData → Match → ExpectedResult (Container)
+- Added Output: HattrickData → Match → ExpectedResult → NrOfSamples (Element)
+- Added Output: HattrickData → Match → ExpectedResult → HomeWins (Element)
+- Added Output: HattrickData → Match → ExpectedResult → Draws (Element)
+- Added Output: HattrickData → Match → ExpectedResult → AwayWins (Element)
+- Added Output: HattrickData → Match → ExpectedResult → AverageHomeGoals (Element)
+- Added Output: HattrickData → Match → ExpectedResult → AverageAwayGoals (Element)
+- Added Output: HattrickData → Match → ExpectedResult → FullTime (Container)
+- Added Output: HattrickData → Match → ExpectedResult → FullTime → HomeWins (Element)
+- Added Output: HattrickData → Match → ExpectedResult → FullTime → Draws (Element)
+- Added Output: HattrickData → Match → ExpectedResult → FullTime → AwayWins (Element)
+- Added Output: HattrickData → Match → ExpectedResult → GoalDistribution (Container)
+- Added Output: HattrickData → Match → ExpectedResult → GoalDistribution → Home (Container)
+- Added Output: HattrickData → Match → ExpectedResult → GoalDistribution → Home → Goals0 (Element)
+- Added Output: HattrickData → Match → ExpectedResult → GoalDistribution → Home → Goals1 (Element)
+- Added Output: HattrickData → Match → ExpectedResult → GoalDistribution → Home → Goals2 (Element)
+- Added Output: HattrickData → Match → ExpectedResult → GoalDistribution → Home → Goals3 (Element)
+- Added Output: HattrickData → Match → ExpectedResult → GoalDistribution → Home → Goals4 (Element)
+- Added Output: HattrickData → Match → ExpectedResult → GoalDistribution → Home → Goals5 (Element)
+- Added Output: HattrickData → Match → ExpectedResult → GoalDistribution → Home → GoalsMoreThan5 (Element)
+- Added Output: HattrickData → Match → ExpectedResult → GoalDistribution → Away (Container)
+- Added Output: HattrickData → Match → ExpectedResult → GoalDistribution → Away → Goals0 (Element)
+- Added Output: HattrickData → Match → ExpectedResult → GoalDistribution → Away → Goals1 (Element)
+- Added Output: HattrickData → Match → ExpectedResult → GoalDistribution → Away → Goals2 (Element)
+- Added Output: HattrickData → Match → ExpectedResult → GoalDistribution → Away → Goals3 (Element)
+- Added Output: HattrickData → Match → ExpectedResult → GoalDistribution → Away → Goals4 (Element)
+- Added Output: HattrickData → Match → ExpectedResult → GoalDistribution → Away → Goals5 (Element)
+- Added Output: HattrickData → Match → ExpectedResult → GoalDistribution → Away → GoalsMoreThan5 (Element)
+- Added Output: HattrickData → Match → ExpectedResult → AverageWinMargin (Container)
+- Added Output: HattrickData → Match → ExpectedResult → AverageWinMargin → Home (Element)
+- Added Output: HattrickData → Match → ExpectedResult → AverageWinMargin → Away (Element)
+- Added Output: HattrickData → Match → ExpectedResult → OverUnder (Container)
+- Added Output: HattrickData → Match → ExpectedResult → OverUnder → Line05 (Container)
+- Added Output: HattrickData → Match → ExpectedResult → OverUnder → Line05 → Over (Element)
+- Added Output: HattrickData → Match → ExpectedResult → OverUnder → Line05 → Under (Element)
+- Added Output: HattrickData → Match → ExpectedResult → OverUnder → Line15 (Container)
+- Added Output: HattrickData → Match → ExpectedResult → OverUnder → Line15 → Over (Element)
+- Added Output: HattrickData → Match → ExpectedResult → OverUnder → Line15 → Under (Element)
+- Added Output: HattrickData → Match → ExpectedResult → OverUnder → Line25 (Container)
+- Added Output: HattrickData → Match → ExpectedResult → OverUnder → Line25 → Over (Element)
+- Added Output: HattrickData → Match → ExpectedResult → OverUnder → Line25 → Under (Element)
+- Added Output: HattrickData → Match → ExpectedResult → OverUnder → Line35 (Container)
+- Added Output: HattrickData → Match → ExpectedResult → OverUnder → Line35 → Over (Element)
+- Added Output: HattrickData → Match → ExpectedResult → OverUnder → Line35 → Under (Element)
+- Added Output: HattrickData → Match → ExpectedResult → OverUnder → Line45 (Container)
+- Added Output: HattrickData → Match → ExpectedResult → OverUnder → Line45 → Over (Element)
+- Added Output: HattrickData → Match → ExpectedResult → OverUnder → Line45 → Under (Element)
+
 ### Version 3.1 (2022-03-03)
 - Add number of chances for each team.
 - Show sold seats even if not home team.
 - Fixed the matchType for national team matches.
+- WeatherID is now also given for ongoing matches, and for upcoming matches once the forecast is known.
+- EventList no longer includes events without a match report text whose type is not listed in the match event types.
+- CupLevel and CupLevelIndex are now 0 when MatchType is not 3, as in matches.
 - Removed Output: HattrickData → Match → Arena → SoldTerraces (Element)
 - Removed Output: HattrickData → Match → Arena → SoldBasic (Element)
 - Removed Output: HattrickData → Match → Arena → SoldRoof (Element)
@@ -152,6 +209,7 @@ Detailed match information
 Only available inputs in this file version are shown.
 required file = matchdetails
 optional version = 
+3.2
 3.1
 3.0
 2.9
@@ -181,127 +239,6 @@ required matchID : unsigned Integer
 Which match to show details for.
 required sourceSystem : sourceSystem
 Specifies which source system the match belongs to, this replace the old isYouth param
-
-## Output (actionType=false)
-- **HattrickData** — Hattrick Data Container for matchEvents=false
-  - SourceSystem : sourceSystem — Which sourceSystem the request was made for.
-  - UserSupporterTier : supporterTier — Indicates which Supporter package the fetching user has, or empty if not a Supporter.
-  - **Match** — A match.
-    - MatchID : unsigned Integer — The globally unique identifier of the match.
-    - MatchType : MatchTypeID — Integer defining the type of match.
-    - MatchContextId : unsigned Integer — This will be either LeagueLevelUnitId (for League), CupId (Cup, Hattrick Masters, World Cup and U-20 World Cup), LadderId, TournamentId, or 0 for friendly, qualification, single matches and preparation matches.
-    - MatchRuleId : MatchRuleID — This will contain the rules that's in place for the ladder or tournament in question. It's provided for all matchtypes and defaults to 0 = No rules
-    - CupLevel : unsigned Integer — 1 = National/Divisional cup, 2 = Challenger cup, 3 = Consolation cup. 0 if MatchType is not 3.
-    - CupLevelIndex : unsigned Integer — In Challenger cups: 1 = Emerald (start week 2), 2 = Ruby (start week 3), 3 = Sapphire (start week 4). Always 1 for National/Divisional (main cups) and Consolation cups. 0 if MatchType is not 3.
-    - MatchDate : DateTime — The start date and time (kick-off) of the match.
-    - FinishedDate : DateTime* — The date and time when the match was finished. Not supplied until it is finished.
-    - AddedMinutes : Integer — How many minutes of added time the match had. Not supplied until it is finished.
-    - **HomeTeam** — The Home (formal, not taking arena location into account) team of the match.
-      - HomeTeamID : Integer — The teamID of the Home team in the match. (Negative for street teams.)
-      - HomeTeamName : String — The team name of the Home team in the match.
-      - DressURI : URI — URI to an image representing the dress of the team. FOR SENIORS ONLY
-      - Formation : String — Character string (x-x-x) representing the formation the team started with.
-      - HomeGoals : unsigned Integer — The current number of goals in the match for the home team.
-      - TacticType : MatchTacticType — Integer value representing the the team tactic type specified for the match.
-      - TacticSkill : SkillLevel — Integer value representing the tactic skill of the team.
-      - RatingMidfield : MatchRating — Integer value representing the midfield rating of the team.
-      - RatingRightDef : MatchRating — Integer value representing the right defence rating of the team.
-      - RatingMidDef : MatchRating — Integer value representing the middle defence rating of the team.
-      - RatingLeftDef : MatchRating — Integer value representing the left defence rating of the team.
-      - RatingRightAtt : MatchRating — Integer value representing the right attack rating of the team.
-      - RatingMidAtt : MatchRating — Integer value representing the middle attack rating of the team.
-      - RatingLeftAtt : MatchRating — Integer value representing the left attack rating of the team.
-      - TeamAttitude : MatchTeamAttitude — Integer value representing the the team attitude specified for the match. Only shown to the owner of the team - otherwise omitted.
-      - RatingIndirectSetPiecesDef : MatchRating — Integer value representing the defensive indirect set pieces rating of the team.
-      - RatingIndirectSetPiecesAtt : MatchRating — Integer value representing the attacking indirect set pieces rating of the team.
-      - NrOfChancesLeft : unsigned Integer — Number of chances the team had on the left side.
-      - NrOfChancesCenter : unsigned Integer — Number of chances the team had in the middle.
-      - NrOfChancesRight : unsigned Integer — Number of chances the team had on the right side.
-      - NrOfChancesSpecialEvents : unsigned Integer — Number of special event chances.
-      - NrOfChancesOther : unsigned Integer — Number of chances of other types that doesn't fit into any of the above categories.
-    - **AwayTeam** — The Away (formal, not taking arena location into account) team of the match.
-      - AwayTeamID : Integer — The teamID of the Away team in the match. (Negative for street teams.)
-      - AwayTeamName : String — The team name of the Away team in the match.
-      - DressURI : URI — URI to an image representing the dress of the team. FOR SENIORS ONLY
-      - Formation : String — Character string (x-x-x) representing the formation the team started with.
-      - AwayGoals : unsigned Integer — The current number of goals in the match for the away team.
-      - TacticType : MatchTacticType — Integer value representing the the team tactic type specified for the match.
-      - TacticSkill : SkillLevel — Integer value representing the tactic skill of the team.
-      - RatingMidfield : MatchRating — Integer value representing the midfield rating of the team.
-      - RatingRightDef : MatchRating — Integer value representing the right defence rating of the team.
-      - RatingMidDef : MatchRating — Integer value representing the middle defence rating of the team.
-      - RatingLeftDef : MatchRating — Integer value representing the left defence rating of the team.
-      - RatingRightAtt : MatchRating — Integer value representing the right attack rating of the team.
-      - RatingMidAtt : MatchRating — Integer value representing the middle attack rating of the team.
-      - RatingLeftAtt : MatchRating — Integer value representing the left attack rating of the team.
-      - TeamAttitude : MatchTeamAttitude — Integer value representing the the team attitude specified for the match. Only shown to the owner of the team - otherwise omitted.
-      - RatingIndirectSetPiecesDef : MatchRating — Integer value representing the defensive indirect set pieces rating of the team.
-      - RatingIndirectSetPiecesAtt : MatchRating — Integer value representing the attacking indirect set pieces rating of the team.
-      - NrOfChancesLeft : unsigned Integer — Number of chances the team had on the left side.
-      - NrOfChancesCenter : unsigned Integer — Number of chances the team had in the middle.
-      - NrOfChancesRight : unsigned Integer — Number of chances the team had on the right side.
-      - NrOfChancesSpecialEvents : unsigned Integer — Number of special event chances.
-      - NrOfChancesOther : unsigned Integer — Number of chances of other types that doesn't fit into any of the above categories.
-    - **Arena** — Container for the data about the arena where the match was played.
-      - ArenaID : unsigned Integer — The globally unique arenaID.
-      - ArenaName : String — The name of the arena.
-      - WeatherID : WeatherID — Integer defining the weather during the match.
-      - SoldTotal : unsigned Integer — The total number of sold tickets (number of spectators).
-      - SoldTerraces : unsigned Integer — The number of sold tickets for the teraces section.
-      - SoldBasic : unsigned Integer — The number of sold tickets for the basic seating section.
-      - SoldRoof : unsigned Integer — The number of sold tickets for the seating under roof section.
-      - SoldVIP : unsigned Integer — The number of sold tickets for the VIP section.
-    - **MatchOfficials** — Container for data about the match officials, only shown for matches with SourceSystem=Hattrick.
-      - **Referee** — Container for the referee.
-        - RefereeId : unsigned Integer — The globally unique PlayerID for the referee.
-        - RefereeName : String — The name of the referee.
-        - RefereeCountryId : unsigned Integer — The countryID of the country the referee is from.
-        - RefereeCountryName : String — The name of the country the referee is from.
-        - RefereeTeamId : unsigned Integer — The teamId of the team that the referee is a Hall of Fame member of.
-        - RefereeTeamname : String — The name of the team that the referee is a Hall of Fame member of.
-      - **RefereeAssistant1** — Container for the first assistant referee.
-        - RefereeId : unsigned Integer — The globally unique PlayerID for the referee.
-        - RefereeName : String — The name of the referee.
-        - RefereeCountryId : unsigned Integer — The countryID of the country the referee is from.
-        - RefereeCountryName : String — The name of the country the referee is from.
-        - RefereeTeamId : unsigned Integer — The teamId of the team that the referee is a Hall of Fame member of.
-        - RefereeTeamname : String — The name of the team that the referee is a Hall of Fame member of.
-      - **RefereeAssistant2** — Container for the second assistant referee.
-        - RefereeId : unsigned Integer — The globally unique PlayerID for the referee.
-        - RefereeName : String — The name of the referee.
-        - RefereeCountryId : unsigned Integer — The countryID of the country the referee is from.
-        - RefereeCountryName : String — The name of the country the referee is from.
-        - RefereeTeamId : unsigned Integer — The teamId of the team that the referee is a Hall of Fame member of.
-        - RefereeTeamname : String — The name of the team that the referee is a Hall of Fame member of.
-    - **Scorers** — Container for the data about the scorers.
-      - **Goal** — Attribute: 'Index' : unsigned Integer The relative number of the goal in the list.
-        - ScorerPlayerID : unsigned Integer — The globally unique PlayerID for the scorer.
-        - ScorerPlayerName : String — The name of the scorer.
-        - ScorerTeamID : Integer — The teamID of the team that scored.
-        - ScorerHomeGoals : unsigned Integer — The number of goals for the home team after the goal.
-        - ScorerAwayGoals : unsigned Integer — The number of goals for the away team after the goal.
-        - ScorerMinute : unsigned Integer — The minute that the goal was scored in.
-        - MatchPart : matchPart — Which part of the match the goal was scored in.
-    - **Bookings** — Container for the data about the warned or sent off players.
-      - **Booking** — Attribute: 'Index' : unsigned Integer The relative number of the booking in the list.
-        - BookingPlayerID : unsigned Integer — The globally unique PlayerID for the booked player.
-        - BookingPlayerName : String — The name of the booked player.
-        - BookingTeamID : Integer — The teamID of the team that suffered the booking.
-        - BookingType : unsigned Integer — Specifies whether it was a warning (BookingType=1) or red card (BookingType=2).
-        - BookingMinute : unsigned Integer — The minute that the booking happened.
-        - MatchPart : matchPart — Which part of the match the booking happened.
-    - **Injuries** — Container for the data about injured players.
-      - **Injury** — Attribute: 'Index' : unsigned Integer The relative number of the booking in the list.
-        - InjuryPlayerID : unsigned Integer — The globally unique PlayerID for the injured player.
-        - InjuryPlayerName : String — The name of the injured player.
-        - InjuryTeamID : Integer — The teamID of the team that suffered the injury.
-        - InjuryType : unsigned Integer — Specifies whether it was a bruise (InjuryType=1) or an injury (InjuryType=2).
-        - InjuryMinute : unsigned Integer — The minute that the injury happened.
-        - MatchPart : matchPart — Which part of the match the booking happened.
-    - PossessionFirstHalfHome : unsigned Integer — Home team's ball possession in % for first half.
-    - PossessionFirstHalfAway : unsigned Integer — Away team's ball possession in % for first half.
-    - PossessionSecondHalfHome : unsigned Integer — Home team's ball possession in % for second half.
-    - PossessionSecondHalfAway : unsigned Integer — Away team's ball possession in % for second half.
 
 ## Output (actionType=true)
 - **HattrickData** — Hattrick Data Container for matchEvents=true
@@ -340,6 +277,8 @@ Specifies which source system the match belongs to, this replace the old isYouth
       - NrOfChancesRight : unsigned Integer — Number of chances the team had on the right side.
       - NrOfChancesSpecialEvents : unsigned Integer — Number of special event chances.
       - NrOfChancesOther : unsigned Integer — Number of chances of other types that doesn't fit into any of the above categories.
+      - HasReplay : Boolean — Whether the team can see the simulated replays of this match. Only shown for finished matches, for the user's own or mentored team, or for both teams in a national team match. Not shown in youth matches.
+      - NrOfReplays : unsigned Integer — The number of simulated replays the team can see: 0, 20 or 100. National team matches always get 100, and a Diamond supporter always gets at least 20. Only shown when HasReplay is shown.
     - **AwayTeam** — The Away (formal, not taking arena location into account) team of the match.
       - AwayTeamID : Integer — The teamID of the Away team in the match. (Negative for street teams.)
       - AwayTeamName : String — The team name of the Away team in the match.
@@ -363,10 +302,12 @@ Specifies which source system the match belongs to, this replace the old isYouth
       - NrOfChancesRight : unsigned Integer — Number of chances the team had on the right side.
       - NrOfChancesSpecialEvents : unsigned Integer — Number of special event chances.
       - NrOfChancesOther : unsigned Integer — Number of chances of other types that doesn't fit into any of the above categories.
+      - HasReplay : Boolean — Whether the team can see the simulated replays of this match. Only shown for finished matches, for the user's own or mentored team, or for both teams in a national team match. Not shown in youth matches.
+      - NrOfReplays : unsigned Integer — The number of simulated replays the team can see: 0, 20 or 100. National team matches always get 100, and a Diamond supporter always gets at least 20. Only shown when HasReplay is shown.
     - **Arena** — Container for the data about the arena where the match was played.
       - ArenaID : unsigned Integer — The globally unique arenaID.
       - ArenaName : String — The name of the arena.
-      - WeatherID : WeatherID — Integer defining the weather during the match.
+      - WeatherID : WeatherID — Integer defining the weather during the match. For an upcoming match it is the forecast, and only appears once the forecast is shown on the website.
       - SoldTotal : unsigned Integer — The total number of sold tickets (number of spectators).
       - SoldTerraces : unsigned Integer — The number of sold tickets for the teraces section.
       - SoldBasic : unsigned Integer — The number of sold tickets for the basic seating section.
@@ -395,7 +336,7 @@ Specifies which source system the match belongs to, this replace the old isYouth
         - RefereeTeamId : unsigned Integer — The teamId of the team that the referee is a Hall of Fame member of.
         - RefereeTeamname : String — The name of the team that the referee is a Hall of Fame member of.
     - **Scorers** — Container for the data about the scorers.
-      - **Goal** — Attribute: 'Index' : unsigned Integer The relative number of the goal in the list.
+      - **Goal** — Attribute: 'Index' : unsigned Integer The relative number of the goal in the list. Container for a certain goal.
         - ScorerPlayerID : unsigned Integer — The globally unique PlayerID for the scorer.
         - ScorerPlayerName : String — The name of the scorer.
         - ScorerTeamID : Integer — The teamID of the team that scored.
@@ -404,7 +345,7 @@ Specifies which source system the match belongs to, this replace the old isYouth
         - ScorerMinute : unsigned Integer — The minute that the goal was scored in.
         - MatchPart : matchPart — Which part of the match the goal was scored in.
     - **Bookings** — Container for the data about the warned or sent off players.
-      - **Booking** — Attribute: 'Index' : unsigned Integer The relative number of the booking in the list.
+      - **Booking** — Attribute: 'Index' : unsigned Integer The relative number of the booking in the list. Container for a certain yellow/red card.
         - BookingPlayerID : unsigned Integer — The globally unique PlayerID for the booked player.
         - BookingPlayerName : String — The name of the booked player.
         - BookingTeamID : Integer — The teamID of the team that suffered the booking.
@@ -412,7 +353,7 @@ Specifies which source system the match belongs to, this replace the old isYouth
         - BookingMinute : unsigned Integer — The minute that the booking happened.
         - MatchPart : matchPart — Which part of the match the booking happened.
     - **Injuries** — Container for the data about injured players.
-      - **Injury** — Attribute: 'Index' : unsigned Integer The relative number of the booking in the list.
+      - **Injury** — Attribute: 'Index' : unsigned Integer The relative number of the booking in the list. Container for a certain injury.
         - InjuryPlayerID : unsigned Integer — The globally unique PlayerID for the injured player.
         - InjuryPlayerName : String — The name of the injured player.
         - InjuryTeamID : Integer — The teamID of the team that suffered the injury.
@@ -423,16 +364,235 @@ Specifies which source system the match belongs to, this replace the old isYouth
     - PossessionFirstHalfAway : unsigned Integer — Away team's ball possession in % for first half.
     - PossessionSecondHalfHome : unsigned Integer — Home team's ball possession in % for second half.
     - PossessionSecondHalfAway : unsigned Integer — Away team's ball possession in % for second half.
-    - **EventList** — Container for all the events.
-      - **Event** — Attribute: 'Index' : unsigned Integer The order of the events
+    - **EventList** — Container for the match events. Events without a match report text are only included if their type is listed in the match event types. The Index attribute can have gaps.
+      - **Event** — Attribute: 'Index' : unsigned Integer The order of the events Container for the data for a certain event. # See table MatchEventTypes
         - Minute : unsigned Integer — The match minute when the event happened.
         - MatchPart : matchPart — Which part of the match the event happened.
-        - EventTypeID : unsigned Integer — A unique key defining what type of event it was. # See information MatchEventTypes
+        - EventTypeID : unsigned Integer — A unique key defining what type of event it was. # See table MatchEventTypes
         - EventVariation : unsigned Integer — The variation defines which text is used to describe the event.
         - EventText : String — String describing the event as it would appear in the match report.
         - SubjectTeamID : Integer — Integer that, for goals and chances, is indicating the attacking team. For other event, this field usually indicates the team that is doing something. It may indicate other things for other events - exactly what is not documented here and the SubjectTeamID information, while free to use for CHPPs is 'unsupported' and used 'at your own risk'.
         - SubjectPlayerID : unsigned Integer — Integer that, for goals and chances, is indicating the scorer or the player failing to score. For other events, this field usually indicates the primarily active player. It may indicate other things for other events and like SubjectTeamID is 'unsupported' and used 'at your own risk'.
         - ObjectPlayerID : unsigned Integer — Integer that, for regular goals and chances, is indicating the defending team's goal keeper. For special event chances/goals, the ObjectPlayer is often the assisting player of the attacking team, but can be any other player that is involved in the event. For other events, this field is used very freely and can indicate any kind of relevant integer data. Like SubjectPlayerID and SubjectTeamID, it is 'unsupported' and used at 'your own risk'.
+    - **ExpectedResult** — Container for the match's simulated-replay statistics, mirroring the replay-analysis box on the site's match page. Only present for finished matches with expected-result data, and only for a manager who could see it on the site: national team matches, a Diamond supporter who owns a participating team, an own or mentored team that has purchased replay credits for this match, or a mentored team whose club has Diamond supporter status.
+      - NrOfSamples : unsigned Integer — The number of simulated replays the following statistics are based on.
+      - HomeWins : unsigned Integer — Number of simulated replays won by the home team (includes penalty shootouts where applicable).
+      - Draws : unsigned Integer — Number of simulated replays that ended in a draw (includes penalty shootouts where applicable).
+      - AwayWins : unsigned Integer — Number of simulated replays won by the away team (includes penalty shootouts where applicable).
+      - AverageHomeGoals : Decimal — Average number of goals scored by the home team across the simulated replays.
+      - AverageAwayGoals : Decimal — Average number of goals scored by the away team across the simulated replays.
+      - **FullTime** — Result breakdown before any penalty shootout. Only present for cup-rule matches (Cup, FriendlyCup, HTOCup, Hattrick Masters, Qualification, IntFriendlyCup, WorldCupCup, SingleMatch) where the simulated-replay data includes the full-time/shootout split.
+        - HomeWins : unsigned Integer — Number of simulated replays won by the home team before any penalty shootout.
+        - Draws : unsigned Integer — Number of simulated replays level before any penalty shootout.
+        - AwayWins : unsigned Integer — Number of simulated replays won by the away team before any penalty shootout.
+      - **GoalDistribution** — How many of the simulated replays each team scored exactly 0-5 goals in, and how many scored more than 5.
+        - **Home** — Home team's goal distribution across the simulated replays.
+          - Goals0 : unsigned Integer — Number of simulated replays where the home team scored 0 goals.
+          - Goals1 : unsigned Integer — Number of simulated replays where the home team scored 1 goal.
+          - Goals2 : unsigned Integer — Number of simulated replays where the home team scored 2 goals.
+          - Goals3 : unsigned Integer — Number of simulated replays where the home team scored 3 goals.
+          - Goals4 : unsigned Integer — Number of simulated replays where the home team scored 4 goals.
+          - Goals5 : unsigned Integer — Number of simulated replays where the home team scored 5 goals.
+          - GoalsMoreThan5 : unsigned Integer — Number of simulated replays where the home team scored more than 5 goals.
+        - **Away** — Away team's goal distribution across the simulated replays.
+          - Goals0 : unsigned Integer — Number of simulated replays where the away team scored 0 goals.
+          - Goals1 : unsigned Integer — Number of simulated replays where the away team scored 1 goal.
+          - Goals2 : unsigned Integer — Number of simulated replays where the away team scored 2 goals.
+          - Goals3 : unsigned Integer — Number of simulated replays where the away team scored 3 goals.
+          - Goals4 : unsigned Integer — Number of simulated replays where the away team scored 4 goals.
+          - Goals5 : unsigned Integer — Number of simulated replays where the away team scored 5 goals.
+          - GoalsMoreThan5 : unsigned Integer — Number of simulated replays where the away team scored more than 5 goals.
+      - **AverageWinMargin** — Average goal margin by which each team won (without the penalty shootout).
+        - Home : Decimal — Home team's average winning margin.
+        - Away : Decimal — Away team's average winning margin.
+      - **OverUnder** — Over/under goal-line splits across the simulated replays, for the total goals scored by both teams combined.
+        - **Line05** — Over/under 0.5 total goals.
+          - Over : unsigned Integer — Number of simulated replays with more than 0.5 total goals.
+          - Under : unsigned Integer — Number of simulated replays with fewer than 0.5 total goals.
+        - **Line15** — Over/under 1.5 total goals.
+          - Over : unsigned Integer — Number of simulated replays with more than 1.5 total goals.
+          - Under : unsigned Integer — Number of simulated replays with fewer than 1.5 total goals.
+        - **Line25** — Over/under 2.5 total goals.
+          - Over : unsigned Integer — Number of simulated replays with more than 2.5 total goals.
+          - Under : unsigned Integer — Number of simulated replays with fewer than 2.5 total goals.
+        - **Line35** — Over/under 3.5 total goals.
+          - Over : unsigned Integer — Number of simulated replays with more than 3.5 total goals.
+          - Under : unsigned Integer — Number of simulated replays with fewer than 3.5 total goals.
+        - **Line45** — Over/under 4.5 total goals.
+          - Over : unsigned Integer — Number of simulated replays with more than 4.5 total goals.
+          - Under : unsigned Integer — Number of simulated replays with fewer than 4.5 total goals.
+
+## Output (actionType=false)
+- **HattrickData** — Hattrick Data Container for matchEvents=false
+  - SourceSystem : sourceSystem — Which sourceSystem the request was made for.
+  - UserSupporterTier : supporterTier — Indicates which Supporter package the fetching user has, or empty if not a Supporter.
+  - **Match** — A match.
+    - MatchID : unsigned Integer — The globally unique identifier of the match.
+    - MatchType : MatchTypeID — Integer defining the type of match.
+    - MatchContextId : unsigned Integer — This will be either LeagueLevelUnitId (for League), CupId (Cup, Hattrick Masters, World Cup and U-20 World Cup), LadderId, TournamentId, or 0 for friendly, qualification, single matches and preparation matches.
+    - MatchRuleId : MatchRuleID — This will contain the rules that's in place for the ladder or tournament in question. It's provided for all matchtypes and defaults to 0 = No rules
+    - CupLevel : unsigned Integer — 1 = National/Divisional cup, 2 = Challenger cup, 3 = Consolation cup. 0 if MatchType is not 3.
+    - CupLevelIndex : unsigned Integer — In Challenger cups: 1 = Emerald (start week 2), 2 = Ruby (start week 3), 3 = Sapphire (start week 4). Always 1 for National/Divisional (main cups) and Consolation cups. 0 if MatchType is not 3.
+    - MatchDate : DateTime — The start date and time (kick-off) of the match.
+    - FinishedDate : DateTime* — The date and time when the match was finished. Not supplied until it is finished.
+    - AddedMinutes : Integer — How many minutes of added time the match had. Not supplied until it is finished.
+    - **HomeTeam** — The Home (formal, not taking arena location into account) team of the match.
+      - HomeTeamID : Integer — The teamID of the Home team in the match. (Negative for street teams.)
+      - HomeTeamName : String — The team name of the Home team in the match.
+      - DressURI : URI — URI to an image representing the dress of the team. FOR SENIORS ONLY
+      - Formation : String — Character string (x-x-x) representing the formation the team started with.
+      - HomeGoals : unsigned Integer — The current number of goals in the match for the home team.
+      - TacticType : MatchTacticType — Integer value representing the the team tactic type specified for the match.
+      - TacticSkill : SkillLevel — Integer value representing the tactic skill of the team.
+      - RatingMidfield : MatchRating — Integer value representing the midfield rating of the team.
+      - RatingRightDef : MatchRating — Integer value representing the right defence rating of the team.
+      - RatingMidDef : MatchRating — Integer value representing the middle defence rating of the team.
+      - RatingLeftDef : MatchRating — Integer value representing the left defence rating of the team.
+      - RatingRightAtt : MatchRating — Integer value representing the right attack rating of the team.
+      - RatingMidAtt : MatchRating — Integer value representing the middle attack rating of the team.
+      - RatingLeftAtt : MatchRating — Integer value representing the left attack rating of the team.
+      - TeamAttitude : MatchTeamAttitude — Integer value representing the the team attitude specified for the match. Only shown to the owner of the team - otherwise omitted.
+      - RatingIndirectSetPiecesDef : MatchRating — Integer value representing the defensive indirect set pieces rating of the team.
+      - RatingIndirectSetPiecesAtt : MatchRating — Integer value representing the attacking indirect set pieces rating of the team.
+      - NrOfChancesLeft : unsigned Integer — Number of chances the team had on the left side.
+      - NrOfChancesCenter : unsigned Integer — Number of chances the team had in the middle.
+      - NrOfChancesRight : unsigned Integer — Number of chances the team had on the right side.
+      - NrOfChancesSpecialEvents : unsigned Integer — Number of special event chances.
+      - NrOfChancesOther : unsigned Integer — Number of chances of other types that doesn't fit into any of the above categories.
+      - HasReplay : Boolean — Whether the team can see the simulated replays of this match. Only shown for finished matches, for the user's own or mentored team, or for both teams in a national team match. Not shown in youth matches.
+      - NrOfReplays : unsigned Integer — The number of simulated replays the team can see: 0, 20 or 100. National team matches always get 100, and a Diamond supporter always gets at least 20. Only shown when HasReplay is shown.
+    - **AwayTeam** — The Away (formal, not taking arena location into account) team of the match.
+      - AwayTeamID : Integer — The teamID of the Away team in the match. (Negative for street teams.)
+      - AwayTeamName : String — The team name of the Away team in the match.
+      - DressURI : URI — URI to an image representing the dress of the team. FOR SENIORS ONLY
+      - Formation : String — Character string (x-x-x) representing the formation the team started with.
+      - AwayGoals : unsigned Integer — The current number of goals in the match for the away team.
+      - TacticType : MatchTacticType — Integer value representing the the team tactic type specified for the match.
+      - TacticSkill : SkillLevel — Integer value representing the tactic skill of the team.
+      - RatingMidfield : MatchRating — Integer value representing the midfield rating of the team.
+      - RatingRightDef : MatchRating — Integer value representing the right defence rating of the team.
+      - RatingMidDef : MatchRating — Integer value representing the middle defence rating of the team.
+      - RatingLeftDef : MatchRating — Integer value representing the left defence rating of the team.
+      - RatingRightAtt : MatchRating — Integer value representing the right attack rating of the team.
+      - RatingMidAtt : MatchRating — Integer value representing the middle attack rating of the team.
+      - RatingLeftAtt : MatchRating — Integer value representing the left attack rating of the team.
+      - TeamAttitude : MatchTeamAttitude — Integer value representing the the team attitude specified for the match. Only shown to the owner of the team - otherwise omitted.
+      - RatingIndirectSetPiecesDef : MatchRating — Integer value representing the defensive indirect set pieces rating of the team.
+      - RatingIndirectSetPiecesAtt : MatchRating — Integer value representing the attacking indirect set pieces rating of the team.
+      - NrOfChancesLeft : unsigned Integer — Number of chances the team had on the left side.
+      - NrOfChancesCenter : unsigned Integer — Number of chances the team had in the middle.
+      - NrOfChancesRight : unsigned Integer — Number of chances the team had on the right side.
+      - NrOfChancesSpecialEvents : unsigned Integer — Number of special event chances.
+      - NrOfChancesOther : unsigned Integer — Number of chances of other types that doesn't fit into any of the above categories.
+      - HasReplay : Boolean — Whether the team can see the simulated replays of this match. Only shown for finished matches, for the user's own or mentored team, or for both teams in a national team match. Not shown in youth matches.
+      - NrOfReplays : unsigned Integer — The number of simulated replays the team can see: 0, 20 or 100. National team matches always get 100, and a Diamond supporter always gets at least 20. Only shown when HasReplay is shown.
+    - **Arena** — Container for the data about the arena where the match was played.
+      - ArenaID : unsigned Integer — The globally unique arenaID.
+      - ArenaName : String — The name of the arena.
+      - WeatherID : WeatherID — Integer defining the weather during the match. For an upcoming match it is the forecast, and only appears once the forecast is shown on the website.
+      - SoldTotal : unsigned Integer — The total number of sold tickets (number of spectators).
+      - SoldTerraces : unsigned Integer — The number of sold tickets for the teraces section.
+      - SoldBasic : unsigned Integer — The number of sold tickets for the basic seating section.
+      - SoldRoof : unsigned Integer — The number of sold tickets for the seating under roof section.
+      - SoldVIP : unsigned Integer — The number of sold tickets for the VIP section.
+    - **MatchOfficials** — Container for data about the match officials, only shown for matches with SourceSystem=Hattrick.
+      - **Referee** — Container for the referee.
+        - RefereeId : unsigned Integer — The globally unique PlayerID for the referee.
+        - RefereeName : String — The name of the referee.
+        - RefereeCountryId : unsigned Integer — The countryID of the country the referee is from.
+        - RefereeCountryName : String — The name of the country the referee is from.
+        - RefereeTeamId : unsigned Integer — The teamId of the team that the referee is a Hall of Fame member of.
+        - RefereeTeamname : String — The name of the team that the referee is a Hall of Fame member of.
+      - **RefereeAssistant1** — Container for the first assistant referee.
+        - RefereeId : unsigned Integer — The globally unique PlayerID for the referee.
+        - RefereeName : String — The name of the referee.
+        - RefereeCountryId : unsigned Integer — The countryID of the country the referee is from.
+        - RefereeCountryName : String — The name of the country the referee is from.
+        - RefereeTeamId : unsigned Integer — The teamId of the team that the referee is a Hall of Fame member of.
+        - RefereeTeamname : String — The name of the team that the referee is a Hall of Fame member of.
+      - **RefereeAssistant2** — Container for the second assistant referee.
+        - RefereeId : unsigned Integer — The globally unique PlayerID for the referee.
+        - RefereeName : String — The name of the referee.
+        - RefereeCountryId : unsigned Integer — The countryID of the country the referee is from.
+        - RefereeCountryName : String — The name of the country the referee is from.
+        - RefereeTeamId : unsigned Integer — The teamId of the team that the referee is a Hall of Fame member of.
+        - RefereeTeamname : String — The name of the team that the referee is a Hall of Fame member of.
+    - **Scorers** — Container for the data about the scorers.
+      - **Goal** — Attribute: 'Index' : unsigned Integer The relative number of the goal in the list. Container for a certain goal.
+        - ScorerPlayerID : unsigned Integer — The globally unique PlayerID for the scorer.
+        - ScorerPlayerName : String — The name of the scorer.
+        - ScorerTeamID : Integer — The teamID of the team that scored.
+        - ScorerHomeGoals : unsigned Integer — The number of goals for the home team after the goal.
+        - ScorerAwayGoals : unsigned Integer — The number of goals for the away team after the goal.
+        - ScorerMinute : unsigned Integer — The minute that the goal was scored in.
+        - MatchPart : matchPart — Which part of the match the goal was scored in.
+    - **Bookings** — Container for the data about the warned or sent off players.
+      - **Booking** — Attribute: 'Index' : unsigned Integer The relative number of the booking in the list. Container for a certain yellow/red card.
+        - BookingPlayerID : unsigned Integer — The globally unique PlayerID for the booked player.
+        - BookingPlayerName : String — The name of the booked player.
+        - BookingTeamID : Integer — The teamID of the team that suffered the booking.
+        - BookingType : unsigned Integer — Specifies whether it was a warning (BookingType=1) or red card (BookingType=2).
+        - BookingMinute : unsigned Integer — The minute that the booking happened.
+        - MatchPart : matchPart — Which part of the match the booking happened.
+    - **Injuries** — Container for the data about injured players.
+      - **Injury** — Attribute: 'Index' : unsigned Integer The relative number of the booking in the list. Container for a certain injury.
+        - InjuryPlayerID : unsigned Integer — The globally unique PlayerID for the injured player.
+        - InjuryPlayerName : String — The name of the injured player.
+        - InjuryTeamID : Integer — The teamID of the team that suffered the injury.
+        - InjuryType : unsigned Integer — Specifies whether it was a bruise (InjuryType=1) or an injury (InjuryType=2).
+        - InjuryMinute : unsigned Integer — The minute that the injury happened.
+        - MatchPart : matchPart — Which part of the match the booking happened.
+    - PossessionFirstHalfHome : unsigned Integer — Home team's ball possession in % for first half.
+    - PossessionFirstHalfAway : unsigned Integer — Away team's ball possession in % for first half.
+    - PossessionSecondHalfHome : unsigned Integer — Home team's ball possession in % for second half.
+    - PossessionSecondHalfAway : unsigned Integer — Away team's ball possession in % for second half.
+    - **ExpectedResult** — Container for the match's simulated-replay statistics, mirroring the replay-analysis box on the site's match page. Only present for finished matches with expected-result data, and only for a manager who could see it on the site: national team matches, a Diamond supporter who owns a participating team, an own or mentored team that has purchased replay credits for this match, or a mentored team whose club has Diamond supporter status.
+      - NrOfSamples : unsigned Integer — The number of simulated replays the following statistics are based on.
+      - HomeWins : unsigned Integer — Number of simulated replays won by the home team (includes penalty shootouts where applicable).
+      - Draws : unsigned Integer — Number of simulated replays that ended in a draw (includes penalty shootouts where applicable).
+      - AwayWins : unsigned Integer — Number of simulated replays won by the away team (includes penalty shootouts where applicable).
+      - AverageHomeGoals : Decimal — Average number of goals scored by the home team across the simulated replays.
+      - AverageAwayGoals : Decimal — Average number of goals scored by the away team across the simulated replays.
+      - **FullTime** — Result breakdown before any penalty shootout. Only present for cup-rule matches (Cup, FriendlyCup, HTOCup, Hattrick Masters, Qualification, IntFriendlyCup, WorldCupCup, SingleMatch) where the simulated-replay data includes the full-time/shootout split.
+        - HomeWins : unsigned Integer — Number of simulated replays won by the home team before any penalty shootout.
+        - Draws : unsigned Integer — Number of simulated replays level before any penalty shootout.
+        - AwayWins : unsigned Integer — Number of simulated replays won by the away team before any penalty shootout.
+      - **GoalDistribution** — How many of the simulated replays each team scored exactly 0-5 goals in, and how many scored more than 5.
+        - **Home** — Home team's goal distribution across the simulated replays.
+          - Goals0 : unsigned Integer — Number of simulated replays where the home team scored 0 goals.
+          - Goals1 : unsigned Integer — Number of simulated replays where the home team scored 1 goal.
+          - Goals2 : unsigned Integer — Number of simulated replays where the home team scored 2 goals.
+          - Goals3 : unsigned Integer — Number of simulated replays where the home team scored 3 goals.
+          - Goals4 : unsigned Integer — Number of simulated replays where the home team scored 4 goals.
+          - Goals5 : unsigned Integer — Number of simulated replays where the home team scored 5 goals.
+          - GoalsMoreThan5 : unsigned Integer — Number of simulated replays where the home team scored more than 5 goals.
+        - **Away** — Away team's goal distribution across the simulated replays.
+          - Goals0 : unsigned Integer — Number of simulated replays where the away team scored 0 goals.
+          - Goals1 : unsigned Integer — Number of simulated replays where the away team scored 1 goal.
+          - Goals2 : unsigned Integer — Number of simulated replays where the away team scored 2 goals.
+          - Goals3 : unsigned Integer — Number of simulated replays where the away team scored 3 goals.
+          - Goals4 : unsigned Integer — Number of simulated replays where the away team scored 4 goals.
+          - Goals5 : unsigned Integer — Number of simulated replays where the away team scored 5 goals.
+          - GoalsMoreThan5 : unsigned Integer — Number of simulated replays where the away team scored more than 5 goals.
+      - **AverageWinMargin** — Average goal margin by which each team won outright in regulation (i.e. not decided by a penalty shootout) across the simulated replays; 0 for a team with no such wins.
+        - Home : Decimal — Home team's average winning margin.
+        - Away : Decimal — Away team's average winning margin.
+      - **OverUnder** — Over/under goal-line splits across the simulated replays, for the total goals scored by both teams combined.
+        - **Line05** — Over/under 0.5 total goals.
+          - Over : unsigned Integer — Number of simulated replays with more than 0.5 total goals.
+          - Under : unsigned Integer — Number of simulated replays with fewer than 0.5 total goals.
+        - **Line15** — Over/under 1.5 total goals.
+          - Over : unsigned Integer — Number of simulated replays with more than 1.5 total goals.
+          - Under : unsigned Integer — Number of simulated replays with fewer than 1.5 total goals.
+        - **Line25** — Over/under 2.5 total goals.
+          - Over : unsigned Integer — Number of simulated replays with more than 2.5 total goals.
+          - Under : unsigned Integer — Number of simulated replays with fewer than 2.5 total goals.
+        - **Line35** — Over/under 3.5 total goals.
+          - Over : unsigned Integer — Number of simulated replays with more than 3.5 total goals.
+          - Under : unsigned Integer — Number of simulated replays with fewer than 3.5 total goals.
+        - **Line45** — Over/under 4.5 total goals.
+          - Over : unsigned Integer — Number of simulated replays with more than 4.5 total goals.
+          - Under : unsigned Integer — Number of simulated replays with fewer than 4.5 total goals.
 
 ## References
 #MatchEventTypes

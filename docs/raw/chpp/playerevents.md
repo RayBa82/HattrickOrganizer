@@ -28,7 +28,7 @@ The player to get information for.
   - UserSupporterTier : supporterTier — Indicates which Supporter package the fetching user has, or empty if not a Supporter.
   - **Player** — Container for the data about the player.
     - PlayerID : unsigned Integer — The globally unique playerID.
-    - **PlayerEvents** — Attribute: 'Available' : Boolean The events are not available, if owner is playing a match currently
+    - **PlayerEvents** — Attribute: 'Available' : Boolean The events are not available, if owner is playing a match currently Container for the data about the player events.
       - **PlayerEvent** — Container for the data about a specific event.
         - EventDate : DateTime — Date and time when the event was recorded.
         - PlayerEventTypeID : unsigned Integer — An identifier to show which type of event it is. No list of events will be available. Each CHPP will have to collect an eventlist him-/herself.

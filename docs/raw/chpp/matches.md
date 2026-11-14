@@ -3,6 +3,12 @@
 The most recent and upcoming matches for a particular team (Senior or Youth).
 
 ## Changelog
+### Version 3.0 (2026-11-10)
+- Added HomeStatement, AwayStatement and FanMatchExpectation.
+- Added Output: HattrickData → Team → MatchList → Match → HomeStatement (Element)
+- Added Output: HattrickData → Team → MatchList → Match → AwayStatement (Element)
+- Added Output: HattrickData → Team → MatchList → Match → FanMatchExpectation (Element)
+
 ### Version 2.9 (2022-03-03)
 - Added LeagueId to youthMatches.
 
@@ -37,6 +43,7 @@ The most recent and upcoming matches for a particular team (Senior or Youth).
 Only available inputs in this file version are shown.
 required file = matches
 optional version = 
+3.0
 2.9
 2.8
 2.7
@@ -85,3 +92,6 @@ Last date to show matches to. If more than 50 matches are affected, only the 50 
         - AwayGoals : unsigned Integer — The current number of goals in the match for the away team.
         - Status : MatchStatus — Specifying whether the match is FINISHED, ONGOING or UPCOMING.
         - OrdersGiven : Boolean* — A boolean value only supplied for upcoming matches (haven't started yet) of your own team that signifies whether you have given orders or not. If the request is for another team than your own (even if it is for your opponent), this data is not sent.
+        - HomeStatement : String — The home team's pre-match statement. Empty if there is none.
+        - AwayStatement : String — The away team's pre-match statement. Empty if there is none.
+        - FanMatchExpectation : unsigned Integer — The fans' expectation for this match - same numeric scale and meaning as FanMatchExpectation in fans.xml. Only supplied for your own senior team, and only for the matches fans.xml lists: league, qualification, Hattrick Masters and main cup matches, up to 6 played in the last 6 weeks and up to 3 upcoming.

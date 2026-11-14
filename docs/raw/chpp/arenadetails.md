@@ -64,6 +64,36 @@ Shows supporter statistics over biggest arenas.
 required StatsLeagueID : unsigned Integer{Default:0}
 Which league to show statistics for. 0 = global statistic
 
+## Output (actionType=MyArena)
+- **HattrickData** — Hattrick Data Container
+  - **MyArena** — Container for the statistics for the user's own arena.
+    - ArenaID : unsigned Integer — The globally unique arenaID.
+    - ArenaName : String — The name of the arena.
+    - ArenaImage : String — URL to an image of the arena. If this fails to load it usually means the team doesn't have a custom arena look. Fallback to ArenaFallbackImage.
+    - ArenaFallbackImage : String — The default image for an arena of this size, use this only when the ArenaImage fails to load.
+    - MatchTypes : ArenaMatchType — Matches that are be included in the statistics.
+    - FirstDate : DateTime — The first date the statistics cover.
+    - LastDate : DateTime — The last date the statistics cover.
+    - NumberOfMatches : unsigned Integer — Number of matches of specified type within given period.
+    - **VisitorsAverage** — Container for average visitor statistics.
+      - Terraces : unsigned Integer — Visitors on terraces.
+      - Basic : unsigned Integer — Visitors on basic seats.
+      - Roof : unsigned Integer — Visitors on seats under roof.
+      - VIP : unsigned Integer — Visitors in VIP lounge.
+      - Total : unsigned Integer — Total amount of visitors.
+    - **VisitorsMost** — Container for most visitor statistics.
+      - Terraces : unsigned Integer — Visitors on terraces.
+      - Basic : unsigned Integer — Visitors on basic seats.
+      - Roof : unsigned Integer — Visitors on seats under roof.
+      - VIP : unsigned Integer — Visitors in VIP lounge.
+      - Total : unsigned Integer — Total amount of visitors.
+    - **VisitorsLeast** — Container for least visitor statistics.
+      - Terraces : unsigned Integer — Visitors on terraces.
+      - Basic : unsigned Integer — Visitors on basic seats.
+      - Roof : unsigned Integer — Visitors on seats under roof.
+      - VIP : unsigned Integer — Visitors in VIP lounge.
+      - Total : unsigned Integer — Total amount of visitors.
+
 ## Output (actionType=)
 - **HattrickData** — Hattrick Data Container
   - **Arena** — Container for the data about the arena.
@@ -94,36 +124,6 @@ Which league to show statistics for. 0 = global statistic
       - Roof : unsigned Integer — The expanded capacity on the seats under roof.
       - VIP : unsigned Integer — The expanded capacity in the VIP lounge.
       - Total : unsigned Integer — The expanded current total capacity.
-
-## Output (actionType=MyArena)
-- **HattrickData** — Hattrick Data Container
-  - **MyArena** — Container for the statistics for the user's own arena.
-    - ArenaID : unsigned Integer — The globally unique arenaID.
-    - ArenaName : String — The name of the arena.
-    - ArenaImage : String — URL to an image of the arena. If this fails to load it usually means the team doesn't have a custom arena look. Fallback to ArenaFallbackImage.
-    - ArenaFallbackImage : String — The default image for an arena of this size, use this only when the ArenaImage fails to load.
-    - MatchTypes : ArenaMatchType — Matches that are be included in the statistics.
-    - FirstDate : DateTime — The first date the statistics cover.
-    - LastDate : DateTime — The last date the statistics cover.
-    - NumberOfMatches : unsigned Integer — Number of matches of specified type within given period.
-    - **VisitorsAverage** — Container for average visitor statistics.
-      - Terraces : unsigned Integer — Visitors on terraces.
-      - Basic : unsigned Integer — Visitors on basic seats.
-      - Roof : unsigned Integer — Visitors on seats under roof.
-      - VIP : unsigned Integer — Visitors in VIP lounge.
-      - Total : unsigned Integer — Total amount of visitors.
-    - **VisitorsMost** — Container for most visitor statistics.
-      - Terraces : unsigned Integer — Visitors on terraces.
-      - Basic : unsigned Integer — Visitors on basic seats.
-      - Roof : unsigned Integer — Visitors on seats under roof.
-      - VIP : unsigned Integer — Visitors in VIP lounge.
-      - Total : unsigned Integer — Total amount of visitors.
-    - **VisitorsLeast** — Container for least visitor statistics.
-      - Terraces : unsigned Integer — Visitors on terraces.
-      - Basic : unsigned Integer — Visitors on basic seats.
-      - Roof : unsigned Integer — Visitors on seats under roof.
-      - VIP : unsigned Integer — Visitors in VIP lounge.
-      - Total : unsigned Integer — Total amount of visitors.
 
 ## Output (actionType=OtherArenas)
 - **HattrickData** — Hattrick Data Container

@@ -5,6 +5,7 @@ Matches Archive
 ## Changelog
 ### Version 1.5 (2022-03-03)
 - Added sourceSystem name and CupId
+- CupLevel and CupLevelIndex are now 0 when MatchType is not 3, as in matches.
 
 ### Version 1.4 (2018-04-03)
 - Added tournament, ladder, preparation and single matches to the list, and MatchRuleId to the output.

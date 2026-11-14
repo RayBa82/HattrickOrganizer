@@ -30,12 +30,12 @@ Team id to get data for.
     - TrainerId : unsigned Integer — The id for the trainer.
     - **Avatar** — Container for the elements to build the avatar.
       - BackgroundImage : URI — The URL to the card background-image. This will show a silouette for non-supporter teams.
-      - **Layer** — Attribute: 'x' : unsigned Integer x-coordinate of image layer
+      - **Layer** — Attribute: 'x' : unsigned Integer x-coordinate of image layer Attribute: 'y' : unsigned Integer y-coordinate of image layer The container for each avatar bodypart item. Two attribute named X and Y indicates where the item should be positioned. There are several of this container for each player. This container will not be provided for non-supporter team.
         - Image : URI — The URL to the bodypart item.
   - **StaffMembers** — Container with list of Staff Members.
     - **Staff** — Container with a Staff
       - StaffId : unsigned Integer — The id for the staff.
       - **Avatar** — Container for the elements to build the avatar.
         - BackgroundImage : URI — The URL to the card background-image. This will show a silouette for non-supporter teams.
-        - **Layer** — Attribute: 'x' : unsigned Integer x-coordinate of image layer
+        - **Layer** — Attribute: 'x' : unsigned Integer x-coordinate of image layer Attribute: 'y' : unsigned Integer y-coordinate of image layer The container for each avatar bodypart item. Two attribute named X and Y indicates where the item should be positioned. There are several of this container for each player. This container will not be provided for non-supporter team.
           - Image : URI — The URL to the bodypart item.

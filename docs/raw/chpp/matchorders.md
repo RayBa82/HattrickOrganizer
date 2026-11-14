@@ -152,14 +152,35 @@ optional sourceSystem : sourceSystem{Default:Hattrick}
 Specifies which source system the match belongs to, this replace the old isYouth param
 optional lineup : String
 JSON formatted match orders to set for the match specified or to predict ratings. Must be specified as request body for POST. Required for actionType=setmatchorder and optional for actionType=predictratings, otherwise not used.
-
 See reference: #Lineup_30
+
+## Output (actionType=predictratings)
+- **HattrickData** — Hattrick Data Container for actionType=predictratings
+  - MatchID : unsigned Integer — The globally unique identifier of the match.
+  - sourceSystem : sourceSystem — Specifies which source system the match belongs to, this replace the old isYouth param
+  - **MatchData** — Container for the data about the predicted match ratings.
+    - TacticType : MatchTacticType — Integer value representing the the team tactic type specified for the match.
+    - TacticSkill : SkillLevel — Integer value representing the predicted tactic skill of the team.
+    - RatingMidfield : MatchRating — Integer value representing the predicted midfield rating of the team.
+    - RatingRightDef : MatchRating — Integer value representing the predicted right defence rating of the team.
+    - RatingMidDef : MatchRating — Integer value representing the predicted middle defence rating of the team.
+    - RatingLeftDef : MatchRating — Integer value representing the predicted left defence rating of the team.
+    - RatingRightAtt : MatchRating — Integer value representing the predicted right attack rating of the team.
+    - RatingMidAtt : MatchRating — Integer value representing the predicted middle attack rating of the team.
+    - RatingLeftAtt : MatchRating — Integer value representing the predicted left attack rating of the team.
+
+## Output (actionType=setmatchorder)
+- **HattrickData** — Hattrick Data Container for actionType=setmatchorder
+  - MatchID : unsigned Integer — The globally unique identifier of the match.
+  - sourceSystem : sourceSystem — Specifies which source system the match belongs to, this replace the old isYouth param
+  - **MatchData** — Attribute: 'OrdersSet' : Boolean True if setting the matchorder was successful. Only available for actionType=setmatchorder. Is empty except for possible Reason for failing to set matchorder.
+    - Reason : String — The reason for failing to set matchorder. Only available for actionType=setmatchorder and when OrdersSet=false.
 
 ## Output (actionType=view)
 - **HattrickData** — Hattrick Data Container for matchEvents=true
   - MatchID : unsigned Integer — The globally unique identifier of the match.
   - sourceSystem : sourceSystem — Specifies which source system the match belongs to, this replace the old isYouth param
-  - **MatchData** — Attribute: 'Available' : Boolean True if the user is allowed to see matchorder for this match, false if too close to match or user is not in match. Only available for actionType=view.
+  - **MatchData** — Attribute: 'Available' : Boolean True if the user is allowed to see matchorder for this match, false if too close to match or user is not in match. Only available for actionType=view. Container for the data about the match.
     - **HomeTeam** — The Home (formal, not taking arena location into account) team of the match.
       - HomeTeamID : Integer — The teamID of the Home team in the match. (Negative for street teams)
       - HomeTeamName : String — The team name of the Home team in the match.
@@ -220,28 +241,6 @@ See reference: #Lineup_30
         - NewPositionBehaviour : MatchBehaviourID — An integer representing the new behaviour for the (entering or staying) player.
         - PlayerOrderExtraInteger : MatchBehaviourID — An integer representing the new behaviour for the (entering or staying) player. (It will always have the value 0, as it is not used by the new match engine.)
 
-## Output (actionType=setmatchorder)
-- **HattrickData** — Hattrick Data Container for actionType=setmatchorder
-  - MatchID : unsigned Integer — The globally unique identifier of the match.
-  - sourceSystem : sourceSystem — Specifies which source system the match belongs to, this replace the old isYouth param
-  - **MatchData** — Attribute: 'OrdersSet' : Boolean True if setting the matchorder was successful. Only available for actionType=setmatchorder.
-    - Reason : String — The reason for failing to set matchorder. Only available for actionType=setmatchorder and when OrdersSet=false.
-
-## Output (actionType=predictratings)
-- **HattrickData** — Hattrick Data Container for actionType=predictratings
-  - MatchID : unsigned Integer — The globally unique identifier of the match.
-  - sourceSystem : sourceSystem — Specifies which source system the match belongs to, this replace the old isYouth param
-  - **MatchData** — Container for the data about the predicted match ratings.
-    - TacticType : MatchTacticType — Integer value representing the the team tactic type specified for the match.
-    - TacticSkill : SkillLevel — Integer value representing the predicted tactic skill of the team.
-    - RatingMidfield : MatchRating — Integer value representing the predicted midfield rating of the team.
-    - RatingRightDef : MatchRating — Integer value representing the predicted right defence rating of the team.
-    - RatingMidDef : MatchRating — Integer value representing the predicted middle defence rating of the team.
-    - RatingLeftDef : MatchRating — Integer value representing the predicted left defence rating of the team.
-    - RatingRightAtt : MatchRating — Integer value representing the predicted right attack rating of the team.
-    - RatingMidAtt : MatchRating — Integer value representing the predicted middle attack rating of the team.
-    - RatingLeftAtt : MatchRating — Integer value representing the predicted left attack rating of the team.
-
 ## References
 #Note
 With version 1.6: Corrected the ID for Substitute (Winger) to 117 (from 118) and corrected the ID for Substitute (Forward) to 118 (from 117).
@@ -281,7 +280,6 @@ RedCardCriteria	Description
 25	Opponent winger red-carded
 #Lineup_18
 Value	Description
-
 {
  "positions": [
   {"id":"283974499", "behaviour":"0"},
@@ -298,16 +296,13 @@ Value	Description
   {"id":"327345682", "behaviour":"4"},
   {"id":"312263029", "behaviour":"0"},
   {"id":"327875363", "behaviour":"0"},
-  
   {"id":"319107771", "behaviour":"0"},
   {"id":"224242073", "behaviour":"0"},
   {"id":"266402745", "behaviour":"0"},
   {"id":"304433518", "behaviour":"0"},
   {"id":"214058496", "behaviour":"0"},
-  
   {"id":"190611685", "behaviour":"0"},
   {"id":"226747085", "behaviour":"0"},
-  
   {"id":"226747085", "behaviour":"0"},
   {"id":"190611685", "behaviour":"0"},
   {"id":"98722167", "behaviour":"0"},
@@ -350,12 +345,9 @@ Value	Description
   }
  ]
 }
-
 	This is a JSON-formatted string.
-
 positions
 An array of all positions.
-
 First 14 positionslots (0-13) represent the players on the field, starting with the goalkeeper (0), followed by right defender (1), right central defender (2) and so on up to left forward (13).
 The next 5 slots are substitutes in the following order: goalkeeper, defender, midfielder, forward, winger.
 Line 20 and 21 is captain and set pieces taker.
@@ -370,7 +362,6 @@ newLineup should always be empty.
 coachModifer is the style of play and is a value between -10 (100% defensive) and 10 (100% offensive). The available values depends on the level of the teams tactical assistant. If the coach is offensive you can go 2 steps, or 20%, per level towards defensive, and vice versa. If you have a neutral coach you can go 1 step, or 10%, per level in either direction. This value is optional and is recommended to not include if the user doesn't have a tactical assistant. Ignored for youth matches.
 substitutions
 An array of all Subs / Orders. You can have 0-5 of subs/orders, plus an additional one per level of the teams tactical assistant. Send an empty array for 0 substitutions.
-
 playerin is the playerId of the player in the "in" box.
 playerout is consequently the playerId of the player in the "out" box, this should be same as playerin if its a behaviour change.
 orderType: 1 = substitution or behaviour change, 3 = position swap.
@@ -381,7 +372,6 @@ card: RedCardCriteria
 standing: GoalDiffCriteria
 #Lineup_30
 Value	Description
-
 {
  "positions": [
   {"id":283974499, "behaviour":0},
@@ -407,7 +397,6 @@ Value	Description
   {"id":214058496, "behaviour":0},
   {"id":304433518, "behaviour":0},
   {"id":0, "behaviour":0},
-
   {"id":224242073, "behaviour":0},
   {"id":0, "behaviour":0},
   {"id":224242073, "behaviour":0},
@@ -463,14 +452,10 @@ Value	Description
   }
  ]
 }
-
 	This is a JSON-formatted string with support of a larger bench.
-
 You must send the complete JSON-object as shown here, even when for example no captain was set. Always send "0" where no player was provided as the order is very important.
-
 positions
 An array of all positions.
-
 id is the PlayerId of the player you want.
 behaviour is the matchBehaviourID
 This represent the players on the field, starting with the goalkeeper (0), followed by right defender (1), right central defender (2) and so on up to left forward (13).
@@ -497,7 +482,6 @@ newLineup should always be empty.
 coachModifer is the style of play and is a value between -10 (100% defensive) and 10 (100% offensive). The available values depends on the level of the teams tactical assistant. If the coach is offensive you can go 2 steps, or 20%, per level towards defensive, and vice versa. If you have a neutral coach you can go 1 step, or 10%, per level in either direction. This value is optional and is recommended to not include if the user doesn't have a tactical assistant. Ignored for youth matches.
 substitutions
 An array of all Subs / Orders. You can have 0-5 of subs/orders, plus an additional one per level of the teams tactical assistant. Send an empty array for 0 substitutions.
-
 playerin is the playerId of the player in the "in" box.
 playerout is consequently the playerId of the player in the "out" box, this should be same as playerin if its a behaviour change.
 orderType: 1 = substitution or behaviour change, 3 = position swap.

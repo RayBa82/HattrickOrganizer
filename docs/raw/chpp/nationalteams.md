@@ -25,9 +25,9 @@ National teams
 - Added Output: HattrickData → NationalTeams → NationalTeam → LeagueID (Element)
 
 ### Version 1.3 {default}
-- First version
 
 ### Version 1.2
+- First version
 
 ## Input
 Only available inputs in this file version are shown.

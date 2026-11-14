@@ -1,12 +1,15 @@
-# CHPP file docs, captured 2026-09-26
+# CHPP file docs, captured 2026-11-14
 
-One Markdown file per CHPP file (57), plus `datatypes.md`, taken from the live CHPP docs at
-`https://www88.hattrick.org/Community/CHPP/NewDocs/`. The docs are login-only and render in the
-browser, so they were captured by a script in a logged-in Chrome tab, not fetched directly.
+One Markdown file per CHPP file (60), plus `datatypes.md`, taken from the live CHPP docs at
+`https://www82.hattrick.org/Community/CHPP/NewDocs/`. The docs are login-only and built in the
+browser, so they are captured by `utils/chpp-docs/capture.js` in a logged-in Chrome tab, not
+fetched directly. The script's header says how to run it; `utils/chpp-docs/split.py` then writes
+the files here.
 
 Each file holds:
 
-- **Changelog** - every version, with its added/removed inputs and outputs (duplicates removed).
+- **Changelog** - every version, with its notes and its added/removed inputs and outputs
+  (duplicates removed).
 - **Input** - the "Simple" input view: every parameter, per `actionType`.
 - **Output** - the "Simple" output tree for the **latest version**, once per `actionType`.
   Nesting is kept as an indented list: containers in bold, elements as `Name : Type — description`.

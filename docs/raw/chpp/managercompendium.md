@@ -3,6 +3,10 @@
 The manager compendium of the logged in user.
 
 ## Changelog
+### Version 1.8 (2026-11-10)
+- Add HasManagerLicense
+- Added Output: HattrickData → Manager → HasManagerLicense (Element)
+
 ### Version 1.7 (2026-02-26)
 - Add team LeagueSystemID
 - Added Output: HattrickData → Manager → Teams → Team → LeagueSystemID (Element)
@@ -50,6 +54,7 @@ The manager compendium of the logged in user.
 Only available inputs in this file version are shown.
 required file = managercompendium
 optional version = 
+1.8
 1.7
 1.6
 1.5
@@ -78,6 +83,7 @@ What user to show the data for.
     - **Currency** — Container for the currency selected by the user.
       - CurrencyName : String — The name of the currency.
       - CurrencyRate : Decimal — Decimal value specifying the relative currency rate to SEK (swedish krona).
+    - HasManagerLicense : Boolean — Whether the manager has completed the manager license.
     - **Teams** — Container for the list of Teams.
       - **Team** — Container for the data about a particular Team.
         - TeamId : unsigned Integer — The globally unique TeamID.
@@ -116,5 +122,5 @@ What user to show the data for.
         - NationalTeamName : String — The name of the national team.
     - **Avatar** — Container for the elements to build the avatar.
       - BackgroundImage : URI — The URL to the card background-image. This will show a silouette for non-supporter teams.
-      - **Layer** — Attribute: 'x' : unsigned Integer x-coordinate of image layer
+      - **Layer** — Attribute: 'x' : unsigned Integer x-coordinate of image layer Attribute: 'y' : unsigned Integer y-coordinate of image layer The container for each avatar bodypart item. Two attribute named X and Y indicates where the item should be positioned. There are several of this container for each player. This container will not be provided for non-supporter team.
         - Image : URI — The URL to the bodypart item.

@@ -3,10 +3,13 @@
 Get (live) match ticker
 
 ## Changelog
+### Version 2.4 (2026-11-10)
+- A behaviour change without a substitution has OrderType 4 in Substitutions.
+
 ### Version 2.3 (2022-05-04)
 - Fix MatchType for national teams,
 
-### Version 2.3 (2022-03-03)
+### Version 2.2 (2022-03-03)
 - Identify single match (61) and ladder match (62) on MatchType,
 
 ### Version 2.1 (2021-08-25)
@@ -91,8 +94,9 @@ Get (live) match ticker
 Only available inputs in this file version are shown.
 required file = live
 optional version = 
+2.4
 2.3
-2.3
+2.2
 2.1
 2.0
 1.9
@@ -129,7 +133,6 @@ optional useLiveEventsAndTexts : Boolean{Default:false}
 Should the events and texts be as on the live page on the site?
 optional lastShownIndexes : String
 JSON formatted array of last shown indexes for each match.
-
 See reference: #LastShownIndexes.
 viewAll
 Show all the events for all matches.
@@ -189,13 +192,13 @@ Specifies which source system the match belongs to, this replace the old isYouth
           - TeamID : unsigned Integer — The globally unique TeamID for which the orders were sent.
           - SubjectPlayerID : unsigned Integer — If a/ substitution: The player leaving. If b/ behaviour change: The player changing his behaviour. Or c/ position swap: the first player that will change his position.
           - ObjectPlayerID : unsigned Integer — The player entering (or once more the player changing behaviour). Or if position swap, the player to swap with.
-          - OrderType : matchOrderTypeID — The type of the order.
+          - OrderType : matchOrderTypeID — The type of the order. From version 2.4, a behaviour change without a substitution has OrderType 4. In earlier versions it has OrderType 1, the same as a substitution.
           - NewPositionId : MatchRoleID — An integer representing the new position for the (entering or staying) player.
           - NewPositionBehaviour : MatchBehaviourID — An integer representing the new behaviour for the (entering or staying) player.
           - MatchMinute : unsigned Integer — An integer indicating in which minute the order was executed.
           - MatchPart : matchPart — Which part of the match the order was executed.
       - **EventList** — Container for all the events.
-        - **Event** — Attribute: 'Index' : unsigned Integer Indicates the order of the event relative to the other events sent in the same batch for this match.
+        - **Event** — Attribute: 'Index' : unsigned Integer Indicates the order of the event relative to the other events sent in the same batch for this match. Container for the data for a certain event. # See table MatchEventTypes
           - Minute : unsigned Integer — The match minute when the event happened.
           - MatchPart : matchPart — Which part of the match the event happened.
           - EventKey : String — A unique key defining what type of event it was.
@@ -220,13 +223,13 @@ Specifies which source system the match belongs to, this replace the old isYouth
           - TeamID : unsigned Integer — The globally unique TeamID for which the orders were sent.
           - SubjectPlayerID : unsigned Integer — If a/ substitution: The player leaving. If b/ behaviour change: The player changing his behaviour. Or c/ position swap: the first player that will change his position.
           - ObjectPlayerID : unsigned Integer — The player entering (or once more the player changing behaviour). Or if position swap, the player to swap with.
-          - OrderType : matchOrderTypeID — The type of the order.
+          - OrderType : matchOrderTypeID — The type of the order. From version 2.4, a behaviour change without a substitution has OrderType 4. In earlier versions it has OrderType 1, the same as a substitution.
           - NewPositionId : MatchRoleID — An integer representing the new position for the (entering or staying) player.
           - NewPositionBehaviour : MatchBehaviourID — An integer representing the new behaviour for the (entering or staying) player.
           - MatchMinute : unsigned Integer — An integer indicating in which minute the order was executed.
           - MatchPart : matchPart — Which part of the match the order was executed.
       - **EventList** — Container for all the events.
-        - **Event** — Attribute: 'Index' : unsigned Integer Indicates the order of the event relative to the other events sent in the same batch for this match.
+        - **Event** — Attribute: 'Index' : unsigned Integer Indicates the order of the event relative to the other events sent in the same batch for this match. Container for the data for a certain event. # See table MatchEventTypes
           - Minute : unsigned Integer — The match minute when the event happened.
           - MatchPart : matchPart — Which part of the match the event happened.
           - EventKey : String — A unique key defining what type of event it was.
@@ -267,13 +270,13 @@ Specifies which source system the match belongs to, this replace the old isYouth
           - TeamID : unsigned Integer — The globally unique TeamID for which the orders were sent.
           - SubjectPlayerID : unsigned Integer — If a/ substitution: The player leaving. If b/ behaviour change: The player changing his behaviour. Or c/ position swap: the first player that will change his position.
           - ObjectPlayerID : unsigned Integer — The player entering (or once more the player changing behaviour). Or if position swap, the player to swap with.
-          - OrderType : matchOrderTypeID — The type of the order.
+          - OrderType : matchOrderTypeID — The type of the order. From version 2.4, a behaviour change without a substitution has OrderType 4. In earlier versions it has OrderType 1, the same as a substitution.
           - NewPositionId : MatchRoleID — An integer representing the new position for the (entering or staying) player.
           - NewPositionBehaviour : MatchBehaviourID — An integer representing the new behaviour for the (entering or staying) player.
           - MatchMinute : unsigned Integer — An integer indicating in which minute the order was executed.
           - MatchPart : matchPart — Which part of the match the order was executed.
-      - **EventList** — Attribute: 'Index' : unsigned Integer The order of the events
-        - **Event** — Attribute: 'Index' : unsigned Integer Indicates the order of the event relative to the other events sent in the same batch for this match.
+      - **EventList** — Attribute: 'Index' : unsigned Integer The order of the events Container for all the events.
+        - **Event** — Attribute: 'Index' : unsigned Integer Indicates the order of the event relative to the other events sent in the same batch for this match. Container for the data for a certain event. # See table MatchEventTypes
           - Minute : unsigned Integer — The match minute when the event happened.
           - MatchPart : matchPart — Which part of the match the event happened.
           - EventKey : String — A unique key defining what type of event it was.
@@ -303,8 +306,8 @@ Specifies which source system the match belongs to, this replace the old isYouth
         - AwayTeamID : Integer — The teamID of the Away team in the match. (Negative for street teams)
         - AwayTeamName : String — The team name of the Away team in the match.
         - AwayTeamShortName : String — The short team name of the Away team in the match.
-      - **EventList** — Attribute: 'Index' : unsigned Integer The order of the events
-        - **Event** — Attribute: 'Index' : unsigned Integer Indicates the order of the event relative to the other events sent in the same batch for this match.
+      - **EventList** — Attribute: 'Index' : unsigned Integer The order of the events Container for all the events.
+        - **Event** — Attribute: 'Index' : unsigned Integer Indicates the order of the event relative to the other events sent in the same batch for this match. Container for the data for a certain event. # See table MatchEventTypes
           - Minute : unsigned Integer — The match minute when the event happened.
           - MatchPart : matchPart — Which part of the match the event happened.
           - EventKey : String — A unique key defining what type of event it was.
@@ -319,21 +322,91 @@ Specifies which source system the match belongs to, this replace the old isYouth
       - NextEventMatchPart : matchPart — The matchPart in which the next matchevent will happen, this allows you to only ask for new events when needed. Only available while the match is ongoing. It should only be used by the application, it should NOT be shown to the users.
 
 ## Output (actionType=addMatch)
-Same as actionType=viewAll.
+- **HattrickData** — Hattrick Data Container for actionType=addMatch
+  - **MatchList** — Container for all the matches.
+    - **Match** — The container for a match. An attribute called Index signifies the number of the match in the list.
+      - MatchID : unsigned Integer — The globally unique identifier of the match.
+      - MatchType : MatchTypeID — Integer defining the type of match.
+      - SourceSystem : sourceSystem — Specifies which source system the match belongs to, this replace the old isYouth param
+      - MatchDate : DateTime — The start date (kick-off) of the match.
+      - **HomeTeam** — The Home (formal, not taking arena location into account) team of the match.
+        - HomeTeamID : Integer — The teamID of the Home team in the match. (Negative for street teams)
+        - HomeTeamName : String — The team name of the Home team in the match.
+        - HomeTeamShortName : String — The short team name of the Home team in the match.
+      - **AwayTeam** — The Away (formal, not taking arena location into account) team of the match.
+        - AwayTeamID : Integer — The teamID of the Away team in the match. (Negative for street teams)
+        - AwayTeamName : String — The team name of the Away team in the match.
+        - AwayTeamShortName : String — The short team name of the Away team in the match.
+      - **StartingLineup** — List of players in the hometeam who started the game
+        - **Player** — Container for a particular player that is part of the starting lineup.
+          - PlayerID : unsigned Integer — Globally unique ID of the player.
+          - RoleID : MatchRoleID — An integer indicating which formal 'slot' (Role) the player has filled in the match.
+          - PlayerName : String — The full name of the player.
+          - Behaviour : MatchBehaviourID — An integer indicating the individual order or repositioning that the player has played with. Not provided for Captain and Set Pieces taker.
+      - **Substitutions** — Container for the substitutions in the game.
+        - **Substitution** — Container for a particular substitution. An attribute named Index gives a counter.
+          - TeamID : unsigned Integer — The globally unique TeamID for which the orders were sent.
+          - SubjectPlayerID : unsigned Integer — If a/ substitution: The player leaving. If b/ behaviour change: The player changing his behaviour. Or c/ position swap: the first player that will change his position.
+          - ObjectPlayerID : unsigned Integer — The player entering (or once more the player changing behaviour). Or if position swap, the player to swap with.
+          - OrderType : matchOrderTypeID — The type of the order. From version 2.4, a behaviour change without a substitution has OrderType 4. In earlier versions it has OrderType 1, the same as a substitution.
+          - NewPositionId : MatchRoleID — An integer representing the new position for the (entering or staying) player.
+          - NewPositionBehaviour : MatchBehaviourID — An integer representing the new behaviour for the (entering or staying) player.
+          - MatchMinute : unsigned Integer — An integer indicating in which minute the order was executed.
+          - MatchPart : matchPart — Which part of the match the order was executed.
+      - **EventList** — Attribute: 'Index' : unsigned Integer The order of the events Container for all the events.
+        - **Event** — Attribute: 'Index' : unsigned Integer Indicates the order of the event relative to the other events sent in the same batch for this match. Container for the data for a certain event. # See table MatchEventTypes
+          - Minute : unsigned Integer — The match minute when the event happened.
+          - MatchPart : matchPart — Which part of the match the event happened.
+          - EventKey : String — A unique key defining what type of event it was.
+          - EventText : String — String describing the event as it would appear in the match report.
+          - SubjectTeamID : unsigned Integer — Integer that, for goals and chances, is indicating the attacking team. For other event, this field usually indicates the team that is doing something. It may indicate other things for other events - exactly what is not documented here and the SubjectTeamID information, while free to use for CHPPs is 'unsupported' and used 'at your own risk'.
+          - SubjectPlayerID : unsigned Integer — Integer that, for goals and chances, is indicating the scorer or the player failing to score. For other events, this field usually indicates the primarily active player. It may indicate other things for other events and like SubjectTeamID is 'unsupported' and used 'at your own risk'.
+          - ObjectPlayerID : unsigned Integer — Integer that, for regular goals and chances, is indicating the defending team's goal keeper. For special event chances/goals, the ObjectPlayer is often the assisting player of the attacking team, but can be any other player that is involved in the event. For other events, this field is used very freely and can indicate any kind of relevant integer data. Like SubjectPlayerID and SubjectTeamID, it is 'unsupported' and used at 'your own risk'.
+      - HomeGoals : unsigned Integer — The current number of goals in the match for the home team.
+      - AwayGoals : unsigned Integer — The current number of goals in the match for the away team.
+      - LastShownEventIndex : unsigned Integer — The last shown event. Use this as LastShownIndexes for actionType=viewNew.
+      - NextEventMinute : unsigned Integer — The minute that the next matchevent will happen, this allows you to only ask for new events when needed. Only available while the match is ongoing. It should only be used by the application, it should NOT be shown to the users.
+      - NextEventMatchPart : matchPart — The matchPart in which the next matchevent will happen, this allows you to only ask for new events when needed. Only available while the match is ongoing. It should only be used by the application, it should NOT be shown to the users.
 
 ## Output (actionType=deleteMatch)
-Same as actionType=clearAll.
+- **HattrickData** — Hattrick Data Container for actionType=deleteMatch
+  - **MatchList** — Container for all the matches.
+    - **Match** — The container for a match. An attribute called Index signifies the number of the match in the list.
+      - MatchID : unsigned Integer — The globally unique identifier of the match.
+      - MatchType : MatchTypeID — Integer defining the type of match.
+      - SourceSystem : sourceSystem — Specifies which source system the match belongs to, this replace the old isYouth param
+      - MatchDate : DateTime — The start date (kick-off) of the match.
+      - **HomeTeam** — The Home (formal, not taking arena location into account) team of the match.
+        - HomeTeamID : Integer — The teamID of the Home team in the match. (Negative for street teams)
+        - HomeTeamName : String — The team name of the Home team in the match.
+        - HomeTeamShortName : String — The short team name of the Home team in the match.
+      - **AwayTeam** — The Away (formal, not taking arena location into account) team of the match.
+        - AwayTeamID : Integer — The teamID of the Away team in the match. (Negative for street teams)
+        - AwayTeamName : String — The team name of the Away team in the match.
+        - AwayTeamShortName : String — The short team name of the Away team in the match.
+      - **EventList** — Attribute: 'Index' : unsigned Integer The order of the events Container for all the events.
+        - **Event** — Attribute: 'Index' : unsigned Integer Indicates the order of the event relative to the other events sent in the same batch for this match. Container for the data for a certain event. # See table MatchEventTypes
+          - Minute : unsigned Integer — The match minute when the event happened.
+          - MatchPart : matchPart — Which part of the match the event happened.
+          - EventKey : String — A unique key defining what type of event it was.
+          - EventText : String — String describing the event as it would appear in the match report.
+          - SubjectTeamID : unsigned Integer — Integer that, for goals and chances, is indicating the attacking team. For other event, this field usually indicates the team that is doing something. It may indicate other things for other events - exactly what is not documented here and the SubjectTeamID information, while free to use for CHPPs is 'unsupported' and used 'at your own risk'.
+          - SubjectPlayerID : unsigned Integer — Integer that, for goals and chances, is indicating the scorer or the player failing to score. For other events, this field usually indicates the primarily active player. It may indicate other things for other events and like SubjectTeamID is 'unsupported' and used 'at your own risk'.
+          - ObjectPlayerID : unsigned Integer — Integer that, for regular goals and chances, is indicating the defending team's goal keeper. For special event chances/goals, the ObjectPlayer is often the assisting player of the attacking team, but can be any other player that is involved in the event. For other events, this field is used very freely and can indicate any kind of relevant integer data. Like SubjectPlayerID and SubjectTeamID, it is 'unsupported' and used at 'your own risk'.
+      - HomeGoals : unsigned Integer — The current number of goals in the match for the home team.
+      - AwayGoals : unsigned Integer — The current number of goals in the match for the away team.
+      - LastShownEventIndex : unsigned Integer — The last shown event. Use this as LastShownIndexes for actionType=viewNew.
+      - NextEventMinute : unsigned Integer — The minute that the next matchevent will happen, this allows you to only ask for new events when needed. Only available while the match is ongoing. It should only be used by the application, it should NOT be shown to the users.
+      - NextEventMatchPart : matchPart — The matchPart in which the next matchevent will happen, this allows you to only ask for new events when needed. Only available while the match is ongoing. It should only be used by the application, it should NOT be shown to the users.
 
 ## References
 #MatchEventTypes
 Documentation of the match events in Hattrick here!
 #Note
 The viewAll and viewNew actionTypes are intended as the primary CHPP use of HT Live, in the following manner, which is the behaviour we recommend. We appreciate all developers who seek to minimize server load by using this recommended way:
-
 Upon first access per session, use viewAll. Then store the events locally in your application, user disk or similar. Then use viewNew for the repeating requests.
 #LastShownIndexes
 Value	Description
-
 {
  "matches": [
   {"matchId":"52383954", "sourceSystem":"youth", "index":"4"},
@@ -342,18 +415,13 @@ Value	Description
   {"matchId":"345947495", "index":"-1"}
  ]
 }
-
 	This is a JSON-formatted string.
-
 matches
 An array of all matches.
-
 matchId
 The globally unique matchID.
-
 sourceSystem
 Specifies which source system the match belongs to. Defaults to "Hattrick" if not provided.
-
 index
 The EventIndex, you should pick this from the <LastShownIndex>-element.
 You can provide -1 to get all the events if you like, but you might just as well not send that match at all and it will default to -1 anyway.

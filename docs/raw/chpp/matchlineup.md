@@ -3,6 +3,9 @@
 Match lineup for finished matches
 
 ## Changelog
+### Version 2.2 (2026-11-10)
+- Added OrderType 4 for behaviour changes in Substitutions. Before, they had OrderType 1, the same as a substitution.
+
 ### Version 2.1 (2022-03-03)
 - Replaced isYouth with sourceSystem in output.
 - Removed Output: HattrickData → IsYouth (Element)
@@ -61,6 +64,7 @@ Match lineup for finished matches
 Only available inputs in this file version are shown.
 required file = matchlineup
 optional version = 
+2.2
 2.1
 2.0
 1.9
@@ -110,7 +114,7 @@ Specifies which source system the match belongs to, this replace the old isYouth
         - TeamID : unsigned Integer — The globally unique TeamID for which the orders were sent.
         - SubjectPlayerID : unsigned Integer — If a/ substitution: The player leaving. If b/ behaviour change: The player changing his behaviour. Or c/ position swap: the first player that will change his position.
         - ObjectPlayerID : unsigned Integer — The player entering (or once more the player changing behaviour). Or if position swap, the player to swap with.
-        - OrderType : matchOrderTypeID — The type of the order.
+        - OrderType : matchOrderTypeID — The type of the order. From version 2.2, a behaviour change without a substitution has OrderType 4. In earlier versions it has OrderType 1, the same as a substitution.
         - NewPositionId : MatchRoleID — An integer representing the new position for the (entering or staying) player.
         - NewPositionBehaviour : MatchBehaviourID — An integer representing the new behaviour for the (entering or staying) player.
         - MatchMinute : unsigned Integer — An integer indicating in which minute the order was executed.

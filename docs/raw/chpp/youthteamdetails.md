@@ -3,6 +3,10 @@
 Youth team information.
 
 ## Changelog
+### Version 1.5 (2026-11-10)
+- Added IsPlayingMatch.
+- Added Output: HattrickData → YouthTeam → IsPlayingMatch (Element)
+
 ### Version 1.4 (2026-02-26)
 - Added team LeagueSystemId.
 - Added Output: HattrickData → YouthTeam → LeagueSystemID (Element)
@@ -26,6 +30,7 @@ Youth team information.
 Only available inputs in this file version are shown.
 required file = youthteamdetails
 optional version = 
+1.5
 1.4
 1.3
 1.2
@@ -46,6 +51,7 @@ Set it to 'true' to get ScoutList container.
     - UserID : unsigned Integer — The globally unique UserID for the owner of the team.
     - GenderID : GenderID — The gender of the youth team.
     - LeagueSystemID : LeagueSystemID — The system type of the league for this team.
+    - IsPlayingMatch : Boolean — Whether the youth team is currently playing a match.
     - **Country** — Container for the country of the team.
       - CountryID : unsigned Integer — The globally unique CountryID.
       - CountryName : String — The name of the country.

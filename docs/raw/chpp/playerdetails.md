@@ -3,6 +3,26 @@
 Detailed information for a player
 
 ## Changelog
+### Version 3.3 (2026-11-10)
+- Added FamilyRelation and TrophyList containers, and TransferCompareAverage and TransferCompareAverageDate.
+- Added Output: HattrickData → Player → TransferCompareAverage (Element)
+- Added Output: HattrickData → Player → TransferCompareAverageDate (Element)
+- Added Output: HattrickData → Player → FamilyRelation (Container)
+- Added Output: HattrickData → Player → FamilyRelation → RelatedPlayerId (Element)
+- Added Output: HattrickData → Player → FamilyRelation → RelatedPlayerSourceId (Element)
+- Added Output: HattrickData → Player → FamilyRelation → RelatedPlayerName (Element)
+- Added Output: HattrickData → Player → FamilyRelation → RelationshipTypeId (Element)
+- Added Output: HattrickData → Player → TrophyList (Container)
+- Added Output: HattrickData → Player → TrophyList → Trophy (Container)
+- Added Output: HattrickData → Player → TrophyList → Trophy → TrophyTypeId (Element)
+- Added Output: HattrickData → Player → TrophyList → Trophy → TeamId (Element)
+- Added Output: HattrickData → Player → TrophyList → Trophy → TeamName (Element)
+- Added Output: HattrickData → Player → TrophyList → Trophy → TrophySeason (Element)
+- Added Output: HattrickData → Player → TrophyList → Trophy → LeagueLevel (Element)
+- Added Output: HattrickData → Player → TrophyList → Trophy → LeagueLevelUnitId (Element)
+- Added Output: HattrickData → Player → TrophyList → Trophy → LeagueLevelUnitName (Element)
+- Added Output: HattrickData → Player → TrophyList → Trophy → GainedDate (Element)
+
 ### Version 3.2 (2026-02-09)
 - Include player gender.
 - Added Output: HattrickData → Player → GenderID (Element)
@@ -113,6 +133,7 @@ Detailed information for a player
 Only available inputs in this file version are shown.
 required file = playerdetails
 optional version = 
+3.3
 3.2
 3.1
 3.0
@@ -174,8 +195,8 @@ required_1: Input teamId is required for actionType=placeBid. Only for version 2
     - Cards : unsigned Integer — The number of currently accumulated cards. If the player is suspended, this will return 3 (whether the player has actually accumulated 3 bookings, or if he has become suspended by being sent off after 2 bookings in the same game). If a match is running this value is not available
     - InjuryLevel : Integer — The number of weeks the player is predicted to be injured. If the player is bruised, a value of 0 is returned. If the player is healthy, a value of -1 is returned. If a match is running this value is not available
     - Statement : String (HTML encoded) — If the owner is a HT Supporter, he may have provided a Statement from his players.
-    - PlayerLanguage : String — This container and its elements is only shown if the user has supporter
-    - PlayerLanguageID : unsigned Integer — This container and its elements is only shown if the user has supporter
+    - PlayerLanguage : String — The language the player speaks in his Statement, if existing.
+    - PlayerLanguageID : unsigned Integer — The languageID the player speaks in his Statement, if existing.
     - **TrainerData** — Container for the skills that relate to coach/trainer ability. Only provided if the player has been made into a trainer, 'has gained trainer license'.
       - TrainerType : unsigned Integer — 0 = defensive, 1 = offensive, 2 = balanced
       - TrainerSkillLevel : unsigned Integer — The trainer skill level, from 1 (lowest) to 5 (highest).
@@ -214,7 +235,7 @@ required_1: Input teamId is required for actionType=placeBid. Only for version 2
     - CareerGoals : unsigned Integer — The total number of goals throughout this player's carreer. If a match is running this value is not available
     - CareerHattricks : unsigned Integer — The total number of hattricks throughout this player's carreer. If a match is running this value is not available
     - LeagueGoals : unsigned Integer — The number of goals in the league this season. If a match is running this value is not available
-    - CupGoals : unsigned Integer — Attribute: 'Available' : Boolean If a match is running this value is not available
+    - CupGoals : unsigned Integer — Attribute: 'Available' : Boolean If a match is running this value is not available The number of goals in the cup this season.
     - FriendliesGoals : unsigned Integer — The number of goals in friendlies this season. If a match is running this value is not available
     - MatchesCurrentTeam : unsigned Integer — The total number of matches for current team. If a match is running this value is not available
     - GoalsCurrentTeam : unsigned Integer — The number of goals in friendlies this season. If a match is running this value is not available
@@ -231,6 +252,23 @@ required_1: Input teamId is required for actionType=placeBid. Only for version 2
       - **BidderTeam** — Container with the information about the team holding the highest bid. Empty if no bids have been made.
         - TeamID : unsigned Integer — The globally unique TeamID.
         - TeamName : String — The full team name.
+    - TransferCompareAverage : Money — The transfer estimate shown on the player's page. Only shown when the skills are shown (own player, transfer-listed player or national team coach) and the player has an estimate.
+    - TransferCompareAverageDate : DateTime — The date and time the transfer estimate was last updated. Shown together with TransferCompareAverage.
+    - **FamilyRelation** — Container for the player's family relation, if any (a player has at most one). Empty if the player has no known relation.
+      - RelatedPlayerId : unsigned Integer* — The id of the related player. RelatedPlayerSourceId says what kind of player it is, so which file or page to use with the id.
+      - RelatedPlayerSourceId : familyRelationSourceID — What kind of player the relative is: a senior player, a Hall of Fame player, a youth player or a staff member.
+      - RelatedPlayerName : String* — The full name of the related player.
+      - RelationshipTypeId : familyRelationTypeID — TypeId for the family relation.
+    - **TrophyList** — Container for the player's trophies. Empty unless the club the player plays for has Gold supporter.
+      - **Trophy** — A single trophy.
+        - TrophyTypeId : trophyID — TypeId for the trophy
+        - TeamId : unsigned Integer — The id of the club the trophy was won with. 0 for national team trophies and top scorer trophies.
+        - TeamName : String — The name of the team the trophy was won with. For national team trophies, the name of the national team. Empty for top scorer trophies.
+        - TrophySeason : unsigned Integer — The season the trophy was gained.
+        - LeagueLevel : unsigned Integer — Depends on the trophy type. For series titles (17) it is the division level. For national team trophies (301-313) it is the medal: 1 gold, 2 silver, 3 bronze. Always 1 for top scorer trophies (19, 20, 93).
+        - LeagueLevelUnitId : unsigned Integer — The id of the competition: the series id for types 17 and 20, the cup id for type 16 and the tournament id for national team trophies (301-313).
+        - LeagueLevelUnitName : String — The name of the series, cup or tournament, when the trophy stores one.
+        - GainedDate : DateTime — The date the trophy was gained.
     - **LastMatch** — Last played match. If MatchId = 0 it either means that the player has not played a match yet, or that he's in a bot team.
       - Date : DateTime — Date of last played match.
       - MatchId : unsigned Integer — Id of the last played match.

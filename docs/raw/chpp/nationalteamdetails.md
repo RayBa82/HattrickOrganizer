@@ -3,6 +3,16 @@
 National Team information
 
 ## Changelog
+### Version 2.0 (2026-11-10)
+- Added AssistantCoach and Scouts.
+- Added Output: HattrickData → Team → AssistantCoach (Container)
+- Added Output: HattrickData → Team → AssistantCoach → UserID (Element)
+- Added Output: HattrickData → Team → AssistantCoach → Loginname (Element)
+- Added Output: HattrickData → Team → Scouts (Container)
+- Added Output: HattrickData → Team → Scouts → Scout (Container)
+- Added Output: HattrickData → Team → Scouts → Scout → UserID (Element)
+- Added Output: HattrickData → Team → Scouts → Scout → Loginname (Element)
+
 ### Version 1.9 (2016-06-28)
 - Removed Output: HattrickData → Team → Trainer (Container)
 - Removed Output: HattrickData → Team → Trainer → PlayerID (Element)
@@ -37,14 +47,15 @@ National Team information
 - Added Output: HattrickData → Team → Morale (Element)
 - Added Output: HattrickData → Team → SelfConfidence (Element)
 - Added Output: HattrickData → Team → RatingScore (Element)
-- First version
 
 ### Version 1.2
+- First version
 
 ## Input
 Only available inputs in this file version are shown.
 required file = nationalteamdetails
 optional version = 
+2.0
 1.9
 1.8
 1.7
@@ -66,6 +77,13 @@ What national team type to list.
     - **NationalCoach** — Container for the data about the national coach.
       - NationalCoachUserID : unsigned Integer — The globally unique UserID for the national coach of the team.
       - NationalCoachLoginname : String — The 'username' or 'nickname' used in Forums.
+    - **AssistantCoach** — Container for the data about the national team's assistant coach. Empty if the team has no assistant coach.
+      - UserID : unsigned Integer — The UserID of the assistant coach.
+      - Loginname : String — The username of the assistant coach.
+    - **Scouts** — Container for the data about the national team's scouts. Empty if the team has no scouts.
+      - **Scout** — Container for a single scout. Repeated once per filled scout slot.
+        - UserID : unsigned Integer — The UserID of the scout.
+        - Loginname : String — The username of the scout.
     - **League** — Container for the data about the league ('Sverige', 'England' and so on) the team is part of.
       - LeagueID : unsigned Integer — The globally unique LeagueID.
       - LeagueName : String — The League name.
@@ -84,7 +102,7 @@ What national team type to list.
     - Experience550 : SkillLevel — The team's experience of playing 5-5-0.
     - Experience253 : SkillLevel — The team's experience of playing 2-5-3.
     - Morale : TeamSpiritID — The morale/team spirit of the team. Will be hidden (empty) 4 hours before every match the team plays and until the match ends.
-    - SupportersPopularity : SupportersPopularityID — Attribute: 'Available' : Boolean If the team is playing a match, the attribute is set to false and the container is empty, otherwise to true.
+    - SupportersPopularity : SupportersPopularityID — Attribute: 'Available' : Boolean If the team is playing a match, the attribute is set to false and the container is empty, otherwise to true. The mood of the teams fan club.
     - SelfConfidence : SelfConfidenceID — The self confidence of the team. Will be hidden (empty) 4 hours before every match the team plays and until the match ends.
     - RatingScore : unsigned Integer — A integer that indicates the current rating score of the national team.
     - FanClubSize : unsigned Integer — A integer that indicates the current fanclub size of the national team.

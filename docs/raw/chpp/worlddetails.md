@@ -3,6 +3,12 @@
 General Information about all countries in HT World
 
 ## Changelog
+### Version 2.1 (2026-11-10)
+- Added TotalTeams, NumberOfForeignOwners and MaxPercentageOfForeignOwners to leagues.
+- Added Output: HattrickData → LeagueList → League → TotalTeams (Element)
+- Added Output: HattrickData → LeagueList → League → NumberOfForeignOwners (Element)
+- Added Output: HattrickData → LeagueList → League → MaxPercentageOfForeignOwners (Element)
+
 ### Version 2.0 (2026-02-09)
 - Added LeagueSystemId to leagues.
 - Added Output: HattrickData → LeagueList → League → LeagueSystemID (Element)
@@ -59,7 +65,6 @@ General Information about all countries in HT World
 ### Version 1.3 (2011-02-12) {default}
 - Added Output: HattrickData → LeagueList → League → NationalTeamId (Element)
 - Added Output: HattrickData → LeagueList → League → U20teamId (Element)
-- First version
 
 ### Version 1.2 {default}
 - First version
@@ -68,6 +73,7 @@ General Information about all countries in HT World
 Only available inputs in this file version are shown.
 required file = worlddetails
 optional version = 
+2.1
 2.0
 1.9
 1.8
@@ -107,7 +113,7 @@ optional_1: You can set countryID or leagueID or none. If countryID and leagueID
       - LeagueSystemID : LeagueSystemID — The system type of the league.
       - LanguageId : unsigned Integer — The ID of the default language of the league.
       - LanguageName : String — The name of the default language of the league.
-      - **Country** — Attribute: 'Available' : Boolean If the league does not have a country this container is unavailable.
+      - **Country** — Attribute: 'Available' : Boolean If the league does not have a country this container is unavailable. Container for the country that is related to the league. It may seem confusing what the difference is between a league and a country. Well, there isn't much, except that in some cases we refer to CountryID instead of LeagueID. The easiest way to deal with it is perhaps to just say: "It's the way it is. Just learn to live with it.". Some things are formally tied to the Country instead of the League. We have chosen to maintain that relationship in the XML output, hence the sub-containers of Country.
         - CountryID : unsigned Integer — The globally unique CountryID of country.
         - CountryName : String — The name of the country.
         - CurrencyName : String — The name of the currency in this country.
@@ -129,6 +135,9 @@ optional_1: You can set countryID or leagueID or none. If countryID and leagueID
       - ActiveTeams : unsigned Integer — Integer specifying the number of active teams in the league, as of last daily count.
       - ActiveUsers : unsigned Integer — Integer specifying the number of active users in the league, as of last daily count.
       - WaitingUsers : unsigned Integer — Integer specifying the number of users on the waiting list in the league. These users are not included in the ActiveUsers, so ActiveUsers + WaitingUsers would give a sort of total number of users.
+      - TotalTeams : unsigned Integer — The number of teams in the league's divisions, used to work out the foreign-owner limit. Empty if the league is not open for additional clubs.
+      - NumberOfForeignOwners : unsigned Integer — The number of teams in the league owned by users from another league, including pending additional club applications. Empty if the league is not open for additional clubs.
+      - MaxPercentageOfForeignOwners : unsigned Integer — The highest share of TotalTeams, in percent, that users from another league can own. The limit is TotalTeams * MaxPercentageOfForeignOwners / 100, rounded up. Empty if the league is not open for additional clubs.
       - TrainingDate : DateTime — The date and time when the next training update will start in this league.
       - EconomyDate : DateTime — The date and time when the next economy update will start in this league.
       - CupMatchDate : DateTime — The date and time when the next cup round is being checked for (that is, there are not necessarily any matches to play, if the cup has been finished).
@@ -181,6 +190,9 @@ optional_1: You can set countryID or leagueID or none. If countryID and leagueID
       - ActiveTeams : unsigned Integer — Integer specifying the number of active teams in the league, as of last daily count.
       - ActiveUsers : unsigned Integer — Integer specifying the number of active users in the league, as of last daily count.
       - WaitingUsers : unsigned Integer — Integer specifying the number of users on the waiting list in the league. These users are not included in the ActiveUsers, so ActiveUsers + WaitingUsers would give a sort of total number of users.
+      - TotalTeams : unsigned Integer — The number of teams in the league's divisions, used to work out the foreign-owner limit. Empty if the league is not open for additional clubs.
+      - NumberOfForeignOwners : unsigned Integer — The number of teams in the league owned by users from another league, including pending additional club applications. Empty if the league is not open for additional clubs.
+      - MaxPercentageOfForeignOwners : unsigned Integer — The highest share of TotalTeams, in percent, that users from another league can own. The limit is TotalTeams * MaxPercentageOfForeignOwners / 100, rounded up. Empty if the league is not open for additional clubs.
       - TrainingDate : DateTime — The date and time when the next training update will start in this league.
       - EconomyDate : DateTime — The date and time when the next economy update will start in this league.
       - CupMatchDate : DateTime — The date and time when the next cup round is being checked for (that is, there are not necessarily any matches to play, if the cup has been finished).

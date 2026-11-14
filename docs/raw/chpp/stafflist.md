@@ -3,6 +3,10 @@
 A list of all staff members
 
 ## Changelog
+### Version 1.3 (2026-11-10)
+- Added ContractExpires to staff members.
+- Added Output: HattrickData → StaffList → StaffMembers → Staff → ContractExpires (Element)
+
 ### Version 1.2 (2023-09-07)
 - Added all trainer info
 - Added Output: HattrickData → StaffList → Trainer (Container)
@@ -29,6 +33,7 @@ A list of all staff members
 Only available inputs in this file version are shown.
 required file = stafflist
 optional version = 
+1.3
 1.2
 1.1
 1.0
@@ -59,5 +64,6 @@ Team id to get data for.
         - HiredDate : DateTime — The date and time that the staff was hired.
         - Cost : unsigned Integer — The cost per week for the staff.
         - HofPlayerId : unsigned Integer — The id of the hall of fame player associated with this staff member. 0 if none.
+        - ContractExpires : DateTime — The date and time the current contract ends. If the manager has turned on automatic renewal, a new contract starts on this date. Otherwise the staff member leaves the club.
     - TotalStaffMembers : unsigned Integer — Total of Staff Members in the staff
     - TotalCost : unsigned Integer — Total cost per week for all the staff members

@@ -36,7 +36,7 @@ Specific match round for this tournament. It will pick the last match round if t
       - MatchDate : DateTime — The start date and time (kick-off) of the match.
       - MatchType : MatchTypeID — Integer defining the type of match.
       - MatchRound : unsigned Integer — The matchround.
-      - Group : unsigned Integer — The group that the game belongs to. If 0 it means this is a playoff match. Use the order of those matches is provided in to display the upcoming playoff rounds (winners of the first match in the list will face the winner of the second match in the list, and so on. The winner of the first match will be the home team).
+      - Group : unsigned Integer — The group that the game belongs to.If 0 it means this is a playoff match. Use the order of those matches is provided in to display the upcoming playoff rounds (winners of the first match in the list will face the winner of the second match in the list, and so on. The winner of the first match will be the home team).
       - Status : MatchStatus — Current status of the match (not started, ongoing or played).
       - HomeGoals : unsigned Integer — The current number of goals in the match for the home team. This will be 0 until the match is finished.
       - AwayGoals : unsigned Integer — The current number of goals in the match for the away team. This will be 0 until the match is finished.

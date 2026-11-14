@@ -3,6 +3,19 @@
 Search the transfer market. This file is NOT meant to be fetched by bots to automatically scan the transfer market, but instead upon manual user request.
 
 ## Changelog
+### Version 1.2 (2026-11-10)
+- priceMin and priceMax are now read in SEK, like every other money value in CHPP. Earlier versions mistakenly read them in the manager's own currency.
+- Added salaryMin and salaryMax.
+- Added transferCompareAvgMin and transferCompareAvgMax.
+- Removed Input: priceMin
+- Removed Input: priceMax
+- Added Input: priceMin
+- Added Input: priceMax
+- Added Input: salaryMin
+- Added Input: salaryMax
+- Added Input: transferCompareAvgMin
+- Added Input: transferCompareAvgMax
+
 ### Version 1.1 (2022-03-03)
 - Added Salary.
 - Added Output: HattrickData → TransferSearch → TransferResults → TransferResult → Details → Salary (Element)
@@ -14,6 +27,7 @@ Search the transfer market. This file is NOT meant to be fetched by bots to auto
 Only available inputs in this file version are shown.
 required file = transfersearch
 optional version = 
+1.2
 1.1
 1.0
 required ageMin : unsigned Integer
@@ -60,6 +74,14 @@ optional priceMin : Money{Default:Not specified}
 Minimum price to search for.
 optional priceMax : Money{Default:Not specified}
 Maximum price to search for.
+optional salaryMin : Money{Default:Not specified}
+Minimum weekly salary to search for. It is the player's base salary, without the extra 20% for foreign players, the same value as Salary in the results.
+optional salaryMax : Money{Default:Not specified}
+Maximum weekly salary to search for. It is the player's base salary, without the extra 20% for foreign players, the same value as Salary in the results.
+optional transferCompareAvgMin : Money{Default:Not specified}
+Minimum transfer estimate to search for. It is the estimate saved when the player was put on the market. Players without an estimate are left out when this is set.
+optional transferCompareAvgMax : Money{Default:Not specified}
+Maximum transfer estimate to search for. It is the estimate saved when the player was put on the market. Players without an estimate are included.
 optional pageSize : unsigned Integer{Default:25}
 How many results to be shown in each page, the maximum value is 100.
 optional pageIndex : unsigned Integer{Default:0}

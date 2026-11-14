@@ -3,12 +3,16 @@
 Alliance / Federation search
 
 ## Changelog
+### Version 1.5 (2026-11-10)
+- Added the userId input to SearchType 5, to get the federations of another user.
+- Added Input: userId
+
 ### Version 1.4 (2013-03-04)
 - Removed Output: HattrickData → UserIsSupporter (Element)
 - Added Output: HattrickData → UserSupporterTier (Element)
 
 ### Version 1.3 (2011-05-30)
-- Added Action for 'SearchType': 5 (Get user's federations)
+- Added Action for 'actionType': 5 (Get the federations of the currently authenticated manager, or of another user when the userId input is supplied (from version 1.5).)
 
 ### Version 1.2
 - Removed Output: HattrickData → UserHasClubHouse (Element)
@@ -20,6 +24,7 @@ Alliance / Federation search
 Only available inputs in this file version are shown.
 required file = alliances
 optional version = 
+1.5
 1.4
 1.3
 1.2
@@ -64,9 +69,11 @@ What to search for
 optional PageIndex : unsigned Integer{Default:0}
 Zero based pageindex to retrieve. If searchresult results in more than one page you will know the total number of pages. Each result may not return more than 25 rows.
 5
-Get user's federations
+Get the federations of the currently authenticated manager, or of another user when the userId input is supplied (from version 1.5).
+optional userId : unsigned Integer{Default:Your userId}
+The user to show the federations for. Gives AccessDenied if the user does not exist or has no team.
 
-## Output
+## Output (actionType=1)
 - **HattrickData** — Hattrick Data Container
   - Pages : unsigned Integer — Number of result pages.
   - PageIndex : unsigned Integer — Zero based pageindex. If searchresult results in more than one page you will know the total number of pages. Each result may not return more than 25 rows.
@@ -76,3 +83,15 @@ Get user's federations
       - AllianceID : unsigned Integer — The globally unique AllianceID.
       - AllianceName : String (HTML encoded) — The name of the federation.
       - AllianceDescription : String (HTML encoded) — Description of the federation.
+
+## Output (actionType=2)
+Same as actionType=1.
+
+## Output (actionType=3)
+Same as actionType=1.
+
+## Output (actionType=4)
+Same as actionType=1.
+
+## Output (actionType=5)
+Same as actionType=1.

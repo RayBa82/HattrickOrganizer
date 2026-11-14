@@ -6,6 +6,7 @@ National team matches
 ### Version 1.4 (2022-03-03)
 - Add teamId to national team matches.
 - Fixed the matchType for national team matches.
+- Fixed the matchType for upcoming national team matches, and added MatchContextId to them.
 - Added Output: HattrickData → Matches → Match → HomeTeamId (Element)
 - Added Output: HattrickData → Matches → Match → AwayTeamId (Element)
 

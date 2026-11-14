@@ -33,7 +33,7 @@ required_1: Inputs transferId and trackingTypeId are required for actionType=ign
 ## Output (actionType=view)
 - **HattrickData** — Hattrick Data Container.
   - TeamId : unsigned Integer — Globally unique identifier of the team whose bids are shown.
-  - **BidItems** — Attribute: 'TrackingTypeId' : trackingTypeId Type of tracking, the categories the transfers are grouped in.
+  - **BidItems** — Attribute: 'TrackingTypeId' : trackingTypeId Type of tracking, the categories the transfers are grouped in. Container for the current transfers.
     - **BidItem** — Container for each transfer.
       - TransferId : unsigned Integer — Unique id for the transfer. Only needed for the ignore functionality.
       - PlayerId : unsigned Integer — The globally unique playerID for the transferlisted player.

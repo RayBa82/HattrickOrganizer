@@ -3,6 +3,12 @@
 Team information
 
 ## Changelog
+### Version 4.0 (2026-11-10)
+- Added CurrencyName and CurrencyRate for the user making the request.
+- Added Output: HattrickData → User → Currency (Container)
+- Added Output: HattrickData → User → Currency → CurrencyName (Element)
+- Added Output: HattrickData → User → Currency → CurrencyRate (Element)
+
 ### Version 3.9 (2026-02-26)
 - Added team LeagueSystemId.
 - Added Output: HattrickData → Teams → Team → LeagueSystemID (Element)
@@ -407,6 +413,7 @@ Team information
 Only available inputs in this file version are shown.
 required file = teamdetails
 optional version = 
+4.0
 3.9
 3.8
 3.7
@@ -447,6 +454,9 @@ required_1: teamID or userID is required!
     - **Language** — Container for the data about the language the user has chosen as his/her default language.
       - LanguageID : unsigned Integer — The globally unique LanguageID.
       - LanguageName : String — The language name
+    - **Currency** — Container for the currency the user has chosen in their preferences. Only shown when the data is for the user making the request.
+      - CurrencyName : String — The name of the currency.
+      - CurrencyRate : Decimal — Decimal value specifying the relative currency rate to SEK (swedish krona).
     - SupporterTier : supporterTier — The current level of Hattrick Supporter that the user has (including Diamond). Empty if not a Supporter.
     - Loginname : String — The 'username' or 'nickname' used in Forums and around the site. Not supplied if the team is ownerless.
     - Name : String — The user's personal name or the value 'HIDDEN' to indicate that the user has chosen to hide it. Not supplied if the team is ownerless.
@@ -511,13 +521,13 @@ required_1: teamID or userID is required!
         - FanclubName : String — The name of the fanclub.
         - FanclubSize : unsigned Integer — The amount of members in the fanclub.
       - LogoURL : URI — The logo URL that the team has specified.
-      - **Guestbook** — This container and its elements is only shown if the user has supporter
+      - **Guestbook** — Container for the data about the team's guestbook.
         - NumberOfGuestbookItems : unsigned Integer — The number of postings in the team's guestbook.
-      - **PressAnnouncement** — This container and its elements is only shown if the user has supporter
+      - **PressAnnouncement** — Container for the data about the team's most recent PressAnnouncement.
         - Subject : String — The subject text specified for the PressAnnouncement.
         - Body : String — The body of the PressAnnouncement.
         - SendDate : DateTime — The time and date when the PressAnnouncement was submitted.
-      - **TeamColors** — This container and its elements is only shown if the user has supporter
+      - **TeamColors** — Container for the team's club theme colors. Empty if no theme has been set for the club.
         - BackgroundColor : String — The defined background color from the club theme.
         - Color : String — The matching text color to the defined background color.
       - DressURI : URI — URI to an image representing the dress of the team.
@@ -552,7 +562,7 @@ required_1: teamID or userID is required!
           - CupLeagueLevel : unsigned Integer — The league level of the cup. 0 for the main cups, division 1-6. Empty when not a cup trophy (16).
           - CupLevel : CupLevel — The level of the cup. Empty when not a cup trophy (16).
           - CupLevelIndex : CupLevelIndex — Which type of challenger cup. Always 1 for national and consolation cups. Empty when not a cup trophy (16).
-      - **SupportedTeams** — Attribute: 'TotalItems' : unsigned Integer Shows how many teams the user supports in total.
+      - **SupportedTeams** — Attribute: 'TotalItems' : unsigned Integer Shows how many teams the user supports in total. Attribute: 'MaxItems' : unsigned Integer Shows how many teams that can maximum be outputted in this list. Container for the the supported teams. It will be empty if the user have no supporters and not present if the user are not a supporter. Only available, when includeSupporters=true.
         - **SupportedTeam** — Container for a supported team. Not supplied if the user dont have no supporters.
           - UserId : unsigned Integer — The globally unique UserID for the owner of the supported team.
           - LoginName : String — The 'username' or 'nickname' used in Forums and around the site.
@@ -582,7 +592,7 @@ required_1: teamID or userID is required!
             - PressAnnouncementSendDate : DateTime — The time and date when the PressAnnouncement was submitted.
             - PressAnnouncementSubject : String — The subject text specified for the PressAnnouncement.
             - PressAnnouncementBody : String — The body of the PressAnnouncement.
-      - **MySupporters** — Attribute: 'TotalItems' : unsigned Integer Shows how many teams supports the team in total.
+      - **MySupporters** — Attribute: 'TotalItems' : unsigned Integer Shows how many teams supports the team in total. Attribute: 'MaxItems' : unsigned Integer Shows how many teams that can maximum be outputted in this list. Container for the the supported teams. It will be empty if the user have no supporters and not present if the user are not a supporter. Only available, when includeSupporters=true.
         - **SupporterTeam** — Container for a supported team. Not supplied if the user dont have no supporters.
           - UserId : unsigned Integer — The globally unique UserID for the owner of the supporter team.
           - LoginName : String — The 'username' or 'nickname' used in Forums and around the site.

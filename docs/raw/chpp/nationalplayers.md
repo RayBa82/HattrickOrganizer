@@ -52,15 +52,15 @@ What national team type to list.
   - ActionType : String — The requested ActionType.
   - TeamID : unsigned Integer — The globally unique nationalTeamID.
   - TeamName : String — The team name.
-  - **Players** — Container for the players. Will be hidden (empty) 4 hours before every match the team plays and until the match starts.
+  - **Players** — Container for the players. Will be hidden (empty) from 8 hours before every match the team plays until the match starts. It is not hidden for the national team's coach, assistant coach and scouts.
     - **Player** — A player enlisted in this national team.
       - PlayerID : unsigned Integer — The globally unique identifier of the player.
       - PlayerName : unsigned Integer — The name of the player.
       - Cards : unsigned Integer — The number of currently accumulated cards. If the player is suspended, this will return 3 (whether the player has actually accumulated 3 bookings, or if he has become suspended by being sent off after 2 bookings in the same game).
       - Specialty : SpecialtyID — Integer indicating the specialty (if any) of the player.
       - **Avatar** — Container for the elements to build the avatar.
-        - BackgroundImage : URI — The URL to the card background-image. This will show a silouette for non-supporter teams.
-        - **Layer** — Attribute: 'x' : unsigned Integer x-coordinate of image layer
+        - BackgroundImage : URI — The URL to the card background image.
+        - **Layer** — Attribute: 'x' : unsigned Integer x-coordinate of image layer Attribute: 'y' : unsigned Integer y-coordinate of image layer The container for each avatar bodypart item. The attributes x and y say where the item should be positioned. There are several of these containers for each player.
           - Image : URI — The URL to the bodypart item.
 
 ## Output (actionType=SupporterStats)

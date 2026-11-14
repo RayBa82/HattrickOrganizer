@@ -23,19 +23,17 @@ Committed on `master` with the tournament-week follow-ups below; image pushed. U
   level_up_report locks only its reads, and every download shares one registry: a second
   request joins the running one (`TeamTools.downloadAndWait`).
 
-## Follow-ups from the hattrick session's tournament week (2026-11-04)
+## CHPP changelog 2026-11-10: docs re-captured, code not started (2026-11-14)
 
-Unit-tested (`core.mcp.*`), not run against a live DB.
-- `get_series` in week 16 says it is the season break: `downloadCurrentFixtures` skips the
-  fixtures then on purpose, and the new series has none published yet.
-- Matches HO still holds as unplayed after kick-off get `kickedOff: true` (get_series
-  `otherUpcoming`, get_training/week_brief fixtures); week_brief reads no order for them.
-- week_brief orders carry `complete` and a `warning` when short of eleven (a tournament
-  carry-over read as status ok, hoLineupDiffers false).
-- download_team with an unknown non-`download-N` id points at `tasks/get`.
-- get_match folds the captain (18) and set-pieces (17) rows into `captain`/`setPieces` flags.
-- Tournament matches without week_brief: the server now sends `instructions` (initialize and
-  server/discover) naming week_brief as the entry point, get_team has `nextMatches` (next 5
-  own matches of every type, local data, `kickedOff`), and get_matches' description points there.
-- Not done: apply_lineup's bench-merge warning (same-day starter on the bench), an empty start
-  lineup for new tournament matches.
+- `docs/raw/chpp/` re-captured from the live docs (60 files + datatypes, three new:
+  playerstats, teamhistory, nationalprospectplayers) with the new `utils/chpp-docs/capture.js`
+  (runs in a logged-in Chrome tab) and `split.py`. The capture builds from the docs page's own
+  `file` object, so it also picked up actions the 2026-09-26 capture missed.
+- `docs/chpp_files.md`: new available versions, a 2026-11-10 changelog table with what each
+  change means for HO, and the OrderType 4 trap (matchlineup 2.2 uses 4 for a behaviour change,
+  HO reads 4 as man marking - stay on 2.0 until a real man-marking match shows what 2.2 sends).
+- No parser breaks: every request pins its version.
+- Next, agreed with the user: transfersearch 1.2 (prices to SEK in `TransferTools.queryFrom`
+  and the search tab, new salary/estimate filters), playerstats (new file), training
+  `actionType=history` (Gold only). The comment at `TransferTools.listingFromProfile`
+  ("same as queryFrom does for priceMin") is wrong today: queryFrom passes prices unconverted.

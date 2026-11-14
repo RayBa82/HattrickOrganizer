@@ -18,7 +18,9 @@ lineup rating, transfer scouting, statistics, …) on top of that local history.
   outlive its task belongs in a code comment, AGENTS.md or a topic doc, not here. `docs/roadmap.md`
   holds decided work waiting for a trigger (e.g. enough matches for a rating-model review); check it
   when picking work up. `docs/chpp_files.md` lists the CHPP files HO uses;
-  `docs/raw/chpp/` holds the full CHPP docs (inputs, output trees, data types) for every file.
+  `docs/raw/chpp/` holds the full CHPP docs (inputs, output trees, data types) for every file;
+  when the CHPP changelog moves, re-capture them with `utils/chpp-docs/` (steps in
+  `docs/raw/chpp/README.md`).
 - Java 17 source/target, Kotlin JVM toolchain 17, Gradle 8.13 wrapper. CI builds on Temurin 17.
   Newer local JDKs work for running, but do not raise the language level.
 
@@ -341,12 +343,12 @@ java -Djava.awt.headless=true -cp HO.jar core.HeadlessMain [--port 8765] [--user
 `UserManager.setDBParentFolder()` picks the location, and it depends on how HO was launched.
 `HO.main` sets `portable_version = true` by default; passing `INSTALLED` as an argument flips it.
 
-| Mode | Location |
-|---|---|
-| portable (default, and any dev/jar run) | `System.getProperty("user.dir")` — i.e. the working directory |
-| installed, macOS | `~/Library/Application Support/HO` |
-| installed, Linux | `~/.ho` |
-| installed, Windows | `%AppData%/HO` |
+| Mode                                    | Location                                                       |
+|-----------------------------------------|----------------------------------------------------------------|
+| portable (default, and any dev/jar run) | `System.getProperty("user.dir")` — i.e. the working directory  |
+| installed, macOS                        | `~/Library/Application Support/HO`                             |
+| installed, Linux                        | `~/.ho`                                                        |
+| installed, Windows                      | `%AppData%/HO`                                                 |
 
 Users are described in `users.json` under that folder; each user gets its own DB subfolder, which is
 why the multi-user login dialog appears before anything else at startup.

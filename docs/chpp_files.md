@@ -1,6 +1,6 @@
 # CHPP Files
 
-Here is list of all available CHPP files (2026-09-26, latest file change 2026-02-26) with their highest version and the version that is currently used
+Here is list of all available CHPP files (2026-11-14, latest file change 2026-11-10) with their highest version and the version that is currently used
 from Hattrick Organizer.
 
 Updates to a newer version should be documented here in the `Used Version` column.
@@ -8,65 +8,68 @@ Updates to a newer version should be documented here in the `Used Version` colum
 The full docs for every file (changelog, inputs per `actionType`, output tree, reference tables)
 and the data types are captured under [`raw/chpp/`](raw/chpp/README.md), one file per CHPP file.
 
-| File                   | Description                                                                                 | Available Version (Date) | Used Version |
-|------------------------|---------------------------------------------------------------------------------------------|--------------------------|--------------|
-| achievements           | The achievements of a specific user.                                                        | 1.2 (2021-08-03)         | -            |
-| arenadetails           | Information about specific arenas, supporter statistics and the largest arenas in Hattrick. | 1.7 (2023-02-08)         | 1.7          |
-| alliances              | Alliance / Federation search                                                                | 1.4 (2013-03-04)         | -            |
-| alliancedetails        | Alliance / Federation information                                                           | 1.5 (2013-03-04)         | -            |
-| avatars                | Avatars for all players of user's team                                                      | 1.1 (2013-01-08)         | 1.1          |
-| bookmarks              | User bookmarks                                                                              | 1.0                      | -            |
-| challenges             | Challenges                                                                                  | 1.6 (2016-10-27)         | 1.6          |
-| club                   | Information about specialists and youth                                                     | 1.5 (2015-09-22)         | 1.5          |
-| cupmatches             | Information about cup matches                                                               | 1.4 (2011-06-03)         | -            |
-| currentbids            | Shows the current transfer activity for a team.                                             | 1.0 (2014-02-10)         | 1.0          |
-| economy                | Economy                                                                                     | 1.4 (2022-03-09)         | 1.3          |
-| fans                   | Fanclub information                                                                         | 1.3 (2018-06-01)         | -            |
-| hofplayers             | Hall of Fame Players                                                                        | 1.2 (2020-06-02)         | 1.2          |
-| ladderdetails          | Information about teams in the ladder and posistions in it                                  | 1.0 (2013-11-20)         | -            |
-| ladderlist             | Information about ladder that the user is currently playing in.                             | 1.0 (2013-11-08)         | -            |
-| leaguedetails          | Information about a League Level Unit (series)                                              | 1.6 (2022-03-03)         | 1.6          |
-| leaguefixtures         | Fixtures for a League Level Unit (series)                                                   | 1.2                      | 1.2          |
-| leaguelevels           | Shows league level units (series) information for a specific league.                        | 1.0 (2024-08-26)         | -            |
-| live                   | Get (live) match ticker                                                                     | 2.3 (2022-05-04)         | -            |
-| managercompendium      | The manager compendium of the logged in user.                                               | 1.7 (2026-02-26)         | -            |
-| matches                | The most recent and upcoming matches for a particular team (Senior or Youth).               | 2.9 (2022-03-03)         | 2.8, 2.9     |
-| matchesarchive         | Matches Archive                                                                             | 1.5 (2022-03-03)         | 1.4, 1.5     |
-| matchdetails           | Detailed match information                                                                  | 3.1 (2022-03-03)         | 3.0, 3.1     |
-| matchlineup            | Match lineup for finished matches                                                           | 2.1 (2022-03-03)         | 2.0          |
-| matchorders            | Match orders for upcoming matches                                                           | 3.1 (2022-03-03)         | 3.0          |
-| nationalteams          | National teams                                                                              | 1.6 (2021-01-18)         | -            |
-| nationalteamdetails    | National Team information                                                                   | 1.9 (2016-06-28)         | 1.9          |
-| nationalteammatches    | National team matches                                                                       | 1.4 (2022-03-03)         | -            |
-| nationalplayers        | National team players                                                                       | 1.5 (2022-03-04)         | 1.2          |
-| players                | Players                                                                                     | 2.8 (2026-02-11)         | 2.7          |
-| playerdetails          | Detailed information for a player                                                           | 3.2 (2026-02-09)         | 3.0, 3.2     |
-| playerevents           | Player events                                                                               | 1.3 (2013-03-04)         | -            |
-| regiondetails          | Detailed information about a region                                                         | 1.2                      | 1.2          |
-| search                 | Search                                                                                      | 1.2                      | -            |
-| staffavatars           | Avatars for all staff members.                                                              | 1.1 (2023-09-07)         | -            |
-| stafflist              | A list of all staff members                                                                 | 1.2 (2023-09-07)         | 1.2          |
-| supporters             | Information about teams supported and teams supporting.                                     | 1.0 (2013-12-16)         | -            |
-| teamdetails            | Team information                                                                            | 3.9 (2026-02-26)         | 3.6          |
-| tournamentdetails      | Information about a tournament. This is only available for the current season.              | 1.0 (2013-10-17)         | 1.0          |
-| tournamentfixtures     | Information about matches for a tournament.                                                 | 1.1 (2025-09-17)         | -            |
-| tournamentleaguetables | League tables for a tournament.                                                             | 1.1 (2021-06-01)         | -            |
-| tournamentlist         | Information about tournaments that the user is currently playing in.                        | 1.0 (2013-10-17)         |              |
-| training               | Training                                                                                    | 2.2 (2013-11-21)         | 2.1, 2.2     |
-| trainingevents         | Get training events for a player.                                                           | 1.3 (2013-03-04)         | 1.3          |
-| transfersearch         | Search the transfer market.                                                                 | 1.1 (2022-03-03)         | 1.1          |
-| transfersteam          | Get the transfer history of a team                                                          | 1.2 (2011-04-13)         | 1.1          |
-| transfersplayer        | Get all transfers of a player                                                               | 1.1                      | 1.1          |
-| translations           | Translations for the denominations in the game.                                             | 1.2 (2022-03-04)         | -            |
-| worldcup               | World cup groups and matches                                                                | 1.1                      | -            |
-| worlddetails           | General Information about all countries in HT World                                         | 2.0 (2026-02-09)         | 1.8, 1.9     |
-| worldlanguages         | Available languages                                                                         | 1.2                      | -            |
-| youthavatars           | Avatars for all players of user's youthteam                                                 | 1.2 (2021-01-19)         | -            |
-| youthleaguedetails     | The youth league information.                                                               | 1.1 (2026-02-26)         | -            |
-| youthleaguefixtures    | Fixtures for a Youthe League (series).                                                      | 1.0 (2013-12-02)         | -            |
-| youthplayerdetails     | Detailed information for a youth player                                                     | 1.3 (2026-02-10)         | -            |
-| youthplayerlist        | Youth Players.                                                                              | 1.3 (2026-02-11)         | 1.1          |
-| youthteamdetails       | Youth team information.                                                                     | 1.4 (2026-02-26)         | -            |
+| File                    | Description                                                                                 | Available Version (Date) | Used Version |
+|-------------------------|---------------------------------------------------------------------------------------------|--------------------------|--------------|
+| achievements            | The achievements of a specific user.                                                        | 1.3 (2026-11-10)         | -            |
+| arenadetails            | Information about specific arenas, supporter statistics and the largest arenas in Hattrick. | 1.7 (2023-02-08)         | 1.7          |
+| alliances               | Alliance / Federation search                                                                | 1.5 (2026-11-10)         | -            |
+| alliancedetails         | Alliance / Federation information                                                           | 1.5 (2013-03-04)         | -            |
+| avatars                 | Avatars for all players of user's team                                                      | 1.1 (2013-01-08)         | 1.1          |
+| bookmarks               | User bookmarks                                                                              | 1.0                      | -            |
+| challenges              | Challenges                                                                                  | 1.6 (2016-10-27)         | 1.6          |
+| club                    | Information about specialists and youth                                                     | 1.5 (2015-09-22)         | 1.5          |
+| cupmatches              | Information about cup matches                                                               | 1.4 (2011-06-03)         | -            |
+| currentbids             | Shows the current transfer activity for a team.                                             | 1.0 (2014-02-10)         | 1.0          |
+| economy                 | Economy                                                                                     | 1.4 (2022-03-09)         | 1.3          |
+| fans                    | Fanclub information                                                                         | 1.3 (2018-06-01)         | -            |
+| hofplayers              | Hall of Fame Players                                                                        | 1.3 (2026-11-10)         | 1.2          |
+| ladderdetails           | Information about teams in the ladder and posistions in it                                  | 1.0 (2013-11-20)         | -            |
+| ladderlist              | Information about ladder that the user is currently playing in.                             | 1.0 (2013-11-08)         | -            |
+| leaguedetails           | Information about a League Level Unit (series)                                              | 1.6 (2022-03-03)         | 1.6          |
+| leaguefixtures          | Fixtures for a League Level Unit (series)                                                   | 1.2                      | 1.2          |
+| leaguelevels            | Shows league level units (series) information for a specific league.                        | 1.0 (2024-08-26)         | -            |
+| live                    | Get (live) match ticker                                                                     | 2.4 (2026-11-10)         | -            |
+| managercompendium       | The manager compendium of the logged in user.                                               | 1.8 (2026-11-10)         | -            |
+| matches                 | The most recent and upcoming matches for a particular team (Senior or Youth).               | 3.0 (2026-11-10)         | 2.8, 2.9     |
+| matchesarchive          | Matches Archive                                                                             | 1.5 (2022-03-03)         | 1.4, 1.5     |
+| matchdetails            | Detailed match information                                                                  | 3.2 (2026-11-10)         | 3.0, 3.1     |
+| matchlineup             | Match lineup for finished matches                                                           | 2.2 (2026-11-10)         | 2.0          |
+| matchorders             | Match orders for upcoming matches                                                           | 3.1 (2022-03-03)         | 3.0          |
+| nationalteams           | National teams                                                                              | 1.6 (2021-01-18)         | -            |
+| nationalteamdetails     | National Team information                                                                   | 2.0 (2026-11-10)         | 1.9          |
+| nationalteammatches     | National team matches                                                                       | 1.4 (2022-03-03)         | -            |
+| nationalplayers         | National team players                                                                       | 1.5 (2022-03-04)         | 1.2          |
+| nationalprospectplayers | The national team's prospect player list.                                                   | 1.0 (2026-11-10)         | -            |
+| players                 | Players                                                                                     | 2.8 (2026-02-11)         | 2.7          |
+| playerdetails           | Detailed information for a player                                                           | 3.3 (2026-11-10)         | 3.0, 3.2     |
+| playerevents            | Player events                                                                               | 1.3 (2013-03-04)         | -            |
+| playerstats             | Detailed player development history.                                                        | 1.0 (2026-11-10)         | -            |
+| regiondetails           | Detailed information about a region                                                         | 1.2                      | 1.2          |
+| search                  | Search                                                                                      | 1.2                      | -            |
+| staffavatars            | Avatars for all staff members.                                                              | 1.1 (2023-09-07)         | -            |
+| stafflist               | A list of all staff members                                                                 | 1.3 (2026-11-10)         | 1.2          |
+| supporters              | Information about teams supported and teams supporting.                                     | 1.1 (2026-11-10)         | -            |
+| teamdetails             | Team information                                                                            | 4.0 (2026-11-10)         | 3.6          |
+| teamhistory             | A club's history: per-season league/cup results and its trophies.                           | 1.0 (2026-11-10)         | -            |
+| tournamentdetails       | Information about a tournament. This is only available for the current season.              | 1.0 (2013-10-17)         | 1.0          |
+| tournamentfixtures      | Information about matches for a tournament.                                                 | 1.1 (2025-09-17)         | -            |
+| tournamentleaguetables  | League tables for a tournament.                                                             | 1.1 (2021-06-01)         | -            |
+| tournamentlist          | Information about tournaments that the user is currently playing in.                        | 1.0 (2013-10-17)         |              |
+| training                | Training                                                                                    | 2.3 (2026-11-10)         | 2.1, 2.2     |
+| trainingevents          | Get training events for a player.                                                           | 1.3 (2013-03-04)         | 1.3          |
+| transfersearch          | Search the transfer market.                                                                 | 1.2 (2026-11-10)         | 1.1          |
+| transfersteam           | Get the transfer history of a team                                                          | 1.2 (2011-04-13)         | 1.1          |
+| transfersplayer         | Get all transfers of a player                                                               | 1.1                      | 1.1          |
+| translations            | Translations for the denominations in the game.                                             | 1.2 (2022-03-04)         | -            |
+| worldcup                | World cup groups and matches                                                                | 1.1                      | -            |
+| worlddetails            | General Information about all countries in HT World                                         | 2.1 (2026-11-10)         | 1.8, 1.9     |
+| worldlanguages          | Available languages                                                                         | 1.2                      | -            |
+| youthavatars            | Avatars for all players of user's youthteam                                                 | 1.2 (2021-01-19)         | -            |
+| youthleaguedetails      | The youth league information.                                                               | 1.1 (2026-02-26)         | -            |
+| youthleaguefixtures     | Fixtures for a Youthe League (series).                                                      | 1.0 (2013-12-02)         | -            |
+| youthplayerdetails      | Detailed information for a youth player                                                     | 1.4 (2026-11-10)         | -            |
+| youthplayerlist         | Youth Players.                                                                              | 1.4 (2026-11-10)         | 1.1          |
+| youthteamdetails        | Youth team information.                                                                     | 1.5 (2026-11-10)         | -            |
 
 `worlddetails` 1.8 is still requested by the national-team HRF converter (`NthrfConvertXml2Hrf`);
 `playerdetails` 3.2 only for the `placeBid` write, reads stay on 3.0.
@@ -75,68 +78,119 @@ and the data types are captured under [`raw/chpp/`](raw/chpp/README.md), one fil
 
 From the changelog on the CHPP docs index. None of these fields is parsed by HO.
 
-| Date | File - version | Added output / input |
-|---|---|---|
-| 2025-09-17 | tournamentfixtures 1.1 | input `matchRound` |
-| 2026-02-09 | playerdetails 3.2 | `GenderID` |
-| 2026-02-09 | worlddetails 2.0 | `LeagueSystemID` per league |
-| 2026-02-10 | teamdetails 3.8 | `GenderID` |
-| 2026-02-10 | youthplayerdetails 1.3 | `GenderID` |
-| 2026-02-10 | youthteamdetails 1.3 | `GenderID` |
-| 2026-02-11 | managercompendium 1.6 | `GenderID` per team |
-| 2026-02-11 | players 2.8 | `GenderID` |
-| 2026-02-11 | youthplayerlist 1.3 | `GenderID` |
-| 2026-02-26 | managercompendium 1.7 | `LeagueSystemID` |
-| 2026-02-26 | teamdetails 3.9 | `LeagueSystemID` |
-| 2026-02-26 | youthleaguedetails 1.1 | `LeagueSystemID` |
-| 2026-02-26 | youthteamdetails 1.4 | `LeagueSystemID` |
+| Date       | File - version         | Added output / input        |
+|------------|------------------------|-----------------------------|
+| 2025-09-17 | tournamentfixtures 1.1 | input `matchRound`          |
+| 2026-02-09 | playerdetails 3.2      | `GenderID`                  |
+| 2026-02-09 | worlddetails 2.0       | `LeagueSystemID` per league |
+| 2026-02-10 | teamdetails 3.8        | `GenderID`                  |
+| 2026-02-10 | youthplayerdetails 1.3 | `GenderID`                  |
+| 2026-02-10 | youthteamdetails 1.3   | `GenderID`                  |
+| 2026-02-11 | managercompendium 1.6  | `GenderID` per team         |
+| 2026-02-11 | players 2.8            | `GenderID`                  |
+| 2026-02-11 | youthplayerlist 1.3    | `GenderID`                  |
+| 2026-02-26 | managercompendium 1.7  | `LeagueSystemID`            |
+| 2026-02-26 | teamdetails 3.9        | `LeagueSystemID`            |
+| 2026-02-26 | youthleaguedetails 1.1 | `LeagueSystemID`            |
+| 2026-02-26 | youthteamdetails 1.4   | `LeagueSystemID`            |
 
 `GenderID` and `LeagueSystemID` share one value set: 1 male, 2 female. This is Hattrick's women's
 league system. Until HO reads them, a women's team or a league in the women's system is
 indistinguishable from a men's one.
+
+## Changelog 2026-11-10 — not picked up by HO yet
+
+Every request carries a fixed `version`, so none of this changes what HO gets today; it matters
+when a request moves to the new version. Full trees in `raw/chpp/`.
+
+| File - version                    | Change                                                                                                                                                                                                                                                                                 | For HO                                         |
+|-----------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------|
+| matchlineup 2.2, live 2.4         | a behaviour change without a substitution has `OrderType` 4, before 1 like a substitution                                                                                                                                                                                              | **trap**, see below                            |
+| transfersearch 1.2                | `priceMin`/`priceMax` read in SEK (1.1 read them in the manager's own currency); new inputs `salaryMin`/`salaryMax` (base salary, without the 20 % abroad surcharge) and `transferCompareAvgMin`/`transferCompareAvgMax` (estimate saved at listing; players without one are left out) | prices must be converted to SEK on the upgrade |
+| training 2.3                      | `actionType=history`, inputs `teamId`, `fromDate` (default 16 weeks back): one `Training` row per change of type, intensity or stamina share, with `HattrickSeason`, `HattrickWeek`, `TrainingDate`. Gold supporter, own or mentored team, else AccessDenied                           | fills training weeks HO never downloaded       |
+| playerstats 1.0 (new)             | per match of one player: age, TSI, form, stamina, loyalty, experience, goals, cards, injury, played minutes, rating (average and end of game), minutes per position group                                                                                                              | match history without lineup reconstruction    |
+| matchdetails 3.2                  | `HasReplay`/`NrOfReplays` per team; `ExpectedResult` with the simulated replays (win/draw/loss, average goals, goal distribution, win margin, over/under 0.5-4.5). Only where the site shows it: national team matches, Diamond, or bought replay credits                              | yardstick for the match predictor              |
+| playerdetails 3.3                 | `TransferCompareAverage`(+`Date`): the site's transfer estimate, only with visible skills; `FamilyRelation`; `TrophyList` (Gold club only)                                                                                                                                             | comparison for `estimate_market_value`         |
+| teamdetails 4.0                   | `Currency` (`CurrencyName`, `CurrencyRate` to SEK) the requesting user chose, only for that user                                                                                                                                                                                       | HO takes the rate from the league today        |
+| teamhistory 1.0 (new)             | per season since the current owner: series, position, points, goals, cup round; trophy list                                                                                                                                                                                            |                                                |
+| youthplayerdetails 1.4            | `TrainingReports` (the coach's comments: skill and level); `UserId` in `OwningYouthTeam`                                                                                                                                                                                               | youth skill estimates                          |
+| youthplayerlist 1.4               | `UserId` in `OwningYouthTeam` (`actionType=details`)                                                                                                                                                                                                                                   |                                                |
+| youthteamdetails 1.5              | `IsPlayingMatch`                                                                                                                                                                                                                                                                       |                                                |
+| matches 3.0                       | `HomeStatement`, `AwayStatement`, `FanMatchExpectation`                                                                                                                                                                                                                                |                                                |
+| stafflist 1.3                     | `ContractExpires` per staff member                                                                                                                                                                                                                                                     |                                                |
+| hofplayers 1.3                    | `MatchesInClub`, `BestPerformanceValue`, `NoOfTimesTrainingMatchHero`, `FaithfulToTheClub`, `NoOfCleanSheet` (Gold only)                                                                                                                                                               |                                                |
+| worlddetails 2.1                  | per league `TotalTeams`, `NumberOfForeignOwners`, `MaxPercentageOfForeignOwners`                                                                                                                                                                                                       |                                                |
+| nationalteamdetails 2.0           | `AssistantCoach`, `Scouts` (`UserID`, `Loginname`)                                                                                                                                                                                                                                     |                                                |
+| nationalprospectplayers 1.0 (new) | the national team's prospect list                                                                                                                                                                                                                                                      |                                                |
+| achievements 1.3                  | `Completed`, `MaxPoints`, `ProgressValue`(+`Date`), `CurrentVariation`/`NextVariation`                                                                                                                                                                                                 |                                                |
+| managercompendium 1.8             | `HasManagerLicense`                                                                                                                                                                                                                                                                    |                                                |
+| supporters 1.1                    | `PageIndex`/`Pages` for `SupportedTeams` and `MySupporters`                                                                                                                                                                                                                            |                                                |
+| alliances 1.5                     | input `userId` for `SearchType` 5 (another user's federations)                                                                                                                                                                                                                         |                                                |
+
+New lookup types in `datatypes.md`: `familyRelationTypeID` (1 brother, 2 father, 3 grandfather,
+4 son, 5 grandson) and `familyRelationSourceID` (1 senior, 2 Hall of Fame, 3 youth player,
+4 staff member); `trophyID` gained 19/20 (cup/series top scorer), 204 and the national team
+cups 301-313.
+
+Changed without a version bump, found by the re-capture: `cupmatches` 1.4 now sorts by MatchID
+(page with `StartAfterMatchID` until an empty list), and `nationalteammatches` 1.4 fixed the
+matchType of upcoming matches and gave them `MatchContextId`. The re-capture also picked up
+actions the 2026-09-26 one had missed, e.g. `matchorders` `predictratings` (sector and tactic
+ratings for a sent or saved lineup) and `arenadetails` `MyArena`.
+
+### OrderType 4: behaviour change, not man marking
+
+`matchOrderTypeID` per the data types page: 1 substitution or behaviour change (matchlineup
+before 2.2, live before 2.4), 3 position swap, 4 behaviour change (matchlineup 2.2+, live 2.4+).
+HO reads 4 as man marking (`MatchOrderType.MAN_MARKING`, undocumented), and
+`Substitution`'s constructor tells a behaviour change from a substitution by
+`playerIn == subjectPlayerID`. On matchlineup 2.2, `XMLMatchLineupParser` would turn every
+behaviour change into man marking, which `RatingCalibration`, `MatchLineupTeam` and the lineup
+view treat differently. The docs do not say how 2.2 reports man marking; check a real match with
+man marking before moving off 2.0. `matchorders` (`setmatchorder`) is not affected.
 
 ## CHPP error codes
 
 Every error comes back as an XML `HattrickData` with an `ErrorCode` instead of the requested
 file; `XMLCHPPPreParser` detects it. Codes, as documented:
 
-| Code | Meaning |
-|---|---|
-| -1 | No information |
-| 0 | Not logged in |
-| 1 | Access denied |
-| 2 | File not specified |
-| 3 | File not supported |
-| 4 | POST not supported |
-| 5 | Must use POST for this action |
-| 6 | Only for Supporters |
-| 7 | Not supported version |
-| 10 | Invalid parameter |
-| 50 | Unknown TeamID |
-| 51 | Unknown MatchID |
-| 52 | Unknown ActionType |
-| 53 | MatchID not subscribed to |
-| 54 | Unknown YouthTeamID |
-| 55 | Unknown YouthPlayerID |
-| 56 | Unknown PlayerID |
-| 57 | Unknown LeagueID |
-| 58 | Unknown LeagueLevelUnitID |
-| 59 | Team not owned by the requesting user |
-| 60 | Unknown TournamentId |
-| 61 | Unknown LadderId |
-| 62 | Youth player is now a senior; senior id in `SeniorPlayerID` |
-| 63 | Missing required parameters |
-| 64 | The player has become a coach |
-| 70 | Challenge failed |
-| 71 | Bid failed |
-| 80 | Banned from international friendly |
-| 81 | Banned from transfers |
-| 90 | Hattrick down for maintenance |
-| 91 | Youth academy down for maintenance |
-| 92 | Transfer market down for maintenance |
-| 93 | HTOIntegrated platform down for maintenance |
-| 99 | Other undefined error |
-| other | Internal .NET error |
+| Code  | Meaning                                                     |
+|-------|-------------------------------------------------------------|
+| -1    | No information                                              |
+| 0     | Not logged in                                               |
+| 1     | Access denied                                               |
+| 2     | File not specified                                          |
+| 3     | File not supported                                          |
+| 4     | POST not supported                                          |
+| 5     | Must use POST for this action                               |
+| 6     | Only for Supporters                                         |
+| 7     | Not supported version                                       |
+| 10    | Invalid parameter                                           |
+| 50    | Unknown TeamID                                              |
+| 51    | Unknown MatchID                                             |
+| 52    | Unknown ActionType                                          |
+| 53    | MatchID not subscribed to                                   |
+| 54    | Unknown YouthTeamID                                         |
+| 55    | Unknown YouthPlayerID                                       |
+| 56    | Unknown PlayerID                                            |
+| 57    | Unknown LeagueID                                            |
+| 58    | Unknown LeagueLevelUnitID                                   |
+| 59    | Team not owned by the requesting user                       |
+| 60    | Unknown TournamentId                                        |
+| 61    | Unknown LadderId                                            |
+| 62    | Youth player is now a senior; senior id in `SeniorPlayerID` |
+| 63    | Missing required parameters                                 |
+| 64    | The player has become a coach                               |
+| 70    | Challenge failed                                            |
+| 71    | Bid failed                                                  |
+| 80    | Banned from international friendly                          |
+| 81    | Banned from transfers                                       |
+| 90    | Hattrick down for maintenance                               |
+| 91    | Youth academy down for maintenance                          |
+| 92    | Transfer market down for maintenance                        |
+| 93    | HTOIntegrated platform down for maintenance                 |
+| 99    | Other undefined error                                       |
+| other | Internal .NET error                                         |
 
 ## Testing supporter-only output
 
@@ -173,28 +227,32 @@ the pool stays a manual step on the website.
 Taken from the rendered CHPP docs page, saved under
 `docs/raw/Transfer Search » CHPP Files help » CHPP » Community » Hattrick_files/transfersearch.html`.
 
-| Parameter        | Req. | Type             | Default       | Notes |
-|------------------|------|------------------|---------------|-------|
-| `file`           | yes  | `transfersearch` |               | |
-| `version`        | no   | `1.1` / `1.0`    | 1.0           | |
-| `ageMin`         | yes  | unsigned int     |               | minimum age in years |
-| `ageDaysMin`     | no   | unsigned int     | 0             | |
-| `ageMax`         | yes  | unsigned int     |               | maximum age in years |
-| `ageDaysMax`     | no   | unsigned int     | 111           | |
-| `skillType1`     | yes  | SkillID          |               | main skill |
-| `minSkillValue1` | yes  | SkillLevel       |               | |
-| `maxSkillValue1` | yes  | SkillLevel       |               | |
-| `skillType2..4`  | no   | SkillID          | not specified | further skills |
-| `minSkillValue2..4` | no | SkillLevel      | not specified | |
-| `maxSkillValue2..4` | no | SkillLevel      | not specified | |
-| `specialty`      | no   | SpecialtyID      | not specified | |
-| `nativeCountryId`| no   | unsigned int     | not specified | country of birth |
-| `tsiMin`         | no   | unsigned int     | not specified | |
-| `tsiMax`         | no   | unsigned int     | not specified | |
-| `priceMin`       | no   | Money            | not specified | |
-| `priceMax`       | no   | Money            | not specified | |
-| `pageSize`       | no   | unsigned int     | 25            | max 100 |
-| `pageIndex`      | no   | unsigned int     | 0             | zero based |
+| Parameter           | Req. | Type             | Default       | Notes                |
+|---------------------|------|------------------|---------------|----------------------|
+| `file`              | yes  | `transfersearch` |               |                      |
+| `version`           | no   | `1.1` / `1.0`    | 1.0           |                      |
+| `ageMin`            | yes  | unsigned int     |               | minimum age in years |
+| `ageDaysMin`        | no   | unsigned int     | 0             |                      |
+| `ageMax`            | yes  | unsigned int     |               | maximum age in years |
+| `ageDaysMax`        | no   | unsigned int     | 111           |                      |
+| `skillType1`        | yes  | SkillID          |               | main skill           |
+| `minSkillValue1`    | yes  | SkillLevel       |               |                      |
+| `maxSkillValue1`    | yes  | SkillLevel       |               |                      |
+| `skillType2..4`     | no   | SkillID          | not specified | further skills       |
+| `minSkillValue2..4` | no   | SkillLevel       | not specified |                      |
+| `maxSkillValue2..4` | no   | SkillLevel       | not specified |                      |
+| `specialty`         | no   | SpecialtyID      | not specified |                      |
+| `nativeCountryId`   | no   | unsigned int     | not specified | country of birth     |
+| `tsiMin`            | no   | unsigned int     | not specified |                      |
+| `tsiMax`            | no   | unsigned int     | not specified |                      |
+| `priceMin`          | no   | Money            | not specified |                      |
+| `priceMax`          | no   | Money            | not specified |                      |
+| `pageSize`          | no   | unsigned int     | 25            | max 100              |
+| `pageIndex`         | no   | unsigned int     | 0             | zero based           |
+
+Version 1.2 (not used yet) reads `priceMin`/`priceMax` in SEK instead of the manager's currency
+and adds `salaryMin`/`salaryMax` and `transferCompareAvgMin`/`transferCompareAvgMax`, all Money;
+see the 2026-11-10 changelog above.
 
 Server-side rules, per skill pair: the window may span at most 4 levels **counted inclusively**, so
 max and min may differ by at most **3** — the docs say "up to 4 levels", but `minSkillValue1=7&maxSkillValue1=11`
@@ -261,9 +319,9 @@ than throwing.
 HO issues these write actions on behalf of the managed team (exposed over MCP, see
 `docs/superpowers/specs/2026-09-02-chpp-write-operations-over-mcp-design.md`):
 
-| file | version | actionType | purpose |
-|---|---|---|---|
-| `training` | 2.2 | `setTraining` | set senior training type / intensity (0-100) / stamina share (5-100); `teamId` required, needs the `set_training` scope |
-| `matchorders` | 3.0 | `setmatchorder` | upload the match order for an upcoming game (pre-existing); carries positions, `kickers` (always 11 slots, id 0 where empty) and `substitutions`. **Needs Supporter**, although the CHPP matchorders docs do not say so: without it Hattrick answers CHPP error 6, "setmatchorder is only available for Hattrick Supporters". A refused order can also come back as `OrdersSet="False"` with a `Reason` instead of an error code |
-| `challenges` | 1.6 | `view` / `challengeable` / `challenge` / `accept` / `decline` / `withdraw` | list and manage friendly challenges; `view` and `challengeable` are reads |
-| `playerdetails` | 3.2 | `placeBid` | place a transfer bid (`bidAmount` / `maxBidAmount` are Money in SEK; needs the `place_bid` scope and Supporter) |
+| file            | version | actionType                                                                 | purpose                                                                                                                                                                                                                                                                                                                                                                                                                          |
+|-----------------|---------|----------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `training`      | 2.2     | `setTraining`                                                              | set senior training type / intensity (0-100) / stamina share (5-100); `teamId` required, needs the `set_training` scope                                                                                                                                                                                                                                                                                                          |
+| `matchorders`   | 3.0     | `setmatchorder`                                                            | upload the match order for an upcoming game (pre-existing); carries positions, `kickers` (always 11 slots, id 0 where empty) and `substitutions`. **Needs Supporter**, although the CHPP matchorders docs do not say so: without it Hattrick answers CHPP error 6, "setmatchorder is only available for Hattrick Supporters". A refused order can also come back as `OrdersSet="False"` with a `Reason` instead of an error code |
+| `challenges`    | 1.6     | `view` / `challengeable` / `challenge` / `accept` / `decline` / `withdraw` | list and manage friendly challenges; `view` and `challengeable` are reads                                                                                                                                                                                                                                                                                                                                                        |
+| `playerdetails` | 3.2     | `placeBid`                                                                 | place a transfer bid (`bidAmount` / `maxBidAmount` are Money in SEK; needs the `place_bid` scope and Supporter)                                                                                                                                                                                                                                                                                                                  |

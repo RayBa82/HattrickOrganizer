@@ -31,5 +31,5 @@ Youth team id to view training information for. Must refer to a youth team manag
         - YouthPlayerID : unsigned Integer — The globally unique YouthPlayerID.
         - **Avatar** — Container for the elements to build the avatar.
           - BackgroundImage : URI — The URL to the card background-image. This will show a silouette for non-supporter teams.
-          - **Layer** — Attribute: 'x' : unsigned Integer x-coordinate of image layer
+          - **Layer** — Attribute: 'x' : unsigned Integer x-coordinate of image layer Attribute: 'y' : unsigned Integer y-coordinate of image layer The container for each avatar bodypart item. Two attribute named X and Y indicates where the item should be positioned. There are several of this container for each player. This container will not be provided for non-supporter team.
             - Image : URI — The URL to the bodypart item.

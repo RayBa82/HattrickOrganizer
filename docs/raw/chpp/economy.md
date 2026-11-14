@@ -45,8 +45,8 @@ Team id to get data for. Must refer to a senior team managed by requesting user.
     - TeamName : String — The name of the team.
     - Cash : Money — The team's cash.
     - ExpectedCash : Money — The budgeted cash for next week for the team.
-    - SponsorsPopularity : unsigned Integer — Attribute: 'Available' : Boolean If a match is running this value is not available.
-    - SupportersPopularity : unsigned Integer — Attribute: 'Available' : Boolean If a match is running this value is not available.
+    - SponsorsPopularity : unsigned Integer — Attribute: 'Available' : Boolean If a match is running this value is not available. The popularity among the sponsors of the team.
+    - SupportersPopularity : unsigned Integer — Attribute: 'Available' : Boolean If a match is running this value is not available. The popularity among the supporters of the team.
     - FanClubSize : unsigned Integer — The size of the team's fanclub.
     - IncomeSpectators : Money — The budgeted income from spectators for the team this week.
     - IncomeSponsors : Money — The budgeted income from sponsors for the team this week.

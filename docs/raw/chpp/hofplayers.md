@@ -3,6 +3,14 @@
 Hall of Fame Players
 
 ## Changelog
+### Version 1.3 (2026-11-10)
+- Added MatchesInClub, BestPerformanceValue, NoOfTimesTrainingMatchHero, FaithfulToTheClub and NoOfCleanSheet. Only shown when the team currently has Gold supporter.
+- Added Output: HattrickData → PlayerList → Player → MatchesInClub (Element)
+- Added Output: HattrickData → PlayerList → Player → BestPerformanceValue (Element)
+- Added Output: HattrickData → PlayerList → Player → NoOfTimesTrainingMatchHero (Element)
+- Added Output: HattrickData → PlayerList → Player → FaithfulToTheClub (Element)
+- Added Output: HattrickData → PlayerList → Player → NoOfCleanSheet (Element)
+
 ### Version 1.2 (2020-06-02)
 - Removed Output: HattrickData → PlayerList → Player → CountryID (Element)
 - Added Output: HattrickData → PlayerList → Player → CountryID (Element)
@@ -17,6 +25,7 @@ Hall of Fame Players
 Only available inputs in this file version are shown.
 required file = hofplayers
 optional version = 
+1.3
 1.2
 1.1
 1.0
@@ -38,6 +47,11 @@ team ID for HoF.
       - ExpertType : unsigned Integer — An identifier to show which type of job the player have now. # See table HoFExpertType
       - HofDate : DateTime — The date the player was made hall of fame.
       - HofAge : unsigned Integer — The age of the player in years when he was made hall of fame.
+      - MatchesInClub : unsigned Integer — Total number of matches played for the club. Only shown when the team has Gold supporter.
+      - BestPerformanceValue : Float — The best rating, in stars, the player got in a match for the club. Only shown when the team has Gold supporter.
+      - NoOfTimesTrainingMatchHero : unsigned Integer — Number of times the player was named training match hero. Only shown when the team has Gold supporter.
+      - FaithfulToTheClub : unsigned Integer — Number of days the player has stayed with the club without being sold. Divide by 112 to get seasons. Only shown when the team has Gold supporter.
+      - NoOfCleanSheet : unsigned Integer — Number of clean sheets kept by the player for the club. Only shown when the team has Gold supporter.
 
 ## References
 #HoFExpertType

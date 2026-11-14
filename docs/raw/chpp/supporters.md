@@ -3,6 +3,13 @@
 Information about teams supported and teams supporting.
 
 ## Changelog
+### Version 1.1 (2026-11-10)
+- Added PageIndex and Pages to SupportedTeams and MySupporters.
+- Added Output: HattrickData → SupportedTeams → PageIndex (Element)
+- Added Output: HattrickData → SupportedTeams → Pages (Element)
+- Added Output: HattrickData → MySupporters → PageIndex (Element)
+- Added Output: HattrickData → MySupporters → Pages (Element)
+
 ### Version 1.0 (2013-12-16) {default}
 - First version
 
@@ -10,6 +17,7 @@ Information about teams supported and teams supporting.
 Only available inputs in this file version are shown.
 required file = supporters
 optional version = 
+1.1
 1.0
 optional actionType = 
 supportedteams {default}
@@ -30,7 +38,9 @@ How many results to be shown in each page, the maximum value is 500. Note howeve
 
 ## Output (actionType=supportedteams)
 - **HattrickData** — Hattrick Data Container
-  - **SupportedTeams** — Attribute: 'TotalItems' : unsigned Integer Shows how many teams the user supports in total.
+  - **SupportedTeams** — Attribute: 'TotalItems' : unsigned Integer Shows how many teams the user supports in total. Container for the the supported teams. It will be empty if the user have no supporters.
+    - PageIndex : unsigned Integer — Zero based pageIndex retrieved. Valid values range from 0 to Pages - 1.
+    - Pages : unsigned Integer — The total number of pages available.
     - **SupportedTeam** — Container for a supported team. Not supplied if the user dont have no supporters.
       - UserId : unsigned Integer — The globally unique UserID for the owner of the supported team.
       - LoginName : String — The 'username' or 'nickname' used in Forums and around the site.
@@ -63,7 +73,9 @@ How many results to be shown in each page, the maximum value is 500. Note howeve
 
 ## Output (actionType=mysupporters)
 - **HattrickData** — Hattrick Data Container
-  - **MySupporters** — Attribute: 'TotalItems' : unsigned Integer Shows how many teams supports the team in total.
+  - **MySupporters** — Attribute: 'TotalItems' : unsigned Integer Shows how many teams supports the team in total. Container for the the supported teams. It will be empty if the user have no supporters.
+    - PageIndex : unsigned Integer — Zero based pageIndex retrieved. Valid values range from 0 to Pages - 1.
+    - Pages : unsigned Integer — The total number of pages available.
     - **SupporterTeam** — Container for a supported team. Not supplied if the user dont have no supporters.
       - UserId : unsigned Integer — The globally unique UserID for the owner of the supporter team.
       - LoginName : String — The 'username' or 'nickname' used in Forums and around the site.

@@ -28,8 +28,8 @@ What player to show training events for.
   - UserSupporterTier : supporterTier — Indicates which Supporter package the fetching user has, or empty if not a Supporter.
   - **Player** — Container for the data about the player.
     - PlayerID : unsigned Integer — The globally unique playerID.
-    - **TrainingEvents** — Attribute: 'Available' : Boolean If the player is currently playing a match training events are not available.
-      - **TrainingEvent** — Attribute: 'Index' : unsigned Integer Incremented by one for each event shown.
+    - **TrainingEvents** — Attribute: 'Available' : Boolean If the player is currently playing a match training events are not available. The full name of the team.
+      - **TrainingEvent** — Attribute: 'Index' : unsigned Integer Incremented by one for each event shown. Container for the data about a specific event.
         - SkillID : SkillID — An identifier to show which type of skill that has been affected.
         - OldLevel : SkillLevel — An integer to show the old level of the skill.
         - NewLevel : SkillLevel — An integer to show the new level of the skill.

@@ -42,6 +42,8 @@ WeatherID
 WorldCupID
 CupID
 trophyID
+familyRelationTypeID
+familyRelationSourceID
 matchOrderTypeID
 ScoutCommentTypeID
 ScoutCommentSkillTypeID
@@ -429,6 +431,8 @@ Value	Description
 16	Cup win
 17	Series win
 18	League win
+19	Cup top scorer
+20	Series top scorer
 78	World cup Gold
 79	World cup Silver
 80	World cup Bronze
@@ -436,10 +440,31 @@ Value	Description
 93	Hattrick Masters top scorer
 103	Tournament winner
 203	Tutorial Tournament
+204	Trial Winner
+301	NT continental cup win
+302	NT nations cup win
+303	NT world cup win
+311	U21 continental cup win
+312	U21 nations cup win
+313	U21 world cup win
+familyRelationTypeID
+Value	Description
+1	Brother
+2	Father
+3	Grandfather
+4	Son
+5	Grandson
+familyRelationSourceID
+Value	Description
+1	Senior player
+2	Hall of Fame player
+3	Youth player
+4	Staff member
 matchOrderTypeID
 Value	Description
-1	Normal substitution / Behaviour change
+1	Normal substitution / Behaviour change (matchlineup.xml before 2.2, live.xml before 2.4)
 3	Player swap
+4	Behaviour change (matchlineup.xml 2.2 and later, live.xml 2.4 and later)
 ScoutCommentTypeID
 Value	Description
 0	Hello
@@ -571,8 +596,10 @@ Value	Description
  ]
 }	This is a JSON-formatted string.
 
+
 positions
 An array of all positions.
+
 
 First 14 positionslots (0-13) represent the players on the field, starting with the goalkeeper (0), followed by right defender (1), right central defender (2) and so on up to left forward (13).
 The next 5 slots are substitutes in the following order: goalkeeper, defender, midfielder, forward, winger.
@@ -587,6 +614,7 @@ speechLevel is the matchTeamAttitude.
 newLineup should always be empty.
 substitutions
 An array of all substitutions. You can have 0-5 of these (send an empty array for 0).
+
 
 playerin is the playerId of the player in the "in" box.
 playerout is consequently the playerId of the player in the "out" box, this should be same as playerin if its a behaviour change.

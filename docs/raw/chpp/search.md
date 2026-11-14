@@ -48,7 +48,7 @@ optional pageIndex : unsigned Integer
 The zerobased PageIndex to retrieve. Will only have effect when resultset has more than 25 rows.
 required_1: Set searchString (and searchString2) or searchID, which overrides the searchStrings
 
-## Output
+## Output (actionType=0)
 - **HattrickData** — Hattrick Data Container
   - **SearchParams** — Container for a search parameters passed.
     - SearchType : unsigned Integer — The SearchType specified as input parameter.
@@ -59,3 +59,21 @@ required_1: Set searchString (and searchString2) or searchID, which overrides th
   - **Result** — Container for a search resultset.
     - ResultID : unsigned Integer — The ID of the result.
     - ResultName : String — The name of the result.
+
+## Output (actionType=1)
+Same as actionType=0.
+
+## Output (actionType=2)
+Same as actionType=0.
+
+## Output (actionType=3)
+Same as actionType=0.
+
+## Output (actionType=4)
+Same as actionType=0.
+
+## Output (actionType=5)
+Same as actionType=0.
+
+## Output (actionType=6)
+Same as actionType=0.

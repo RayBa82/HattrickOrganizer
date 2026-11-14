@@ -206,13 +206,124 @@ optional_1: If matchPlace = 2, then you have to set the arena in neutralArenaId!
           - IsAgreed : Boolean — Indicating whether the challenge/offer has been accepted and the match arranged.
 
 ## Output (actionType=accept)
-Same as actionType=challenge.
+- **HattrickData** — Hattrick Data Container for actionType=accept
+  - **Team** — Container for a team in the group.
+    - TeamID : unsigned Integer — The globally unique nationalTeamID.
+    - TeamName : String — The team name.
+    - **ChallengesByMe** — Container for the challenges that the user has done.
+      - **Challenge** — Container for a particular challenge.
+        - TrainingMatchID : unsigned Integer — The globally unique identifier for the challenge/offer.
+        - MatchTime : unsigned Integer — The match start time.
+        - MatchID : unsigned Integer — The matchid for the match that was created for an accepted challenge.
+        - FriendlyType : unsigned Integer — Integer defining the type of friendly. # See table FriendlyType
+        - **Opponent** — Container for the data about the opponent.
+          - TeamID : unsigned Integer — The globally unique nationalTeamID.
+          - TeamName : String — The team name.
+          - LogoURL : URI — The url for the opponent's logo, if it has one.
+          - **Arena** — Container for the data about the arena for the friendly.
+            - ArenaID : unsigned Integer — The globally unique arenaID.
+            - ArenaName : String — The name of the arena.
+          - **League** — Container for the data about the league that the friendly would be played in.
+            - LeagueID : unsigned Integer — The globally unique LeagueID.
+            - LeagueName : String — The League name.
+          - IsAgreed : Boolean — Indicating whether the challenge/offer has been accepted and the match arranged.
+    - **OffersByOthers** — Container for the offers of friendlies that other teams have given to the logged on user's team.
+      - **Offer** — Container for a particular offer.
+        - TrainingMatchID : unsigned Integer — The globally unique identifier for the challenge/offer.
+        - MatchTime : unsigned Integer — The match start time.
+        - MatchID : unsigned Integer — The matchid for the match that was created for an accepted challenge.
+        - FriendlyType : unsigned Integer — Integer defining the type of friendly. # See table FriendlyType
+        - **Opponent** — Container for the data about the opponent.
+          - TeamID : unsigned Integer — The globally unique nationalTeamID.
+          - TeamName : String — The team name.
+          - LogoURL : URI — The url for the opponent's logo, if it has one.
+          - **Arena** — Container for the data about the arena for the friendly.
+            - ArenaID : unsigned Integer — The globally unique arenaID.
+            - ArenaName : String — The name of the arena.
+          - **League** — Container for the data about the league that the friendly would be played in.
+            - LeagueID : unsigned Integer — The globally unique LeagueID.
+            - LeagueName : String — The League name.
+          - IsAgreed : Boolean — Indicating whether the challenge/offer has been accepted and the match arranged.
 
 ## Output (actionType=decline)
-Same as actionType=challenge.
+- **HattrickData** — Hattrick Data Container for actionType=decline
+  - **Team** — Container for a team in the group.
+    - TeamID : unsigned Integer — The globally unique nationalTeamID.
+    - TeamName : String — The team name.
+    - **ChallengesByMe** — Container for the challenges that the user has done.
+      - **Challenge** — Container for a particular challenge.
+        - TrainingMatchID : unsigned Integer — The globally unique identifier for the challenge/offer.
+        - MatchTime : unsigned Integer — The match start time.
+        - MatchID : unsigned Integer — The matchid for the match that was created for an accepted challenge.
+        - FriendlyType : unsigned Integer — Integer defining the type of friendly. # See table FriendlyType
+        - **Opponent** — Container for the data about the opponent.
+          - TeamID : unsigned Integer — The globally unique nationalTeamID.
+          - TeamName : String — The team name.
+          - LogoURL : URI — The url for the opponent's logo, if it has one.
+          - **Arena** — Container for the data about the arena for the friendly.
+            - ArenaID : unsigned Integer — The globally unique arenaID.
+            - ArenaName : String — The name of the arena.
+          - **League** — Container for the data about the league that the friendly would be played in.
+            - LeagueID : unsigned Integer — The globally unique LeagueID.
+            - LeagueName : String — The League name.
+          - IsAgreed : Boolean — Indicating whether the challenge/offer has been accepted and the match arranged.
+    - **OffersByOthers** — Container for the offers of friendlies that other teams have given to the logged on user's team.
+      - **Offer** — Container for a particular offer.
+        - TrainingMatchID : unsigned Integer — The globally unique identifier for the challenge/offer.
+        - MatchTime : unsigned Integer — The match start time.
+        - MatchID : unsigned Integer — The matchid for the match that was created for an accepted challenge.
+        - FriendlyType : unsigned Integer — Integer defining the type of friendly. # See table FriendlyType
+        - **Opponent** — Container for the data about the opponent.
+          - TeamID : unsigned Integer — The globally unique nationalTeamID.
+          - TeamName : String — The team name.
+          - LogoURL : URI — The url for the opponent's logo, if it has one.
+          - **Arena** — Container for the data about the arena for the friendly.
+            - ArenaID : unsigned Integer — The globally unique arenaID.
+            - ArenaName : String — The name of the arena.
+          - **League** — Container for the data about the league that the friendly would be played in.
+            - LeagueID : unsigned Integer — The globally unique LeagueID.
+            - LeagueName : String — The League name.
+          - IsAgreed : Boolean — Indicating whether the challenge/offer has been accepted and the match arranged.
 
 ## Output (actionType=withdraw)
-Same as actionType=challenge.
+- **HattrickData** — Hattrick Data Container for actionType=withdraw
+  - **Team** — Container for a team in the group.
+    - TeamID : unsigned Integer — The globally unique nationalTeamID.
+    - TeamName : String — The team name.
+    - **ChallengesByMe** — Container for the challenges that the user has done.
+      - **Challenge** — Container for a particular challenge.
+        - TrainingMatchID : unsigned Integer — The globally unique identifier for the challenge/offer.
+        - MatchTime : unsigned Integer — The match start time.
+        - MatchID : unsigned Integer — The matchid for the match that was created for an accepted challenge.
+        - FriendlyType : unsigned Integer — Integer defining the type of friendly. # See table FriendlyType
+        - **Opponent** — Container for the data about the opponent.
+          - TeamID : unsigned Integer — The globally unique nationalTeamID.
+          - TeamName : String — The team name.
+          - LogoURL : URI — The url for the opponent's logo, if it has one.
+          - **Arena** — Container for the data about the arena for the friendly.
+            - ArenaID : unsigned Integer — The globally unique arenaID.
+            - ArenaName : String — The name of the arena.
+          - **League** — Container for the data about the league that the friendly would be played in.
+            - LeagueID : unsigned Integer — The globally unique LeagueID.
+            - LeagueName : String — The League name.
+          - IsAgreed : Boolean — Indicating whether the challenge/offer has been accepted and the match arranged.
+    - **OffersByOthers** — Container for the offers of friendlies that other teams have given to the logged on user's team.
+      - **Offer** — Container for a particular offer.
+        - TrainingMatchID : unsigned Integer — The globally unique identifier for the challenge/offer.
+        - MatchTime : unsigned Integer — The match start time.
+        - MatchID : unsigned Integer — The matchid for the match that was created for an accepted challenge.
+        - FriendlyType : unsigned Integer — Integer defining the type of friendly. # See table FriendlyType
+        - **Opponent** — Container for the data about the opponent.
+          - TeamID : unsigned Integer — The globally unique nationalTeamID.
+          - TeamName : String — The team name.
+          - LogoURL : URI — The url for the opponent's logo, if it has one.
+          - **Arena** — Container for the data about the arena for the friendly.
+            - ArenaID : unsigned Integer — The globally unique arenaID.
+            - ArenaName : String — The name of the arena.
+          - **League** — Container for the data about the league that the friendly would be played in.
+            - LeagueID : unsigned Integer — The globally unique LeagueID.
+            - LeagueName : String — The League name.
+          - IsAgreed : Boolean — Indicating whether the challenge/offer has been accepted and the match arranged.
 
 ## References
 #FriendlyType

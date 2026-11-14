@@ -4,6 +4,7 @@ Information about cup matches
 
 ## Changelog
 ### Version 1.4 (2011-06-03)
+- Matches are now sorted by MatchID, so StartAfterMatchID returns every match of the round without gaps or repeats.
 - Removed Output: HattrickData → Cup → Match (Container)
 - Removed Output: HattrickData → Cup → Match → MatchID (Element)
 - Removed Output: HattrickData → Cup → Match → MatchDate (Element)
@@ -67,7 +68,7 @@ What season to show the matches for.
 optional CupRound : unsigned Integer{Default:Latest CupRound}
 What cupround to show the matches for.
 optional StartAfterMatchID : unsigned Integer{Default:0}
-For large cups in the first round, there will be more than 256 matches to display. To be able to fetch the next 256 matches, take the last MatchID you received from the XML-output. Send it as StartAfterMatchID=. This will return the next 256 matches with MatchID > StartAfterMatchID.
+For large cups in the first round, there will be more than 256 matches to display. To be able to fetch the next 256 matches, take the last MatchID you received from the XML-output. Send it as StartAfterMatchID=. This will return the next 256 matches with MatchID > StartAfterMatchID. Matches are sorted by MatchID ascending. Keep calling until you get an empty match list, since some rounds of older seasons return fewer than 256 matches per call.
 
 ## Output
 - **HattrickData** — Hattrick Data Container
@@ -86,10 +87,10 @@ For large cups in the first round, there will be more than 256 matches to displa
         - **AwayTeam** — Container for the away team in the match.
           - TeamId : unsigned Integer — The awayteam's TeamId.
           - TeamName : String — The full name of the awayteam.
-        - **MatchResult** — Attribute: 'Available' : Boolean Specifies whether or not the match result is available.
+        - **MatchResult** — Attribute: 'Available' : Boolean Specifies whether or not the match result is available. Container for the match results.
           - HomeGoals : unsigned Integer — The number of goals for the home team.
           - AwayGoals : unsigned Integer — The number of goals for the away team.
-        - **LeagueInfo** — Attribute: 'Available' : Boolean Specifies whether or not the league information is available. It is only available for international cups.
+        - **LeagueInfo** — Attribute: 'Available' : Boolean Specifies whether or not the league information is available. It is only available for international cups. Container for information about the participating team's league.
           - HomeLeagueID : unsigned Integer — The LeagueID of the home team in the match.
           - AwayLeagueID : unsigned Integer — The LeagueID of the away team in the match.
           - HomeLeagueName : String — The league name of the home team in the match.
