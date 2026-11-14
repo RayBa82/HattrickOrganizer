@@ -8,6 +8,7 @@ import core.model.enums.MatchType;
 import core.model.player.IMatchRoleID;
 import core.model.player.Player;
 import core.rating.RatingPredictionModel;
+import core.training.FutureTrainingPlan;
 import core.util.HODateTime;
 import org.jetbrains.annotations.Nullable;
 
@@ -330,7 +331,7 @@ public final class WeekTools {
             minutes.put(row.get(PLAYER_ID).getAsInt(), row);
         }
         final var ratingModel = McpJson.privateRatingModel();
-        final var plan = DBManager.instance().getFutureTrainingsVector();
+        final var plan = FutureTrainingPlan.current();
         final var rows = new JsonArray();
         for (final var player : model.getCurrentPlayers()) {
             if (!player.isCoach() && wanted.contains(player.getPlayerId())) {

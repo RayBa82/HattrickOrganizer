@@ -3,13 +3,10 @@ package module.training.ui.model;
 import core.db.DBManager;
 import core.gui.comp.table.PlayersTable;
 import core.model.HOVerwaltung;
-import core.model.UserParameter;
-import core.model.enums.DBDataSource;
 import core.training.FutureTrainingManager;
-import core.training.TrainingManager;
+import core.training.FutureTrainingPlan;
 import core.training.TrainingPerWeek;
 import core.training.WeeklyTrainingType;
-import core.util.HOLogger;
 import module.training.PastTrainingManager;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
@@ -40,12 +37,8 @@ public class TrainingModel implements PropertyChangeListener {
 
 	public List<TrainingPerWeek> getFutureTrainings() {
 		if (futureTrainings == null) {
-			var _futureTrainings = DBManager.instance().getFutureTrainingsVector();
-
-			// remove old entries and add new to make sure the vector size match user preference settings
-			List<TrainingPerWeek> adjustedFutureTrainings = adjustFutureTrainingsVector(_futureTrainings, UserParameter.instance().futureWeeks);
-			DBManager.instance().saveFutureTrainings(adjustedFutureTrainings);
-			futureTrainings = adjustedFutureTrainings;
+			// rolled forward to the coming weeks and stored, sized to the user's preference
+			futureTrainings = FutureTrainingPlan.current();
 		}
 		return futureTrainings;
 	}
@@ -79,7 +72,7 @@ public class TrainingModel implements PropertyChangeListener {
 		}
 		return this.futureTrainingManager;
 	}
-	
+
 	public void resetFutureTrainings() {
         this.futureTrainings = null;
         this.futureTrainingManager = null;
@@ -135,31 +128,5 @@ public class TrainingModel implements PropertyChangeListener {
 		var tt = WeeklyTrainingType.instance(t.getTrainingType());
 		if ( tt != null ) return tt.getTrainingSkillOsmosisTrainingPositions().length > 0;
 		return false;
-	}
-
-	private List<TrainingPerWeek> adjustFutureTrainingsVector(List<TrainingPerWeek> _futureTrainings, int requiredNBentries) {
-		List<TrainingPerWeek> newFutureTrainings = new ArrayList<>();
-		TrainingPerWeek previousTraining = TrainingManager.instance().getNextWeekTraining();
-		HOLogger.instance().debug(TrainingModel.class, "Previous training date: " + previousTraining);
-
-		if ( previousTraining != null) {
-			TrainingPerWeek futureTraining;
-			while (newFutureTrainings.size() < requiredNBentries) {
-				//first iteration equals to nextWeek training then increase per one week per iteration
-				var futureTrainingDate = previousTraining.getTrainingDate().plusDaysAtSameLocalTime(7);
-				var storedFutureTrainings = _futureTrainings.stream().filter(t -> futureTrainingDate.equals(t.getTrainingDate())).toList();
-				if (storedFutureTrainings.size() == 1) {
-					// training present in Future Training table => we keep it
-					futureTraining = storedFutureTrainings.get(0);
-				} else {
-					// training not present in Future Training table => we create a new one from previous training
-					futureTraining = new TrainingPerWeek(futureTrainingDate, previousTraining.getTrainingType(), previousTraining.getTrainingIntensity(),
-							previousTraining.getStaminaShare(), previousTraining.getTrainingAssistantsLevel(), previousTraining.getCoachLevel(), DBDataSource.GUESS);
-				}
-				newFutureTrainings.add(futureTraining);
-				previousTraining = futureTraining;
-			}
-		}
-		return newFutureTrainings;
 	}
 }

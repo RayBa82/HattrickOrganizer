@@ -12,6 +12,7 @@ import core.model.match.Matchdetails;
 import core.model.player.Player;
 import core.net.ChppWriteService;
 import core.training.FutureTrainingManager;
+import core.training.FutureTrainingPlan;
 import core.training.TrainingManager;
 import core.training.TrainingPerWeek;
 import core.training.WeeklyTrainingType;
@@ -358,9 +359,10 @@ public final class TrainingTools {
                     Math.min(Math.max(historyWeeks, 1), MAX_HISTORY_WEEKS)));
         }
 
-        // The future training plan is what the Training tab edits; it is empty until the user has
-        // opened that tab once, and then predictions are simply unavailable.
-        final var plan = DBManager.instance().getFutureTrainingsVector();
+        // The future training plan is what the Training tab edits, rolled forward to the coming
+        // weeks here as the tab does - the stored rows go stale after every training otherwise.
+        // Empty only before the first download.
+        final var plan = FutureTrainingPlan.current();
         final var weeks = Math.min(McpJson.optInt(args, WEEKS, DEFAULT_WEEKS), plan.size());
         json.addProperty("predictedWeeks", weeks);
         if (weeks <= 0) {
@@ -993,7 +995,7 @@ public final class TrainingTools {
      * This is the week that closes at the <em>next</em> training update, so it is not the week
      * {@link #current} reports - that one has already been applied. HO itself never computes real
      * minutes for the week in progress. The future plan's first entry <em>is</em> this week
-     * (TrainingModel.adjustFutureTrainingsVector starts at nextWeekTraining + 7 days), and
+     * ({@code FutureTrainingPlan.adjust} starts at nextWeekTraining + 7 days), and
      * {@code FutureTrainingManager} credits a flat 90 minutes to every player whose ideal position
      * falls in a trained sector - see {@code Player.getFuturePlayerTrainingPriority} - whether or
      * not he played. That is what makes {@code skillChanges} confidently wrong for a player who has
