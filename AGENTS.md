@@ -42,11 +42,13 @@ lineup rating, transfer scouting, statistics, …) on top of that local history.
 cd build/install/XXX && java -jar HO.jar
 ```
 
-`createVersion` is **not optional**. `core.HO` reads `Implementation-Version` from the jar manifest
-and splits it into four parts (`major.minor.build.stage`, `HO.java:118`). The `jar` task alone stamps
-`project.version` — just `10.0` — and startup dies with `ArrayIndexOutOfBoundsException`.
-Only `createVersion` computes the four-part string, and it rewrites the manifest attribute in
-`doLast`, so it must run in the *same* Gradle invocation as `jar`.
+Run `createVersion` for anything you hand out. `core.util.HOBuildLoader` reads `Implementation-Version`
+from the jar manifest as `major.minor.build.stage` (`HOBuild`). The `jar` task alone stamps
+`project.version` — just `10.0` — which `HOBuildLoader` accepts as a *local build* (build number `-1`,
+stage from the generated `build-info.properties`): HO starts, but reports "(local build)". Without a
+manifest at all (IDE run) it falls back to `core.BuildInfo`. Only `createVersion` computes the
+four-part string, and it rewrites the manifest attribute in `doLast`, so it must run in the *same*
+Gradle invocation as `jar`.
 
 `createDistribution` matters too: the jar manifest's `Class-Path` lists ~88 dependency jars by bare
 filename, and `FileLoader` resolves `prediction/`, `truststore.jks` and themes from the working

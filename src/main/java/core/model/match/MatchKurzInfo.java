@@ -598,6 +598,10 @@ public class MatchKurzInfo extends AbstractTable.Storable implements Comparable<
         TournamentDetails oTournamentDetails = DBManager.instance().getTournamentDetailsFromDB(tournamentId);
         if (oTournamentDetails == null) {
             oTournamentDetails = OnlineWorker.downloadTournamentDetails(tournamentId); // download info about tournament from HT
+            if (oTournamentDetails == null) {
+                // CHPP failed (already logged): leave the tournament type unset rather than abort the match download
+                return;
+            }
             DBManager.instance().storeTournamentDetailsIntoDB(oTournamentDetails); // store tournament details into DB
         }
         setTournamentTypeID(oTournamentDetails.getTournamentType());
