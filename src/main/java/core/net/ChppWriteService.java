@@ -397,6 +397,27 @@ public class ChppWriteService {
         }
     }
 
+    // ===================== team history =====================
+
+    /** A read, like {@link #playerStatsForAgent}. */
+    public core.file.xml.XMLTeamHistoryParser.TeamHistory teamHistoryForAgent(int teamId)
+            throws ChppWriteException {
+        final var xml = fetchTeamHistory(teamId);
+        if (xml == null || xml.isBlank()) {
+            throw new ChppWriteException(null, "Hattrick rejected the team history: " + reason());
+        }
+        return core.file.xml.XMLTeamHistoryParser.parse(xml);
+    }
+
+    protected String fetchTeamHistory(int teamId) {
+        final var was = Connector.instance().setSilentDownload(true);
+        try {
+            return Connector.instance().getTeamHistory(teamId);
+        } finally {
+            Connector.instance().setSilentDownload(was);
+        }
+    }
+
     // ===================== match order =====================
 
     /**

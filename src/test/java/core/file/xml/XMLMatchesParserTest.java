@@ -296,5 +296,32 @@ class XMLMatchesParserTest {
         assertThat(cup.getMatchType()).isEqualTo(MatchType.CUP);
         assertThat(cup.getCupLevel()).isEqualTo(CupLevel.NATIONALorDIVISIONAL);
         assertThat(cup.getMatchContextId()).isEqualTo(1330);
+        assertThat(cup.getFanMatchExpectation()).isNull();
+    }
+
+    /** matches 3.0: the fans' expectation, only on the matches fans.xml covers. */
+    @Test
+    void parseMatchesFromString_readsTheFansExpectationWhereThereIsOne() {
+        final var matches = XMLMatchesParser.parseMatchesFromString("""
+                <HattrickData><Team><MatchList><Match>
+                <MatchID>1</MatchID>
+                <HomeTeam><HomeTeamID>1</HomeTeamID><HomeTeamName>A</HomeTeamName></HomeTeam>
+                <AwayTeam><AwayTeamID>2</AwayTeamID><AwayTeamName>B</AwayTeamName></AwayTeam>
+                <MatchDate>2026-11-21 15:00:00</MatchDate><MatchType>1</MatchType>
+                <MatchContextId>4711</MatchContextId><Status>UPCOMING</Status>
+                <OrdersGiven>False</OrdersGiven><HomeStatement></HomeStatement>
+                <AwayStatement></AwayStatement><FanMatchExpectation>7</FanMatchExpectation>
+                </Match><Match>
+                <MatchID>2</MatchID>
+                <HomeTeam><HomeTeamID>3</HomeTeamID><HomeTeamName>C</HomeTeamName></HomeTeam>
+                <AwayTeam><AwayTeamID>1</AwayTeamID><AwayTeamName>A</AwayTeamName></AwayTeam>
+                <MatchDate>2026-11-18 20:00:00</MatchDate><MatchType>4</MatchType>
+                <MatchContextId>0</MatchContextId><Status>UPCOMING</Status>
+                <OrdersGiven>True</OrdersGiven>
+                </Match></MatchList></Team></HattrickData>""");
+
+        assertThat(matches).hasSize(2);
+        assertThat(matches.get(0).getFanMatchExpectation()).isEqualTo(7);
+        assertThat(matches.get(1).getFanMatchExpectation()).isNull();
     }
 }

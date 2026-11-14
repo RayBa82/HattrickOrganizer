@@ -24,6 +24,31 @@ class WeekToolsTest {
                 .containsExactlyInAnyOrder("playerIds", "includeOrders", "includeLevelUps");
     }
 
+    /** Only contracts ending within two weeks are flagged; unknown ones never. */
+    @Test
+    void staffContractsEnding_flagsOnlyTheNextTwoWeeks() {
+        final var now = core.util.HODateTime.fromHT("2026-11-14 12:00:00");
+        final var soon = staff("Soon", "2026-11-20 03:00:00");
+        final var later = staff("Later", "2026-12-20 03:00:00");
+        final var unknown = staff("Unknown", null);
+
+        final var rows = WeekTools.staffContractsEnding(java.util.List.of(soon, later, unknown), now);
+
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).getAsJsonObject().get("name").getAsString()).isEqualTo("Soon");
+        assertThat(rows.get(0).getAsJsonObject().get("contractExpires").getAsString())
+                .isEqualTo("2026-11-20 03:00:00");
+        assertThat(WeekTools.staffContractsEnding(null, now)).isEmpty();
+    }
+
+    private static core.model.StaffMember staff(String name, String expires) {
+        final var member = new core.model.StaffMember();
+        member.setName(name);
+        member.setStaffType(core.model.StaffType.ASSISTANTTRAINER);
+        member.setContractExpires(core.util.HODateTime.fromHT(expires));
+        return member;
+    }
+
     /** A player with no minutes this week is not maxed, and zero minutes are left out. */
     @Test
     void minutes_leaveZerosOutAndMarkAFullSlotAsMaxed() {

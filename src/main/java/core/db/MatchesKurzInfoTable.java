@@ -57,7 +57,8 @@ final class MatchesKurzInfoTable extends AbstractTable {
 				ColumnDescriptor.Builder.newInstance().setColumnName("Weather").setGetter((o) -> ((MatchKurzInfo) o).getWeather().getId()).setSetter((o, v) -> ((MatchKurzInfo) o).setWeather(Weather.getById((Integer) v))).setType(Types.INTEGER).isNullable(true).build(),
 				ColumnDescriptor.Builder.newInstance().setColumnName("WeatherForecast").setGetter((o) -> ((MatchKurzInfo) o).getWeatherForecast().getId()).setSetter((o, v) -> ((MatchKurzInfo) o).setWeatherForecast(Weather.Forecast.getById((Integer) v))).setType(Types.INTEGER).isNullable(true).build(),
 				ColumnDescriptor.Builder.newInstance().setColumnName("Duration").setGetter((o) -> ((MatchKurzInfo) o).getDuration()).setSetter((o, v) -> ((MatchKurzInfo) o).setDuration((Integer) v)).setType(Types.INTEGER).isNullable(true).build(),
-				ColumnDescriptor.Builder.newInstance().setColumnName("isObsolete").setGetter((o) -> ((MatchKurzInfo) o).isObsolet()).setSetter((o, v) -> ((MatchKurzInfo) o).setisObsolet((Boolean) v)).setType(Types.BOOLEAN).isNullable(true).build()
+				ColumnDescriptor.Builder.newInstance().setColumnName("isObsolete").setGetter(o -> ((MatchKurzInfo) o).isObsolet()).setSetter((o, v) -> ((MatchKurzInfo) o).setisObsolet((Boolean) v)).setType(Types.BOOLEAN).isNullable(true).build(),
+				ColumnDescriptor.Builder.newInstance().setColumnName("FanMatchExpectation").setGetter(o -> ((MatchKurzInfo) o).getFanMatchExpectation()).setSetter((o, v) -> ((MatchKurzInfo) o).setFanMatchExpectation((Integer) v)).setType(Types.INTEGER).isNullable(true).build()
 		};
 	}
 

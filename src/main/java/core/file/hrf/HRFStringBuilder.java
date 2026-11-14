@@ -733,6 +733,7 @@ public class HRFStringBuilder {
             appendKeyValue(staffStringBuilder,"staff"+i+"StaffType",hash.get("StaffType"));
             appendKeyValue(staffStringBuilder,"staff"+i+"StaffLevel",hash.get("StaffLevel"));
             appendKeyValue(staffStringBuilder,"staff"+i+"Cost",hash.get("Cost"));
+            appendKeyValue(staffStringBuilder,"staff"+i+"ContractExpires",hash.get("ContractExpires"));
         }
     }
 

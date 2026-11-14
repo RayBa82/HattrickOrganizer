@@ -73,6 +73,40 @@ public final class McpJson {
         return AmountOfMoney.Companion.getCurrencyName();
     }
 
+    /** fans.xml's FanMatchExpectation scale, 0-8. */
+    private static final java.util.List<String> FAN_MATCH_EXPECTATIONS = java.util.List.of(
+            "better not show up", "we are outclassed", "we will lose", "they are favourites",
+            "they have the edge", "a close affair", "we have the edge", "we are favourites",
+            "we will win");
+
+    /**
+     * The fans' expectation for a match as {@code fanExpectation: "7 we are favourites"}: what the
+     * result is judged against for fan mood. Nothing is added when there is none.
+     */
+    public static void addFanExpectation(JsonObject json, Integer expectation) {
+        if (expectation == null || expectation < 0 || expectation >= FAN_MATCH_EXPECTATIONS.size()) {
+            return;
+        }
+        json.addProperty("fanExpectation", expectation + " " + FAN_MATCH_EXPECTATIONS.get(expectation));
+    }
+
+    /** Hattrick's own transfer estimate of a player, as the player's page shows it. */
+    public static final String HATTRICK_ESTIMATE = "hattrickEstimate";
+    /** When Hattrick last updated that estimate. */
+    public static final String HATTRICK_ESTIMATE_DATE = "hattrickEstimateDate";
+
+    /**
+     * Hattrick's estimate (playerdetails TransferCompareAverage) and its date onto {@code json}, in
+     * the user's currency. Nothing is added when there is none, so a row without one stays short.
+     */
+    public static void addHattrickEstimate(JsonObject json, Long swedishKrona, HODateTime date) {
+        if (swedishKrona == null) {
+            return;
+        }
+        json.addProperty(HATTRICK_ESTIMATE, money(swedishKrona));
+        json.addProperty(HATTRICK_ESTIMATE_DATE, date == null ? null : date.toHT());
+    }
+
     /**
      * The reverse of {@link #money}: an amount a model passed in, as the krona CHPP expects. A long,
      * because in a weak-currency league the local number can exceed the int range.
@@ -286,6 +320,7 @@ public final class McpJson {
         json.addProperty(WINGER_KEY, l.getWinger());
         json.addProperty("scoring", l.getScorer());
         json.addProperty(SET_PIECES, l.getSetPieces());
+        addHattrickEstimate(json, l.getHattrickEstimate(), l.getHattrickEstimateDate());
         return json;
     }
 

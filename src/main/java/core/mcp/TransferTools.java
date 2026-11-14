@@ -225,10 +225,11 @@ public final class TransferTools {
                                 ACTION),
                         TransferTools::manageScout),
                 new McpTool("list_scout",
-                        "Read back HO's local scout shortlist, filtered, one page (count = the "
-                                + "filtered total). Rows: playerId, playerName, note, age, specialty, "
+                        "HO's local scout shortlist, filtered, one page (count = filtered "
+                                + "total). Rows: playerId, playerName, note, age, specialty, "
                                 + "price and deadline (frozen when added), askingPrice, highestBid, "
-                                + "observedAt (newest observation), salePrice, soldAt, plus each skill "
+                                + "observedAt (newest observation), salePrice, soldAt, "
+                                + "hattrickEstimate (Hattrick's own), plus each skill "
                                 + "filtered on. full adds every frozen skill, TSI, wage and character. "
                                 + "playerIds picks entries by id.",
                         McpTool.schema(McpTool.properties(
@@ -317,7 +318,10 @@ public final class TransferTools {
                                                         + "call; passed explicitly, it fails the call "
                                                         + "as before. liveSearch reports itemCount, "
                                                         + "hitCount and a resultId: page the hits with "
-                                                        + "search_transfers resultId."),
+                                                        + "search_transfers resultId. For a squad "
+                                                        + "playerId it also reads Hattrick's own "
+                                                        + "estimate (hattrickEstimate, one playerdetails "
+                                                        + "call) - a second opinion, not in the median."),
                                         SPECIALTY_FILTER, McpTool.prop(BOOLEAN,
                                                 "hard-filter the corpus to the target's exact specialty "
                                                         + "(the old behaviour; thin cells). Default false: "
@@ -372,7 +376,8 @@ public final class TransferTools {
     /** What summary keeps of a valuation, besides playerId/name and the top skill groups. */
     private static final List<String> SUMMARY_KEYS = List.of(CURRENCY, "basis", "sampleSize",
             "resolvedSalesAvailable", ESTIMATE, RANGE, MIDDLE_HALF, "listingsEstimate",
-            "resolvedSales", "liveSearch", "liveSearchSkipped", "download", "note", "corpus");
+            "resolvedSales", "liveSearch", "liveSearchSkipped", "download", "note", "corpus",
+            McpJson.HATTRICK_ESTIMATE, McpJson.HATTRICK_ESTIMATE_DATE);
 
     // ------------------------------------------------------------------ corpus stats
 
@@ -1084,6 +1089,9 @@ public final class TransferTools {
             json.addProperty(AGE_WINDOW_DAYS, ageWindowDays);
         }
         addLiveSearch(json, liveSearch, liveSearchSkipped);
+        if (!hasProfile && McpJson.optBool(args, "live", true)) {
+            addSquadHattrickEstimate(json, player.getPlayerId());
+        }
 
         // The evidence, not just the summary. The median below is a crude anchor: it collapses
         // wage, TSI, form, the other skills and how long ago each was seen, all of which change
@@ -1195,6 +1203,36 @@ public final class TransferTools {
         if (liveSearchSkipped != null) {
             // Only ever set when live was defaulted, not asked for - see runLiveSearch.
             json.addProperty("liveSearchSkipped", liveSearchSkipped);
+        }
+    }
+
+    /**
+     * Hattrick's own estimate of a squad player, read live from playerdetails (one CHPP call, as
+     * part of live): a second opinion beside the corpus figure, not an input to it. Best effort -
+     * left out when Hattrick has none or the call fails.
+     */
+    private static void addSquadHattrickEstimate(JsonObject json, int playerId) {
+        try {
+            final var m = ChppWriteService.instance().marketPlayerForAgent(playerId);
+            if (m != null) {
+                McpJson.addHattrickEstimate(json, m.hattrickEstimate(), m.hattrickEstimateDate());
+            }
+        } catch (RuntimeException e) {
+            HOLogger.instance().log(TransferTools.class, e);
+        }
+    }
+
+    /** Each row's newest stored Hattrick estimate (rows keyed by playerId), where one was observed. */
+    private static void addStoredHattrickEstimates(JsonArray rows) {
+        if (rows == null) {
+            return;
+        }
+        for (final var element : rows) {
+            final var row = element.getAsJsonObject();
+            final var l = DBManager.instance().loadLatestHattrickEstimate(row.get(PLAYER_ID).getAsInt());
+            if (l != null) {
+                McpJson.addHattrickEstimate(row, l.getHattrickEstimate(), l.getHattrickEstimateDate());
+            }
         }
     }
 
@@ -1813,7 +1851,7 @@ public final class TransferTools {
             }
         }
 
-        return LineupTools.onEdt(() -> {
+        final var result = LineupTools.onEdt(() -> {
             listed.forEach((id, m) -> ScoutList.recordRelisting(id, m.askingPrice(), m.highestBid(), m.deadline()));
             final var refreshed = new JsonArray();
             ScoutList.entries().stream()
@@ -1830,6 +1868,8 @@ public final class TransferTools {
             addNotOnList(out, wanted, ids);
             return out;
         });
+        addStoredHattrickEstimates(result.getAsJsonArray("refreshed"));
+        return result;
     }
 
     /** A players element: a bare id or a {playerId, note} object. */
@@ -1887,7 +1927,7 @@ public final class TransferTools {
             }
         }
 
-        return LineupTools.onEdt(() -> {
+        final var result = LineupTools.onEdt(() -> {
             final var tabOpen = ScoutList.isLive();
             final var list = ScoutList.entries();
             for (final var entry : entries.values()) {
@@ -1918,6 +1958,9 @@ public final class TransferTools {
             }
             return out;
         });
+        // observeForScout's playerdetails read stored Hattrick's estimate with the corpus row.
+        addStoredHattrickEstimates(result.getAsJsonArray("added"));
+        return result;
     }
 
     /**
@@ -2032,7 +2075,7 @@ public final class TransferTools {
     /** list_scout's default row: the market state plus age and specialty, not the frozen skills. */
     private static final List<String> COMPACT_SCOUT_KEYS = List.of(PLAYER_ID, PLAYER_NAME, "note",
             "age", SPECIALTY, PRICE, DEADLINE, ASKING_PRICE, HIGHEST_BID, "observedAt",
-            SALE_PRICE, "soldAt");
+            SALE_PRICE, "soldAt", McpJson.HATTRICK_ESTIMATE, McpJson.HATTRICK_ESTIMATE_DATE);
     private static final int DEFAULT_SCOUT_PAGE = 20;
     /** A compact row's note is cut here; full returns it whole. */
     static final int COMPACT_NOTE_CHARS = 80;
@@ -2993,6 +3036,12 @@ public final class TransferTools {
             player.addProperty(ASKING_PRICE, McpJson.money(listing.getAskingPrice()));
         }
         player.addProperty(HIGHEST_BID, McpJson.money(listing.getHighestBid()));
+        // From whichever observation carried it - search hits never do.
+        final var estimate = listing.getHattrickEstimate() != null ? listing
+                : DBManager.instance().loadLatestHattrickEstimate(player.get(PLAYER_ID).getAsInt());
+        if (estimate != null) {
+            McpJson.addHattrickEstimate(player, estimate.getHattrickEstimate(), estimate.getHattrickEstimateDate());
+        }
     }
 
     private static JsonObject transferRow(PlayerTransfer t, int teamId) {

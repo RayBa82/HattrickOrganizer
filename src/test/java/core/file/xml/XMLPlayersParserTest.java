@@ -191,6 +191,22 @@ class XMLPlayersParserTest {
         assertThat(p.getSetPiecesSkill()).isNotZero();
     }
 
+    /** playerdetails 3.3: the site's transfer estimate, only where the skills are visible. */
+    @Test
+    void hattrickEstimateIsReadWhenPresentAndNullOtherwise() {
+        final var xml = LISTED.replace("<TransferListed>True</TransferListed>", """
+                <TransferListed>True</TransferListed>
+                <TransferCompareAverage>3100000</TransferCompareAverage>
+                <TransferCompareAverageDate>2026-09-01 08:00:00</TransferCompareAverageDate>""");
+        final var m = new XMLPlayersParser().parseMarketPlayerFromString(xml);
+        assertThat(m.hattrickEstimate()).isEqualTo(3_100_000L);
+        assertThat(m.hattrickEstimateDate()).isEqualTo(HODateTime.fromHT("2026-09-01 08:00:00"));
+
+        final var unlisted = new XMLPlayersParser().parseMarketPlayerFromString(UNLISTED);
+        assertThat(unlisted.hattrickEstimate()).isNull();
+        assertThat(unlisted.hattrickEstimateDate()).isNull();
+    }
+
     /**
      * An unlisted response carries no market data at all: no price, no bid, no deadline.
      * <p>

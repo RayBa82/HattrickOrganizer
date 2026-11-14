@@ -55,6 +55,12 @@ public class TransferListing extends AbstractTable.Storable {
     /** What the player actually sold for, filled in later by the resolve pass. Null until then. */
     private Long salePrice;
     private HODateTime resolvedAt;
+    /**
+     * Hattrick's own transfer estimate (TransferCompareAverage, SEK) and when Hattrick last updated
+     * it. Only a playerdetails observation carries it, and only once Hattrick has one; null otherwise.
+     */
+    private Long hattrickEstimate;
+    private HODateTime hattrickEstimateDate;
 
     public TransferListing() {
     }
@@ -161,6 +167,8 @@ public class TransferListing extends AbstractTable.Storable {
         listing.aggressiveness = p.getAggressivity();
         listing.honesty = p.getHonesty();
         listing.salary = baseWage(p, m.isAbroad());
+        listing.hattrickEstimate = m.hattrickEstimate();
+        listing.hattrickEstimateDate = m.hattrickEstimateDate();
         return listing;
     }
 

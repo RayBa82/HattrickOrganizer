@@ -167,11 +167,11 @@ Each table is a subclass of `core.db.AbstractTable` that declares its columns as
 `ColumnDescriptor[]` in `initColumns()`; the base class generates the select/insert/update/delete SQL
 from that, using `idColumns` to know how many leading columns form the key.
 
-**Schema changes require a migration.** `DBManager.DBVersion` (currently `1008`, "HO 10.0") is the
+**Schema changes require a migration.** `DBManager.DB_VERSION` (currently `1009`, "HO 10.0") is the
 target; `core.db.DBUpdater.updateDB` is a deliberately fall-through `switch` where each `case` is a
 starting version that cascades through every later `updateDBvNNN()` step. Adding a column means:
-change the table's `initColumns()`, bump `DBVersion`, and add the matching case plus `ALTER TABLE`
-step. Note `DBManager.getDBVersion()` returns `previousDBVersion` when `HO.isDevelopment()`, so DEV
+change the table's `initColumns()`, bump `DB_VERSION` and `PREVIOUS_DB_VERSION`, and add the
+matching case plus `ALTER TABLE` step (the newest case ends in `break`). Note `DBManager.getDBVersion()` returns `PREVIOUS_DB_VERSION` when `HO.isDevelopment()`, so DEV
 builds intentionally re-run the newest migration on each start.
 
 ### Modules

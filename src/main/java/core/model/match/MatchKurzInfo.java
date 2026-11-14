@@ -95,6 +95,15 @@ public class MatchKurzInfo extends AbstractTable.Storable implements Comparable<
 	public void setWeatherForecast(Weather.Forecast wf){this.m_iWeatherForecast=wf;}
 	public Weather.Forecast getWeatherForecast(){return this.m_iWeatherForecast;}
 
+	/**
+	 * The fans' expectation for this match, 0 (better not show up) to 8 (we will win), as fans.xml
+	 * reports it (matches 3.0). Only for our own senior team's league, qualification, Masters and main
+	 * cup matches; null otherwise and for rows written before.
+	 */
+	@lombok.Getter
+	@lombok.Setter
+	private Integer fanMatchExpectation;
+
 	/** Typ des Spiels */
 	private MatchType m_mtMatchTyp = MatchType.NONE;
 	private CupLevel m_mtCupLevel = CupLevel.NONE;

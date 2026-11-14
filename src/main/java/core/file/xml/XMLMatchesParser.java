@@ -23,7 +23,28 @@ public class XMLMatchesParser {
 	}
 
 	public static List<MatchKurzInfo> parseMatchesFromString(String input) {
-		return createMatches(XMLManager.parseString(input));
+		final var doc = XMLManager.parseString(input);
+		final var matches = createMatches(doc);
+		addFanMatchExpectations(doc, matches);
+		return matches;
+	}
+
+	/**
+	 * matches 3.0: FanMatchExpectation, onto the match parsed from the same Match element (one each,
+	 * in order). Absent on matches the fans have no expectation for.
+	 */
+	private static void addFanMatchExpectations(Document doc, List<MatchKurzInfo> matches) {
+		if (doc == null) {
+			return;
+		}
+		final var list = doc.getDocumentElement().getElementsByTagName("Match");
+		if (list.getLength() != matches.size()) {
+			return;   // createMatches gave up on this document
+		}
+		for (int i = 0; i < list.getLength(); i++) {
+			matches.get(i).setFanMatchExpectation(
+					XMLManager.xmlIntegerValue((Element) list.item(i), "FanMatchExpectation"));
+		}
 	}
 
 	/**

@@ -2,6 +2,7 @@ package core.db;
 
 import core.model.StaffMember;
 import core.model.StaffType;
+import core.util.HODateTime;
 import java.sql.Types;
 import java.util.List;
 
@@ -23,7 +24,8 @@ public class StaffTable extends AbstractTable{
 				ColumnDescriptor.Builder.newInstance().setColumnName("stafftype").setGetter((p) -> ((StaffMember) p).getStaffType().getId()).setSetter((p, v) -> ((StaffMember) p).setStaffType(StaffType.getById((int) v))).setType(Types.INTEGER).isNullable(false).build(),
 				ColumnDescriptor.Builder.newInstance().setColumnName("level").setGetter((p) -> ((StaffMember) p).getLevel()).setSetter((p, v) -> ((StaffMember) p).setLevel((int) v)).setType(Types.INTEGER).isNullable(false).build(),
 				ColumnDescriptor.Builder.newInstance().setColumnName("cost").setGetter((p) -> ((StaffMember) p).getCost()).setSetter((p, v) -> ((StaffMember) p).setCost((int) v)).setType(Types.INTEGER).isNullable(false).build(),
-				ColumnDescriptor.Builder.newInstance().setColumnName("name").setGetter((p) -> ((StaffMember) p).getName()).setSetter((p, v) -> ((StaffMember) p).setName((String) v)).setType(Types.VARCHAR).setLength(127).isNullable(false).build()
+				ColumnDescriptor.Builder.newInstance().setColumnName("name").setGetter(p -> ((StaffMember) p).getName()).setSetter((p, v) -> ((StaffMember) p).setName((String) v)).setType(Types.VARCHAR).setLength(127).isNullable(false).build(),
+				ColumnDescriptor.Builder.newInstance().setColumnName("ContractExpires").setGetter(p -> HODateTime.toDbTimestamp(((StaffMember) p).getContractExpires())).setSetter((p, v) -> ((StaffMember) p).setContractExpires((HODateTime) v)).setType(Types.TIMESTAMP).isNullable(true).build()
 		};
 	}
 
@@ -34,9 +36,9 @@ public class StaffTable extends AbstractTable{
 	protected List<StaffMember> getStaffByHrfId(int hrfId) {
 		return load(StaffMember.class, hrfId);
 	}
-	
+
 	protected void storeStaff(int hrfId, List<StaffMember> list) {
-		
+
 		if ( list==null || hrfId < 0) {
 			return;
 		}

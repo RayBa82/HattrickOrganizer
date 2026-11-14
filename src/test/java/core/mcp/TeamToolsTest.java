@@ -21,6 +21,22 @@ import static org.assertj.core.api.Assertions.assertThatNoException;
  */
 class TeamToolsTest {
 
+    /** analyze_opponent history: newest season first, cup result as words, trophies named. */
+    @Test
+    void teamHistoryJson_showsTheNewestSeasonFirst() {
+        final var json = TeamTools.teamHistoryJson(core.file.xml.XMLTeamHistoryParser.parse(
+                core.file.xml.XMLTeamHistoryParserTest.HISTORY));
+
+        assertThat(json.get("seasonCount").getAsInt()).isEqualTo(2);
+        final var newest = json.getAsJsonArray("seasons").get(0).getAsJsonArray();
+        assertThat(newest.get(0).getAsInt()).isEqualTo(79);
+        assertThat(newest.get(7).isJsonNull()).isTrue();
+        final var oldest = json.getAsJsonArray("seasons").get(1).getAsJsonArray();
+        assertThat(oldest.get(7).getAsString()).isEqualTo("won");
+        assertThat(json.getAsJsonArray("trophies").get(0).getAsJsonObject().get("trophy").getAsString())
+                .isEqualTo("series win");
+    }
+
     @Test
     void tools_areTheReadToolsPlusTheDownload() {
         assertThat(TeamTools.tools()).extracting(McpTool::name)

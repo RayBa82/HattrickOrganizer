@@ -113,7 +113,8 @@ public final class MatchTools {
                         "The team's played matches, most recent first: result, competition, "
                                 + "location and outcome. Use it for recent form, and for the "
                                 + "matchId / matchType pair that get_match needs. CUP rows name "
-                                + "the cup (cup, cupId). Upcoming matches, tournaments included: "
+                                + "the cup (cup, cupId); fanExpectation is what the fans expected, "
+                                + "where Hattrick says. Upcoming matches, tournaments included: "
                                 + "week_brief, get_team nextMatches.",
                         McpTool.schema(McpTool.properties(
                                 COUNT, McpTool.prop(INTEGER,
@@ -577,6 +578,8 @@ public final class MatchTools {
         final var theirs = atHome ? info.getGuestTeamGoals() : info.getHomeTeamGoals();
         json.addProperty(LOCATION, atHome ? "home" : "away");
         json.addProperty("outcome", outcome(ours, theirs));
+        // what the fans judged this result against (matches 3.0; recent official matches only)
+        McpJson.addFanExpectation(json, info.getFanMatchExpectation());
         addCup(json, info);
         return json;
     }

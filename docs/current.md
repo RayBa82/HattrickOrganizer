@@ -5,7 +5,29 @@ accumulated; git keeps them (`git log -p -- docs/current.md`; the full history f
 2026-09-26 is `git show f5c51d0d:docs/current.md`).
 
 
-## Tool gaps from the hattrick session's keeper/CD search (2026-11-09)
+## CHPP 2026-11-10, second part: playerdetails 3.3, stafflist 1.3, matches 3.0, teamhistory (2026-11-14)
+
+Committed on `master`, image pushed, unit-tested, none tried against live CHPP. DB 1009 adds
+the columns. The hattrick session was told (tools, currency of the search filters, editorial).
+- playerdetails 3.3 (reads; placeBid stays 3.2): `TransferCompareAverage(+Date)` →
+  `MarketPlayer.hattrickEstimate(Date)`, kept on playerdetails rows of TRANSFERLISTING
+  (`HTESTIMATE`, `HTESTIMATEDATE`). Shown as `hattrickEstimate` in list_scout, manage_scout
+  add/refresh and the comparables; estimate_market_value reads it live for a squad player (one
+  playerdetails call while `live`). Second opinion only, not in the median. The request also
+  fills the assists the parser read since 3.1.
+- stafflist 1.3: `StaffMember.contractExpires` through XML → HRF → STAFF; `get_team` staff
+  rows carry `contractExpires`, `week_brief` lists `staffContractsEnding` (14 days ahead).
+- matches 3.0: `MatchKurzInfo.fanMatchExpectation` (MATCHESKURZINFO.FanMatchExpectation);
+  `fanExpectation` ("7 we are favourites") on get_team/download_team nextMatches and get_matches.
+  Statements not read. An archive re-store of a match writes null over it.
+- teamhistory 1.0: `XMLTeamHistoryParser`, `ChppWriteService.teamHistoryForAgent`,
+  analyze_opponent `include: ["history"]` (opt-in, 1 request): newest 10 seasons as rows,
+  newest 10 trophies, counts.
+- Side fixes for diagnostics on touched code: `DBManager` constants `DB_VERSION` /
+  `PREVIOUS_DB_VERSION`, `instance()` split up (the backup dialog is now modal instead of a
+  busy-wait), `XMLPlayersParser.parseMarketPlayerFromString` split up.
+- Not done: hofplayers 1.3, achievements, nationalprospectplayers (little value), the editorial
+  follow-ups below. Budget check of analyze_opponent history and live checks still open.
 
 Committed on `master` with the tournament-week follow-ups below; image pushed. Unit-tested.
 - `get_open_bids` adds `ourMaxBid` (the autobid ceiling place_bid sent). `leading` was always

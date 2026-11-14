@@ -217,6 +217,28 @@ class TransferListingTableTest {
                         unlisted, HODateTime.fromHT("2026-08-30 16:00:00")));
     }
 
+    /**
+     * Hattrick's estimate comes only with playerdetails, so the newest row - usually a search hit -
+     * does not carry it; loadLatestHattrickEstimate finds the observation that does.
+     */
+    @Test
+    void hattrickEstimateIsFoundPastANewerSearchHit() {
+        final var base = market(88991126, false, 44_000L);
+        final var withEstimate = new core.file.xml.XMLPlayersParser.MarketPlayer(
+                base.player(), true, 555444, false, 2_850_000L, base.deadline(), 100_000L,
+                3_100_000L, HODateTime.fromHT("2026-09-01 08:00:00"));
+        table.storeListing(TransferListing.fromPlayerDetails(withEstimate,
+                HODateTime.fromHT("2026-09-02 10:00:00")));
+        table.storeListing(TransferListing.fromHit(hit(88991126, details()),
+                HODateTime.fromHT("2026-09-03 10:00:00")));
+
+        assertThat(table.loadLatestForPlayer(88991126).getHattrickEstimate()).isNull();
+        final var latest = table.loadLatestHattrickEstimate(88991126);
+        assertThat(latest.getHattrickEstimate()).isEqualTo(3_100_000L);
+        assertThat(latest.getHattrickEstimateDate()).isEqualTo(HODateTime.fromHT("2026-09-01 08:00:00"));
+        assertThat(table.loadLatestHattrickEstimate(88991122)).isNull();
+    }
+
 
     @Test
     void hasSkillDataIsTrueOnlyOnceASkillBearingSnapshotExists() {

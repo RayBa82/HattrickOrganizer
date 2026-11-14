@@ -407,10 +407,24 @@ public class XMLPlayersParser {
      * false the market fields are 0 / null, and the seven hidden skills on {@code player} are a
      * meaningless 1 - Player's own field default, left unparsed rather than read as 0. Only stamina
      * is real. Build nothing out of this record's skills unless the flag is true.
+     * <p>
+     * {@code hattrickEstimate} is the transfer estimate the player's page shows
+     * ({@code TransferCompareAverage}, SEK, playerdetails 3.3), {@code hattrickEstimateDate} when
+     * Hattrick last updated it. Hattrick only sends it where the skills are visible - an own or a
+     * transfer-listed player - and only once it has one, so both are null otherwise.
      */
     public record MarketPlayer(Player player, boolean transferListed, int owningTeamId,
                                boolean isAbroad, long askingPrice, HODateTime deadline,
-                               long highestBid) {}
+                               long highestBid, Long hattrickEstimate,
+                               HODateTime hattrickEstimateDate) {
+        /** Without a Hattrick estimate. */
+        public MarketPlayer(Player player, boolean transferListed, int owningTeamId,
+                            boolean isAbroad, long askingPrice, HODateTime deadline,
+                            long highestBid) {
+            this(player, transferListed, owningTeamId, isAbroad, askingPrice, deadline, highestBid,
+                    null, null);
+        }
+    }
 
     // TODO refactor, use createPlayerDetails
     public MarketPlayer parseMarketPlayerFromString(String xml) {
@@ -499,39 +513,8 @@ public class XMLPlayersParser {
         final var transferListed = xmlBoolValue(root, "TransferListed");
         player.setTransferListed(transferListed ? 1 : 0);
 
-        var ele = (Element) root.getElementsByTagName("TrainerData").item(0);
-        if ( ele != null) {
-            player.setTrainerType(TrainerType.fromInt(xmlIntegerValue(ele, "TrainerType")));
-            var trainerSkill = xmlIntegerValue(root, "TrainerSkill");
-            if ( trainerSkill == null){
-                trainerSkill=0;
-            }
-            player.setCoachSkill(trainerSkill);
-        }
-
-        ele = (Element) root.getElementsByTagName("MotherClub").item(0);
-        if ( ele != null) {
-            player.setMotherClubId(xmlIntegerValue(ele, "TeamID"));
-            player.setMotherClubName(xmlValue(ele, "TeamName"));
-        }
-
-        ele = (Element) root.getElementsByTagName("PlayerSkills").item(0);
-        if ( ele != null) {
-            // Stamina is published whether or not he is listed. The other seven are pruned out of
-            // the block when he is not, and xmlIntValue would read every one of them as 0 - a
-            // number indistinguishable from a genuinely terrible footballer. Leave them at Player's
-            // own default of 1 instead, and let the caller refuse to build anything out of them.
-            player.setStamina(xmlIntValue(ele, "StaminaSkill"));
-            if (transferListed) {
-                player.setGoalkeeperSkill(xmlIntValue(ele, "KeeperSkill"));
-                player.setPlaymakingSkill(xmlIntValue(ele, "PlaymakerSkill"));
-                player.setScoringSkill(xmlIntValue(ele, "ScorerSkill"));
-                player.setPassingSkill(xmlIntValue(ele, "PassingSkill"));
-                player.setWingerSkill(xmlIntValue(ele, "WingerSkill"));
-                player.setDefendingSkill(xmlIntValue(ele, "DefenderSkill"));
-                player.setSetPiecesSkill(xmlIntValue(ele, "SetPiecesSkill"));
-            }
-        }
+        readTrainerAndMotherClub(root, player);
+        readMarketSkills(root, player, transferListed);
 
         // Read by child, never by container presence: <TransferDetails /> is a non-null Element for
         // an unlisted player, so only <TransferListed> can tell the two apart.
@@ -549,8 +532,48 @@ public class XMLPlayersParser {
             }
         }
 
+        // playerdetails 3.3; both absent unless the skills are visible and Hattrick has an estimate
         return new MarketPlayer(player, transferListed, teamID, isAbroad,
-                askingPrice, deadline, highestBid);
+                askingPrice, deadline, highestBid, xmlLongValue(root, "TransferCompareAverage"),
+                xmlHODateTimeValue(root, "TransferCompareAverageDate"));
+    }
+
+    private static void readTrainerAndMotherClub(Element root, Player player) {
+        var ele = (Element) root.getElementsByTagName("TrainerData").item(0);
+        if ( ele != null) {
+            player.setTrainerType(TrainerType.fromInt(xmlIntegerValue(ele, "TrainerType")));
+            var trainerSkill = xmlIntegerValue(root, "TrainerSkill");
+            if ( trainerSkill == null){
+                trainerSkill=0;
+            }
+            player.setCoachSkill(trainerSkill);
+        }
+
+        ele = (Element) root.getElementsByTagName("MotherClub").item(0);
+        if ( ele != null) {
+            player.setMotherClubId(xmlIntegerValue(ele, "TeamID"));
+            player.setMotherClubName(xmlValue(ele, "TeamName"));
+        }
+    }
+
+    private static void readMarketSkills(Element root, Player player, boolean transferListed) {
+        final var ele = (Element) root.getElementsByTagName("PlayerSkills").item(0);
+        if ( ele != null) {
+            // Stamina is published whether or not he is listed. The other seven are pruned out of
+            // the block when he is not, and xmlIntValue would read every one of them as 0 - a
+            // number indistinguishable from a genuinely terrible footballer. Leave them at Player's
+            // own default of 1 instead, and let the caller refuse to build anything out of them.
+            player.setStamina(xmlIntValue(ele, "StaminaSkill"));
+            if (transferListed) {
+                player.setGoalkeeperSkill(xmlIntValue(ele, "KeeperSkill"));
+                player.setPlaymakingSkill(xmlIntValue(ele, "PlaymakerSkill"));
+                player.setScoringSkill(xmlIntValue(ele, "ScorerSkill"));
+                player.setPassingSkill(xmlIntValue(ele, "PassingSkill"));
+                player.setWingerSkill(xmlIntValue(ele, "WingerSkill"));
+                player.setDefendingSkill(xmlIntValue(ele, "DefenderSkill"));
+                player.setSetPiecesSkill(xmlIntValue(ele, "SetPiecesSkill"));
+            }
+        }
     }
 
     /**

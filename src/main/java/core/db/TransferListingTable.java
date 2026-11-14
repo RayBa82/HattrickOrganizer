@@ -57,7 +57,9 @@ public class TransferListingTable extends AbstractTable {
                 intCol("AGGRESSIVENESS", p -> ((TransferListing) p).getAggressiveness(), (p, v) -> ((TransferListing) p).setAggressiveness((Integer) v), true),
                 intCol("HONESTY", p -> ((TransferListing) p).getHonesty(), (p, v) -> ((TransferListing) p).setHonesty((Integer) v), true),
                 longCol("SALEPRICE", p -> ((TransferListing) p).getSalePrice(), (p, v) -> ((TransferListing) p).setSalePrice(v == null ? null : ((Number) v).longValue()), true),
-                timeCol("RESOLVEDAT", p -> HODateTime.toDbTimestamp(((TransferListing) p).getResolvedAt()), (p, v) -> ((TransferListing) p).setResolvedAt((HODateTime) v), true)
+                timeCol("RESOLVEDAT", p -> HODateTime.toDbTimestamp(((TransferListing) p).getResolvedAt()), (p, v) -> ((TransferListing) p).setResolvedAt((HODateTime) v), true),
+                longCol("HTESTIMATE", p -> ((TransferListing) p).getHattrickEstimate(), (p, v) -> ((TransferListing) p).setHattrickEstimate(v == null ? null : ((Number) v).longValue()), true),
+                timeCol("HTESTIMATEDATE", p -> HODateTime.toDbTimestamp(((TransferListing) p).getHattrickEstimateDate()), (p, v) -> ((TransferListing) p).setHattrickEstimateDate((HODateTime) v), true)
         )).toArray(new ColumnDescriptor[0]);
     }
 
@@ -163,6 +165,17 @@ public class TransferListingTable extends AbstractTable {
     public TransferListing loadLatestForPlayer(int playerId) {
         final var sql = createSelectStatement(
                 "WHERE PLAYERID = " + playerId + " ORDER BY OBSERVEDAT DESC LIMIT 1");
+        final var rows = load(TransferListing.class, connectionManager.executeQuery(sql));
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
+    /**
+     * The newest observation of this player that carries Hattrick's own estimate, or null. Not
+     * simply the newest row: search hits and currentbids snapshots never carry one.
+     */
+    public TransferListing loadLatestHattrickEstimate(int playerId) {
+        final var sql = createSelectStatement("WHERE PLAYERID = " + playerId
+                + " AND HTESTIMATE IS NOT NULL ORDER BY OBSERVEDAT DESC LIMIT 1");
         final var rows = load(TransferListing.class, connectionManager.executeQuery(sql));
         return rows.isEmpty() ? null : rows.get(0);
     }

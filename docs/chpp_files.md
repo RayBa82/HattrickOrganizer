@@ -30,7 +30,7 @@ and the data types are captured under [`raw/chpp/`](raw/chpp/README.md), one fil
 | leaguelevels            | Shows league level units (series) information for a specific league.                        | 1.0 (2024-08-26)         | -            |
 | live                    | Get (live) match ticker                                                                     | 2.4 (2026-11-10)         | -            |
 | managercompendium       | The manager compendium of the logged in user.                                               | 1.8 (2026-11-10)         | -            |
-| matches                 | The most recent and upcoming matches for a particular team (Senior or Youth).               | 3.0 (2026-11-10)         | 2.8, 2.9     |
+| matches                 | The most recent and upcoming matches for a particular team (Senior or Youth).               | 3.0 (2026-11-10)         | 3.0, 2.9     |
 | matchesarchive          | Matches Archive                                                                             | 1.5 (2022-03-03)         | 1.4, 1.5     |
 | matchdetails            | Detailed match information                                                                  | 3.2 (2026-11-10)         | 3.0, 3.1     |
 | matchlineup             | Match lineup for finished matches                                                           | 2.2 (2026-11-10)         | 2.2          |
@@ -41,16 +41,16 @@ and the data types are captured under [`raw/chpp/`](raw/chpp/README.md), one fil
 | nationalplayers         | National team players                                                                       | 1.5 (2022-03-04)         | 1.2          |
 | nationalprospectplayers | The national team's prospect player list.                                                   | 1.0 (2026-11-10)         | -            |
 | players                 | Players                                                                                     | 2.8 (2026-02-11)         | 2.7          |
-| playerdetails           | Detailed information for a player                                                           | 3.3 (2026-11-10)         | 3.0, 3.2     |
+| playerdetails           | Detailed information for a player                                                           | 3.3 (2026-11-10)         | 3.3, 3.2     |
 | playerevents            | Player events                                                                               | 1.3 (2013-03-04)         | -            |
 | playerstats             | Detailed player development history.                                                        | 1.0 (2026-11-10)         | 1.0          |
 | regiondetails           | Detailed information about a region                                                         | 1.2                      | 1.2          |
 | search                  | Search                                                                                      | 1.2                      | -            |
 | staffavatars            | Avatars for all staff members.                                                              | 1.1 (2023-09-07)         | -            |
-| stafflist               | A list of all staff members                                                                 | 1.3 (2026-11-10)         | 1.2          |
+| stafflist               | A list of all staff members                                                                 | 1.3 (2026-11-10)         | 1.3          |
 | supporters              | Information about teams supported and teams supporting.                                     | 1.1 (2026-11-10)         | -            |
 | teamdetails             | Team information                                                                            | 4.0 (2026-11-10)         | 3.6          |
-| teamhistory             | A club's history: per-season league/cup results and its trophies.                           | 1.0 (2026-11-10)         | -            |
+| teamhistory             | A club's history: per-season league/cup results and its trophies.                           | 1.0 (2026-11-10)         | 1.0          |
 | tournamentdetails       | Information about a tournament. This is only available for the current season.              | 1.0 (2013-10-17)         | 1.0          |
 | tournamentfixtures      | Information about matches for a tournament.                                                 | 1.1 (2025-09-17)         | -            |
 | tournamentleaguetables  | League tables for a tournament.                                                             | 1.1 (2021-06-01)         | -            |
@@ -72,7 +72,7 @@ and the data types are captured under [`raw/chpp/`](raw/chpp/README.md), one fil
 | youthteamdetails        | Youth team information.                                                                     | 1.5 (2026-11-10)         | -            |
 
 `worlddetails` 1.8 is still requested by the national-team HRF converter (`NthrfConvertXml2Hrf`);
-`playerdetails` 3.2 only for the `placeBid` write, reads stay on 3.0.
+`playerdetails` 3.2 only for the `placeBid` write, reads are on 3.3.
 
 ## Changelog 2025-09 to 2026-02 — not picked up by HO yet
 
@@ -81,7 +81,6 @@ From the changelog on the CHPP docs index. None of these fields is parsed by HO.
 | Date       | File - version         | Added output / input        |
 |------------|------------------------|-----------------------------|
 | 2025-09-17 | tournamentfixtures 1.1 | input `matchRound`          |
-| 2026-02-09 | playerdetails 3.2      | `GenderID`                  |
 | 2026-02-09 | worlddetails 2.0       | `LeagueSystemID` per league |
 | 2026-02-10 | teamdetails 3.8        | `GenderID`                  |
 | 2026-02-10 | youthplayerdetails 1.3 | `GenderID`                  |
@@ -110,14 +109,14 @@ when a request moves to the new version. Full trees in `raw/chpp/`.
 | training 2.3                      | `actionType=history`, inputs `teamId`, `fromDate` (default 16 weeks back): one `Training` row per change of type, intensity or stamina share, with `HattrickSeason`, `HattrickWeek`, `TrainingDate`. Gold supporter, own or mentored team, else AccessDenied                           | used: get_training `historyWeeks`              |
 | playerstats 1.0 (new)             | per match of one player: age, TSI, form, stamina, loyalty, experience, goals, cards, injury, played minutes, rating (average and end of game), minutes per position group                                                                                                              | used: `get_player_match_stats`                 |
 | matchdetails 3.2                  | `HasReplay`/`NrOfReplays` per team; `ExpectedResult` with the simulated replays (win/draw/loss, average goals, goal distribution, win margin, over/under 0.5-4.5). Only where the site shows it: national team matches, Diamond, or bought replay credits                              | yardstick for the match predictor              |
-| playerdetails 3.3                 | `TransferCompareAverage`(+`Date`): the site's transfer estimate, only with visible skills; `FamilyRelation`; `TrophyList` (Gold club only)                                                                                                                                             | comparison for `estimate_market_value`         |
+| playerdetails 3.3                 | `TransferCompareAverage`(+`Date`): the site's transfer estimate, only with visible skills; `FamilyRelation`; `TrophyList` (Gold club only)                                                                                                                                             | used: `hattrickEstimate`, see playerdetails    |
 | teamdetails 4.0                   | `Currency` (`CurrencyName`, `CurrencyRate` to SEK) the requesting user chose, only for that user                                                                                                                                                                                       | HO takes the rate from the league today        |
-| teamhistory 1.0 (new)             | per season since the current owner: series, position, points, goals, cup round; trophy list                                                                                                                                                                                            |                                                |
+| teamhistory 1.0 (new)             | per season since the current owner: series, position, points, goals, cup round; trophy list                                                                                                                                                                                            | used: analyze_opponent `include: [history]`    |
 | youthplayerdetails 1.4            | `TrainingReports` (the coach's comments: skill and level); `UserId` in `OwningYouthTeam`                                                                                                                                                                                               | youth skill estimates                          |
 | youthplayerlist 1.4               | `UserId` in `OwningYouthTeam` (`actionType=details`)                                                                                                                                                                                                                                   |                                                |
 | youthteamdetails 1.5              | `IsPlayingMatch`                                                                                                                                                                                                                                                                       |                                                |
-| matches 3.0                       | `HomeStatement`, `AwayStatement`, `FanMatchExpectation`                                                                                                                                                                                                                                |                                                |
-| stafflist 1.3                     | `ContractExpires` per staff member                                                                                                                                                                                                                                                     |                                                |
+| matches 3.0                       | `HomeStatement`, `AwayStatement`, `FanMatchExpectation`                                                                                                                                                                                                                                | used: `fanExpectation` (statements not read)   |
+| stafflist 1.3                     | `ContractExpires` per staff member                                                                                                                                                                                                                                                     | used: get_team, week_brief                     |
 | hofplayers 1.3                    | `MatchesInClub`, `BestPerformanceValue`, `NoOfTimesTrainingMatchHero`, `FaithfulToTheClub`, `NoOfCleanSheet` (Gold only)                                                                                                                                                               |                                                |
 | worlddetails 2.1                  | per league `TotalTeams`, `NumberOfForeignOwners`, `MaxPercentageOfForeignOwners`                                                                                                                                                                                                       |                                                |
 | nationalteamdetails 2.0           | `AssistantCoach`, `Scouts` (`UserID`, `Loginname`)                                                                                                                                                                                                                                     |                                                |
@@ -277,7 +276,7 @@ Documented example: `?file=transfersearch&version=1.1&ageMin=20&ageMax=22&skillT
 The file description states it is *not* meant to be polled by bots, only fetched on manual user
 request.
 
-## playerdetails (version 3.0)
+## playerdetails (version 3.3)
 
 Requested by `Connector.downloadPlayerDetails`. Answers for **any** player, including a foreign one
 on a non-supporter account (`UserSupporterTier: none`), and carries `OwningTeam/TeamID`. This is the
@@ -310,6 +309,14 @@ Four things about it that cost a live fetch to learn:
     <BidderTeam />
   </TransferDetails>
   ```
+
+- **`TransferCompareAverage` (3.3)** is the estimate the player's page shows, SEK, with
+  `TransferCompareAverageDate`. Only where the skills are visible (own player, listed player, NT
+  coach) and Hattrick has one. HO keeps it on the playerdetails rows of TRANSFERLISTING
+  (`HTESTIMATE`, `HTESTIMATEDATE`, DB 1009) and shows it as `hattrickEstimate` in `list_scout`,
+  `manage_scout` add/refresh and the comparables; `estimate_market_value` reads it live for a squad
+  player. It is a second opinion beside the corpus median, not an input to it - once enough sales
+  have both, the two can be compared.
 
 `XMLPlayersParser.parseMarketPlayerFromString` handles all of the above.
 `parsePlayerDetailsFromString` is a wrapper over it that returns `null` for a foreign player.

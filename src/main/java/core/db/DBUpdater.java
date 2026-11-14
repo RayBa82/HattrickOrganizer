@@ -103,8 +103,11 @@ final class DBUpdater {
 						case 1006:
 							updateDBv1007(DBVersion);
 						case 1007:
-							updateDBv1008(DBVersion);
-						case 1008:
+								updateDBv1008(DBVersion);
+							case 1008:
+								updateDBv1009(DBVersion);
+								// the newest step: the next one replaces this break with its own case
+								break;
 				}
 
 			} catch (Exception e) {
@@ -282,8 +285,23 @@ final class DBUpdater {
 				}
 			}
 
-			updateDBVersion(dbVersion, 1008);
-		}
+				updateDBVersion(dbVersion, 1008);
+			}
+
+			/**
+			 * HO 10.0.9: the CHPP 2026-11-10 fields. Hattrick's own transfer estimate (playerdetails
+			 * 3.3) on the market corpus, when a staff contract ends (stafflist 1.3) and the fans'
+			 * expectation per match (matches 3.0). All nullable: only downloads from now on carry them.
+			 */
+			private void updateDBv1009(int dbVersion) throws SQLException {
+				var listingTable = dbManager.getTable(TransferListingTable.TABLENAME);
+				listingTable.tryAddColumn("HTESTIMATE", "BIGINT");
+				listingTable.tryAddColumn("HTESTIMATEDATE", "TIMESTAMP");
+			dbManager.getTable(StaffTable.TABLENAME).tryAddColumn("ContractExpires", "TIMESTAMP");
+			dbManager.getTable(MatchesKurzInfoTable.TABLENAME).tryAddColumn("FanMatchExpectation", "INTEGER");
+
+				updateDBVersion(dbVersion, 1009);
+			}
 
     private void updateDBv901(int dbVersion) throws SQLException {
 

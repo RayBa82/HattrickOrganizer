@@ -61,6 +61,7 @@ public class XMLStaffParser {
 			xmlValue2Hash(hash, root, "StaffType");
 			xmlValue2Hash(hash, root, "StaffLevel");
 			xmlValue2Hash(hash, root, "Cost");
+			xmlValue2Hash(hash, root, "ContractExpires");   // stafflist 1.3
 			returnList.add(hash);
 		}
 		return returnList;

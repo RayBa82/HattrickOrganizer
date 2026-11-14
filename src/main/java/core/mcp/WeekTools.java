@@ -59,13 +59,13 @@ public final class WeekTools {
     public static List<McpTool> tools() {
         return List.of(
                 new McpTool("week_brief",
-                        "The week in one call: training type and trained roles; every fixture of "
-                                + "the training week, oldest first (tournaments too), with matchTypeId, "
-                                + "trains, injuriesPossible and the order Hattrick holds (players, "
-                                + "captain on the pitch, hoLineupDiffers); per player age, banked "
-                                + "minutes, maxedForWeek, trainingSpeed, top-3 positions, "
-                                + "availability; level-ups since "
-                                + "the last training. sources dates every part.",
+                        "The week in one call: training type and roles; every fixture of the "
+                                + "training week, oldest first, tournaments too, with matchTypeId, "
+                                + "trains, injuriesPossible and Hattrick's held order (players, "
+                                + "captain, hoLineupDiffers); per player age, banked minutes, "
+                                + "maxedForWeek, trainingSpeed, top-3 positions, availability; "
+                                + "level-ups since last training; staffContractsEnding. sources "
+                                + "dates every part.",
                         McpTool.schema(McpTool.properties(
                                 PLAYER_IDS, McpTool.prop(ARRAY,
                                         "only these players in players and levelUps; default "
@@ -100,6 +100,32 @@ public final class WeekTools {
         );
     }
 
+    /** How far ahead week_brief warns about a staff contract running out. */
+    static final java.time.Duration STAFF_CONTRACT_WARNING = java.time.Duration.ofDays(14);
+
+    /**
+     * Staff whose contract ends within {@link #STAFF_CONTRACT_WARNING} (stafflist 1.3): without
+     * automatic renewal they leave then. Empty when none, or before the first 1.3 download.
+     */
+    static JsonArray staffContractsEnding(java.util.List<core.model.StaffMember> staff, HODateTime now) {
+        final var rows = new JsonArray();
+        if (staff == null) {
+            return rows;
+        }
+        final var until = now.getInstant().plus(STAFF_CONTRACT_WARNING);
+        for (final var member : staff) {
+            final var expires = member.getContractExpires();
+            if (expires != null && !expires.getInstant().isAfter(until)) {
+                final var row = new JsonObject();
+                row.addProperty("name", member.getName());
+                row.addProperty("type", String.valueOf(member.getStaffType()));
+                row.addProperty("contractExpires", expires.toHT());
+                rows.add(row);
+            }
+        }
+        return rows;
+    }
+
     private static JsonObject weekBrief(JsonObject args) throws McpToolException {
         final var model = McpJson.model();
         final var includeOrders = McpJson.optBool(args, INCLUDE_ORDERS, true);
@@ -107,6 +133,10 @@ public final class WeekTools {
         final var json = new JsonObject();
         json.add("sources", sources(model, includeOrders));
         json.add("training", training(model));
+        final var ending = staffContractsEnding(model.getStaff(), HODateTime.now());
+        if (!ending.isEmpty()) {
+            json.add("staffContractsEnding", ending);
+        }
 
         final var week = TrainingTools.currentWeek(model, null, true);
         if (!"ok".equals(week.get(STATUS).getAsString())) {

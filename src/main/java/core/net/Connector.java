@@ -494,7 +494,7 @@ public class Connector {
 	 */
 	public String getMatches(int teamId, boolean forceRefresh, HODateTime date) throws IOException {
 		StringBuilder urlBuilder = new StringBuilder();
-		urlBuilder.append(htUrl).append("?file=matches&version=2.8");
+		urlBuilder.append(htUrl).append("?file=matches&version=3.0");
 		urlBuilder.append("&teamID=").append(teamId);
 		if (forceRefresh) {
 			urlBuilder.append("&actionType=refreshCache");
@@ -527,7 +527,7 @@ public class Connector {
 	}
 
 	public String getMatches(int teamId, boolean forceRefresh, boolean upcoming) throws IOException {
-		String url = htUrl + "?file=matches&version=2.8";
+		String url = htUrl + "?file=matches&version=3.0";
 
 		if (teamId > 0) {
 			url += "&teamID=" + teamId;
@@ -558,7 +558,9 @@ public class Connector {
 		return getCHPPWebFile(url);
 	}
 	public String downloadPlayerDetails(String playerID) {
-		return getCHPPWebFile(htUrl+"?file=playerdetails&version=3.0&includeMatchInfo=true&playerID=" + playerID);
+			// 3.3: TransferCompareAverage(+Date), the site's transfer estimate; 3.1 brought the assists
+			// the parser already read. Nothing between 3.0 and 3.3 was removed.
+			return getCHPPWebFile(htUrl+"?file=playerdetails&version=3.3&includeMatchInfo=true&playerID=" + playerID);
 	}
 
 	public String downloadYouthPlayers(int youthteamId) {
@@ -583,7 +585,7 @@ public class Connector {
 	 * Download Staff
 	 */
 	public String getStaff(int teamId) {
-		String url = htUrl + "?file=stafflist&version=1.2&teamId=" + teamId;
+		String url = htUrl + "?file=stafflist&version=1.3&teamId=" + teamId;
 		return getCHPPWebFile(url);
 	}
 
@@ -658,6 +660,14 @@ public class Connector {
 		final String url = htUrl + "?file=playerstats&version=1.0&playerID=" + playerId;
 
 		return getCHPPWebFile(url);
+	}
+
+	/**
+	 * A club's result per season since its current owner took over, and its trophies (teamhistory,
+	 * new in the 2026-11-10 changelog), for any team.
+	 */
+	public String getTeamHistory(int teamId) {
+		return getCHPPWebFile(htUrl + "?file=teamhistory&version=1.0&teamId=" + teamId);
 	}
 
 	/**

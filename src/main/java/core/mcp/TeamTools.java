@@ -88,9 +88,10 @@ public final class TeamTools {
                 new McpTool("get_team",
                         "The user's team as of the latest download: name, league, stadium, "
                                 + "team spirit and confidence, the head coach and the rest of the "
-                                + "staff, and the club's logo, kit images and colours (teamColors: "
-                                + "Supporters only, else null); nextMatches: the next 5 own matches "
-                                + "of every type, tournaments too. Cash and the statement: get_finances.",
+                                + "staff (contractExpires), and the club's logo, kit images and colours "
+                                + "(teamColors: Supporters only, else null); nextMatches: the next 5 own "
+                                + "matches of every type, tournaments too, with fanExpectation. Cash "
+                                + "and the statement: get_finances.",
                         McpTool.schema(new JsonObject()),
                         args -> team()),
                 new McpTool("get_squad",
@@ -133,13 +134,15 @@ public final class TeamTools {
                                 + "in recent matches, averaged and named as simulate_lineup wants "
                                 + "them (~1 CHPP request per match). squad: visible attributes, "
                                 + "injuries, cards, lastMatch per player (highest matchId = last "
-                                + "eleven); estimatedSkills is HO's guess (1 request).",
+                                + "eleven); estimatedSkills is HO's guess (1 request). history "
+                                + "(on request): seasons and trophies under this owner (1 request).",
                         McpTool.schema(McpTool.properties(
                                         TEAM_ID, McpTool.prop(INTEGER,
                                                 "the Hattrick team id, e.g. an opponent id from "
                                                         + "get_series"),
                                         INCLUDE, McpTool.prop(ARRAY,
-                                                "ratings and/or squad; default both"),
+                                                "any of ratings, squad, history; default ratings "
+                                                        + "and squad"),
                                         "count", McpTool.prop(INTEGER,
                                                 "ratings: how many recent matches to average, "
                                                         + DEFAULT_PREFIX + MatchTools.DEFAULT_OPPONENT_MATCHES + "; keep it small"),
@@ -363,6 +366,10 @@ public final class TeamTools {
                         ? "HEAD_COACH" : String.valueOf(member.getStaffType()));
                 staffJson.addProperty("level", member.getLevel());
                 staffJson.addProperty("weeklyCost", McpJson.money(member.getCost()));
+                // stafflist 1.3: with automatic renewal a new contract starts then, else he leaves
+                if (member.getContractExpires() != null) {
+                    staffJson.addProperty("contractExpires", member.getContractExpires().toHT());
+                }
                 staff.add(staffJson);
             }
         }
@@ -394,6 +401,7 @@ public final class TeamTools {
             row.addProperty("opponent", home ? m.getGuestTeamName() : m.getHomeTeamName());
             final var where = home ? "home" : "away";
             row.addProperty("location", m.isNeutral() ? "neutral" : where);
+            McpJson.addFanExpectation(row, m.getFanMatchExpectation());
             if (TrainingTools.kickedOff(m.getMatchSchedule(), now)) {
                 row.addProperty(TrainingTools.KICKED_OFF, true);
             }
@@ -612,10 +620,18 @@ public final class TeamTools {
         return json;
     }
 
-    /** analyze_opponent: ratings and/or squad (default both), one round trip. */
+    /** analyze_opponent: ratings and/or squad (default both), history on request, one round trip. */
     private static JsonObject scoutOpponent(JsonObject args) throws McpToolException {
         final var include = includeParts(args, SCOUT_PARTS);
+        final var explicit = args.has(INCLUDE) && args.get(INCLUDE).isJsonArray()
+                && !args.getAsJsonArray(INCLUDE).isEmpty();
+        if (!explicit) {
+            include.remove(HISTORY);   // a CHPP request nobody asked for
+        }
         final var json = new JsonObject();
+        if (include.contains(HISTORY)) {
+            json.add(HISTORY, opponentHistory(McpJson.reqInt(args, TEAM_ID)));
+        }
         if (include.contains(RATINGS)) {
             json.add(RATINGS, MatchTools.opponentRatings(args));
         }
@@ -626,7 +642,75 @@ public final class TeamTools {
                 ? McpDownloads.bulkSections(json, "ratings.matches", "squad.players") : json;
     }
 
-    private static final List<String> SCOUT_PARTS = List.of(RATINGS, SQUAD);
+    private static final String HISTORY = "history";
+    private static final List<String> SCOUT_PARTS = List.of(RATINGS, SQUAD, HISTORY);
+    /** Newest seasons and trophies analyze_opponent's history shows; the counts give the rest. */
+    static final int HISTORY_ROWS = 10;
+    private static final java.util.Map<Integer, String> TROPHIES = java.util.Map.ofEntries(
+            java.util.Map.entry(16, "cup win"), java.util.Map.entry(17, "series win"),
+            java.util.Map.entry(18, "league win"), java.util.Map.entry(19, "cup top scorer"),
+            java.util.Map.entry(20, "series top scorer"), java.util.Map.entry(91, "masters win"),
+            java.util.Map.entry(93, "masters top scorer"), java.util.Map.entry(103, "tournament winner"));
+
+    /** One teamhistory read; a refusal becomes the section's error, not the call's. */
+    private static JsonObject opponentHistory(int teamId) {
+        try {
+            return teamHistoryJson(core.net.ChppWriteService.instance().teamHistoryForAgent(teamId));
+        } catch (core.net.ChppWriteService.ChppWriteException e) {
+            final var json = new JsonObject();
+            json.addProperty("error", e.getMessage());
+            return json;
+        }
+    }
+
+    /**
+     * Seasons newest first, as {@code [season, level, series, position, points, goalsFor,
+     * goalsAgainst, cup]} rows; cup is "won", "round N" (knocked out there) or null. Trophies newest
+     * first. Only the time under the current owner - Hattrick lists nothing earlier.
+     */
+    static JsonObject teamHistoryJson(core.file.xml.XMLTeamHistoryParser.TeamHistory h) {
+        final var json = new JsonObject();
+        json.addProperty("ownerSince", h.foundedDate());
+        json.addProperty("seasonCount", h.seasons().size());
+        json.addProperty("seasonColumns", "season, level, series, position, points, goalsFor, goalsAgainst, cup");
+        final var seasons = new JsonArray();
+        final var newestSeasons = new java.util.ArrayList<>(h.seasons());
+        java.util.Collections.reverse(newestSeasons);
+        newestSeasons.stream().limit(HISTORY_ROWS).forEach(s -> {
+            final var row = new JsonArray();
+            row.add(s.season());
+            row.add(s.leagueLevel());
+            row.add(s.leagueLevelUnitName());
+            row.add(s.position());
+            row.add(s.points());
+            row.add(s.goalsFor());
+            row.add(s.goalsAgainst());
+            row.add(cupResult(s.cupRound(), s.cupRoundsLeft()));
+            seasons.add(row);
+        });
+        json.add("seasons", seasons);
+        json.addProperty("trophyCount", h.trophies().size());
+        final var trophies = new JsonArray();
+        h.trophies().stream()
+                .sorted(java.util.Comparator.comparingInt(core.file.xml.XMLTeamHistoryParser.Trophy::season).reversed())
+                .limit(HISTORY_ROWS)
+                .forEach(t -> {
+                    final var row = new JsonObject();
+                    row.addProperty("season", t.season());
+                    row.addProperty("trophy", TROPHIES.getOrDefault(t.trophyTypeId(), "type " + t.trophyTypeId()));
+                    row.addProperty("competition", t.leagueLevelUnitName());
+                    trophies.add(row);
+                });
+        json.add("trophies", trophies);
+        return json;
+    }
+
+    private static String cupResult(int cupRound, int cupRoundsLeft) {
+        if (cupRound < 0) {
+            return null;
+        }
+        return cupRoundsLeft == 0 ? "won" : "round " + cupRound;
+    }
     private static final List<String> SERIES_PARTS = List.of(MATCHES, TABLE, OTHER_UPCOMING);
 
     /** The include argument: every part when absent or empty, refused when it names an unknown one. */

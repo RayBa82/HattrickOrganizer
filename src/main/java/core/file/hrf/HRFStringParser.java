@@ -248,6 +248,7 @@ public class HRFStringParser {
 				member.setStaffType(StaffType.getById(Integer.parseInt(props.getProperty("staff" + i + "stafftype"))));
 				member.setLevel(Integer.parseInt(props.getProperty("staff" + i + "stafflevel")));
 				member.setCost(Integer.parseInt(props.getProperty("staff" + i + "cost")));
+				member.setContractExpires(HODateTime.fromHT(props.getProperty("staff" + i + "contractexpires")));
 
 				i++;
 				list.add(member);
