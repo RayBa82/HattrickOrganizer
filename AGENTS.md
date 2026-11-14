@@ -319,6 +319,9 @@ java -Djava.awt.headless=true -cp HO.jar core.HeadlessMain [--port 8765] [--user
   stores it. It then runs the first team download, which `download_team` refuses on an empty DB.
   With several teams and no picker it takes the primary team, or `-Dho.teamId=<id>`.
 - Loopback only, no authentication: reach it through `ssh -L 8765:localhost:8765 server`.
+- `docker` and `dockerPush` stamp a release (`DEV_STAGE` 2) whatever `gradle.properties` says;
+  `-PDEV_STAGE=0` overrides it. A DEV build never stores `DBVersion` and re-runs the newest
+  migration on every container start.
 - Publish: `./gradlew dockerPush` builds amd64+arm64 and pushes `docker.rayba.de/ho-headless:<version>`
   and `:latest` (needs a prior `docker login docker.rayba.de`, done by the user). Run Gradle on JDK 17
   (`JAVA_HOME=~/.sdkman/candidates/java/17.0.15-sapmchn`): a newer default JDK fails Gradle 8.13
