@@ -33,7 +33,7 @@ and the data types are captured under [`raw/chpp/`](raw/chpp/README.md), one fil
 | matches                 | The most recent and upcoming matches for a particular team (Senior or Youth).               | 3.0 (2026-11-10)         | 2.8, 2.9     |
 | matchesarchive          | Matches Archive                                                                             | 1.5 (2022-03-03)         | 1.4, 1.5     |
 | matchdetails            | Detailed match information                                                                  | 3.2 (2026-11-10)         | 3.0, 3.1     |
-| matchlineup             | Match lineup for finished matches                                                           | 2.2 (2026-11-10)         | 2.0          |
+| matchlineup             | Match lineup for finished matches                                                           | 2.2 (2026-11-10)         | 2.2          |
 | matchorders             | Match orders for upcoming matches                                                           | 3.1 (2022-03-03)         | 3.0          |
 | nationalteams           | National teams                                                                              | 1.6 (2021-01-18)         | -            |
 | nationalteamdetails     | National Team information                                                                   | 2.0 (2026-11-10)         | 1.9          |
@@ -105,7 +105,7 @@ when a request moves to the new version. Full trees in `raw/chpp/`.
 
 | File - version                    | Change                                                                                                                                                                                                                                                                                 | For HO                                         |
 |-----------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------|
-| matchlineup 2.2, live 2.4         | a behaviour change without a substitution has `OrderType` 4, before 1 like a substitution                                                                                                                                                                                              | **trap**, see below                            |
+| matchlineup 2.2, live 2.4         | a behaviour change without a substitution has `OrderType` 4, before 1 like a substitution                                                                                                                                                                                              | matchlineup 2.2 used, see below                |
 | transfersearch 1.2                | `priceMin`/`priceMax` read in SEK (1.1 read them in the manager's own currency); new inputs `salaryMin`/`salaryMax` (base salary, without the 20 % abroad surcharge) and `transferCompareAvgMin`/`transferCompareAvgMax` (estimate saved at listing; players without one are left out) | used since 2026-11-14, HO converts to SEK      |
 | training 2.3                      | `actionType=history`, inputs `teamId`, `fromDate` (default 16 weeks back): one `Training` row per change of type, intensity or stamina share, with `HattrickSeason`, `HattrickWeek`, `TrainingDate`. Gold supporter, own or mentored team, else AccessDenied                           | used: get_training `historyWeeks`              |
 | playerstats 1.0 (new)             | per match of one player: age, TSI, form, stamina, loyalty, experience, goals, cards, injury, played minutes, rating (average and end of game), minutes per position group                                                                                                              | used: `get_player_match_stats`                 |
@@ -138,16 +138,18 @@ matchType of upcoming matches and gave them `MatchContextId`. The re-capture als
 actions the 2026-09-26 one had missed, e.g. `matchorders` `predictratings` (sector and tactic
 ratings for a sent or saved lineup) and `arenadetails` `MyArena`.
 
-### OrderType 4: behaviour change, not man marking
+### OrderType 4: behaviour change or man marking
 
 `matchOrderTypeID` per the data types page: 1 substitution or behaviour change (matchlineup
 before 2.2, live before 2.4), 3 position swap, 4 behaviour change (matchlineup 2.2+, live 2.4+).
-HO reads 4 as man marking (`MatchOrderType.MAN_MARKING`, undocumented), and
-`Substitution`'s constructor tells a behaviour change from a substitution by
-`playerIn == subjectPlayerID`. On matchlineup 2.2, `XMLMatchLineupParser` would turn every
-behaviour change into man marking, which `RatingCalibration`, `MatchLineupTeam` and the lineup
-view treat differently. The docs do not say how 2.2 reports man marking; check a real match with
-man marking before moving off 2.0. `matchorders` (`setmatchorder`) is not affected.
+HO has read 4 as man marking since 2020 (`MatchOrderType.MAN_MARKING`, undocumented), so
+`XMLMatchLineupParser.legacyOrderType` splits it like `Substitution`'s constructor splits 1: the
+same player as subject and object is a behaviour change (handed on as 1), another player - the
+marked opponent - is man marking. Nobody can mark himself, so the rule holds on 2.0 and 2.2 alike, and
+HO requests matchlineup 2.2 since 2026-11-14. Stored and sent, a behaviour change stays 1.
+Open: the docs do not say how 2.2 reports man marking; the dev DB (182 orders) never had a 4, so
+a real match with man marking still has to show it. `live` is not used by HO, and `matchorders`
+(`setmatchorder`) is not affected.
 
 ## CHPP error codes
 

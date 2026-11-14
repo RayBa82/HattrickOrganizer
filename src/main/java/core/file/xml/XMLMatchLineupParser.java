@@ -326,8 +326,22 @@ public class XMLMatchLineupParser {
 		if (tmp != null) {
 			behaviour = Byte.parseByte(XMLManager.getFirstChildNodeValue(tmp));
 		}
-		return new Substitution(playerOrderID, playerIn, playerOut, orderTypeId,
+		return new Substitution(playerOrderID, playerIn, playerOut,
+				legacyOrderType(orderTypeId, playerIn, playerOut),
 				matchMinuteCriteria, pos, behaviour, RedCardCriteria.getById(card),
 				GoalDiffCriteria.getById(standing));
+	}
+
+	/**
+	 * matchlineup 2.2 sends a behaviour change as OrderType 4, which HO has read as man marking
+	 * since before 2.2 (undocumented). Both stay apart by the players: a behaviour change names
+	 * the same player twice, man marking names the marked opponent - nobody marks himself. A
+	 * behaviour change is handed on as 1, the id the rest of HO stores and sends for it.
+	 */
+	static byte legacyOrderType(byte orderTypeId, int objectPlayerId, int subjectPlayerId) {
+		if (orderTypeId == MatchOrderType.MAN_MARKING.getId() && objectPlayerId == subjectPlayerId) {
+			return MatchOrderType.NEW_BEHAVIOUR.getId();
+		}
+		return orderTypeId;
 	}
 }

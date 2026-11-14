@@ -4,13 +4,15 @@ import com.google.gson.annotations.SerializedName;
 
 /**
  * Enum for the match order types used in substitutions/orders for the lineup.
- * man marking (4) is an undocumented feature
- * 
+ * man marking (4) is an undocumented feature; matchlineup 2.2 and live 2.4 use 4 for a
+ * behaviour change as well, see XMLMatchLineupParser.legacyOrderType.
+ *
  */
 public enum MatchOrderType {
 
-	// In the HT-API, position swap has id 3, normal substitution and behaviour
-	// change both have id 1.
+		// In the HT-API, position swap has id 3, normal substitution and behaviour
+		// change both have id 1 (behaviour change 4 from matchlineup 2.2). HO stores and
+		// sends a behaviour change as 1.
 	@SerializedName("1")
 	SUBSTITUTION((byte) 1),
 	@SerializedName("1")
@@ -28,7 +30,7 @@ public enum MatchOrderType {
 
 	/**
 	 * Gets the HT matchOrderTypeId.
-	 * 
+	 *
 	 * @return the matchOrderTypeId like defined by the CHPP API.
 	 */
 	public byte getId() {

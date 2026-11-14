@@ -298,7 +298,8 @@ public class Connector {
 	 * lädt die Aufstellungsbewertung zu einem Spiel
 	 */
 	public String downloadMatchLineup(int matchId, int teamId, MatchType matchType) {
-		String url = htUrl + "?file=matchlineup&version=2.0";
+		// 2.2 sends a behaviour change as OrderType 4, which XMLMatchLineupParser tells from man marking
+		String url = htUrl + "?file=matchlineup&version=2.2";
 
 		if (matchId > 0) {
 			url += ("&matchID=" + matchId);
