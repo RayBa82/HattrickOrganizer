@@ -5,6 +5,21 @@ accumulated; git keeps them (`git log -p -- docs/current.md`; the full history f
 2026-09-26 is `git show f5c51d0d:docs/current.md`).
 
 
+## Upstream merge (ho-dev master + release/10) and training prediction (2026-11-14)
+
+Merged on `master` from branch `merge-upstream`, image pushed and checked live by the hattrick session.
+- Upstream up to #2588 and #2580 (release/10 only so far): match XML parsers on `XMLUtils`,
+  `HOBuild`/`HOBuildLoader` (serverInfo version comes from it), `core.util.HTWeek` record,
+  `toLocal*` renames, lineup download for upcoming matches, tournament details loaded by
+  `MatchKurzInfo.loadTournamentDetails` (null-safe on a failed CHPP call). Upstream's own
+  warnings on its lines were left alone to keep later merges conflict-free.
+- get_training skillChanges were empty headless: only the Training tab rolled the
+  FUTURETRAINING rows forward. `core.training.FutureTrainingPlan` now does it for the tab,
+  get_training and week_brief, and stores the rolled plan back (never an empty one).
+- get_training flags a drop on a skill HO holds no subskill for (exactly .0, untrained) as
+  `uncertain: true` plus `uncertainNote`: HO assumes .0, so it predicts the drop in week one.
+- Open: compare the predictions with the real training on 2026-11-20.
+
 ## CHPP 2026-11-10, second part: playerdetails 3.3, stafflist 1.3, matches 3.0, teamhistory (2026-11-14)
 
 Committed on `master`, image pushed, unit-tested, none tried against live CHPP. DB 1009 adds
@@ -48,41 +63,3 @@ Committed on `master` with the tournament-week follow-ups below; image pushed. U
   tool lock (`McpTool.outsideToolLock`, `McpToolLock`), so plain calls answer during a download.
   level_up_report locks only its reads, and every download shares one registry: a second
   request joins the running one (`TeamTools.downloadAndWait`).
-
-## CHPP changelog 2026-11-10: docs, transfersearch 1.2, playerstats, training history (2026-11-14)
-
-- `docs/raw/chpp/` re-captured from the live docs (60 files + datatypes, three new:
-  playerstats, teamhistory, nationalprospectplayers) with the new `utils/chpp-docs/capture.js`
-  (runs in a logged-in Chrome tab) and `split.py`. The capture builds from the docs page's own
-  `file` object, so it also picked up actions the 2026-09-26 capture missed.
-- `docs/chpp_files.md`: new available versions and a 2026-11-10 changelog table with what each
-  change means for HO.
-- matchlineup 2.2 (committed): 2.2 uses OrderType 4 for a behaviour change, HO read 4 as man
-  marking. `XMLMatchLineupParser.legacyOrderType` now splits 4 by subject == object (behaviour
-  change, handed on as 1) vs another player (man marking). How 2.2 reports man marking is still unverified - check the
-  first match with a man-marking order.
-- Committed in 9838f54e, unit-tested, none tried against live CHPP yet:
-  the parsers are shaped from the docs, there is no real sample.
-- transfersearch 1.2: `TransferSearchQuery` money bounds are `Long` krona, plus
-  `salaryMin/Max` and `transferCompareAvgMin/Max`. The search tab sends the form's krona value
-  (`criteria().maxPriceSek()`, `maxPriceLocal` is gone); `search_transfers`/`screen_market` take
-  `priceMin/Max`, `salaryMin/Max`, `estimateMin/Max` in the user's currency and `queryFrom`
-  converts.
-- playerstats 1.0: `Connector.getPlayerStats`, `XMLPlayerStatsParser`,
-  `ChppWriteService.playerStatsForAgent`, new MCP tool `get_player_match_stats` (MatchTools;
-  limit default 20, max 25 by the ~330-char row; playedOnly). Not stored in the DB.
-- training 2.3 history: `Connector.getTrainingHistory`, `XMLTrainingHistoryParser`,
-  `ChppWriteService.trainingHistoryForAgent`; `get_training historyWeeks` adds
-  `hattrickHistory` (Gold only, a refusal comes back as `available: false`). Not used to
-  backfill HO's own training weeks - that would feed the training engine and is a separate
-  decision.
-- Next, proposed after the 2026-11-10 editorial (engine changes from the new season):
-  `TransferTools` specialty scores for estimate_market_value - raise Support (0.1 everywhere,
-  support events no longer need a second support player, opponent experience counts half, the
-  bonus doubles) and Technical slightly (tech vs head checks experience less strictly, more
-  extra counters, reacts to man marking like no specialty). To docs/roadmap.md, waiting for
-  numbers: the experience weight in `TechnicalEventPredictionAnalyzer`, and support events in
-  the special-events prediction (`TODO: Support Player`). Confidence now fades older results;
-  HO only reads the current value, nothing to change.
-- Still open: budget measurement of both tools on a real team (needs a CHPP call), and a live
-  check that the transfersearch price filter now matches in krona.
