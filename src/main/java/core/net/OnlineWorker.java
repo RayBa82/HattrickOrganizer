@@ -421,35 +421,36 @@ public class OnlineWorker {
 			String matchesString;
 
 			while (firstDate.isBefore(endDate)) {
-				var lastDate=firstDate.plus(90, ChronoUnit.DAYS);
-				if (!lastDate.isBefore(endDate)) {
-					lastDate = endDate;
-				}
+                var lastDate = firstDate.plus(90, ChronoUnit.DAYS);
+                if (!lastDate.isBefore(endDate)) {
+                    lastDate = endDate;
+                }
 
-				try {
-					HOMainFrame.setInformation(TranslationFacility.tr("ls.update_status.match_info"), 20);
-					matchesString = Connector.instance().getMatchesArchive(teamId, firstDate,	lastDate);
-					HOMainFrame.setInformation(TranslationFacility.tr("ls.update_status.match_info"), 20);
-				} catch (Exception e) {
-					// Info
-					String msg = getLangString("Downloadfehler")
-							+ " : Error fetching MatchArchiv : ";
-					setInfoMsg(msg, InfoPanel.FEHLERFARBE);
-					Helper.showMessage(HOMainFrame.shown(), msg, getLangString("Fehler"),
-							JOptionPane.ERROR_MESSAGE);
-					return null;
-				}
+                try {
+                    HOMainFrame.setInformation(TranslationFacility.tr("ls.update_status.match_info"), 20);
+                    matchesString = Connector.instance().getMatchesArchive(teamId, firstDate, lastDate);
+                    HOMainFrame.setInformation(TranslationFacility.tr("ls.update_status.match_info"), 20);
+                } catch (Exception e) {
+                    // Info
+                    String msg = getLangString("Downloadfehler")
+                        + " : Error fetching MatchArchiv : ";
+                    setInfoMsg(msg, InfoPanel.FEHLERFARBE);
+                    Helper.showMessage(HOMainFrame.shown(), msg, getLangString("Fehler"),
+                        JOptionPane.ERROR_MESSAGE);
+                    return null;
+                }
 
-				HOMainFrame.setInformation(TranslationFacility.tr("ls.update_status.match_info"), 20);
-				List<MatchKurzInfo> matches = XMLMatchArchivParser
-						.parseMatchesFromString(matchesString);
+                HOMainFrame.setInformation(TranslationFacility.tr("ls.update_status.match_info"), 20);
+                List<MatchKurzInfo> matches = XMLMatchArchiveParser
+                    .parseMatchesFromString(matchesString);
+                matches.stream().filter(i -> i.getMatchType().isTournament()).forEach(MatchKurzInfo::loadTournamentDetails);
 
-				// Add the new matches to the list of all matches
-				allMatches.addAll(matches);
+                // Add the new matches to the list of all matches
+                allMatches.addAll(matches);
 
-				// Zeitfenster neu setzen
-				firstDate = firstDate.plus(90, ChronoUnit.DAYS);
-			}
+                // Zeitfenster neu setzen
+                firstDate = firstDate.plus(90, ChronoUnit.DAYS);
+            }
 
 			// Store in the db if store is true
 			if (store && (!allMatches.isEmpty())) {
@@ -575,25 +576,25 @@ public class OnlineWorker {
 						info.setGuestTeamID(details.getGuestTeamId());
 						info.setArenaId(details.getArenaID());
 						info.setMatchSchedule(details.getMatchDate());
-							info.setMatchType(details.getMatchType());
-							copyRegion(info, details);
-							int wetterId = details.getWetterId();
+						info.setMatchType(details.getMatchType());
+						copyRegion(info, details);
+						int wetterId = details.getWetterId();
 						// WeatherID can come before kick-off; only FinishedDate marks a played match
 						if (details.isFinished() && wetterId != -1) {
 							info.setMatchStatus(MatchKurzInfo.FINISHED);
 							info.setWeather(Weather.getById(details.getWetterId()));
 							info.setWeatherForecast(Weather.Forecast.HAPPENED);
-							} else if (info.getArenaId() > 0) {
+						} else if (info.getArenaId() > 0 && info.getMatchStatus() == MatchKurzInfo.UPCOMING) {
 							if (!info.getWeatherForecast().isSure()) {
 								Regiondetails regiondetails = getRegionDetails(info.getRegionId());
 								if (regiondetails != null) {
-									var matchDate = info.getMatchSchedule().toLocaleDate();
-									var weatherDate = regiondetails.getFetchDatum().toLocaleDate();
+									var matchDate = info.getMatchSchedule().toLocalDate();
+									var weatherDate = regiondetails.getFetchDatum().toLocalDate();
 									if (matchDate.equals(weatherDate)) {
 										info.setWeatherForecast(Weather.Forecast.TODAY);
 										info.setWeather(regiondetails.getWeather());
 									} else {
-										var forecastDate = regiondetails.getFetchDatum().plus(1, ChronoUnit.DAYS).toLocaleDate();
+										var forecastDate = regiondetails.getFetchDatum().plus(1, ChronoUnit.DAYS).toLocalDate();
 										if (matchDate.equals(forecastDate)) {
 											info.setWeatherForecast(Weather.Forecast.TOMORROW);
 										} else {
@@ -739,7 +740,6 @@ public class OnlineWorker {
 		List<MatchKurzInfo> matches = getMatches(teamId, matchDate.plus(1, ChronoUnit.MINUTES));
 		for (MatchKurzInfo m : matches) {
 			if (m.getMatchID() == match.getMatchID()) {
-				//DBManager.instance().updateMatchKurzInfo(m);
 				return m;
 			}
 		}
@@ -777,7 +777,7 @@ public class OnlineWorker {
 	/**
 	 * Download information about a given tournament
 	 */
-	public static TournamentDetails getTournamentDetails(int tournamentId) {
+	public static TournamentDetails downloadTournamentDetails(int tournamentId) {
 		TournamentDetails oTournamentDetails = null;
 		String tournamentString = "";
 
@@ -791,7 +791,7 @@ public class OnlineWorker {
 		}
 
 		if (!StringUtils.isEmpty(tournamentString)) {
-			oTournamentDetails = XMLTournamentDetailsParser.parseTournamentDetailsFromString(tournamentString);  // TODO: create function parseTournamentDetailsFromString
+			oTournamentDetails = XMLTournamentDetailsParser.parseTournamentDetailsFromString(tournamentString);
 		}
 
 		return oTournamentDetails;
@@ -846,7 +846,10 @@ public class OnlineWorker {
 
 				// Automatically download additional match infos (lineup + arena)
 				for (MatchKurzInfo match : matches) {
-					int curMatchId = match.getMatchID();
+                    if (match.getMatchType().isTournament()) {
+                        match.loadTournamentDetails();
+                    }
+                    int curMatchId = match.getMatchID();
 					boolean refresh = !DBManager.instance().isMatchInDB(curMatchId, match.getMatchType())
 							|| (match.getMatchStatus() != MatchKurzInfo.FINISHED && DBManager.instance().hasUnsureWeatherForecast(curMatchId))
 							|| DBManager.instance().matchLineupIsNotStored(match.getMatchType(), curMatchId);
@@ -924,41 +927,27 @@ public class OnlineWorker {
 	 * @return
 	 * 			MatchLineup containing specified teams
 	 */
-	private static MatchLineup downloadMatchlineup(int matchId, MatchType matchType, int teamId1,
-												   int teamId2) {
-		MatchLineup lineUp2 = null;
-
-		HOMainFrame.setWaitInformation();
-
-		// Lineups holen
-		var lineUp1 = downloadMatchLineup(matchId, teamId1, matchType);
-		if (lineUp1 != null) {
-			HOMainFrame.setWaitInformation();
-			if (teamId2 > 0)
-				lineUp2 = downloadMatchLineup(matchId, teamId2, matchType);
-
-			// Merge the two
-			if ((lineUp2 != null)) {
-				if (lineUp1.isHomeTeamNotLoaded())
-					lineUp1.setHomeTeam(lineUp2.getHomeTeam());
-				else if (!lineUp1.isGuestTeamLoaded())
-					lineUp1.setGuestTeam(lineUp2.getGuestTeam());
-			} else {
-				// Get the 2nd lineup
-				if (lineUp1.isHomeTeamNotLoaded()) {
-					lineUp2 = downloadMatchLineup(matchId, lineUp1.getHomeTeamId(), matchType);
-					if (lineUp2 != null)
-						lineUp1.setHomeTeam(lineUp2.getHomeTeam());
-				} else {
-					lineUp2 = downloadMatchLineup(matchId, lineUp1.getGuestTeamId(), matchType);
-					if (lineUp2 != null)
-						lineUp1.setGuestTeam(lineUp2.getGuestTeam());
-				}
-			}
-		}
-		HOMainFrame.setWaitInformation();
-		return lineUp1;
-	}
+    private static MatchLineup downloadMatchlineup(int matchId, MatchType matchType, int teamId1, int teamId2) {
+        HOMainFrame.setWaitInformation();
+        var matchLineup = downloadMatchLineup(matchId, teamId1, matchType);
+        if (matchLineup != null && teamId2 > 0) {
+            final boolean otherTeamIdIsGuest = teamId2 == matchLineup.getGuestTeamId();
+            final boolean otherTeamIdIsHomeTeam = teamId2 == matchLineup.getHomeTeamId();
+            if (otherTeamIdIsGuest || otherTeamIdIsHomeTeam) {
+                HOMainFrame.setWaitInformation();
+                final var otherMatchLineup = downloadMatchLineup(matchId, teamId2, matchType);
+                if (otherMatchLineup != null) {
+                    if (otherTeamIdIsGuest) {
+                        matchLineup.setGuestTeam(otherMatchLineup.getGuestTeam());
+                    } else {
+                        matchLineup.setHomeTeam(otherMatchLineup.getHomeTeam());
+                    }
+                }
+            }
+        }
+        HOMainFrame.setWaitInformation();
+        return matchLineup;
+    }
 
 	/**
 	 * Get the Fixtures list
@@ -1477,7 +1466,7 @@ public class OnlineWorker {
 	public static List<MatchKurzInfo> downloadMatchesOfSeason(int teamId, int season){
 		try{
 			var xml = Connector.instance().getMatchesOfSeason(teamId, season);
-			return XMLMatchArchivParser.parseMatchesFromString(xml);
+			return XMLMatchArchiveParser.parseMatchesFromString(xml);
 		}
 		catch (Exception exception) {
 			HOLogger.instance().error(OnlineWorker.class,"downloadMatchData:  Error in downloading matches of season: " + exception);
@@ -1504,7 +1493,7 @@ public class OnlineWorker {
 			var mc = Connector.instance();
 			try {
 				var xml = mc.getMatchesArchive(SourceSystem.YOUTH, youthteamid, dateSince, dateUntil);
-				var youthMatches = XMLMatchArchivParser.parseMatchesFromString(xml);
+				var youthMatches = XMLMatchArchiveParser.parseMatchesFromString(xml);
 				for ( var match: youthMatches){
 					MatchLineup lineup = downloadMatchlineup(match.getMatchID(), match.getMatchType(), match.getHomeTeamID(), match.getGuestTeamID());
 					if (lineup != null) {

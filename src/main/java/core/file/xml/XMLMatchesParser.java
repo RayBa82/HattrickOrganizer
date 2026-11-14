@@ -4,12 +4,12 @@ import core.model.cup.CupLevel;
 import core.model.cup.CupLevelIndex;
 import core.model.match.MatchKurzInfo;
 import core.model.enums.MatchType;
-import core.util.HODateTime;
 import core.util.HOLogger;
 
 import java.util.ArrayList;
 import java.util.List;
 
+import core.util.XMLUtils;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
@@ -23,28 +23,7 @@ public class XMLMatchesParser {
 	}
 
 	public static List<MatchKurzInfo> parseMatchesFromString(String input) {
-		final var doc = XMLManager.parseString(input);
-		final var matches = createMatches(doc);
-		addFanMatchExpectations(doc, matches);
-		return matches;
-	}
-
-	/**
-	 * matches 3.0: FanMatchExpectation, onto the match parsed from the same Match element (one each,
-	 * in order). Absent on matches the fans have no expectation for.
-	 */
-	private static void addFanMatchExpectations(Document doc, List<MatchKurzInfo> matches) {
-		if (doc == null) {
-			return;
-		}
-		final var list = doc.getDocumentElement().getElementsByTagName("Match");
-		if (list.getLength() != matches.size()) {
-			return;   // createMatches gave up on this document
-		}
-		for (int i = 0; i < list.getLength(); i++) {
-			matches.get(i).setFanMatchExpectation(
-					XMLManager.xmlIntegerValue((Element) list.item(i), "FanMatchExpectation"));
-		}
+		return createMatches(XMLManager.parseString(input));
 	}
 
 	/**
@@ -62,100 +41,57 @@ public class XMLMatchesParser {
 		return -1;
 	}
 
-	/**
-	 * erstellt das MAtchlineup Objekt
-	 */
 	private static List<MatchKurzInfo> createMatches(Document doc) {
-		MatchKurzInfo match;
-		List<MatchKurzInfo> liste = new ArrayList<>();
-		int iMatchType;
-		int iCupLevel;
-		int iCupLevelIndex;
+        List<MatchKurzInfo> matches = new ArrayList<>();
+        if (doc != null) {
+            Element root = doc.getDocumentElement();
+            try {
+                NodeList list = root.getElementsByTagName("Match");
+                for (int i = 0; i < list.getLength(); i++) {
+                    var match = new MatchKurzInfo();
+                    var matchElement = (Element) list.item(i);
+                    match.setMatchSchedule(XMLUtils.getHODateTimeValue(matchElement, "MatchDate"));
+                    match.setMatchID(XMLUtils.getIntValue(matchElement, "MatchID"));
+                    match.setMatchType(MatchType.getById(XMLUtils.getIntValue(matchElement, "MatchType")));
 
-		if (doc != null) {
-			Element root = doc.getDocumentElement();
-			try {
-				NodeList list = root.getElementsByTagName("Match");
+                    if (match.getMatchType() == MatchType.CUP) {
+                        match.setCupLevel(CupLevel.fromInt(XMLUtils.getIntValue(matchElement, "CupLevel")));
+                        match.setCupLevelIndex(CupLevelIndex.fromInt(XMLUtils.getIntValue(matchElement, "CupLevelIndex")));
+                    }
 
-				Element ele;
-				Element tmp;
-				for (int i = 0; i < list.getLength(); i++) {
-					match = new MatchKurzInfo();
-					ele = (Element) list.item(i);
+                    // LeagueLevelUnitId, CupId, LadderId or TournamentId - read for every type
+                    match.setMatchContextId(XMLUtils.getIntValue(matchElement, "MatchContextId"));
+                    // matches 3.0: absent on matches the fans have no expectation for
+                    match.setFanMatchExpectation(XMLUtils.findIntegerValue(matchElement, "FanMatchExpectation").orElse(null));
 
-					tmp = (Element) ele.getElementsByTagName("MatchDate").item(0);
-					match.setMatchSchedule(HODateTime.fromHT(tmp.getFirstChild().getNodeValue()));
-					tmp = (Element) ele.getElementsByTagName("MatchID").item(0);
-					match.setMatchID(Integer.parseInt(tmp.getFirstChild().getNodeValue()));
-					tmp = (Element) ele.getElementsByTagName("MatchType").item(0);
-					iMatchType = Integer.parseInt(tmp.getFirstChild().getNodeValue());
-					match.setMatchType(MatchType.getById(iMatchType));
-					// LeagueLevelUnitId, CupId or TournamentId - read for every type, not just tournaments
-					final int contextId = XMLManager.xmlIntValue(ele, "MatchContextId", 0);
-					match.setMatchContextId(contextId);
+                    var homeTeamElement = XMLUtils.getChildElement(matchElement, "HomeTeam");
+                    match.setHomeTeamID(XMLUtils.getIntValue(homeTeamElement, "HomeTeamID"));
+                    match.setHomeTeamName(XMLUtils.getStringValue(homeTeamElement, "HomeTeamName"));
 
-					if (iMatchType == 3) {
-						tmp = (Element) ele.getElementsByTagName("CupLevel").item(0);
-						iCupLevel = Integer.parseInt(tmp.getFirstChild().getNodeValue());
-						match.setCupLevel(CupLevel.fromInt(iCupLevel));
+                    var awayTeamElement = XMLUtils.getChildElement(matchElement, "AwayTeam");
+                    match.setGuestTeamID(XMLUtils.getIntValue(awayTeamElement, "AwayTeamID"));
+                    match.setGuestTeamName(XMLUtils.getStringValue(awayTeamElement, "AwayTeamName"));
 
-						tmp = (Element) ele.getElementsByTagName("CupLevelIndex").item(0);
-						iCupLevelIndex = Integer.parseInt(tmp.getFirstChild().getNodeValue());
-						match.setCupLevelIndex(CupLevelIndex.fromInt(iCupLevelIndex));
-						}
-						// Tournaments: MatchContextId above is the tournament id. The tournament type is no
-						// longer looked up here (#2527) - the parser runs without a database or CHPP.
+                    match.setMatchStatus(getStatus(XMLUtils.getStringValue(matchElement, "Status")));
+                    if (match.getMatchStatus() == MatchKurzInfo.FINISHED) {
+                        match.setHomeTeamGoals(XMLUtils.getIntValue(matchElement, "HomeGoals"));
+                        match.setGuestTeamGoals(XMLUtils.getIntValue(matchElement, "AwayGoals"));
+                    } else if (match.getMatchStatus() == MatchKurzInfo.UPCOMING) {
+                        try {
+                            match.setOrdersGiven(XMLUtils.getBooleanValue(matchElement, "OrdersGiven"));
+                        } catch (Exception e) {
+                            // We will end up here if the match is not the user's
+                            match.setOrdersGiven(false);
+                        }
+                    }
 
-
-
-					tmp = (Element) ele.getElementsByTagName("HomeTeam").item(0);
-					match.setHomeTeamID(Integer.parseInt(tmp
-							.getElementsByTagName("HomeTeamID").item(0)
-							.getFirstChild().getNodeValue()));
-					match.setHomeTeamName(tmp.getElementsByTagName(
-							"HomeTeamName").item(0).getFirstChild()
-							.getNodeValue());
-					tmp = (Element) ele.getElementsByTagName("AwayTeam")
-							.item(0);
-					match.setGuestTeamID(Integer.parseInt(tmp
-							.getElementsByTagName("AwayTeamID").item(0)
-							.getFirstChild().getNodeValue()));
-					match.setGuestTeamName(tmp.getElementsByTagName(
-							"AwayTeamName").item(0).getFirstChild()
-							.getNodeValue());
-					tmp = (Element) ele.getElementsByTagName("Status").item(0);
-					match.setMatchStatus(getStatus(tmp.getFirstChild()
-							.getNodeValue()));
-
-					if (match.getMatchStatus() == MatchKurzInfo.FINISHED) {
-						tmp = (Element) ele.getElementsByTagName("HomeGoals")
-								.item(0);
-						match.setHomeTeamGoals(Integer.parseInt(tmp.getFirstChild()
-								.getNodeValue()));
-						tmp = (Element) ele.getElementsByTagName("AwayGoals")
-								.item(0);
-						match.setGuestTeamGoals(Integer.parseInt(tmp.getFirstChild()
-								.getNodeValue()));
-					} else if (match.getMatchStatus() == MatchKurzInfo.UPCOMING) {
-						try {
-							tmp = (Element) ele.getElementsByTagName(
-									"OrdersGiven").item(0);
-							match.setOrdersGiven(tmp.getFirstChild()
-									.getNodeValue().equalsIgnoreCase("TRUE"));
-						} catch (Exception e) {
-							// We will end up here if the match is not the
-							// user's
-							match.setOrdersGiven(false);
-						}
-					}
-
-					liste.add(match);
-				}
-			} catch (Exception e) {
-				HOLogger.instance().log(XMLMatchesParser.class, e);
-				liste.clear();
-			}
-		}
-		return liste;
-	}
+                    matches.add(match);
+                }
+            } catch (Exception e) {
+                HOLogger.instance().log(XMLMatchesParser.class, e);
+                matches.clear();
+            }
+        }
+        return matches;
+    }
 }

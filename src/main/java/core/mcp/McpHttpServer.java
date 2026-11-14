@@ -614,7 +614,7 @@ public final class McpHttpServer {
     private static JsonObject serverInfo() {
         final var serverInfo = new JsonObject();
         serverInfo.addProperty("name", "ho");
-        serverInfo.addProperty("version", String.valueOf(core.HO.VERSION));
+        serverInfo.addProperty("version", core.HO.getHoBuild().getVersionShort());
         return serverInfo;
     }
 

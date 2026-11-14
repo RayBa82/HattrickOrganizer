@@ -147,10 +147,10 @@ public class MatchBanner extends JPanel implements Refreshable {
         jlAwayTeam.setText(teamName(false));
 
         var datetime = m_clSelectedMatch.getMatchSchedule();
-        String schedule = datetime.toLocaleDateTime();
+        String schedule = datetime.toLocalDateTime();
         if (matchType == MatchType.LEAGUE) {
             schedule += " · " + String.format(Helper.getTranslation("ls.module.lineup.matchSchedule"),
-                    datetime.toHTWeek().week, HOVerwaltung.instance().getModel().getLeague().getLiga()).replace("<br>", " ");
+                    datetime.toHTWeek().week(), HOVerwaltung.instance().getModel().getLeague().getLiga()).replace("<br>", " ");
         } else {
             schedule += " · " + matchType.getName();
         }

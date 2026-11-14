@@ -16,6 +16,7 @@ import core.training.TrainingManager;
 import core.training.TrainingPerWeek;
 import core.training.WeeklyTrainingType;
 import core.util.HODateTime;
+import core.util.HTWeek;
 import org.jetbrains.annotations.Nullable;
 
 import java.time.temporal.ChronoUnit;
@@ -140,7 +141,7 @@ public final class TrainingTools {
             row.addProperty("matchRound", e.matchRound());
             row.addProperty("dayNumber", e.dayNumber());
             if (seasonOffset != null && e.season() > 0 && e.matchRound() > 0) {
-                row.addProperty(WEEK_START, HODateTime.fromHTWeek(new HODateTime.HTWeek(
+                row.addProperty(WEEK_START, HODateTime.fromHTWeek(new HTWeek(
                         e.season() - seasonOffset, e.matchRound())).toHT());
             }
             rows.add(row);

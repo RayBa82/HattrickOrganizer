@@ -3,6 +3,7 @@ package core.db.backup
 import core.db.user.UserManager
 import core.util.HODateTime
 import core.util.HODuration
+import core.util.HTWeek
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
@@ -74,7 +75,7 @@ internal class BackupHelperTest {
         val dbDir = File(testResourcesDir, "db")
         var fileFromPreviousWeek = 0
         val currentDate = HODateTime.now()
-        var htweekFile3 : HODateTime.HTWeek? = null
+        var htweekFile3 : HTWeek? = null
 
         // Create backup files for the last 5 days
         (1..5).forEach { i ->
@@ -82,13 +83,12 @@ internal class BackupHelperTest {
             val f = File(testResourcesDir, "db/db_user-${formatter.format(date.localDateTime)}.zip")
             Assertions.assertDoesNotThrow { f.createNewFile() }
             Files.setLastModifiedTime(f.toPath(), FileTime.from(date.instant))
-            if (i==2) {
+            if (i == 2) {
                 htweekFile3 = date.toHTWeek()
             } else {
                 val htweek = date.toHTWeek()
                 if (i >= 3 && !htweek.equals(htweekFile3)) {
                     fileFromPreviousWeek = 1
-
                 }
             }
         }
@@ -118,10 +118,12 @@ internal class BackupHelperTest {
         }
 
         var date = currentDate.minus(3, ChronoUnit.DAYS)
-        if (!date.toHTWeek()
-                .equals(expectedLastModifiedDates.get(expectedLastModifiedDates.size - 1).toHTWeek())
-        ) expectedLastModifiedDates.add(date)
-        createBackupFile(date) // Will be deleted (not in the three latest backups, but not if in the previous week)
+        val weekFile3 = expectedLastModifiedDates.last().toHTWeek()
+        val weekFile4 = date.toHTWeek()
+        if (!weekFile4.equals(weekFile3)) {
+            expectedLastModifiedDates.add(date)
+        }
+        createBackupFile(date) // If not in the previous week, this file will be deleted (not in the three latest backups)
 
         repeat(15) { weeks ->
             run {

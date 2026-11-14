@@ -112,7 +112,7 @@ public final class HeadlessMain {
         if (hrfId == 0) {
             System.out.println("Newest snapshots (hrfId  downloaded at):");
             Arrays.stream(hrfs).limit(10).forEach(h ->
-                    System.out.println("  " + h.getHrfId() + "  " + h.getDatum().toLocaleDateTime()));
+                    System.out.println("  " + h.getHrfId() + "  " + h.getDatum().toLocalDateTime()));
             System.out.println("Delete one with: delete-hrf <hrfId>");
             return;
         }
@@ -122,6 +122,6 @@ public final class HeadlessMain {
             return;
         }
         DBManager.instance().deleteHRF(hrfId);
-        System.out.println("Deleted snapshot " + hrfId + " from " + hrf.get().getDatum().toLocaleDateTime());
+        System.out.println("Deleted snapshot " + hrfId + " from " + hrf.get().getDatum().toLocalDateTime());
     }
 }

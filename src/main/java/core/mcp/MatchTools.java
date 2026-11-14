@@ -4,7 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import core.db.DBManager;
 import core.file.xml.XMLManager;
-import core.file.xml.XMLMatchArchivParser;
+import core.file.xml.XMLMatchArchiveParser;
 import core.file.xml.XMLMatchdetailsParser;
 import core.model.cup.CupLevel;
 import core.model.cup.CupLevelIndex;
@@ -930,7 +930,7 @@ public final class MatchTools {
                     + ". Check the team id.");
         }
 
-        final var candidates = new ArrayList<>(XMLMatchArchivParser.parseMatchesFromString(archive));
+        final var candidates = new ArrayList<>(XMLMatchArchiveParser.parseMatchesFromString(archive));
         candidates.removeIf(m -> m.getMatchStatus() != MatchKurzInfo.FINISHED
                 || m.getMatchType() == null
                 || m.getMatchSchedule() == null
