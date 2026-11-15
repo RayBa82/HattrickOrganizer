@@ -19,6 +19,12 @@ avatars. Details and request costs in `docs/chpp_files.md`, "Youth files".
 `ReportType` codes feed no skill estimate yet. Both are in `docs/roadmap.md`, as are the MCP
 youth tools that come next.
 
+Merged with it: gone players on the scout list (CHPP error 56, fired or retired) are kept in
+`mcpScoutGonePlayers` and no longer asked about on every download for the 90-day re-listing
+watch; checked on a DB copy (the next download asks once more, the one after asks none). The 40
+other gone players the desktop app kept asking about since 2026-10-16 were already handled by
+`e9aaf907`: the installed desktop HO predates it, so it needs a new build.
+
 ## estimate_market_value: hattrickEstimate split from live (2026-11-15)
 
 Asked for by the hattrick session: `live` bundled the transfer search (one of 20 per rolling hour)
