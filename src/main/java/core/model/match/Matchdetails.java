@@ -11,8 +11,11 @@ import core.model.enums.MatchType;
 import core.net.OnlineWorker;
 import core.util.HODateTime;
 import core.util.HOLogger;
+import lombok.Getter;
+import lombok.Setter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -114,6 +117,55 @@ public class Matchdetails extends AbstractTable.Storable implements core.model.m
     private int homeRatingIndirectSetPiecesDef = -1;
     private int guestRatingIndirectSetPiecesAtt = -1;
     private int guestRatingIndirectSetPiecesDef = -1;
+
+    /** NrOfChances per type (matchdetails 3.1); empty for a match stored before. */
+    private final EnumMap<ChanceType, Integer> homeChances = new EnumMap<>(ChanceType.class);
+    private final EnumMap<ChanceType, Integer> guestChances = new EnumMap<>(ChanceType.class);
+
+    /**
+     * HasReplay/NrOfReplays (matchdetails 3.2): whether the team can see the simulated replays,
+     * and how many (0, 20 or 100). Sent only for finished matches of the user's own or mentored
+     * team (both teams in a national team match), never for youth matches; null otherwise.
+     */
+    @Getter @Setter private Boolean homeHasReplay;
+    @Getter @Setter private Boolean guestHasReplay;
+    @Getter @Setter private Integer homeNrOfReplays;
+    @Getter @Setter private Integer guestNrOfReplays;
+
+    /** The simulated replays' statistics (matchdetails 3.2); null for most matches. */
+    private MatchExpectedResult expectedResult;
+    private boolean expectedResultLoaded;
+
+    /**
+     * The simulated replays' statistics, null for most matches. Read from its own table on first
+     * use, so loading match details in bulk costs no extra query.
+     */
+    public MatchExpectedResult getExpectedResult() {
+        if (!expectedResultLoaded && isStored()) {
+            expectedResult = DBManager.instance().loadMatchExpectedResult(m_iMatchID, m_MatchTyp.getId());
+        }
+        expectedResultLoaded = true;
+        return expectedResult;
+    }
+
+    public void setExpectedResult(MatchExpectedResult expectedResult) {
+        this.expectedResult = expectedResult;
+        this.expectedResultLoaded = true;
+    }
+
+    /** The team's chances of that type, null when CHPP did not send them. */
+    public Integer getChances(boolean home, ChanceType type) {
+        return (home ? homeChances : guestChances).get(type);
+    }
+
+    public void setChances(boolean home, ChanceType type, Integer count) {
+        final var chances = home ? homeChances : guestChances;
+        if (count == null) {
+            chances.remove(type);
+        } else {
+            chances.put(type, count);
+        }
+    }
 
     public ArrayList<Injury> getInjuries() {
         return m_Injuries;
@@ -868,10 +920,10 @@ public class Matchdetails extends AbstractTable.Storable implements core.model.m
      * Setter for property m_iGuestHatStats
      */
     public void calculateGuestHatStats() {
-        int m_iGuestHatStats = this.m_iGuestLeftDef + this.m_iGuestMidDef + this.m_iGuestRightDef;
-        m_iGuestHatStats += this.m_iGuestMidfield * 3;
-        m_iGuestHatStats += this.m_iGuestLeftAtt + this.m_iGuestMidAtt + this.m_iGuestRightAtt;
-        this.m_iGuestHatStats = m_iGuestHatStats;
+        int hatStats = this.m_iGuestLeftDef + this.m_iGuestMidDef + this.m_iGuestRightDef;
+        hatStats += this.m_iGuestMidfield * 3;
+        hatStats += this.m_iGuestLeftAtt + this.m_iGuestMidAtt + this.m_iGuestRightAtt;
+        this.m_iGuestHatStats = hatStats;
     }
 
     public void setGuestHatStats(int v){
@@ -1182,10 +1234,10 @@ public class Matchdetails extends AbstractTable.Storable implements core.model.m
      * Setter for property m_iHomeHatStats
      */
     public void calculateHomeHatStats() {
-        int m_iHomeHatStats = this.m_iHomeLeftDef + this.m_iHomeMidDef + this.m_iHomeRightDef;
-        m_iHomeHatStats += this.m_iHomeMidfield * 3;
-        m_iHomeHatStats += this.m_iHomeLeftAtt + this.m_iHomeMidAtt + this.m_iHomeRightAtt;
-        this.m_iHomeHatStats = m_iHomeHatStats;
+        int hatStats = this.m_iHomeLeftDef + this.m_iHomeMidDef + this.m_iHomeRightDef;
+        hatStats += this.m_iHomeMidfield * 3;
+        hatStats += this.m_iHomeLeftAtt + this.m_iHomeMidAtt + this.m_iHomeRightAtt;
+        this.m_iHomeHatStats = hatStats;
     }
 
     public void setHomeHatStats(int v){

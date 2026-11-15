@@ -19,6 +19,8 @@ import org.w3c.dom.Element;
  * @author thomas.werth
  */
 public class XMLMatchdetailsParser {
+    private static final String MATCH = "Match";
+
     /**
      * Utility class - private constructor enforces noninstantiability.
      */
@@ -41,6 +43,7 @@ public class XMLMatchdetailsParser {
                 readGuestTeam(doc, md);
                 readHomeTeam(doc, md);
                 readInjuries(doc, md);
+                readExpectedResult(doc, md);
 
                 if (matchLineup != null) {
                     // Match lineup needs to be available, if not -> ignore match highlights/report
@@ -78,7 +81,7 @@ public class XMLMatchdetailsParser {
         final ArrayList<Matchdetails.Injury> mdInjuries = new ArrayList<>();
         try {
             var root = doc.getDocumentElement();
-            var matchElement = XMLUtils.getChildElement(root, "Match");
+            var matchElement = XMLUtils.getChildElement(root, MATCH);
             var injuriesElement = XMLUtils.findChildElement(matchElement, "Injuries");
             if (injuriesElement.isEmpty()) {
                 return;
@@ -100,140 +103,134 @@ public class XMLMatchdetailsParser {
         }
     }
 
-    /**
-     * read the match highlights from XML
-     *
-     * @param doc 	XML document
-     * @param md	match details
-     *
-     */
     private static void readHighlights(Document doc, Matchdetails md, MatchLineup lineup) {
         final ArrayList<MatchEvent> matchEvents = new ArrayList<>();
         try {
             //get Root element
             var root = doc.getDocumentElement();
-            var matchElement = XMLUtils.getChildElement(root, "Match");
+            var matchElement = XMLUtils.getChildElement(root, MATCH);
             var eventListElement = XMLUtils.findChildElement(matchElement, "EventList");
-            if (eventListElement.isEmpty()) { return; }
-            var eventNodeList = XMLUtils.getChildElements(eventListElement.get(), "Event");
-            for (var eventNode : eventNodeList) {
-                //get values from xml
-                var eventIndex = XMLUtils.getAttributeIntValue(eventNode, "Index");
-                int iMinute = XMLUtils.getIntValue(eventNode, "Minute");
-                var iSubjectPlayerID = XMLUtils.getIntValue(eventNode, "SubjectPlayerID");
-                var iSubjectTeamID = XMLUtils.getIntValue(eventNode, "SubjectTeamID");
-                var iObjectPlayerID = XMLUtils.getIntValue(eventNode, "ObjectPlayerID");
-                var iMatchPart = XMLUtils.getIntValue(eventNode, "MatchPart");
-                var iEventVariation = XMLUtils.getIntValue(eventNode, "EventVariation");
-
-                var eventtext = XMLUtils.getStringValue(eventNode, "EventText", "");
-                eventtext = eventtext.replaceAll("&lt;", "<");
-                eventtext = eventtext.replaceAll("&gt;", ">");
-                eventtext = eventtext.replaceAll("/>", ">");
-                eventtext = eventtext.replaceAll("&quot;", "\"");
-                eventtext = eventtext.replaceAll("&amp;", "&");
-
-                // Convert the ID to type and subtype.
-                int iMatchEventID = XMLUtils.getIntValue(eventNode, "EventTypeID");
-
-                //get players
-                boolean subHome = true;
-                boolean objHome = true;
-                MatchLineupPosition subjectPlayer = null;
-                MatchLineupPosition objectPlayer = null;
-                if (iMinute > 0) {
-
-                    subjectPlayer = lineup.getHomeTeam().getPlayerByID(iSubjectPlayerID, true);
-                    objectPlayer = lineup.getHomeTeam().getPlayerByID(iObjectPlayerID, true);
-                    if (subjectPlayer == null) {
-                        subjectPlayer = lineup.getGuestTeam().getPlayerByID(iSubjectPlayerID, true);
-                        subHome = false;
-                    }
-                    if (objectPlayer == null) {
-                        objectPlayer = lineup.getGuestTeam().getPlayerByID(iObjectPlayerID, true);
-                        objHome = false;
-                    }
-                }
-
-                //modify eventtext
-                if (subjectPlayer != null) {
-                    String subplayerColor;
-
-                    if (subHome) {
-                        subplayerColor = "#000099";
-                    } else {
-                        subplayerColor = "#990000";
-                    }
-
-                    String objplayerColor;
-
-                    if (objHome) {
-                        objplayerColor = "#000099";
-                    } else {
-                        objplayerColor = "#990000";
-                    }
-
-                    boolean replaceend = false;
-
-                    if (eventtext.contains(String.valueOf(iSubjectPlayerID))) {
-                        eventtext = eventtext.replaceAll("(?i)<A HREF=\"/Club/Players/Player\\.aspx\\?playerId="
-                                + iSubjectPlayerID + ".*?>",
-                            "<FONT COLOR=" + subplayerColor + "#><B>");
-                        replaceend = true;
-                    }
-
-                    if (eventtext.contains(String.valueOf(iObjectPlayerID))) {
-                        eventtext = eventtext.replaceAll("(?i)<A HREF=\"/Club/Players/Player\\.aspx\\?playerId="
-                                + iObjectPlayerID + ".*?>",
-                            "<FONT COLOR=" + objplayerColor + "#><B>");
-                        replaceend = true;
-                    }
-
-                    if (replaceend) {
-                        eventtext = eventtext.replaceAll("(?i)</A>", "</B></FONT>");
-                    }
-                }
-
-                //generate MatchEvent and add to list
-                final MatchEvent myHighlight = new MatchEvent();
-                myHighlight.setMatchEventIndex(eventIndex);
-                myHighlight.setMatchEventID(iMatchEventID);
-                myHighlight.setMinute(iMinute);
-                myHighlight.setPlayerId(iSubjectPlayerID);
-                myHighlight.setPlayerName(subjectPlayer != null ? subjectPlayer.getSpielerName() : "");
-                myHighlight.setSpielerHeim(subHome);
-                myHighlight.setTeamID(iSubjectTeamID);
-                myHighlight.setAssistingPlayerId(iObjectPlayerID);
-                myHighlight.setAssistingPlayerName(objectPlayer != null ? objectPlayer.getSpielerName() : "");
-                myHighlight.setGehilfeHeim(objHome);
-                myHighlight.setEventText(eventtext);
-                myHighlight.setMatchPartId(MatchEvent.MatchPartId.fromMatchPartId(iMatchPart));
-                myHighlight.setEventVariation(iEventVariation);
-
-                if (myHighlight.getMatchEventID() == MatchEventID.UNKNOWN_MATCHEVENT) {
-                    HOLogger.instance().warning(XMLMatchdetailsParser.class, "Unknown event id found in match " +
-                        md.getHomeTeamName() + "-" + md.getGuestTeamName() +
-                        " in minute " + myHighlight.getMinute() +
-                        " text: " + myHighlight.getEventText());
-                }
-
-                // Treat injury
-                if ((iMatchEventID == 90) || ((iMatchEventID == 94))) {
-                    myHighlight.setInjuryType(Matchdetails.eInjuryType.BRUISE);
-                } else if ((iMatchEventID == 91) || (iMatchEventID == 92) || (iMatchEventID == 93) || (iMatchEventID == 96)) {
-                    myHighlight.setInjuryType(Matchdetails.eInjuryType.INJURY);
-                } else if ((iMatchEventID >= 401) && (iMatchEventID <= 422)) {
-                    myHighlight.setInjuryType(getInjuryType(iSubjectPlayerID, md.getInjuries()));
-                } else {
-                    myHighlight.setInjuryType(Matchdetails.eInjuryType.NA);
-                }
-
-                matchEvents.add(myHighlight);
+            if (eventListElement.isEmpty()) {
+                return;
+            }
+            for (var eventNode : XMLUtils.getChildElements(eventListElement.get(), "Event")) {
+                matchEvents.add(readHighlight(eventNode, md, lineup));
             }
             md.setHighlights(matchEvents);
         } catch (Exception e) {
             HOLogger.instance().log(XMLMatchdetailsParser.class, e);
         }
+    }
+
+    /**
+     * One {@code Event} of the EventList, with its player names looked up in the lineup.
+     */
+    private static MatchEvent readHighlight(Element eventNode, Matchdetails md, MatchLineup lineup) {
+        //get values from xml
+        var eventIndex = XMLUtils.getAttributeIntValue(eventNode, "Index");
+        int iMinute = XMLUtils.getIntValue(eventNode, "Minute");
+        var iSubjectPlayerID = XMLUtils.getIntValue(eventNode, "SubjectPlayerID");
+        var iSubjectTeamID = XMLUtils.getIntValue(eventNode, "SubjectTeamID");
+        var iObjectPlayerID = XMLUtils.getIntValue(eventNode, "ObjectPlayerID");
+        var iMatchPart = XMLUtils.getIntValue(eventNode, "MatchPart");
+        var iEventVariation = XMLUtils.getIntValue(eventNode, "EventVariation");
+        var eventtext = unescape(XMLUtils.getStringValue(eventNode, "EventText", ""));
+
+        // Convert the ID to type and subtype.
+        int iMatchEventID = XMLUtils.getIntValue(eventNode, "EventTypeID");
+
+        //get players
+        boolean subHome = true;
+        boolean objHome = true;
+        MatchLineupPosition subjectPlayer = null;
+        MatchLineupPosition objectPlayer = null;
+        if (iMinute > 0) {
+            subjectPlayer = lineup.getHomeTeam().getPlayerByID(iSubjectPlayerID, true);
+            objectPlayer = lineup.getHomeTeam().getPlayerByID(iObjectPlayerID, true);
+            if (subjectPlayer == null) {
+                subjectPlayer = lineup.getGuestTeam().getPlayerByID(iSubjectPlayerID, true);
+                subHome = false;
+            }
+            if (objectPlayer == null) {
+                objectPlayer = lineup.getGuestTeam().getPlayerByID(iObjectPlayerID, true);
+                objHome = false;
+            }
+        }
+
+        //modify eventtext
+        if (subjectPlayer != null) {
+            eventtext = colorPlayerLinks(eventtext, iSubjectPlayerID, subHome, iObjectPlayerID, objHome);
+        }
+
+        //generate MatchEvent
+        final MatchEvent myHighlight = new MatchEvent();
+        myHighlight.setMatchEventIndex(eventIndex);
+        myHighlight.setMatchEventID(iMatchEventID);
+        myHighlight.setMinute(iMinute);
+        myHighlight.setPlayerId(iSubjectPlayerID);
+        myHighlight.setPlayerName(subjectPlayer != null ? subjectPlayer.getSpielerName() : "");
+        myHighlight.setSpielerHeim(subHome);
+        myHighlight.setTeamID(iSubjectTeamID);
+        myHighlight.setAssistingPlayerId(iObjectPlayerID);
+        myHighlight.setAssistingPlayerName(objectPlayer != null ? objectPlayer.getSpielerName() : "");
+        myHighlight.setGehilfeHeim(objHome);
+        myHighlight.setEventText(eventtext);
+        myHighlight.setMatchPartId(MatchEvent.MatchPartId.fromMatchPartId(iMatchPart));
+        myHighlight.setEventVariation(iEventVariation);
+
+        if (myHighlight.getMatchEventID() == MatchEventID.UNKNOWN_MATCHEVENT) {
+            HOLogger.instance().warning(XMLMatchdetailsParser.class, "Unknown event id found in match " +
+                md.getHomeTeamName() + "-" + md.getGuestTeamName() +
+                " in minute " + myHighlight.getMinute() +
+                " text: " + myHighlight.getEventText());
+        }
+        myHighlight.setInjuryType(injuryTypeOf(iMatchEventID, iSubjectPlayerID, md));
+        return myHighlight;
+    }
+
+    private static String unescape(String eventtext) {
+        return eventtext.replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("/>", ">")
+            .replace("&quot;", "\"")
+            .replace("&amp;", "&");
+    }
+
+    /**
+     * Replaces the player links of the subject and object player by coloured names (home blue, away red).
+     */
+    private static String colorPlayerLinks(String eventtext, int subjectPlayerId, boolean subHome, int objectPlayerId, boolean objHome) {
+        final String subplayerColor = subHome ? "#000099" : "#990000";
+        final String objplayerColor = objHome ? "#000099" : "#990000";
+        boolean replaceend = false;
+        var text = eventtext;
+        if (text.contains(String.valueOf(subjectPlayerId))) {
+            text = text.replaceAll("(?i)<A HREF=\"/Club/Players/Player\\.aspx\\?playerId="
+                    + subjectPlayerId + ".*?>",
+                "<FONT COLOR=" + subplayerColor + "#><B>");
+            replaceend = true;
+        }
+        if (text.contains(String.valueOf(objectPlayerId))) {
+            text = text.replaceAll("(?i)<A HREF=\"/Club/Players/Player\\.aspx\\?playerId="
+                    + objectPlayerId + ".*?>",
+                "<FONT COLOR=" + objplayerColor + "#><B>");
+            replaceend = true;
+        }
+        if (replaceend) {
+            text = text.replaceAll("(?i)</A>", "</B></FONT>");
+        }
+        return text;
+    }
+
+    private static Matchdetails.eInjuryType injuryTypeOf(int matchEventId, int subjectPlayerId, Matchdetails md) {
+        if ((matchEventId == 90) || (matchEventId == 94)) {
+            return Matchdetails.eInjuryType.BRUISE;
+        } else if ((matchEventId == 91) || (matchEventId == 92) || (matchEventId == 93) || (matchEventId == 96)) {
+            return Matchdetails.eInjuryType.INJURY;
+        } else if ((matchEventId >= 401) && (matchEventId <= 422)) {
+            return getInjuryType(subjectPlayerId, md.getInjuries());
+        }
+        return Matchdetails.eInjuryType.NA;
     }
 
     /**
@@ -254,7 +251,7 @@ public class XMLMatchdetailsParser {
         var root = doc.getDocumentElement();
         try {
             //Match data
-            var matchElement = XMLUtils.getChildElement(root, "Match");
+            var matchElement = XMLUtils.getChildElement(root, MATCH);
             var arenaElement = XMLUtils.getChildElement(matchElement, "Arena");
 
             try {
@@ -287,7 +284,7 @@ public class XMLMatchdetailsParser {
         try {
             md.setFetchDatumFromString(XMLUtils.getStringValue(root, "FetchedDate"));
 
-            var matchElement = XMLUtils.getChildElement(root, "Match");
+            var matchElement = XMLUtils.getChildElement(root, MATCH);
             var iMatchType = XMLUtils.getIntValue(matchElement, "MatchType");
             var matchType = Objects.requireNonNull(MatchType.getById(iMatchType));
             md.setMatchType(matchType);
@@ -310,7 +307,7 @@ public class XMLMatchdetailsParser {
     private static void readGuestTeam(Document doc, Matchdetails md) {
         try {
             var root = doc.getDocumentElement();
-            var matchElement = core.util.XMLUtils.getChildElement(root, "Match");
+            var matchElement = XMLUtils.getChildElement(root, MATCH);
             var awayTeamElement = XMLUtils.getChildElement(matchElement, "AwayTeam");
             md.setAwayFormation(XMLUtils.getStringValue(awayTeamElement, "Formation", ""));
             md.setGastId(XMLUtils.getIntValue(awayTeamElement, "AwayTeamID"));
@@ -328,6 +325,7 @@ public class XMLMatchdetailsParser {
             md.setGuestRatingIndirectSetPiecesAtt(XMLUtils.getIntValue(awayTeamElement, "RatingIndirectSetPiecesAtt", -1));
             md.setGuestRatingIndirectSetPiecesDef(XMLUtils.getIntValue(awayTeamElement, "RatingIndirectSetPiecesDef", -1));
             md.setGuestEinstellung(XMLUtils.getIntValue(awayTeamElement, "TeamAttitude", Matchdetails.EINSTELLUNG_UNBEKANNT));
+            readChancesAndReplays(awayTeamElement, md, false);
         } catch (Exception e) {
             HOLogger.instance().log(XMLMatchdetailsParser.class, e);
         }
@@ -336,7 +334,7 @@ public class XMLMatchdetailsParser {
     private static void readHomeTeam(Document doc, Matchdetails md) {
         try {
             var root = doc.getDocumentElement();
-            var matchElement = core.util.XMLUtils.getChildElement(root, "Match");
+            var matchElement = XMLUtils.getChildElement(root, MATCH);
             var homeTeamElement = XMLUtils.getChildElement(matchElement, "HomeTeam");
             md.setHomeFormation(XMLUtils.getStringValue(homeTeamElement, "Formation", ""));
             md.setHeimId(XMLUtils.getIntValue(homeTeamElement, "HomeTeamID"));
@@ -354,9 +352,102 @@ public class XMLMatchdetailsParser {
             md.setHomeRatingIndirectSetPiecesAtt(XMLUtils.getIntValue(homeTeamElement, "RatingIndirectSetPiecesAtt", -1));
             md.setHomeRatingIndirectSetPiecesDef(XMLUtils.getIntValue(homeTeamElement, "RatingIndirectSetPiecesDef", -1));
             md.setHomeEinstellung(XMLUtils.getIntValue(homeTeamElement, "TeamAttitude", Matchdetails.EINSTELLUNG_UNBEKANNT));
+            readChancesAndReplays(homeTeamElement, md, true);
         } catch (Exception e) {
             HOLogger.instance().log(XMLMatchdetailsParser.class, e);
         }
+    }
+
+    /**
+     * NrOfChances (3.1) and HasReplay/NrOfReplays (3.2) of one team. All are absent from older
+     * versions, and the replay pair is never sent for youth matches; absent stays null.
+     */
+    private static void readChancesAndReplays(Element teamElement, Matchdetails md, boolean home) {
+        for (var type : ChanceType.values()) {
+            md.setChances(home, type, optionalInt(teamElement, type.getXmlElement()));
+        }
+        final var hasReplay = XMLUtils.findChildElement(teamElement, "HasReplay")
+                .map(e -> Boolean.parseBoolean(e.getTextContent().trim()))
+                .orElse(null);
+        final var nrOfReplays = optionalInt(teamElement, "NrOfReplays");
+        if (home) {
+            md.setHomeHasReplay(hasReplay);
+            md.setHomeNrOfReplays(nrOfReplays);
+        } else {
+            md.setGuestHasReplay(hasReplay);
+            md.setGuestNrOfReplays(nrOfReplays);
+        }
+    }
+
+    /**
+     * ExpectedResult (3.2), the statistics of the simulated replays. Hattrick sends it only for
+     * the few matches the site shows it for, so its absence is the normal case.
+     */
+    private static void readExpectedResult(Document doc, Matchdetails md) {
+        try {
+            final var matchElement = XMLUtils.getChildElement(doc.getDocumentElement(), MATCH);
+            final var element = XMLUtils.findChildElement(matchElement, "ExpectedResult");
+            if (element.isEmpty()) {
+                return;
+            }
+            final var e = element.get();
+            final var result = new MatchExpectedResult();
+            result.setMatchId(md.getMatchID());
+            result.setMatchType(md.getMatchType());
+            result.setNrOfSamples(XMLUtils.getIntValue(e, "NrOfSamples"));
+            result.setHomeWins(XMLUtils.getIntValue(e, "HomeWins"));
+            result.setDraws(XMLUtils.getIntValue(e, "Draws"));
+            result.setAwayWins(XMLUtils.getIntValue(e, "AwayWins"));
+            result.setAverageHomeGoals(optionalDouble(e, "AverageHomeGoals"));
+            result.setAverageAwayGoals(optionalDouble(e, "AverageAwayGoals"));
+            XMLUtils.findChildElement(e, "FullTime").ifPresent(fullTime -> {
+                result.setFullTimeHomeWins(optionalInt(fullTime, "HomeWins"));
+                result.setFullTimeDraws(optionalInt(fullTime, "Draws"));
+                result.setFullTimeAwayWins(optionalInt(fullTime, "AwayWins"));
+            });
+            XMLUtils.findChildElement(e, "GoalDistribution").ifPresent(distribution -> {
+                readGoalDistribution(distribution, "Home", true, result);
+                readGoalDistribution(distribution, "Away", false, result);
+            });
+            XMLUtils.findChildElement(e, "AverageWinMargin").ifPresent(margin -> {
+                result.setAverageWinMarginHome(optionalDouble(margin, "Home"));
+                result.setAverageWinMarginAway(optionalDouble(margin, "Away"));
+            });
+            XMLUtils.findChildElement(e, "OverUnder").ifPresent(overUnder -> {
+                for (int line = 0; line < MatchExpectedResult.GOAL_LINES; line++) {
+                    final int index = line;
+                    // Line05, Line15, ... Line45
+                    XMLUtils.findChildElement(overUnder, "Line" + line + "5").ifPresent(l -> {
+                        result.setOverUnder(true, index, optionalInt(l, "Over"));
+                        result.setOverUnder(false, index, optionalInt(l, "Under"));
+                    });
+                }
+            });
+            md.setExpectedResult(result);
+        } catch (Exception e) {
+            HOLogger.instance().log(XMLMatchdetailsParser.class, e);
+        }
+    }
+
+    private static void readGoalDistribution(Element distribution, String side, boolean home, MatchExpectedResult result) {
+        XMLUtils.findChildElement(distribution, side).ifPresent(goals -> {
+            for (int bucket = 0; bucket < MatchExpectedResult.GOAL_BUCKETS - 1; bucket++) {
+                result.setGoals(home, bucket, optionalInt(goals, "Goals" + bucket));
+            }
+            result.setGoals(home, MatchExpectedResult.GOAL_BUCKETS - 1, optionalInt(goals, "GoalsMoreThan5"));
+        });
+    }
+
+    /** The element's integer, null when it is absent or empty. */
+    private static Integer optionalInt(Element parent, String tagName) {
+        final var text = XMLUtils.getStringValue(parent, tagName, "").trim();
+        return text.isEmpty() ? null : Integer.valueOf(text);
+    }
+
+    /** The element's decimal, null when it is absent or empty; tolerates a decimal comma. */
+    private static Double optionalDouble(Element parent, String tagName) {
+        final var text = XMLUtils.getStringValue(parent, tagName, "").trim();
+        return text.isEmpty() ? null : Double.valueOf(text.replace(',', '.'));
     }
 
 	private static Matchdetails.eInjuryType getInjuryType(int iPlayerID, ArrayList<Matchdetails.Injury> injuries) {

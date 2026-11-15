@@ -31,8 +31,8 @@ and the data types are captured under [`raw/chpp/`](raw/chpp/README.md), one fil
 | live                    | Get (live) match ticker                                                                     | 2.4 (2026-11-10)         | -            |
 | managercompendium       | The manager compendium of the logged in user.                                               | 1.8 (2026-11-10)         | -            |
 | matches                 | The most recent and upcoming matches for a particular team (Senior or Youth).               | 3.0 (2026-11-10)         | 3.0, 2.9     |
-| matchesarchive          | Matches Archive                                                                             | 1.5 (2022-03-03)         | 1.4, 1.5     |
-| matchdetails            | Detailed match information                                                                  | 3.2 (2026-11-10)         | 3.0, 3.1     |
+| matchesarchive          | Matches Archive                                                                             | 1.5 (2022-03-03)         | 1.5          |
+| matchdetails            | Detailed match information                                                                  | 3.2 (2026-11-10)         | 3.2          |
 | matchlineup             | Match lineup for finished matches                                                           | 2.2 (2026-11-10)         | 2.2          |
 | matchorders             | Match orders for upcoming matches                                                           | 3.1 (2022-03-03)         | 3.0          |
 | nationalteams           | National teams                                                                              | 1.6 (2021-01-18)         | -            |
@@ -64,12 +64,12 @@ and the data types are captured under [`raw/chpp/`](raw/chpp/README.md), one fil
 | worldcup                | World cup groups and matches                                                                | 1.1                      | -            |
 | worlddetails            | General Information about all countries in HT World                                         | 2.1 (2026-11-10)         | 1.8, 1.9     |
 | worldlanguages          | Available languages                                                                         | 1.2                      | -            |
-| youthavatars            | Avatars for all players of user's youthteam                                                 | 1.2 (2021-01-19)         | -            |
-| youthleaguedetails      | The youth league information.                                                               | 1.1 (2026-02-26)         | -            |
-| youthleaguefixtures     | Fixtures for a Youthe League (series).                                                      | 1.0 (2013-12-02)         | -            |
-| youthplayerdetails      | Detailed information for a youth player                                                     | 1.4 (2026-11-10)         | -            |
-| youthplayerlist         | Youth Players.                                                                              | 1.4 (2026-11-10)         | 1.1          |
-| youthteamdetails        | Youth team information.                                                                     | 1.5 (2026-11-10)         | -            |
+| youthavatars            | Avatars for all players of user's youthteam                                                 | 1.2 (2021-01-19)         | 1.2          |
+| youthleaguedetails      | The youth league information.                                                               | 1.1 (2026-02-26)         | 1.1          |
+| youthleaguefixtures     | Fixtures for a Youthe League (series).                                                      | 1.0 (2013-12-02)         | 1.0          |
+| youthplayerdetails      | Detailed information for a youth player                                                     | 1.4 (2026-11-10)         | 1.4          |
+| youthplayerlist         | Youth Players.                                                                              | 1.4 (2026-11-10)         | 1.4          |
+| youthteamdetails        | Youth team information.                                                                     | 1.5 (2026-11-10)         | 1.5          |
 
 `worlddetails` 1.8 is still requested by the national-team HRF converter (`NthrfConvertXml2Hrf`);
 `playerdetails` 3.2 only for the `placeBid` write, reads are on 3.3.
@@ -84,15 +84,15 @@ the database (#2429, DB step 1100); the rest is not parsed.
 | 2025-09-17 | tournamentfixtures 1.1 | input `matchRound`          | -                                          |
 | 2026-02-09 | worlddetails 2.0       | `LeagueSystemID` per league | stored (`WorldDetailLeague`)               |
 | 2026-02-10 | teamdetails 3.8        | `GenderID`                  | stored (`Basics`), get_team `gender`       |
-| 2026-02-10 | youthplayerdetails 1.3 | `GenderID`                  | -                                          |
-| 2026-02-10 | youthteamdetails 1.3   | `GenderID`                  | -                                          |
+| 2026-02-10 | youthplayerdetails 1.3 | `GenderID`                  | - (the list has it)                        |
+| 2026-02-10 | youthteamdetails 1.3   | `GenderID`                  | stored (`YOUTHTEAMDETAILS`, step 1101)     |
 | 2026-02-11 | managercompendium 1.6  | `GenderID` per team         | -                                          |
 | 2026-02-11 | players 2.8            | `GenderID`                  | stored (`Player`, also from playerdetails) |
 | 2026-02-11 | youthplayerlist 1.3    | `GenderID`                  | stored (`YouthPlayer`)                     |
 | 2026-02-26 | managercompendium 1.7  | `LeagueSystemID`            | -                                          |
 | 2026-02-26 | teamdetails 3.9        | `LeagueSystemID`            | stored (`Basics`), get_team `leagueSystem` |
-| 2026-02-26 | youthleaguedetails 1.1 | `LeagueSystemID`            | -                                          |
-| 2026-02-26 | youthteamdetails 1.4   | `LeagueSystemID`            | -                                          |
+| 2026-02-26 | youthleaguedetails 1.1 | `LeagueSystemID`            | stored (`YOUTHLEAGUE`, step 1101)          |
+| 2026-02-26 | youthteamdetails 1.4   | `LeagueSystemID`            | stored (`YOUTHTEAMDETAILS`, step 1101)     |
 
 `GenderID` and `LeagueSystemID` share one value set: 1 male, 2 female. This is Hattrick's women's
 league system. A null column means the snapshot was downloaded before HO read the field. The
@@ -109,13 +109,13 @@ when a request moves to the new version. Full trees in `raw/chpp/`.
 | transfersearch 1.2                | `priceMin`/`priceMax` read in SEK (1.1 read them in the manager's own currency); new inputs `salaryMin`/`salaryMax` (base salary, without the 20 % abroad surcharge) and `transferCompareAvgMin`/`transferCompareAvgMax` (estimate saved at listing; players without one are left out) | used since 2026-11-14, HO converts to SEK      |
 | training 2.3                      | `actionType=history`, inputs `teamId`, `fromDate` (default 16 weeks back): one `Training` row per change of type, intensity or stamina share, with `HattrickSeason`, `HattrickWeek`, `TrainingDate`. Gold supporter, own or mentored team, else AccessDenied                           | used: get_training `historyWeeks`              |
 | playerstats 1.0 (new)             | per match of one player: age, TSI, form, stamina, loyalty, experience, goals, cards, injury, played minutes, rating (average and end of game), minutes per position group                                                                                                              | used: `get_player_match_stats`                 |
-| matchdetails 3.2                  | `HasReplay`/`NrOfReplays` per team; `ExpectedResult` with the simulated replays (win/draw/loss, average goals, goal distribution, win margin, over/under 0.5-4.5). Only where the site shows it: national team matches, Diamond, or bought replay credits                              | yardstick for the match predictor              |
+| matchdetails 3.2                  | `HasReplay`/`NrOfReplays` per team; `ExpectedResult` with the simulated replays (win/draw/loss, average goals, goal distribution, win margin, over/under 0.5-4.5). Only where the site shows it: national team matches, Diamond, or bought replay credits                              | stored (`MATCHDETAILS`, `MATCHEXPECTEDRESULT`, step 1101); yardstick for the match predictor |
 | playerdetails 3.3                 | `TransferCompareAverage`(+`Date`): the site's transfer estimate, only with visible skills; `FamilyRelation`; `TrophyList` (Gold club only)                                                                                                                                             | used: `hattrickEstimate`, see playerdetails    |
 | teamdetails 4.0                   | `Currency` (`CurrencyName`, `CurrencyRate` to SEK) the requesting user chose, only for that user                                                                                                                                                                                       | HO takes the rate from the league today        |
 | teamhistory 1.0 (new)             | per season since the current owner: series, position, points, goals, cup round; trophy list                                                                                                                                                                                            | used: analyze_opponent `include: [history]`    |
-| youthplayerdetails 1.4            | `TrainingReports` (the coach's comments: skill and level); `UserId` in `OwningYouthTeam`                                                                                                                                                                                               | youth skill estimates                          |
-| youthplayerlist 1.4               | `UserId` in `OwningYouthTeam` (`actionType=details`)                                                                                                                                                                                                                                   |                                                |
-| youthteamdetails 1.5              | `IsPlayingMatch`                                                                                                                                                                                                                                                                       |                                                |
+| youthplayerdetails 1.4            | `TrainingReports` (the coach's comments: skill and level); `UserId` in `OwningYouthTeam`                                                                                                                                                                                               | stored raw (`YOUTHTRAINERCOMMENT`); youth skill estimates once the codes are known |
+| youthplayerlist 1.4               | `UserId` in `OwningYouthTeam` (`actionType=details`)                                                                                                                                                                                                                                   | the team's, stored with youthteamdetails       |
+| youthteamdetails 1.5              | `IsPlayingMatch`                                                                                                                                                                                                                                                                       | stored (`YOUTHTEAMDETAILS`)                    |
 | matches 3.0                       | `HomeStatement`, `AwayStatement`, `FanMatchExpectation`                                                                                                                                                                                                                                | used: `fanExpectation` (statements not read)   |
 | stafflist 1.3                     | `ContractExpires` per staff member                                                                                                                                                                                                                                                     | used: get_team, week_brief                     |
 | hofplayers 1.3                    | `MatchesInClub`, `BestPerformanceValue`, `NoOfTimesTrainingMatchHero`, `FaithfulToTheClub`, `NoOfCleanSheet` (Gold only)                                                                                                                                                               |                                                |
@@ -137,6 +137,33 @@ Changed without a version bump, found by the re-capture: `cupmatches` 1.4 now so
 matchType of upcoming matches and gave them `MatchContextId`. The re-capture also picked up
 actions the 2026-09-26 one had missed, e.g. `matchorders` `predictratings` (sector and tactic
 ratings for a sent or saved lineup) and `arenadetails` `MyArena`.
+
+### Youth files and the shared match files (2026-11-15, DB step 1101)
+
+Every youth file is on its latest version, and the shared match files with it. The team
+download's youth block (`OnlineWorker.downloadCurrentMatches`) fetches, after the youth matches:
+the coach's reports (`youthplayerdetails`, one request per player, only for a player who played
+a youth match after his newest stored report, and none below Gold supporter), the team with its
+scouts (`youthteamdetails`, per HRF), the league standings and fixtures (two requests, current
+state) and the avatars (`youthavatars`, only missing images). Nothing extra without a youth team.
+
+`matchdetails` 3.0 → 3.2 and `matchesarchive` 1.4 → 1.5 were checked on real responses of the
+same matches at both versions (`XMLMatchVersionRegressionTest`): nothing HO read changed. The
+youth files were **not** checked on real data: the development club has had no youth academy
+since 2026-09-22 (error 54 for its old youth team id), so their test fixtures under
+`src/test/resources/chpp/youth/` are built from the docs and say so in their header. Replace
+them with captures once a club with an academy is at hand. What the real responses already showed:
+
+- `youthteamdetails` sends `UserId`, the docs say `UserID`; the parser reads both. A club without
+  youth team gets an empty team of id 0, not an error.
+- `youthplayerlist` sends `ScoutId` (HO's long-standing samples), the docs say `ScoutID`.
+- `youthleaguedetails` types `TeamName` as unsigned Integer in the docs; it is read as text.
+
+**`TrainingReport/ReportType` is not documented.** The docs say only that types 18, 19, 28, 29
+and 30 carry a `ReportSkillLevel`. HO stores the reports raw (`YouthTrainerComment`) and derives
+no skill estimate from them. Mapping the codes needs real reports from a Gold club with an
+academy; then feed the verified ones into `YouthSkillInfo` as `YouthPlayer.evaluateScoutComments`
+does with the scout's comments, and list the codes here.
 
 ### OrderType 4: behaviour change or man marking
 

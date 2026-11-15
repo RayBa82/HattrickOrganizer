@@ -5,6 +5,20 @@ accumulated; git keeps them (`git log -p -- docs/current.md`; the full history f
 2026-09-26 is `git show f5c51d0d:docs/current.md`).
 
 
+## Youth CHPP files and the shared match files on their latest versions (2026-11-15)
+
+Branch `feature/youth-chpp`, DB step 1101; storage only, no UI. `matchesarchive` 1.5 and
+`matchdetails` 3.2 everywhere (senior and youth), with the chances per side, the replay pair and
+`ExpectedResult` stored. Checked on real responses of the same matches at old and new versions
+(`XMLMatchVersionRegressionTest`). All six youth files at their latest version and stored:
+native country, coach reports (raw), youth team with scouts, league standings and fixtures,
+avatars. Details and request costs in `docs/chpp_files.md`, "Youth files".
+
+**Not checked on real youth data:** the development club has had no youth academy since
+2026-09-22, so the youth fixtures are built from the docs, and the undocumented coach
+`ReportType` codes feed no skill estimate yet. Both are in `docs/roadmap.md`, as are the MCP
+youth tools that come next.
+
 ## estimate_market_value: hattrickEstimate split from live (2026-11-15)
 
 Asked for by the hattrick session: `live` bundled the transfer search (one of 20 per rolling hour)
@@ -16,16 +30,7 @@ comparables. Unit-tested, shipped as `ho-headless:11.0.0.2`, and checked live on
 player of another team via `profile.playerId` with `live: false` returned `hattrickEstimate` beside
 the median, no search spent. The hattrick session's price-player skill uses these names.
 
-## #2429 gender and league system merged from the upstream PR (2026-11-14)
-
-Upstream PR ho-dev#2595 (branch `feature/2429-gender-league-system`, against ho-dev master)
-merged into `master`. CHPP teamdetails 4.0, worlddetails 2.1, players 2.8, youthplayerlist 1.4;
-`GenderID`/`LeagueSystemID` stored in Basics, players, youth players and world details. The
-upstream step is `case 1000 → updateDBv1100`; here it runs as `case 1009 → updateDBv1100` and
-`DB_VERSION` is 1100. When upstream merges the PR, keep our chain (1001–1009, then 1100) and
-our `DBManager.instance()` helpers (headless exits) on the next upstream merge. get_team shows
-`gender` and `leagueSystem` (male/female), left out on an old snapshot. Not checked against a
-women's team: the dev DB is a men's team.
-
-Still open from earlier pieces: compare the get_training predictions with the real training on
+Still open: on the next upstream merge, keep our DB chain (1001–1009, 1100, then 1101; upstream
+has `case 1000 → updateDBv1100`) and our `DBManager.instance()` helpers (headless exits). The
+#2429 gender/league system fields are not checked against a women's team. Also open from earlier pieces: compare the get_training predictions with the real training on
 2026-11-20; the #2587 season-offset fix (ho-dev#2594) was not checked on the headless server's DB.

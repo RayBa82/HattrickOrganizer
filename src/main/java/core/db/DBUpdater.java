@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Locale;
+import java.util.Objects;
 
 final class DBUpdater {
 	private static final String GENDER_ID = "GenderID";
@@ -111,6 +112,8 @@ final class DBUpdater {
 								updateDBv1009(DBVersion);
 							case 1009:
 								updateDBv1100(DBVersion);
+							case 1100:
+								updateDBv1101(DBVersion);
 								// the newest step: the next one replaces this break with its own case
 								break;
 				}
@@ -121,6 +124,41 @@ final class DBUpdater {
 		} else {
 			HOLogger.instance().log(getClass(), "No DB update necessary.");
 		}
+	}
+
+	/**
+	 * The latest CHPP versions of the match files and of every youth file: matchdetails 3.2
+	 * (chances per side, replay flags, ExpectedResult), youthplayerlist 1.4 (native country),
+	 * youthplayerdetails 1.4 (the coach's reports), youthteamdetails 1.5 (team and scouts),
+	 * youthleaguedetails 1.1 and youthleaguefixtures 1.0. Safe to re-run, which DEV builds do on
+	 * every start.
+	 */
+	private void updateDBv1101(int dbVersion) throws SQLException {
+		var matchDetailsTable = dbManager.getTable(MatchDetailsTable.TABLENAME);
+		var dbInfo = Objects.requireNonNull(connectionManager.getDbInfo(), "database not connected");
+		for (var column : MatchDetailsTable.chanceAndReplayColumns()) {
+			matchDetailsTable.tryAddColumn(column.getColumnName(), dbInfo.getTypeName(column.getType()));
+		}
+		dbManager.getTable(MatchExpectedResultTable.TABLENAME).createTable();
+
+		var youthPlayerTable = dbManager.getTable(YouthPlayerTable.TABLENAME);
+		youthPlayerTable.tryAddColumn(YouthPlayerTable.NATIVE_COUNTRY_ID, SQL_INTEGER);
+		youthPlayerTable.tryAddColumn(YouthPlayerTable.NATIVE_COUNTRY_NAME,
+				"VARCHAR(" + YouthPlayerTable.NATIVE_COUNTRY_NAME_LENGTH + ")");
+		// Declared long ago but never registered, so no database should have it. Should an old
+		// build have created it in its first shape (MATCH_ID/INDEX, never filled), replace it.
+		var trainerComments = dbManager.getTable(YouthTrainerCommentTable.TABLENAME);
+		if (!trainerComments.columnExistsInTable("REPORT_DATE")) {
+			trainerComments.tryDropTable();
+		}
+		trainerComments.createTable();
+		dbManager.getTable(YouthTeamDetailsTable.TABLENAME).createTable();
+		dbManager.getTable(YouthScoutTable.TABLENAME).createTable();
+		dbManager.getTable(YouthLeagueTable.TABLENAME).createTable();
+		dbManager.getTable(YouthLeagueTable.StandingsTable.TABLENAME).createTable();
+		dbManager.getTable(YouthLeagueTable.FixtureTable.TABLENAME).createTable();
+
+		updateDBVersion(dbVersion, 1101);
 	}
 
 	private void updateDBv1100(int dbVersion) throws SQLException {

@@ -1,0 +1,359 @@
+<?xml version="1.0" encoding="utf-8"?>
+<HattrickData>
+  <FileName>matchdetails.xml</FileName>
+  <Version>3.2</Version>
+  <UserID>1357154</UserID>
+  <FetchedDate>2026-11-15 03:01:14</FetchedDate>
+  <UserSupporterTier>gold</UserSupporterTier>
+  <SourceSystem>Youth</SourceSystem>
+  <Match>
+    <MatchID>146086858</MatchID>
+    <MatchType>100</MatchType>
+    <MatchContextId>750688</MatchContextId>
+    <MatchRuleId>0</MatchRuleId>
+    <CupLevel>0</CupLevel>
+    <CupLevelIndex>0</CupLevelIndex>
+    <MatchDate>2026-09-21 19:15:00</MatchDate>
+    <FinishedDate>2026-09-21 21:00:00</FinishedDate>
+    <AddedMinutes>0</AddedMinutes>
+    <HomeTeam>
+      <HomeTeamID>3271684</HomeTeamID>
+      <HomeTeamName>JFC Ingersleben</HomeTeamName>
+      <Formation>4-4-2</Formation>
+      <HomeGoals>1</HomeGoals>
+      <TacticType>0</TacticType>
+      <TacticSkill>0</TacticSkill>
+      <RatingMidfield>7</RatingMidfield>
+      <RatingRightDef>8</RatingRightDef>
+      <RatingMidDef>14</RatingMidDef>
+      <RatingLeftDef>12</RatingLeftDef>
+      <RatingRightAtt>13</RatingRightAtt>
+      <RatingMidAtt>12</RatingMidAtt>
+      <RatingLeftAtt>11</RatingLeftAtt>
+      <RatingIndirectSetPiecesDef>6</RatingIndirectSetPiecesDef>
+      <RatingIndirectSetPiecesAtt>6</RatingIndirectSetPiecesAtt>
+      <NrOfChancesLeft>2</NrOfChancesLeft>
+      <NrOfChancesCenter>2</NrOfChancesCenter>
+      <NrOfChancesRight>2</NrOfChancesRight>
+      <NrOfChancesSpecialEvents>1</NrOfChancesSpecialEvents>
+      <NrOfChancesOther>1</NrOfChancesOther>
+    </HomeTeam>
+    <AwayTeam>
+      <AwayTeamID>3256333</AwayTeamID>
+      <AwayTeamName>Beach Teens</AwayTeamName>
+      <Formation>4-4-2</Formation>
+      <AwayGoals>5</AwayGoals>
+      <TacticType>0</TacticType>
+      <TacticSkill>0</TacticSkill>
+      <RatingMidfield>7</RatingMidfield>
+      <RatingRightDef>14</RatingRightDef>
+      <RatingMidDef>20</RatingMidDef>
+      <RatingLeftDef>21</RatingLeftDef>
+      <RatingRightAtt>7</RatingRightAtt>
+      <RatingMidAtt>12</RatingMidAtt>
+      <RatingLeftAtt>17</RatingLeftAtt>
+      <RatingIndirectSetPiecesDef>7</RatingIndirectSetPiecesDef>
+      <RatingIndirectSetPiecesAtt>6</RatingIndirectSetPiecesAtt>
+      <NrOfChancesLeft>2</NrOfChancesLeft>
+      <NrOfChancesCenter>1</NrOfChancesCenter>
+      <NrOfChancesRight>2</NrOfChancesRight>
+      <NrOfChancesSpecialEvents>2</NrOfChancesSpecialEvents>
+      <NrOfChancesOther>1</NrOfChancesOther>
+    </AwayTeam>
+    <Arena>
+      <ArenaID>3236247</ArenaID>
+      <ArenaName>JFC-Zentrale</ArenaName>
+      <WeatherID>1</WeatherID>
+      <SoldTotal>411</SoldTotal>
+      <SoldTerraces>299</SoldTerraces>
+      <SoldBasic>112</SoldBasic>
+      <SoldRoof>0</SoldRoof>
+      <SoldVIP>0</SoldVIP>
+    </Arena>
+    <Scorers>
+      <Goal Index="0">
+        <ScorerPlayerID>432504681</ScorerPlayerID>
+        <ScorerPlayerName>Heinke Hagmüller</ScorerPlayerName>
+        <ScorerTeamID>3271684</ScorerTeamID>
+        <ScorerHomeGoals>1</ScorerHomeGoals>
+        <ScorerAwayGoals>0</ScorerAwayGoals>
+        <ScorerMinute>2</ScorerMinute>
+        <MatchPart>1</MatchPart>
+      </Goal>
+      <Goal Index="1">
+        <ScorerPlayerID>422894508</ScorerPlayerID>
+        <ScorerPlayerName>Peter-Michael Etzdorf</ScorerPlayerName>
+        <ScorerTeamID>3256333</ScorerTeamID>
+        <ScorerHomeGoals>1</ScorerHomeGoals>
+        <ScorerAwayGoals>1</ScorerAwayGoals>
+        <ScorerMinute>8</ScorerMinute>
+        <MatchPart>1</MatchPart>
+      </Goal>
+      <Goal Index="2">
+        <ScorerPlayerID>422894505</ScorerPlayerID>
+        <ScorerPlayerName>Przemysław Chrząścik</ScorerPlayerName>
+        <ScorerTeamID>3256333</ScorerTeamID>
+        <ScorerHomeGoals>1</ScorerHomeGoals>
+        <ScorerAwayGoals>2</ScorerAwayGoals>
+        <ScorerMinute>9</ScorerMinute>
+        <MatchPart>1</MatchPart>
+      </Goal>
+      <Goal Index="3">
+        <ScorerPlayerID>422894512</ScorerPlayerID>
+        <ScorerPlayerName>Konrad Szmagalski</ScorerPlayerName>
+        <ScorerTeamID>3256333</ScorerTeamID>
+        <ScorerHomeGoals>1</ScorerHomeGoals>
+        <ScorerAwayGoals>3</ScorerAwayGoals>
+        <ScorerMinute>10</ScorerMinute>
+        <MatchPart>1</MatchPart>
+      </Goal>
+      <Goal Index="4">
+        <ScorerPlayerID>422894512</ScorerPlayerID>
+        <ScorerPlayerName>Konrad Szmagalski</ScorerPlayerName>
+        <ScorerTeamID>3256333</ScorerTeamID>
+        <ScorerHomeGoals>1</ScorerHomeGoals>
+        <ScorerAwayGoals>4</ScorerAwayGoals>
+        <ScorerMinute>86</ScorerMinute>
+        <MatchPart>2</MatchPart>
+      </Goal>
+      <Goal Index="5">
+        <ScorerPlayerID>422894514</ScorerPlayerID>
+        <ScorerPlayerName>Marko Lischka</ScorerPlayerName>
+        <ScorerTeamID>3256333</ScorerTeamID>
+        <ScorerHomeGoals>1</ScorerHomeGoals>
+        <ScorerAwayGoals>5</ScorerAwayGoals>
+        <ScorerMinute>87</ScorerMinute>
+        <MatchPart>2</MatchPart>
+      </Goal>
+    </Scorers>
+    <Bookings />
+    <Injuries />
+    <PossessionFirstHalfHome>47</PossessionFirstHalfHome>
+    <PossessionFirstHalfAway>53</PossessionFirstHalfAway>
+    <PossessionSecondHalfHome>47</PossessionSecondHalfHome>
+    <PossessionSecondHalfAway>53</PossessionSecondHalfAway>
+    <EventList>
+      <Event Index="0">
+        <Minute>0</Minute>
+        <SubjectPlayerID>3236247</SubjectPlayerID>
+        <SubjectTeamID>600</SubjectTeamID>
+        <ObjectPlayerID>411</ObjectPlayerID>
+        <MatchPart>0</MatchPart>
+        <EventTypeID>31</EventTypeID>
+        <EventVariation>2</EventVariation>
+        <EventText>411 Zuschauer pilgerten trotz bewölkten Himmels in Richtung &lt;a href="/Club/Stadium/?youthStadiumId=3236247"&gt;JFC-Zentrale&lt;/a&gt;.</EventText>
+      </Event>
+      <Event Index="2">
+        <Minute>0</Minute>
+        <SubjectPlayerID>0</SubjectPlayerID>
+        <SubjectTeamID>3271684</SubjectTeamID>
+        <ObjectPlayerID>0</ObjectPlayerID>
+        <MatchPart>0</MatchPart>
+        <EventTypeID>21</EventTypeID>
+        <EventVariation>5</EventVariation>
+        <EventText>In der Start-Elf: &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=432504685" title="Soika" class="homeplayer"&gt;Soika&lt;/a&gt; - &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=432504686" title="Gallei" class="homeplayer"&gt;Gallei&lt;/a&gt;, &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=432504676" title="Panzenb&amp;#246;ck" class="homeplayer"&gt;Panzenböck&lt;/a&gt;, &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=432504675" title="Hisar" class="homeplayer"&gt;Hisar&lt;/a&gt;, &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=432504684" title="Pl&amp;#246;rre" class="homeplayer"&gt;Plörre&lt;/a&gt; - &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=432504678" title="Rotersand" class="homeplayer"&gt;Rotersand&lt;/a&gt;, &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=432504681" title="Hagm&amp;#252;ller" class="homeplayer"&gt;Hagmüller&lt;/a&gt;, &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=432504677" title="Radebeul" class="homeplayer"&gt;Radebeul&lt;/a&gt;, &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=432504688" title="Bistram" class="homeplayer"&gt;Bistram&lt;/a&gt; - &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=432504680" title="Kaup" class="homeplayer"&gt;Kaup&lt;/a&gt;, &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=432504682" title="Pias" class="homeplayer"&gt;Pias&lt;/a&gt;.&lt;br /&gt;&lt;br /&gt;</EventText>
+      </Event>
+      <Event Index="3">
+        <Minute>0</Minute>
+        <SubjectPlayerID>0</SubjectPlayerID>
+        <SubjectTeamID>3256333</SubjectTeamID>
+        <ObjectPlayerID>0</ObjectPlayerID>
+        <MatchPart>0</MatchPart>
+        <EventTypeID>21</EventTypeID>
+        <EventVariation>4</EventVariation>
+        <EventText>Diese Talente bot der Trainer auf: &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=411991854" title="Pohla-Reissmann" class="awayplayer"&gt;Pohla-Reissmann&lt;/a&gt; - &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=415670324" title="Schr&amp;#246;ders" class="awayplayer"&gt;Schröders&lt;/a&gt;, &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=415915282" title="P&amp;#246;ppl" class="awayplayer"&gt;Pöppl&lt;/a&gt;, &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=421289342" title="Schoierer" class="awayplayer"&gt;Schoierer&lt;/a&gt;, &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=422894505" title="Chrząścik" class="awayplayer"&gt;Chrząścik&lt;/a&gt; - &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=422894506" title="Kończal" class="awayplayer"&gt;Kończal&lt;/a&gt;, &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=422894507" title="Remagen" class="awayplayer"&gt;Remagen&lt;/a&gt;, &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=422894508" title="Etzdorf" class="awayplayer"&gt;Etzdorf&lt;/a&gt;, &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=422894510" title="Garrett" class="awayplayer"&gt;Garrett&lt;/a&gt; - &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=422894512" title="Szmagalski" class="awayplayer"&gt;Szmagalski&lt;/a&gt;, &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=422894514" title="Lischka" class="awayplayer"&gt;Lischka&lt;/a&gt;.&lt;br /&gt;&lt;br /&gt;</EventText>
+      </Event>
+      <Event Index="4">
+        <Minute>0</Minute>
+        <SubjectPlayerID>1040402</SubjectPlayerID>
+        <SubjectTeamID>0</SubjectTeamID>
+        <ObjectPlayerID>1040402</ObjectPlayerID>
+        <MatchPart>0</MatchPart>
+        <EventTypeID>23</EventTypeID>
+        <EventVariation>1</EventVariation>
+        <EventText>Beide Teams starteten mit einer 4-4-2 Formation. </EventText>
+      </Event>
+      <Event Index="6">
+        <Minute>2</Minute>
+        <SubjectPlayerID>432504681</SubjectPlayerID>
+        <SubjectTeamID>3271684</SubjectTeamID>
+        <ObjectPlayerID>411991854</ObjectPlayerID>
+        <MatchPart>1</MatchPart>
+        <EventTypeID>123</EventTypeID>
+        <EventVariation>1</EventVariation>
+        <EventText>Nach 2 Minuten zeigte die &lt;span class="hometeam"&gt;JFCI&lt;/span&gt;-Offensive ein ernsthaftes Bemühen, ein Tor erzielen zu wollen. Und die Bemühungen waren tatsächlich von Erfolg gekrönt, &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=432504681" title="Heinke Hagm&amp;#252;ller" class="homeplayer"&gt;Heinke Hagmüller&lt;/a&gt; konnte nach einer Flanke von rechts den Ball ungestört mit der Brust annehmen und zum 1 - 0 vollenden. Ein präziser Pass von &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=432504675" title="Erdener Hisar" class="homeplayer"&gt;Erdener Hisar&lt;/a&gt; machte das Tor überhaupt erst möglich.</EventText>
+      </Event>
+      <Event Index="7">
+        <Minute>4</Minute>
+        <SubjectPlayerID>432504681</SubjectPlayerID>
+        <SubjectTeamID>3271684</SubjectTeamID>
+        <ObjectPlayerID>411991854</ObjectPlayerID>
+        <MatchPart>1</MatchPart>
+        <EventTypeID>233</EventTypeID>
+        <EventVariation>3</EventVariation>
+        <EventText>Eine scharfe Hereingabe oder doch ein Torschuss? In der 4. Minute drosch &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=432504681" title="Heinke Hagm&amp;#252;ller" class="homeplayer"&gt;Heinke Hagmüller&lt;/a&gt; den Ball von der rechten Seite aus hart in Richtung Tor, die Hereingabe wurde aber von keinem seiner &lt;span class="hometeam"&gt;JFCI&lt;/span&gt;-Mitspieler erreicht, und so gab es Abstoß für die Gastmannschaft.</EventText>
+      </Event>
+      <Event Index="8">
+        <Minute>5</Minute>
+        <SubjectPlayerID>432504686</SubjectPlayerID>
+        <SubjectTeamID>3271684</SubjectTeamID>
+        <ObjectPlayerID>411991854</ObjectPlayerID>
+        <MatchPart>1</MatchPart>
+        <EventTypeID>232</EventTypeID>
+        <EventVariation>5</EventVariation>
+        <EventText>&lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=432504686" title="Dietmar Gallei" class="homeplayer"&gt;Dietmar Gallei&lt;/a&gt; versuchte in der 5. Minute, die Führung für &lt;span class="hometeam"&gt;JFCI&lt;/span&gt; auszubauen. Er agierte allerdings viel zu eigensinnig und blieb an der linken Strafraumgrenze in der vielbeinigen Gästeabwehr hängen.</EventText>
+      </Event>
+      <Event Index="9">
+        <Minute>8</Minute>
+        <SubjectPlayerID>422894508</SubjectPlayerID>
+        <SubjectTeamID>3256333</SubjectTeamID>
+        <ObjectPlayerID>432504685</ObjectPlayerID>
+        <MatchPart>1</MatchPart>
+        <EventTypeID>162</EventTypeID>
+        <EventVariation>3</EventVariation>
+        <EventText>&lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=422894508" title="Peter-Michael Etzdorf" class="awayplayer"&gt;Peter-Michael Etzdorf&lt;/a&gt; überraschte in der 8. Minute die rechte Abwehrseite der Heimmannschaft. Er drang in den Strafraum ein und setzte zu einem Lupfer an, den der wild in der Luft herumfuchtelnde Torwart nicht parieren konnte. Tor für &lt;span class="awayteam"&gt;FC GBB&lt;/span&gt;, 1 - 1.</EventText>
+      </Event>
+      <Event Index="10">
+        <Minute>9</Minute>
+        <SubjectPlayerID>422894505</SubjectPlayerID>
+        <SubjectTeamID>3256333</SubjectTeamID>
+        <ObjectPlayerID>415915282</ObjectPlayerID>
+        <MatchPart>1</MatchPart>
+        <EventTypeID>118</EventTypeID>
+        <EventVariation>4</EventVariation>
+        <EventText>Ein stark angeschnittener Eckstoß von &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=415915282" title="Manfred P&amp;#246;ppl" class="awayplayer"&gt;Manfred Pöppl&lt;/a&gt; rutschte dem Torwart über die Fäuste, so dass &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=422894505" title="Przemysław Chrząścik" class="awayplayer"&gt;Przemysław Chrząścik&lt;/a&gt; an die Kugel kam und sie mühelos für &lt;span class="awayteam"&gt;FC GBB&lt;/span&gt; einschob. Das war das 1 - 2 in der 9. Minute.</EventText>
+      </Event>
+      <Event Index="11">
+        <Minute>10</Minute>
+        <SubjectPlayerID>422894512</SubjectPlayerID>
+        <SubjectTeamID>3256333</SubjectTeamID>
+        <ObjectPlayerID>432504685</ObjectPlayerID>
+        <MatchPart>1</MatchPart>
+        <EventTypeID>182</EventTypeID>
+        <EventVariation>5</EventVariation>
+        <EventText>Freie Bahn in der 10. Minute für &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=422894512" title="Konrad Szmagalski" class="awayplayer"&gt;Konrad Szmagalski&lt;/a&gt;: Das Timing bei diesem Pass von links war optimal, der &lt;span class="awayteam"&gt;FC GBB&lt;/span&gt;-Junge lief unbedrängt auf das Tor zu und feierte kurz nach dem Anspiel sich und seinen Treffer zum 1 - 3.</EventText>
+      </Event>
+      <Event Index="12">
+        <Minute>45</Minute>
+        <SubjectPlayerID>0</SubjectPlayerID>
+        <SubjectTeamID>0</SubjectTeamID>
+        <ObjectPlayerID>0</ObjectPlayerID>
+        <MatchPart>1</MatchPart>
+        <EventTypeID>45</EventTypeID>
+        <EventVariation>2</EventVariation>
+        <EventText>Die Teams gingen mit einem 1 - 3 in die Kabinen.</EventText>
+      </Event>
+      <Event Index="13">
+        <Minute>45</Minute>
+        <SubjectPlayerID>0</SubjectPlayerID>
+        <SubjectTeamID>3256333</SubjectTeamID>
+        <ObjectPlayerID>53</ObjectPlayerID>
+        <MatchPart>1</MatchPart>
+        <EventTypeID>40</EventTypeID>
+        <EventVariation>2</EventVariation>
+        <EventText>Statistiker im Stadion ermittelten in dieser Hälfte 53 Prozent Ballbesitz für die &lt;span class="awayteam"&gt;FC GBB&lt;/span&gt;-Buben.&lt;br /&gt;&lt;br /&gt;</EventText>
+      </Event>
+      <Event Index="15">
+        <Minute>57</Minute>
+        <SubjectPlayerID>432504682</SubjectPlayerID>
+        <SubjectTeamID>3271684</SubjectTeamID>
+        <ObjectPlayerID>411991854</ObjectPlayerID>
+        <MatchPart>2</MatchPart>
+        <EventTypeID>200</EventTypeID>
+        <EventVariation>5</EventVariation>
+        <EventText>57. Minute: Irgendwie bahnte sich der Freistoß von &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=432504682" title="Simos Pias" class="homeplayer"&gt;Simos Pias&lt;/a&gt; einen Weg durch die Mauer, doch der Torwart verhinderte mit einer spektakulären Rettungsaktion ein Tor für &lt;span class="hometeam"&gt;JFCI&lt;/span&gt;.</EventText>
+      </Event>
+      <Event Index="16">
+        <Minute>58</Minute>
+        <SubjectPlayerID>422894506</SubjectPlayerID>
+        <SubjectTeamID>3271684</SubjectTeamID>
+        <ObjectPlayerID>432504675</ObjectPlayerID>
+        <MatchPart>2</MatchPart>
+        <EventTypeID>209</EventTypeID>
+        <EventVariation>5</EventVariation>
+        <EventText>Wollte oder konnte &lt;span class="awayteam"&gt;FC GBB&lt;/span&gt; dieses Geschenk einfach nicht annehmen? &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=432504675" title="Erdener Hisar" class="homeplayer"&gt;Erdener Hisar&lt;/a&gt; hatte jedenfalls nach 58 Minuten wieder einen seiner berüchtigten Aussetzer. Doch auch der Torschuss von &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=422894506" title="Ariel Kończal" class="awayplayer"&gt;Ariel Kończal&lt;/a&gt; glich eher einer Rückgabe, und der Torwart konnte den Ball ohne Probleme aufnehmen.</EventText>
+      </Event>
+      <Event Index="17">
+        <Minute>64</Minute>
+        <SubjectPlayerID>422894512</SubjectPlayerID>
+        <SubjectTeamID>3256333</SubjectTeamID>
+        <ObjectPlayerID>432504685</ObjectPlayerID>
+        <MatchPart>2</MatchPart>
+        <EventTypeID>281</EventTypeID>
+        <EventVariation>3</EventVariation>
+        <EventText>&lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=422894512" title="Konrad Szmagalski" class="awayplayer"&gt;Konrad Szmagalski&lt;/a&gt; hatte in der 64. Minute die große Chance, einen weiteren Treffer für &lt;span class="awayteam"&gt;FC GBB&lt;/span&gt; zu erzielen. Er wurde im Sturmzentrum angespielt, zögerte den Abschluss aber zu lange heraus. &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=432504685" title="Andy Soika" class="homeplayer"&gt;Andy Soika&lt;/a&gt; konnte ihm mit letztem Einsatz den Ball vom Fuß spitzeln.</EventText>
+      </Event>
+      <Event Index="18">
+        <Minute>65</Minute>
+        <SubjectPlayerID>432504675</SubjectPlayerID>
+        <SubjectTeamID>3271684</SubjectTeamID>
+        <ObjectPlayerID>411991854</ObjectPlayerID>
+        <MatchPart>2</MatchPart>
+        <EventTypeID>242</EventTypeID>
+        <EventVariation>1</EventVariation>
+        <EventText>Was für ein Konter von &lt;span class="hometeam"&gt;JFCI&lt;/span&gt; in Minute 65! Zum Leidwesen seiner Mitspieler verpasste es der auf links aufgerückte &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=432504675" title="Erdener Hisar" class="homeplayer"&gt;Erdener Hisar&lt;/a&gt;, den Ball im Tor unterzubringen.</EventText>
+      </Event>
+      <Event Index="22">
+        <Minute>86</Minute>
+        <SubjectPlayerID>422894512</SubjectPlayerID>
+        <SubjectTeamID>3256333</SubjectTeamID>
+        <ObjectPlayerID>432504685</ObjectPlayerID>
+        <MatchPart>2</MatchPart>
+        <EventTypeID>183</EventTypeID>
+        <EventVariation>3</EventVariation>
+        <EventText>86. Minute: Flanke von rechts, Volleyschuss von &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=422894512" title="Konrad Szmagalski" class="awayplayer"&gt;Konrad Szmagalski&lt;/a&gt;, Tor für &lt;span class="awayteam"&gt;FC GBB&lt;/span&gt;. Der neue Spielstand von 1 - 4 stellte zumindest den Gästetrainer zufrieden.</EventText>
+      </Event>
+      <Event Index="23">
+        <Minute>87</Minute>
+        <SubjectPlayerID>422894514</SubjectPlayerID>
+        <SubjectTeamID>3256333</SubjectTeamID>
+        <ObjectPlayerID>432504686</ObjectPlayerID>
+        <MatchPart>2</MatchPart>
+        <EventTypeID>115</EventTypeID>
+        <EventVariation>5</EventVariation>
+        <EventText>Ein alter Mann ist kein D-Zug, aber der junge &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=422894514" title="Marko Lischka" class="awayplayer"&gt;Marko Lischka&lt;/a&gt; ist ein ICE!
+Nach 87 Minuten ließ er mühelos &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=432504686" title="Dietmar Gallei" class="homeplayer"&gt;Dietmar Gallei&lt;/a&gt; stehen und traf für &lt;span class="awayteam"&gt;FC GBB&lt;/span&gt; zum 1 - 5. </EventText>
+      </Event>
+      <Event Index="25">
+        <Minute>90</Minute>
+        <SubjectPlayerID>0</SubjectPlayerID>
+        <SubjectTeamID>0</SubjectTeamID>
+        <ObjectPlayerID>0</ObjectPlayerID>
+        <MatchPart>2</MatchPart>
+        <EventTypeID>599</EventTypeID>
+        <EventVariation>1</EventVariation>
+        <EventText>Die Begegnung endete 1 - 5.</EventText>
+      </Event>
+      <Event Index="27">
+        <Minute>90</Minute>
+        <SubjectPlayerID>0</SubjectPlayerID>
+        <SubjectTeamID>3256333</SubjectTeamID>
+        <ObjectPlayerID>53</ObjectPlayerID>
+        <MatchPart>2</MatchPart>
+        <EventTypeID>40</EventTypeID>
+        <EventVariation>1</EventVariation>
+        <EventText>Der Nachwuchs von &lt;span class="awayteam"&gt;FC GBB&lt;/span&gt; erreichte in dieser Halbzeit laut HT-Datenbank 53 Prozent Ballbesitz.&lt;br /&gt;&lt;br /&gt;</EventText>
+      </Event>
+      <Event Index="28">
+        <Minute>90</Minute>
+        <SubjectPlayerID>432504675</SubjectPlayerID>
+        <SubjectTeamID>3271684</SubjectTeamID>
+        <ObjectPlayerID>0</ObjectPlayerID>
+        <MatchPart>2</MatchPart>
+        <EventTypeID>41</EventTypeID>
+        <EventVariation>5</EventVariation>
+        <EventText>Bei &lt;span class="hometeam"&gt;JFCI&lt;/span&gt; war die Leistung von &lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=432504675" title="Erdener Hisar" class="homeplayer"&gt;Erdener Hisar&lt;/a&gt; bewundernswert - in dieser Verfassung könnte er eines Tages ein Kandidat für die 1. Mannschaft sein.</EventText>
+      </Event>
+      <Event Index="29">
+        <Minute>90</Minute>
+        <SubjectPlayerID>422894505</SubjectPlayerID>
+        <SubjectTeamID>3256333</SubjectTeamID>
+        <ObjectPlayerID>0</ObjectPlayerID>
+        <MatchPart>2</MatchPart>
+        <EventTypeID>41</EventTypeID>
+        <EventVariation>3</EventVariation>
+        <EventText>Nach diesem Spiel forderten die Fans von &lt;span class="awayteam"&gt;FC GBB&lt;/span&gt; eine "&lt;a href="/Club/Players/YouthPlayer.aspx?YouthPlayerID=422894505" title="Przemysław Chrząścik" class="awayplayer"&gt;Przemysław Chrząścik&lt;/a&gt;-Straße" - die Leistung des Jungen war herausragend gewesen.</EventText>
+      </Event>
+    </EventList>
+  </Match>
+</HattrickData>

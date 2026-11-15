@@ -1,0 +1,573 @@
+<?xml version="1.0" encoding="utf-8"?>
+<HattrickData>
+  <FileName>matchdetails.xml</FileName>
+  <Version>3.0</Version>
+  <UserID>1357154</UserID>
+  <FetchedDate>2026-11-15 03:01:13</FetchedDate>
+  <UserSupporterTier>gold</UserSupporterTier>
+  <SourceSystem>Hattrick</SourceSystem>
+  <Match>
+    <MatchID>768523807</MatchID>
+    <MatchType>1</MatchType>
+    <MatchContextId>41421</MatchContextId>
+    <MatchRuleId>0</MatchRuleId>
+    <CupLevel>0</CupLevel>
+    <CupLevelIndex>0</CupLevelIndex>
+    <MatchDate>2026-08-15 18:15:00</MatchDate>
+    <FinishedDate>2026-08-15 20:01:00</FinishedDate>
+    <AddedMinutes>1</AddedMinutes>
+    <HomeTeam>
+      <HomeTeamID>2168446</HomeTeamID>
+      <HomeTeamName>FC GaisBeach 04</HomeTeamName>
+      <DressURI>//res.hattrick.org/kits/1/1/1/1/matchKitSmall.png</DressURI>
+      <Formation>3-5-2</Formation>
+      <HomeGoals>3</HomeGoals>
+      <TacticType>3</TacticType>
+      <TacticSkill>16</TacticSkill>
+      <RatingMidfield>31</RatingMidfield>
+      <RatingRightDef>18</RatingRightDef>
+      <RatingMidDef>35</RatingMidDef>
+      <RatingLeftDef>17</RatingLeftDef>
+      <RatingRightAtt>12</RatingRightAtt>
+      <RatingMidAtt>15</RatingMidAtt>
+      <RatingLeftAtt>13</RatingLeftAtt>
+      <TeamAttitude>0</TeamAttitude>
+      <RatingIndirectSetPiecesDef>22</RatingIndirectSetPiecesDef>
+      <RatingIndirectSetPiecesAtt>13</RatingIndirectSetPiecesAtt>
+    </HomeTeam>
+    <AwayTeam>
+      <AwayTeamID>3372131</AwayTeamID>
+      <AwayTeamName>1.FC 1888 München</AwayTeamName>
+      <DressURI>//res.hattrick.org/kits/1/1/1/2/matchKitSmall.png</DressURI>
+      <Formation>3-5-2</Formation>
+      <AwayGoals>0</AwayGoals>
+      <TacticType>0</TacticType>
+      <TacticSkill>0</TacticSkill>
+      <RatingMidfield>10</RatingMidfield>
+      <RatingRightDef>13</RatingRightDef>
+      <RatingMidDef>19</RatingMidDef>
+      <RatingLeftDef>12</RatingLeftDef>
+      <RatingRightAtt>11</RatingRightAtt>
+      <RatingMidAtt>15</RatingMidAtt>
+      <RatingLeftAtt>13</RatingLeftAtt>
+      <RatingIndirectSetPiecesDef>16</RatingIndirectSetPiecesDef>
+      <RatingIndirectSetPiecesAtt>12</RatingIndirectSetPiecesAtt>
+    </AwayTeam>
+    <Arena>
+      <ArenaID>2165188</ArenaID>
+      <ArenaName>Beach Arena</ArenaName>
+      <WeatherID>3</WeatherID>
+      <SoldTotal>13033</SoldTotal>
+      <SoldTerraces>8000</SoldTerraces>
+      <SoldBasic>3000</SoldBasic>
+      <SoldRoof>1635</SoldRoof>
+      <SoldVIP>398</SoldVIP>
+    </Arena>
+    <MatchOfficials>
+      <Referee>
+        <RefereeId>471360067</RefereeId>
+        <RefereeName>Fernandas Andrulevičius</RefereeName>
+        <RefereeCountryId>66</RefereeCountryId>
+        <RefereeCountryName>Lietuva</RefereeCountryName>
+        <RefereeTeamId>2053254</RefereeTeamId>
+        <RefereeTeamname>JSK Aapchi</RefereeTeamname>
+      </Referee>
+      <RefereeAssistant1>
+        <RefereeId>433460718</RefereeId>
+        <RefereeName>Luciano Calderai</RefereeName>
+        <RefereeCountryId>4</RefereeCountryId>
+        <RefereeCountryName>Italia</RefereeCountryName>
+        <RefereeTeamId>2058675</RefereeTeamId>
+        <RefereeTeamname>SC OK Ynternasjonaal</RefereeTeamname>
+      </RefereeAssistant1>
+      <RefereeAssistant2>
+        <RefereeId>444275946</RefereeId>
+        <RefereeName>Juhana Åby</RefereeName>
+        <RefereeCountryId>12</RefereeCountryId>
+        <RefereeCountryName>Suomi</RefereeCountryName>
+        <RefereeTeamId>1060242</RefereeTeamId>
+        <RefereeTeamname>Åbo Fenix Club</RefereeTeamname>
+      </RefereeAssistant2>
+    </MatchOfficials>
+    <Scorers>
+      <Goal Index="0">
+        <ScorerPlayerID>485877347</ScorerPlayerID>
+        <ScorerPlayerName>Friedrich-Wilhelm Arnhof</ScorerPlayerName>
+        <ScorerTeamID>2168446</ScorerTeamID>
+        <ScorerHomeGoals>1</ScorerHomeGoals>
+        <ScorerAwayGoals>0</ScorerAwayGoals>
+        <ScorerMinute>10</ScorerMinute>
+        <MatchPart>1</MatchPart>
+      </Goal>
+      <Goal Index="1">
+        <ScorerPlayerID>485571231</ScorerPlayerID>
+        <ScorerPlayerName>Guschti Spaltenstein</ScorerPlayerName>
+        <ScorerTeamID>2168446</ScorerTeamID>
+        <ScorerHomeGoals>2</ScorerHomeGoals>
+        <ScorerAwayGoals>0</ScorerAwayGoals>
+        <ScorerMinute>36</ScorerMinute>
+        <MatchPart>1</MatchPart>
+      </Goal>
+      <Goal Index="2">
+        <ScorerPlayerID>485818207</ScorerPlayerID>
+        <ScorerPlayerName>Provokentios Gkatsilakis</ScorerPlayerName>
+        <ScorerTeamID>2168446</ScorerTeamID>
+        <ScorerHomeGoals>3</ScorerHomeGoals>
+        <ScorerAwayGoals>0</ScorerAwayGoals>
+        <ScorerMinute>84</ScorerMinute>
+        <MatchPart>2</MatchPart>
+      </Goal>
+    </Scorers>
+    <Bookings>
+      <Booking Index="0">
+        <BookingPlayerID>514261849</BookingPlayerID>
+        <BookingPlayerName>Guenther Suessenbacher</BookingPlayerName>
+        <BookingTeamID>3372131</BookingTeamID>
+        <BookingType>1</BookingType>
+        <BookingMinute>34</BookingMinute>
+        <MatchPart>1</MatchPart>
+      </Booking>
+      <Booking Index="1">
+        <BookingPlayerID>514261849</BookingPlayerID>
+        <BookingPlayerName>Guenther Suessenbacher</BookingPlayerName>
+        <BookingTeamID>3372131</BookingTeamID>
+        <BookingType>2</BookingType>
+        <BookingMinute>39</BookingMinute>
+        <MatchPart>1</MatchPart>
+      </Booking>
+      <Booking Index="2">
+        <BookingPlayerID>486084140</BookingPlayerID>
+        <BookingPlayerName>Karl Ludger Godesberg</BookingPlayerName>
+        <BookingTeamID>2168446</BookingTeamID>
+        <BookingType>1</BookingType>
+        <BookingMinute>42</BookingMinute>
+        <MatchPart>1</MatchPart>
+      </Booking>
+      <Booking Index="3">
+        <BookingPlayerID>514261851</BookingPlayerID>
+        <BookingPlayerName>Ulrich Raibach</BookingPlayerName>
+        <BookingTeamID>3372131</BookingTeamID>
+        <BookingType>1</BookingType>
+        <BookingMinute>89</BookingMinute>
+        <MatchPart>2</MatchPart>
+      </Booking>
+    </Bookings>
+    <Injuries />
+    <PossessionFirstHalfHome>75</PossessionFirstHalfHome>
+    <PossessionFirstHalfAway>25</PossessionFirstHalfAway>
+    <PossessionSecondHalfHome>77</PossessionSecondHalfHome>
+    <PossessionSecondHalfAway>23</PossessionSecondHalfAway>
+    <EventList>
+      <Event Index="0">
+        <Minute>0</Minute>
+        <SubjectPlayerID>2165188</SubjectPlayerID>
+        <SubjectTeamID>43000</SubjectTeamID>
+        <ObjectPlayerID>13033</ObjectPlayerID>
+        <MatchPart>0</MatchPart>
+        <EventTypeID>33</EventTypeID>
+        <EventVariation>3</EventVariation>
+        <EventText>&lt;a href="/Club/Stadium/?stadiumId=2165188"&gt;Beach Arena&lt;/a&gt; - 13033 ZuschauerInnen genossen an diesem Tag den strahlenden Sonnenschein. &lt;a href="/Club/HallOfFame/Player.aspx?playerId=471360067"&gt;Fernandas Andrulevičius&lt;/a&gt; wurde als Schiedsrichter angesetzt, Unterstützung erhielt er von seinen Assistenten &lt;a href="/Club/HallOfFame/Player.aspx?playerId=433460718"&gt;Luciano Calderai&lt;/a&gt; und &lt;a href="/Club/HallOfFame/Player.aspx?playerId=444275946"&gt;Juhana Åby&lt;/a&gt;.</EventText>
+      </Event>
+      <Event Index="1">
+        <Minute>0</Minute>
+        <SubjectPlayerID>0</SubjectPlayerID>
+        <SubjectTeamID>0</SubjectTeamID>
+        <ObjectPlayerID>0</ObjectPlayerID>
+        <MatchPart>0</MatchPart>
+        <EventTypeID>391</EventTypeID>
+        <EventVariation>2</EventVariation>
+        <EventText>"The heat is on!" trällerte es gut gelaunt aus den Stadionlautsprechern. Ebenso gut gelaunt waren die technisch starken Spieler, die in der Hitze regelrecht aufblühten. Ihre physisch starken und schnellen Mannschaftskollegen hingegen schien die Hitze richtiggehend zu quälen. </EventText>
+      </Event>
+      <Event Index="2">
+        <Minute>0</Minute>
+        <SubjectPlayerID>0</SubjectPlayerID>
+        <SubjectTeamID>0</SubjectTeamID>
+        <ObjectPlayerID>0</ObjectPlayerID>
+        <MatchPart>0</MatchPart>
+        <EventTypeID>19</EventTypeID>
+        <EventVariation>1</EventVariation>
+        <EventText />
+      </Event>
+      <Event Index="3">
+        <Minute>0</Minute>
+        <SubjectPlayerID>0</SubjectPlayerID>
+        <SubjectTeamID>2168446</SubjectTeamID>
+        <ObjectPlayerID>0</ObjectPlayerID>
+        <MatchPart>0</MatchPart>
+        <EventTypeID>21</EventTypeID>
+        <EventVariation>1</EventVariation>
+        <EventText>Es liefen auf: &lt;a href="/Club/Players/Player.aspx?playerId=461748897" title="Morales" class="homeplayer"&gt;Morales&lt;/a&gt; - &lt;a href="/Club/Players/Player.aspx?playerId=486084140" title="Godesberg" class="homeplayer"&gt;Godesberg&lt;/a&gt;, &lt;a href="/Club/Players/Player.aspx?playerId=465315671" title="O&amp;#39;shee" class="homeplayer"&gt;O'shee&lt;/a&gt;, &lt;a href="/Club/Players/Player.aspx?playerId=486069728" title="Svolos" class="homeplayer"&gt;Svolos&lt;/a&gt; - &lt;a href="/Club/Players/Player.aspx?playerId=485867546" title="Malvic" class="homeplayer"&gt;Malvic&lt;/a&gt;, &lt;a href="/Club/Players/Player.aspx?playerId=485571231" title="Spaltenstein" class="homeplayer"&gt;Spaltenstein&lt;/a&gt;, &lt;a href="/Club/Players/Player.aspx?playerId=485870031" title="Flikweert" class="homeplayer"&gt;Flikweert&lt;/a&gt;, &lt;a href="/Club/Players/Player.aspx?playerId=483563274" title="Škerbinek" class="homeplayer"&gt;Škerbinek&lt;/a&gt;, &lt;a href="/Club/Players/Player.aspx?playerId=485818207" title="Gkatsilakis" class="homeplayer"&gt;Gkatsilakis&lt;/a&gt; - &lt;a href="/Club/Players/Player.aspx?playerId=485877340" title="Voigts" class="homeplayer"&gt;Voigts&lt;/a&gt;, &lt;a href="/Club/Players/Player.aspx?playerId=485877347" title="Arnhof" class="homeplayer"&gt;Arnhof&lt;/a&gt;.&lt;br /&gt;&lt;br /&gt;</EventText>
+      </Event>
+      <Event Index="4">
+        <Minute>0</Minute>
+        <SubjectPlayerID>0</SubjectPlayerID>
+        <SubjectTeamID>3372131</SubjectTeamID>
+        <ObjectPlayerID>0</ObjectPlayerID>
+        <MatchPart>0</MatchPart>
+        <EventTypeID>21</EventTypeID>
+        <EventVariation>5</EventVariation>
+        <EventText>In der Startelf: &lt;a href="/Club/Players/Player.aspx?playerId=514261845" title="Topchiy" class="awayplayer"&gt;Topchiy&lt;/a&gt; - &lt;a href="/Club/Players/Player.aspx?playerId=514261847" title="Brummund" class="awayplayer"&gt;Brummund&lt;/a&gt;, &lt;a href="/Club/Players/Player.aspx?playerId=514261849" title="Suessenbacher" class="awayplayer"&gt;Suessenbacher&lt;/a&gt;, &lt;a href="/Club/Players/Player.aspx?playerId=514261850" title="Felber" class="awayplayer"&gt;Felber&lt;/a&gt; - &lt;a href="/Club/Players/Player.aspx?playerId=514261858" title="Roggenbach" class="awayplayer"&gt;Roggenbach&lt;/a&gt;, &lt;a href="/Club/Players/Player.aspx?playerId=514261854" title="Gerold" class="awayplayer"&gt;Gerold&lt;/a&gt;, &lt;a href="/Club/Players/Player.aspx?playerId=514261851" title="Raibach" class="awayplayer"&gt;Raibach&lt;/a&gt;, &lt;a href="/Club/Players/Player.aspx?playerId=514261855" title="Eichicht" class="awayplayer"&gt;Eichicht&lt;/a&gt;, &lt;a href="/Club/Players/Player.aspx?playerId=514261859" title="Voinov" class="awayplayer"&gt;Voinov&lt;/a&gt; - &lt;a href="/Club/Players/Player.aspx?playerId=514261861" title="Fuhri" class="awayplayer"&gt;Fuhri&lt;/a&gt;, &lt;a href="/Club/Players/Player.aspx?playerId=514261860" title="Temirgaliev" class="awayplayer"&gt;Temirgaliev&lt;/a&gt;.&lt;br /&gt;&lt;br /&gt;</EventText>
+      </Event>
+      <Event Index="5">
+        <Minute>0</Minute>
+        <SubjectPlayerID>1030502</SubjectPlayerID>
+        <SubjectTeamID>0</SubjectTeamID>
+        <ObjectPlayerID>1030502</ObjectPlayerID>
+        <MatchPart>0</MatchPart>
+        <EventTypeID>23</EventTypeID>
+        <EventVariation>3</EventVariation>
+        <EventText>Da waren gute Spione am Werk! Die Teams wählten eine 3-5-2-Formation.</EventText>
+      </Event>
+      <Event Index="6">
+        <Minute>0</Minute>
+        <SubjectPlayerID>0</SubjectPlayerID>
+        <SubjectTeamID>0</SubjectTeamID>
+        <ObjectPlayerID>0</ObjectPlayerID>
+        <MatchPart>0</MatchPart>
+        <EventTypeID>598</EventTypeID>
+        <EventVariation>2</EventVariation>
+        <EventText />
+      </Event>
+      <Event Index="7">
+        <Minute>0</Minute>
+        <SubjectPlayerID>216</SubjectPlayerID>
+        <SubjectTeamID>2168446</SubjectTeamID>
+        <ObjectPlayerID>0</ObjectPlayerID>
+        <MatchPart>1</MatchPart>
+        <EventTypeID>333</EventTypeID>
+        <EventVariation>3</EventVariation>
+        <EventText>&lt;span class="hometeam"&gt;GaisBeach&lt;/span&gt; konzentrierte die Angriffsbemühungen heute vor allem auf das gegnerische Abwehrzentrum. Diese Taktik beherrschte das Team &lt;a href="/Help/Rules/AppDenominations.aspx?lt=skill&amp;amp;ll=16#skill" class="skill"&gt;außerirdisch&lt;/a&gt;.</EventText>
+      </Event>
+      <Event Index="8">
+        <Minute>4</Minute>
+        <SubjectPlayerID>486084140</SubjectPlayerID>
+        <SubjectTeamID>2168446</SubjectTeamID>
+        <ObjectPlayerID>35</ObjectPlayerID>
+        <MatchPart>1</MatchPart>
+        <EventTypeID>812</EventTypeID>
+        <EventVariation>5</EventVariation>
+        <EventText />
+      </Event>
+      <Event Index="9">
+        <Minute>6</Minute>
+        <SubjectPlayerID>514261854</SubjectPlayerID>
+        <SubjectTeamID>3372131</SubjectTeamID>
+        <ObjectPlayerID>514261859</ObjectPlayerID>
+        <MatchPart>1</MatchPart>
+        <EventTypeID>237</EventTypeID>
+        <EventVariation>3</EventVariation>
+        <EventText>Flügelspieler &lt;a href="/Club/Players/Player.aspx?playerId=514261859" title="Semyon Voinov" class="awayplayer"&gt;Semyon Voinov&lt;/a&gt; hatte einen besonders guten Tag. In den Fernsehberichten wird sicherlich die Bananenflanke gezeigt werden, die er in der 6. Minute schlug. &lt;a href="/Club/Players/Player.aspx?playerId=514261854" title="Rudolf Gerold" class="awayplayer"&gt;Rudolf Gerold&lt;/a&gt; bekam zwar die Fußspitze an den Ball, doch der Torwart konnte parieren.</EventText>
+      </Event>
+      <Event Index="10">
+        <Minute>8</Minute>
+        <SubjectPlayerID>74</SubjectPlayerID>
+        <SubjectTeamID>2168446</SubjectTeamID>
+        <ObjectPlayerID>0</ObjectPlayerID>
+        <MatchPart>1</MatchPart>
+        <EventTypeID>471</EventTypeID>
+        <EventVariation>1</EventVariation>
+        <EventText />
+      </Event>
+      <Event Index="11">
+        <Minute>10</Minute>
+        <SubjectPlayerID>485877347</SubjectPlayerID>
+        <SubjectTeamID>2168446</SubjectTeamID>
+        <ObjectPlayerID>514261845</ObjectPlayerID>
+        <MatchPart>1</MatchPart>
+        <EventTypeID>122</EventTypeID>
+        <EventVariation>2</EventVariation>
+        <EventText>Einige schöne Spielzüge auf der linken Seite brachten &lt;span class="hometeam"&gt;GaisBeach&lt;/span&gt; in der 10. Minute mit 1 - 0 in Front. Torschütze war &lt;a href="/Club/Players/Player.aspx?playerId=485877347" title="Friedrich-Wilhelm Arnhof" class="homeplayer"&gt;Friedrich-Wilhelm Arnhof&lt;/a&gt;.</EventText>
+      </Event>
+      <Event Index="12">
+        <Minute>20</Minute>
+        <SubjectPlayerID>0</SubjectPlayerID>
+        <SubjectTeamID>2168446</SubjectTeamID>
+        <ObjectPlayerID>0</ObjectPlayerID>
+        <MatchPart>1</MatchPart>
+        <EventTypeID>815</EventTypeID>
+        <EventVariation>3</EventVariation>
+        <EventText />
+      </Event>
+      <Event Index="13">
+        <Minute>31</Minute>
+        <SubjectPlayerID>0</SubjectPlayerID>
+        <SubjectTeamID>2168446</SubjectTeamID>
+        <ObjectPlayerID>0</ObjectPlayerID>
+        <MatchPart>1</MatchPart>
+        <EventTypeID>343</EventTypeID>
+        <EventVariation>2</EventVariation>
+        <EventText>Bei &lt;span class="hometeam"&gt;GaisBeach&lt;/span&gt; sollte gemäß Anweisungen des Trainers immer wieder der Weg durch die Mitte gesucht werden. Daher verlagerten die Flügelspieler das Spiel wiederholt in die Zentrale.</EventText>
+      </Event>
+      <Event Index="14">
+        <Minute>32</Minute>
+        <SubjectPlayerID>485877340</SubjectPlayerID>
+        <SubjectTeamID>2168446</SubjectTeamID>
+        <ObjectPlayerID>514261845</ObjectPlayerID>
+        <MatchPart>1</MatchPart>
+        <EventTypeID>231</EventTypeID>
+        <EventVariation>2</EventVariation>
+        <EventText>Eine wundervolle Kombination im Angriffszentrum hätte nach 32 Minuten fast zu einem weiteren Tor für &lt;span class="hometeam"&gt;GaisBeach&lt;/span&gt; geführt, doch &lt;a href="/Club/Players/Player.aspx?playerId=514261845" title="Alexey Topchiy" class="awayplayer"&gt;Alexey Topchiy&lt;/a&gt; war bei diesem Schuss von &lt;a href="/Club/Players/Player.aspx?playerId=485877340" title="Hannes Voigts" class="homeplayer"&gt;Hannes Voigts&lt;/a&gt; auf dem Posten.</EventText>
+      </Event>
+      <Event Index="15">
+        <Minute>34</Minute>
+        <SubjectPlayerID>514261849</SubjectPlayerID>
+        <SubjectTeamID>3372131</SubjectTeamID>
+        <ObjectPlayerID>0</ObjectPlayerID>
+        <MatchPart>1</MatchPart>
+        <EventTypeID>510</EventTypeID>
+        <EventVariation>5</EventVariation>
+        <EventText>Manche im Publikum fanden es doch sehr gnädig vom Schiedsrichter, dass dieser nach einer wüsten Grätsche von &lt;a href="/Club/Players/Player.aspx?playerId=514261849" title="Guenther Suessenbacher" class="awayplayer"&gt;Guenther Suessenbacher&lt;/a&gt; in der 34. Minute dem &lt;span class="awayteam"&gt;München&lt;/span&gt;-Spieler nur die Gelbe Karte zeigte. Das hätte durchaus auch Rot sein können!</EventText>
+      </Event>
+      <Event Index="16">
+        <Minute>36</Minute>
+        <SubjectPlayerID>485571231</SubjectPlayerID>
+        <SubjectTeamID>2168446</SubjectTeamID>
+        <ObjectPlayerID>514261845</ObjectPlayerID>
+        <MatchPart>1</MatchPart>
+        <EventTypeID>131</EventTypeID>
+        <EventVariation>5</EventVariation>
+        <EventText>&lt;span class="hometeam"&gt;GaisBeach&lt;/span&gt; baute die Führung in der 36. Minute auf 2 - 0 aus, als &lt;a href="/Club/Players/Player.aspx?playerId=485571231" title="Guschti Spaltenstein" class="homeplayer"&gt;Guschti Spaltenstein&lt;/a&gt; einen Angriff durch die Mitte erfolgreich abschloss.</EventText>
+      </Event>
+      <Event Index="17">
+        <Minute>38</Minute>
+        <SubjectPlayerID>485877347</SubjectPlayerID>
+        <SubjectTeamID>2168446</SubjectTeamID>
+        <ObjectPlayerID>514261845</ObjectPlayerID>
+        <MatchPart>1</MatchPart>
+        <EventTypeID>233</EventTypeID>
+        <EventVariation>4</EventVariation>
+        <EventText>Feiner Versuch von &lt;a href="/Club/Players/Player.aspx?playerId=485877347" title="Friedrich-Wilhelm Arnhof" class="homeplayer"&gt;Friedrich-Wilhelm Arnhof&lt;/a&gt; auf rechts, doch seine Direktabnahme in der 38. Minute verfehlte ihr Ziel um einen knappen Meter. Es blieb beim 2 - 0 für &lt;span class="hometeam"&gt;GaisBeach&lt;/span&gt;.</EventText>
+      </Event>
+      <Event Index="18">
+        <Minute>39</Minute>
+        <SubjectPlayerID>514261849</SubjectPlayerID>
+        <SubjectTeamID>3372131</SubjectTeamID>
+        <ObjectPlayerID>0</ObjectPlayerID>
+        <MatchPart>1</MatchPart>
+        <EventTypeID>512</EventTypeID>
+        <EventVariation>3</EventVariation>
+        <EventText>Ohne Rücksicht auf Verluste grätschte &lt;a href="/Club/Players/Player.aspx?playerId=514261849" title="Guenther Suessenbacher" class="awayplayer"&gt;Guenther Suessenbacher&lt;/a&gt; nach 39 Minuten seinen Gegenspieler auf Höhe der Mittellinie um. Die Gelbe Karte hatte der Sünder in diesem Spiel schon gesehen - nun sah er sie ein weiteres Mal.  Nur, dass der Schiedsrichter diesmal die Rote Karte gleich hinterher zückte. &lt;span class="awayteam"&gt;München&lt;/span&gt; spielte also von nun an mit einem Mann weniger.</EventText>
+      </Event>
+      <Event Index="19">
+        <Minute>39</Minute>
+        <SubjectPlayerID>514261849</SubjectPlayerID>
+        <SubjectTeamID>3372131</SubjectTeamID>
+        <ObjectPlayerID>514261860</ObjectPlayerID>
+        <MatchPart>1</MatchPart>
+        <EventTypeID>81</EventTypeID>
+        <EventVariation>3</EventVariation>
+        <EventText>&lt;a href="/Club/Players/Player.aspx?playerId=514261849" title="Guenther Suessenbacher" class="awayplayer"&gt;Guenther Suessenbacher&lt;/a&gt; konnte somit die Freistöße nicht mehr treten. Von der Bank kam das Zeichen, dass &lt;a href="/Club/Players/Player.aspx?playerId=514261860" title="Marden Temirgaliev" class="awayplayer"&gt;Marden Temirgaliev&lt;/a&gt; ab sofort die Standards ausführen sollte.</EventText>
+      </Event>
+      <Event Index="20">
+        <Minute>42</Minute>
+        <SubjectPlayerID>486084140</SubjectPlayerID>
+        <SubjectTeamID>2168446</SubjectTeamID>
+        <ObjectPlayerID>0</ObjectPlayerID>
+        <MatchPart>1</MatchPart>
+        <EventTypeID>510</EventTypeID>
+        <EventVariation>1</EventVariation>
+        <EventText>&lt;a href="/Club/Players/Player.aspx?playerId=486084140" title="Karl Ludger Godesberg" class="homeplayer"&gt;Karl Ludger Godesberg&lt;/a&gt; von &lt;span class="hometeam"&gt;GaisBeach&lt;/span&gt; sah nach 42 Minuten wegen eines Fouls die Gelbe Karte.</EventText>
+      </Event>
+      <Event Index="21">
+        <Minute>44</Minute>
+        <SubjectPlayerID>485870031</SubjectPlayerID>
+        <SubjectTeamID>2168446</SubjectTeamID>
+        <ObjectPlayerID>514261845</ObjectPlayerID>
+        <MatchPart>1</MatchPart>
+        <EventTypeID>231</EventTypeID>
+        <EventVariation>1</EventVariation>
+        <EventText>&lt;a href="/Club/Players/Player.aspx?playerId=485870031" title="Levi Flikweert" class="homeplayer"&gt;Levi Flikweert&lt;/a&gt; hatte in der 44. Minute zentral vor dem Tor eine gute Chance, die Führung seines Teams zu vergrößern, doch eine großartige Parade von &lt;a href="/Club/Players/Player.aspx?playerId=514261845" title="Alexey Topchiy" class="awayplayer"&gt;Alexey Topchiy&lt;/a&gt; vereitelte diese Tormöglichkeit für &lt;span class="hometeam"&gt;GaisBeach&lt;/span&gt;.</EventText>
+      </Event>
+      <Event Index="22">
+        <Minute>45</Minute>
+        <SubjectPlayerID>0</SubjectPlayerID>
+        <SubjectTeamID>0</SubjectTeamID>
+        <ObjectPlayerID>0</ObjectPlayerID>
+        <MatchPart>1</MatchPart>
+        <EventTypeID>45</EventTypeID>
+        <EventVariation>5</EventVariation>
+        <EventText>Mit einem 2 - 0 schlurften die Spieler in die Katakomben des Stadions.</EventText>
+      </Event>
+      <Event Index="23">
+        <Minute>45</Minute>
+        <SubjectPlayerID>0</SubjectPlayerID>
+        <SubjectTeamID>2168446</SubjectTeamID>
+        <ObjectPlayerID>75</ObjectPlayerID>
+        <MatchPart>1</MatchPart>
+        <EventTypeID>40</EventTypeID>
+        <EventVariation>2</EventVariation>
+        <EventText>Statistiker im Stadion ermittelten 75 Prozent Ballbesitz für &lt;span class="hometeam"&gt;GaisBeach&lt;/span&gt;.&lt;br /&gt;&lt;br /&gt;</EventText>
+      </Event>
+      <Event Index="24">
+        <Minute>46</Minute>
+        <SubjectPlayerID>0</SubjectPlayerID>
+        <SubjectTeamID>0</SubjectTeamID>
+        <ObjectPlayerID>0</ObjectPlayerID>
+        <MatchPart>2</MatchPart>
+        <EventTypeID>597</EventTypeID>
+        <EventVariation>3</EventVariation>
+        <EventText />
+      </Event>
+      <Event Index="25">
+        <Minute>50</Minute>
+        <SubjectPlayerID>0</SubjectPlayerID>
+        <SubjectTeamID>0</SubjectTeamID>
+        <ObjectPlayerID>13033</ObjectPlayerID>
+        <MatchPart>2</MatchPart>
+        <EventTypeID>464</EventTypeID>
+        <EventVariation>5</EventVariation>
+        <EventText />
+      </Event>
+      <Event Index="26">
+        <Minute>55</Minute>
+        <SubjectPlayerID>0</SubjectPlayerID>
+        <SubjectTeamID>2168446</SubjectTeamID>
+        <ObjectPlayerID>0</ObjectPlayerID>
+        <MatchPart>2</MatchPart>
+        <EventTypeID>495</EventTypeID>
+        <EventVariation>2</EventVariation>
+        <EventText />
+      </Event>
+      <Event Index="27">
+        <Minute>59</Minute>
+        <SubjectPlayerID>485877347</SubjectPlayerID>
+        <SubjectTeamID>2168446</SubjectTeamID>
+        <ObjectPlayerID>514261845</ObjectPlayerID>
+        <MatchPart>2</MatchPart>
+        <EventTypeID>232</EventTypeID>
+        <EventVariation>1</EventVariation>
+        <EventText>59. Minute: Welch eine Parade von &lt;a href="/Club/Players/Player.aspx?playerId=514261845" title="Alexey Topchiy" class="awayplayer"&gt;Alexey Topchiy&lt;/a&gt;! Er lag geradezu in der Luft, als er den fulminanten Schuss von &lt;a href="/Club/Players/Player.aspx?playerId=485877347" title="Friedrich-Wilhelm Arnhof" class="homeplayer"&gt;Friedrich-Wilhelm Arnhof&lt;/a&gt; von der linken Seite mit den Fingerspitzen noch um den Pfosten drehen konnte. Die Spieler von &lt;span class="hometeam"&gt;GaisBeach&lt;/span&gt; konnten es nicht fassen!</EventText>
+      </Event>
+      <Event Index="28">
+        <Minute>78</Minute>
+        <SubjectPlayerID>486069728</SubjectPlayerID>
+        <SubjectTeamID>2168446</SubjectTeamID>
+        <ObjectPlayerID>485877347</ObjectPlayerID>
+        <MatchPart>2</MatchPart>
+        <EventTypeID>218</EventTypeID>
+        <EventVariation>5</EventVariation>
+        <EventText>Mustergültig, wie &lt;a href="/Club/Players/Player.aspx?playerId=485877347" title="Friedrich-Wilhelm Arnhof" class="homeplayer"&gt;Friedrich-Wilhelm Arnhof&lt;/a&gt; von &lt;span class="hometeam"&gt;GaisBeach&lt;/span&gt; in der 78. Minute einen Eckstoß zu &lt;a href="/Club/Players/Player.aspx?playerId=486069728" title="Yiorgos Svolos" class="homeplayer"&gt;Yiorgos Svolos&lt;/a&gt; schlug. Der nahm den Ball volley - knapp vorbei!</EventText>
+      </Event>
+      <Event Index="29">
+        <Minute>84</Minute>
+        <SubjectPlayerID>0</SubjectPlayerID>
+        <SubjectTeamID>2168446</SubjectTeamID>
+        <ObjectPlayerID>0</ObjectPlayerID>
+        <MatchPart>2</MatchPart>
+        <EventTypeID>343</EventTypeID>
+        <EventVariation>5</EventVariation>
+        <EventText>Durch die Mitte zum Erfolg hieß es heute bei &lt;span class="hometeam"&gt;GaisBeach&lt;/span&gt;, erfolgreich beförderte das Team das Spielgerät vom Flügel ins Sturmzentrum.</EventText>
+      </Event>
+      <Event Index="30">
+        <Minute>84</Minute>
+        <SubjectPlayerID>485818207</SubjectPlayerID>
+        <SubjectTeamID>2168446</SubjectTeamID>
+        <ObjectPlayerID>514261845</ObjectPlayerID>
+        <MatchPart>2</MatchPart>
+        <EventTypeID>131</EventTypeID>
+        <EventVariation>2</EventVariation>
+        <EventText>In der 84. Spielminute raste &lt;a href="/Club/Players/Player.aspx?playerId=485818207" title="Provokentios Gkatsilakis" class="homeplayer"&gt;Provokentios Gkatsilakis&lt;/a&gt; durch die Innenverteidigung und erhöhte die Führung von &lt;span class="hometeam"&gt;GaisBeach&lt;/span&gt; auf 3 - 0.</EventText>
+      </Event>
+      <Event Index="31">
+        <Minute>87</Minute>
+        <SubjectPlayerID>485877340</SubjectPlayerID>
+        <SubjectTeamID>2168446</SubjectTeamID>
+        <ObjectPlayerID>514261845</ObjectPlayerID>
+        <MatchPart>2</MatchPart>
+        <EventTypeID>231</EventTypeID>
+        <EventVariation>5</EventVariation>
+        <EventText>Aufregung im Abwehrzentrum der Gäste: &lt;a href="/Club/Players/Player.aspx?playerId=485877340" title="Hannes Voigts" class="homeplayer"&gt;Hannes Voigts&lt;/a&gt; traf den Ball bei seinem Schuss in der 87. Minute optimal - nur die Querlatte verhinderte eine höhere Führung für &lt;span class="hometeam"&gt;GaisBeach&lt;/span&gt;.</EventText>
+      </Event>
+      <Event Index="32">
+        <Minute>88</Minute>
+        <SubjectPlayerID>485877340</SubjectPlayerID>
+        <SubjectTeamID>2168446</SubjectTeamID>
+        <ObjectPlayerID>514261845</ObjectPlayerID>
+        <MatchPart>2</MatchPart>
+        <EventTypeID>233</EventTypeID>
+        <EventVariation>5</EventVariation>
+        <EventText>Ein abgefälschter Schuss von &lt;a href="/Club/Players/Player.aspx?playerId=485877340" title="Hannes Voigts" class="homeplayer"&gt;Hannes Voigts&lt;/a&gt; trudelte nach 88 Minuten von rechts in Richtung Tor - undankbar für den Gästekeeper, der auf Nummer sicher ging und den Ball mit einer Hand über die Latte lenkte. Die Gastgeber führten unverändert mit 3 - 0.</EventText>
+      </Event>
+      <Event Index="33">
+        <Minute>89</Minute>
+        <SubjectPlayerID>514261851</SubjectPlayerID>
+        <SubjectTeamID>3372131</SubjectTeamID>
+        <ObjectPlayerID>0</ObjectPlayerID>
+        <MatchPart>2</MatchPart>
+        <EventTypeID>510</EventTypeID>
+        <EventVariation>2</EventVariation>
+        <EventText>&lt;span class="awayteam"&gt;München&lt;/span&gt;-Spieler &lt;a href="/Club/Players/Player.aspx?playerId=514261851" title="Ulrich Raibach" class="awayplayer"&gt;Ulrich Raibach&lt;/a&gt; sah in der 89. Minute nach einem harten Einsteigen gegen seinen Gegenspieler völlig zu Recht die Gelbe Karte.</EventText>
+      </Event>
+      <Event Index="34">
+        <Minute>89</Minute>
+        <SubjectPlayerID>485877347</SubjectPlayerID>
+        <SubjectTeamID>2168446</SubjectTeamID>
+        <ObjectPlayerID>514261845</ObjectPlayerID>
+        <MatchPart>2</MatchPart>
+        <EventTypeID>230</EventTypeID>
+        <EventVariation>3</EventVariation>
+        <EventText>Nach 89 Minuten verfehlte ein Freistoß von &lt;a href="/Club/Players/Player.aspx?playerId=485877347" title="Friedrich-Wilhelm Arnhof" class="homeplayer"&gt;Friedrich-Wilhelm Arnhof&lt;/a&gt; nur knapp sein Ziel. Mit etwas mehr Präzision wäre das ein Tor für &lt;span class="hometeam"&gt;GaisBeach&lt;/span&gt; gewesen.</EventText>
+      </Event>
+      <Event Index="35">
+        <Minute>89</Minute>
+        <SubjectPlayerID>0</SubjectPlayerID>
+        <SubjectTeamID>0</SubjectTeamID>
+        <ObjectPlayerID>0</ObjectPlayerID>
+        <MatchPart>2</MatchPart>
+        <EventTypeID>75</EventTypeID>
+        <EventVariation>4</EventVariation>
+        <EventText>Einen Nachschlag von 1' bekommen wir hier zu sehen. Ob in der Nachspielzeit noch etwas passiert?</EventText>
+      </Event>
+      <Event Index="36">
+        <Minute>91</Minute>
+        <SubjectPlayerID>0</SubjectPlayerID>
+        <SubjectTeamID>0</SubjectTeamID>
+        <ObjectPlayerID>0</ObjectPlayerID>
+        <MatchPart>2</MatchPart>
+        <EventTypeID>599</EventTypeID>
+        <EventVariation>4</EventVariation>
+        <EventText>Die Begegnung endete 3 - 0.</EventText>
+      </Event>
+      <Event Index="37">
+        <Minute>91</Minute>
+        <SubjectPlayerID>0</SubjectPlayerID>
+        <SubjectTeamID>2168446</SubjectTeamID>
+        <ObjectPlayerID>0</ObjectPlayerID>
+        <MatchPart>2</MatchPart>
+        <EventTypeID>601</EventTypeID>
+        <EventVariation>1</EventVariation>
+        <EventText />
+      </Event>
+      <Event Index="38">
+        <Minute>91</Minute>
+        <SubjectPlayerID>0</SubjectPlayerID>
+        <SubjectTeamID>2168446</SubjectTeamID>
+        <ObjectPlayerID>77</ObjectPlayerID>
+        <MatchPart>2</MatchPart>
+        <EventTypeID>40</EventTypeID>
+        <EventVariation>4</EventVariation>
+        <EventText>&lt;span class="hometeam"&gt;GaisBeach&lt;/span&gt; war in dieser Halbzeit das dominierende Team - die Spieler brachten den Ballbesitz auf 77 Prozent.&lt;br /&gt;&lt;br /&gt;</EventText>
+      </Event>
+      <Event Index="39">
+        <Minute>91</Minute>
+        <SubjectPlayerID>485571231</SubjectPlayerID>
+        <SubjectTeamID>2168446</SubjectTeamID>
+        <ObjectPlayerID>0</ObjectPlayerID>
+        <MatchPart>2</MatchPart>
+        <EventTypeID>41</EventTypeID>
+        <EventVariation>2</EventVariation>
+        <EventText>Der beste Spieler von &lt;span class="hometeam"&gt;GaisBeach&lt;/span&gt; war ohne jeden Zweifel &lt;a href="/Club/Players/Player.aspx?playerId=485571231" title="Guschti Spaltenstein" class="homeplayer"&gt;Guschti Spaltenstein&lt;/a&gt;.</EventText>
+      </Event>
+      <Event Index="40">
+        <Minute>91</Minute>
+        <SubjectPlayerID>514261861</SubjectPlayerID>
+        <SubjectTeamID>3372131</SubjectTeamID>
+        <ObjectPlayerID>0</ObjectPlayerID>
+        <MatchPart>2</MatchPart>
+        <EventTypeID>41</EventTypeID>
+        <EventVariation>1</EventVariation>
+        <EventText>&lt;a href="/Club/Players/Player.aspx?playerId=514261861" title="Waldemar Fuhri" class="awayplayer"&gt;Waldemar Fuhri&lt;/a&gt; von &lt;span class="awayteam"&gt;München&lt;/span&gt; war der beste Spieler seiner Mannschaft und darf sich im Sommer auf einen zusätzlichen Tag Urlaub freuen. Die Freundin auf der Tribüne ist sichtlich entzückt! </EventText>
+      </Event>
+    </EventList>
+  </Match>
+</HattrickData>
