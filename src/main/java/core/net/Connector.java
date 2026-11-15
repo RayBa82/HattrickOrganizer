@@ -610,6 +610,19 @@ public class Connector {
 		}
 	}
 
+	/**
+	 * The youth team's recent and upcoming matches (matches 3.0 with isYouth): Hattrick's default
+	 * window, up to 28 days ahead. Silent, like the other youth calls.
+	 */
+	public String getYouthMatches(int youthTeamId) {
+		final var was = setSilentDownload(true);
+		try {
+			return getCHPPWebFile(htUrl + "?file=matches&version=3.0&isYouth=true&teamID=" + youthTeamId);
+		} finally {
+			setSilentDownload(was);
+		}
+	}
+
 	/** The youth players' avatars (1.2). */
 	public String getYouthAvatars(int youthTeamId) {
 		return getCHPPWebFile(htUrl + "?file=youthavatars&version=1.2&youthTeamId=" + youthTeamId);

@@ -83,16 +83,16 @@ by all HO users.
 
 ## MCP youth tools
 
-**Trigger:** the youth CHPP data is in (2026-11-15, DB step 1101) - start any time; the real
-check needs a club with a youth academy, which the development club has not had since
-2026-09-22.
+**Trigger:** a club with a youth academy (the development club has had none since 2026-09-22).
 
-**What:** `get_youth_squad` (age, promotion date, specialty, skill estimates with known
-maxima, potential, last youth match; compact by default, `full`, `bulk`), `get_youth_player`
-(skill development, scout and coach comments), `get_youth_training` (per youth match:
-training, factor, who trained what), the youth team and league (`YouthTeamDetails`,
-`YouthLeague`), and a youth section in `week_brief`. All local reads, budgeted like the other
-tools. Then a training what-if on `YouthTrainingContext`.
+**Done (2026-11-15):** `get_youth_squad`, `get_youth_player`, `get_youth_team`,
+`get_youth_training`, `set_youth_training`, `get_youth_matches`, `send_youth_match_order`.
+Measured on the last real squad (17 players, 6.2k chars).
+
+**Still open:** check `get_youth_team`, `get_youth_matches` and `send_youth_match_order`
+against Hattrick once there is an academy (the order shape is the senior one, sent with the
+youth team id and `sourceSystem=youth`); a youth section in `week_brief`; a training what-if
+on `YouthTrainingContext`.
 
 ## Youth coach report codes
 

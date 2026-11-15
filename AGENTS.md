@@ -216,7 +216,11 @@ available languages at runtime.
 `core.mcp` exposes HO's data to AI agents over MCP: `McpHttpServer` serves JSON-RPC, and the
 tools live in `TeamTools`, `MatchTools`, `LineupTools`, `TrainingTools`, `TransferTools` and
 `WeekTools` (`week_brief`, the aggregate the hattrick skills start the week with, and
-`level_up_report` after a training) and `MarketTools` (`screen_market`). Each is
+`level_up_report` after a training), `MarketTools` (`screen_market`) and `YouthTools` (the
+academy: squad, player, team and league, training, live matches, match order). Youth training is
+not in CHPP, so `set_youth_training` files it in HO; HO's youth estimates rest on it. A youth
+order goes to the youth team id (`ChppWriteService.teamIdFor`), and `send_match_order` refuses
+youth match types, since HO's lineup holds senior players. Each is
 an `McpTool(name, description, schema, handler)`. `McpServerToolsTest` pins the tool count and a
 400-char cap on descriptions.
 
