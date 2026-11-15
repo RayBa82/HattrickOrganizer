@@ -12,8 +12,9 @@ with the playerdetails read of Hattrick's own estimate, so the estimate cost a s
 the search only. The new `hattrickEstimate` argument (default true) reads it for a squad `playerId`
 or for `profile.playerId`, i.e. any team's player, which Hattrick shows when the player is listed.
 Tool and parameter descriptions say when the field is absent: no visible skills, search-only
-comparables. Unit-tested and shipped with `dockerPush`; not yet called against a live listed player.
-The hattrick session writes the price-player skill rule against these names.
+comparables. Unit-tested, shipped as `ho-headless:11.0.0.2`, and checked live on the server (2026-11-15): a listed
+player of another team via `profile.playerId` with `live: false` returned `hattrickEstimate` beside
+the median, no search spent. The hattrick session's price-player skill uses these names.
 
 ## #2429 gender and league system merged from the upstream PR (2026-11-14)
 
