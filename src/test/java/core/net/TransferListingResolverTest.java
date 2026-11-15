@@ -209,6 +209,31 @@ class TransferListingResolverTest {
 
         assertThat(sales).containsExactly(first, second);
     }
+
+    /**
+     * A scout-list player Hattrick answers with error 56 (fired, retired) was asked about on every
+     * download for the whole re-listing watch: the corpus's gone mark never reaches the scout list.
+     */
+    @Test
+    void goneScoutPlayersAreLeftOutOfBothPasses() {
+        final var gone = entry(512549349, "2026-09-01 20:00:00");
+        final var alive = entry(2, "2026-09-01 21:00:00");
+
+        final var asked = TransferListingResolver.withoutGone(List.of(gone, alive), java.util.Set.of(512549349));
+
+        assertThat(asked).containsExactly(alive);
+        assertThat(TransferListingResolver.relistingsToWatch(asked, NOW))
+                .extracting(TransferListingResolver.Candidate::playerId).containsExactly(2);
+        assertThat(TransferListingResolver.withoutGone(List.of(gone, alive), java.util.Set.of()))
+                .containsExactly(gone, alive);
+    }
+
+    @Test
+    void goneIdsSurviveTheirStoredForm() {
+        assertThat(TransferListingResolver.parseIds("512549349, 2,,x")).containsExactly(2, 512549349);
+        assertThat(TransferListingResolver.parseIds("")).isEmpty();
+        assertThat(TransferListingResolver.parseIds(null)).isEmpty();
+    }
 }
 
 

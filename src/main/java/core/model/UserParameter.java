@@ -174,6 +174,14 @@ public final class UserParameter extends Configuration {
      */
     public boolean mcpNoSaleFoundReset = false;
 
+    /**
+     * Scout-list players Hattrick no longer knows (CHPP error 56: fired, retired or deleted), as
+     * comma-separated ids. The resolver skips their entries instead of asking on every download for
+     * as long as SCOUT_WATCH_GRACE; the entries themselves stay on the list. Only ids still on the
+     * scout list are kept. See TransferListingResolver.withoutGone.
+     */
+    public String mcpScoutGonePlayers = "";
+
     //Whether or not the player analysis is packed vertically one below the other
     public boolean spieleranalyseVertikal = true;
     public boolean statistikAlleBeschriftung = true;
@@ -513,6 +521,7 @@ public final class UserParameter extends Configuration {
         map.put("mcpScoutResolvedThrough",
                 mcpScoutResolvedThrough == null ? "" : mcpScoutResolvedThrough);
         map.put("mcpNoSaleFoundReset", String.valueOf(mcpNoSaleFoundReset));
+        map.put("mcpScoutGonePlayers", mcpScoutGonePlayers == null ? "" : mcpScoutGonePlayers);
 
         if (ReleaseChannel == null) {
             ReleaseChannel = "Stable";
@@ -774,6 +783,7 @@ public final class UserParameter extends Configuration {
         mcpDownloadsPerSession = orDefault(getIntValue(values, "mcpDownloadsPerSession"), 5);
         mcpScoutResolvedThrough = getStringValue(values, "mcpScoutResolvedThrough");
         mcpNoSaleFoundReset = getBooleanValue(values, "mcpNoSaleFoundReset");
+        mcpScoutGonePlayers = getStringValue(values, "mcpScoutGonePlayers");
         ReleaseChannel = getStringValue(values, "ReleaseChannel");
         fixtures = getBooleanValue(values, "fixtures");
         downloadCurrentMatchlist = getBooleanValue(values, "currentMatchlist");

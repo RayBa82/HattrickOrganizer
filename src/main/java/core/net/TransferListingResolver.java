@@ -16,6 +16,9 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 /**
  * Fills the real sale price into the transfer listing corpus, so a valuation has actual transfer
@@ -113,15 +116,23 @@ public final class TransferListingResolver {
         UserParameter.instance().mcpNoSaleFoundReset = true;
         DBManager.instance().saveUserParameter("mcpNoSaleFoundReset", "true");
     }
+
+    /**
+     * What one {@link #resolve} run shares between its three passes.
+     *
+     * @param seen   players whose sale has been asked about this run
+     * @param looked players playerdetails has been fetched for this run
+     */
+    private record Run(HODateTime now, long deadline, Set<Integer> seen,
+                       Set<Integer> looked, List<ScoutEintrag> allEntries, Progress progress) {
+    }
+
     /** @return how many listings got a sale price */
     public static int resolve() {
         final var now = HODateTime.now();
         resetNoSaleFoundOnce();
-        final var deadline = System.nanoTime() + TIME_BUDGET.toNanos();
-        var resolved = 0;
-        final var seen = new HashSet<Integer>();
-        final var looked = new HashSet<Integer>();   // playerdetails fetched for him this run
-        final var entries = ScoutList.entries();
+        final var allEntries = ScoutList.entries();
+        final var entries = withoutGone(allEntries, goneScoutPlayers());
 
         // All three work lists up front, so the status bar can count through the whole run - it can
         // take a minute, and a bar that stands still for that long looks like HO has hung. Loading
@@ -130,16 +141,31 @@ public final class TransferListingResolver {
         final var sales = salesToAskAbout(entries, saleWatermark(now), now);
         final var watch = relistingsToWatch(entries, now);
         final var corpus = DBManager.instance().loadUnresolvedTransferListings(Integer.MAX_VALUE);
-        final var progress = new Progress(sales.size() + watch.size() + corpus.size());
+        final var run = new Run(now, System.nanoTime() + TIME_BUDGET.toNanos(), new HashSet<>(),
+                new HashSet<>(), allEntries, new Progress(sales.size() + watch.size() + corpus.size()));
+        var resolved = salePass(sales, run);
+        watchPass(watch, run);
+        resolved += corpusPass(corpus, run);
+        return resolved;
+    }
 
-        // Pass one: the sale, for entries whose watched transfer ended since the last run.
-        //
-        // Scoped by a watermark, because "what did he sell for" has exactly one moment to be
-        // answered and the set that needs asking is small - the handful that expired since the last
-        // download. The earlier version walked the whole list under a call cap instead, which meant
-        // it spent every download re-asking about whichever entries sat near the head and never
-        // reached the rest: a player who had sold twenty minutes before sat at position 85 of 92 and
-        // was skipped download after download, indefinitely.
+    /**
+     * Pass one: the sale, for entries whose watched transfer ended since the last run.
+     * <p>
+     * Scoped by a watermark, because "what did he sell for" has exactly one moment to be
+     * answered and the set that needs asking is small - the handful that expired since the last
+     * download. The earlier version walked the whole list under a call cap instead, which meant
+     * it spent every download re-asking about whichever entries sat near the head and never
+     * reached the rest: a player who had sold twenty minutes before sat at position 85 of 92 and
+     * was skipped download after download, indefinitely.
+     */
+    private static int salePass(List<Candidate> sales, Run run) {
+        final var now = run.now();
+        final var deadline = run.deadline();
+        final var progress = run.progress();
+        final var seen = run.seen();
+        final var looked = run.looked();
+        var resolved = 0;
         var resolvedThrough = settled(now);
         for (final var candidate : sales) {
             progress.step();
@@ -159,6 +185,9 @@ public final class TransferListingResolver {
             // listed. Fills in entries added before manage_scout add started fetching it.
             if (observation != null) {
                 recordCharacterOnScoutList(candidate.playerId(), observation);
+            } else if (lastLookupSaidGone()) {
+                // his sale is still asked about below - transfersPlayer answers for a gone player
+                rememberGoneScoutPlayer(candidate.playerId(), run.allEntries());
             }
             // Asked whether or not he is listed again: a buyer re-listing a player he has just
             // bought is ordinary Hattrick behaviour, and this is the last moment the sale can be
@@ -181,50 +210,66 @@ public final class TransferListingResolver {
             }
         }
         setSaleWatermark(resolvedThrough);
+        return resolved;
+    }
 
-        // Pass two: the re-listing watch. Unlike the sale it has no single moment and no answer
-        // that ends it - "is he back on the market" is asked on every download for as long as
-        // SCOUT_WATCH_GRACE. Newest expiry first so a run cut short by the clock skips the stalest
-        // entries, and it asks nothing about sales: pass one has already done that, once, for
-        // every entry here.
+    /**
+     * Pass two: the re-listing watch. Unlike the sale it has no single moment and no answer
+     * that ends it - "is he back on the market" is asked on every download for as long as
+     * SCOUT_WATCH_GRACE. Newest expiry first so a run cut short by the clock skips the stalest
+     * entries, and it asks nothing about sales: pass one has already done that, once, for
+     * every entry here.
+     */
+    private static void watchPass(List<Candidate> watch, Run run) {
         for (final var candidate : watch) {
-            progress.step();
-            if (outOfTime(deadline)) {
+            run.progress().step();
+            if (outOfTime(run.deadline())) {
                 break;
             }
-            if (!looked.add(candidate.playerId())) {
-                continue;
-            }
-            final var observation = observe(candidate.playerId(), now);
-            if (observation == null) {
-                continue;
-            }
-            recordCharacterOnScoutList(candidate.playerId(), observation);
-            if (observation.transferListed()) {
-                recordRelistingOnScoutList(candidate.playerId(), observation);
+            if (run.looked().add(candidate.playerId())) {
+                watchOne(candidate.playerId(), run);
             }
         }
+    }
 
-        // Then the valuation corpus, on its own budget rather than whatever passes one and two left
-        // of TIME_BUDGET - see CORPUS_BACKFILL_BUDGET's doc for why. Rows, not players: one player
-        // repeatedly observed holds several.
+    private static void watchOne(int playerId, Run run) {
+        final var observation = observe(playerId, run.now());
+        if (observation == null) {
+            if (lastLookupSaidGone()) {
+                rememberGoneScoutPlayer(playerId, run.allEntries());
+            }
+            return;
+        }
+        recordCharacterOnScoutList(playerId, observation);
+        if (observation.transferListed()) {
+            recordRelistingOnScoutList(playerId, observation);
+        }
+    }
+
+    /**
+     * Then the valuation corpus, on its own budget rather than whatever passes one and two left
+     * of TIME_BUDGET - see CORPUS_BACKFILL_BUDGET's doc for why. Rows, not players: one player
+     * repeatedly observed holds several.
+     */
+    private static int corpusPass(List<TransferListing> corpus, Run run) {
+        final var now = run.now();
         final var corpusDeadline = System.nanoTime() + CORPUS_BACKFILL_BUDGET.toNanos();
+        var resolved = 0;
         for (final var listing : corpus) {
-            progress.step();
+            run.progress().step();
             if (outOfTime(corpusDeadline)) {
                 break;
             }
-            if (!seen.add(listing.getPlayerId())) {
-                continue;                      // his sale was already asked about this run
+            // a player whose sale was already asked about this run is skipped
+            if (run.seen().add(listing.getPlayerId())) {
+                if (run.looked().add(listing.getPlayerId())) {
+                    observeForCorpus(listing, now);
+                }
+                // only a settled listing has anything to resolve
+                if (listing.getDeadline() != null && listing.getDeadline().compareTo(settled(now)) < 0) {
+                    resolved += resolvePlayer(listing.getPlayerId(), listing.getDeadline(), now).sales();
+                }
             }
-            if (looked.add(listing.getPlayerId())) {
-                observeForCorpus(listing, now);
-            }
-            if (listing.getDeadline() == null
-                    || listing.getDeadline().compareTo(settled(now)) >= 0) {
-                continue;                      // not settled yet, nothing to resolve
-            }
-            resolved += resolvePlayer(listing.getPlayerId(), listing.getDeadline(), now).sales();
         }
         return resolved;
     }
@@ -382,6 +427,62 @@ public final class TransferListingResolver {
         return candidates;
     }
 
+    /** Whether the last playerdetails call was answered with CHPP error 56, Unknown PlayerID. */
+    private static boolean lastLookupSaidGone() {
+        final var error = ChppError.parse(Connector.instance().lastError());
+        return error != null && error.code() == 56;
+    }
+
+    /**
+     * The scout entries worth asking about: all but the players Hattrick has said it no longer
+     * knows. Without this a fired player on the scout list cost a playerdetails call on every
+     * download for the whole of SCOUT_WATCH_GRACE - the corpus's gone mark (AGREEABILITY) does not
+     * reach the scout list, and misses a player whose character was already known.
+     */
+    static List<ScoutEintrag> withoutGone(List<ScoutEintrag> entries, Set<Integer> gone) {
+        if (gone.isEmpty()) {
+            return entries;
+        }
+        return entries.stream().filter(e -> !gone.contains(e.getPlayerID())).toList();
+    }
+
+    /** The scout-list players stored as gone, see {@link UserParameter#mcpScoutGonePlayers}. */
+    static Set<Integer> goneScoutPlayers() {
+        return parseIds(UserParameter.instance().mcpScoutGonePlayers);
+    }
+
+    static Set<Integer> parseIds(String ids) {
+        final var ret = new TreeSet<Integer>();
+        if (ids == null) {
+            return ret;
+        }
+        for (var id : ids.split(",")) {
+            final var trimmed = id.trim();
+            if (!trimmed.isEmpty()) {
+                try {
+                    ret.add(Integer.valueOf(trimmed));
+                } catch (NumberFormatException e) {
+                    HOLogger.instance().warning(TransferListingResolver.class, "Ignoring gone player id " + trimmed);
+                }
+            }
+        }
+        return ret;
+    }
+
+    /**
+     * Adds a player to the stored gone list, keeping only ids still on the scout list so the list
+     * cannot grow past the scout list itself. Written through like the sale watermark.
+     */
+    private static void rememberGoneScoutPlayer(int playerId, List<ScoutEintrag> scoutEntries) {
+        final var onList = scoutEntries.stream().map(ScoutEintrag::getPlayerID).collect(Collectors.toSet());
+        final var gone = goneScoutPlayers();
+        gone.retainAll(onList);
+        gone.add(playerId);
+        final var value = gone.stream().map(String::valueOf).collect(Collectors.joining(","));
+        UserParameter.instance().mcpScoutGonePlayers = value;
+        DBManager.instance().saveUserParameter("mcpScoutGonePlayers", value);
+    }
+
     /** A scouted player and the deadline of the transfer that was being watched. */
     record Candidate(int playerId, HODateTime deadline) {}
 
@@ -439,8 +540,7 @@ public final class TransferListingResolver {
         try {
             final var m = OnlineWorker.downloadMarketPlayer(String.valueOf(playerId));
             if (m == null) {
-                final var error = ChppError.parse(Connector.instance().lastError());
-                if (error != null && error.code() == 56) {   // Unknown PlayerID: gone for good
+                if (lastLookupSaidGone()) {   // Unknown PlayerID: gone for good
                     DBManager.instance().markTransferListingPlayerGone(playerId);
                 }
                 return null;
