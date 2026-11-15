@@ -325,12 +325,7 @@ public class OnlineWorker {
 			downloadMissingYouthMatchData(model, dateSince);
 			// delete old youth match lineups, no longer needed (no current youth player has trained then)
 			DBManager.instance().deleteYouthMatchDataBefore(dateSinceTimestamp);
-			downloadYouthTrainingReports(model);
-			final var youthTeam = downloadYouthTeamDetails(model);
-			if (youthTeam != null && youthTeam.getYouthLeagueId() != null) {
-				downloadYouthLeague(youthTeam.getYouthLeagueId());
-			}
-			downloadYouthAvatars(model.getBasics().getYouthTeamId());
+			downloadYouthTeamData(model);
 		}
 		return bOK;
 	}
@@ -1464,13 +1459,39 @@ public class OnlineWorker {
 	}
 
 	/**
+	 * The youth files beyond the player list and the matches: the coach's training reports, the
+	 * youth team with its scouts, its league and the players' avatars. Storage only. Each part is
+	 * guarded: a failure is logged and neither the other youth parts nor the rest of the download
+	 * are skipped.
+	 */
+	public static void downloadYouthTeamData(HOModel model) {
+		guarded("youth training reports", () -> downloadYouthTrainingReports(model));
+		guarded("youth team details and league", () -> {
+			final var youthTeam = downloadYouthTeamDetails(model);
+			if (youthTeam != null && youthTeam.getYouthLeagueId() != null) {
+				downloadYouthLeague(youthTeam.getYouthLeagueId());
+			}
+		});
+		guarded("youth avatars", () -> downloadYouthAvatars(model.getBasics().getYouthTeamId()));
+	}
+
+	private static void guarded(String part, Runnable download) {
+		try {
+			download.run();
+		} catch (RuntimeException e) {
+			HOLogger.instance().error(OnlineWorker.class, "Download of " + part + " failed: " + e);
+		}
+	}
+
+	/**
 	 * The coach's training reports (youthplayerdetails 1.4). One request per player, so only for a
 	 * player who has played a youth match since his newest stored report, or has none yet. Stops
 	 * at the first answer that shows the club below Gold supporter: Hattrick sends it no reports.
 	 */
 	public static void downloadYouthTrainingReports(HOModel model) {
+		final var now = HODateTime.now();
 		for (var player : model.getCurrentYouthPlayers()) {
-			if (needsTrainingReports(player) && !downloadTrainingReports(player)) {
+			if (needsTrainingReports(player, now) && !downloadTrainingReports(player)) {
 				return;
 			}
 		}
@@ -1537,10 +1558,20 @@ public class OnlineWorker {
 		}
 	}
 
-	/** A youth match newer than the newest stored report, or no report yet for a player who played. */
-	static boolean needsTrainingReports(YouthPlayer player) {
+	/**
+	 * How long after a youth match its report is still asked for. The coach may write none (or not
+	 * yet), and without this limit every download would ask again until the next report. CHPP sends
+	 * the player's whole report history, so a report missed here comes with the next match's.
+	 */
+	static final int TRAINING_REPORT_WINDOW_DAYS = 7;
+
+	/**
+	 * A youth match within the last {@link #TRAINING_REPORT_WINDOW_DAYS} days that is newer than
+	 * the newest stored report, or no report yet for a player who played then.
+	 */
+	static boolean needsTrainingReports(YouthPlayer player, HODateTime now) {
 		final var lastMatch = player.getYouthMatchDate();
-		if (lastMatch == null) {
+		if (lastMatch == null || lastMatch.isBefore(now.minus(TRAINING_REPORT_WINDOW_DAYS, ChronoUnit.DAYS))) {
 			return false;
 		}
 		final var stored = player.getTrainerComments();

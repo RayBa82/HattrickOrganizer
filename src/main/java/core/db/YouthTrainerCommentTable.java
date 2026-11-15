@@ -13,6 +13,7 @@ import java.util.function.UnaryOperator;
  * snapshot: a report is stored once and kept, a re-download adds only the new ones. The table was
  * declared long before CHPP sent the reports but never registered, so no database had it before
  * DB step 1101.
+
  */
 public class YouthTrainerCommentTable extends AbstractTable {
 
@@ -53,13 +54,10 @@ public class YouthTrainerCommentTable extends AbstractTable {
 
     @Override
     protected String[] getConstraintStatements() {
+        // no extra index: the key starts with YOUTHPLAYER_ID, which serves the per-player load
         return new String[]{"  PRIMARY KEY (YOUTHPLAYER_ID, REPORT_DATE, REPORT_TYPE, SKILL_TYPE)"};
     }
 
-    @Override
-    protected String[] getCreateIndexStatement() {
-        return new String[]{"CREATE INDEX IYOUTHTRAINERCOMMENT_1 ON " + getTableName() + "(YOUTHPLAYER_ID)"};
-    }
 
     private final String loadByPlayerSql = createSelectStatement("WHERE YOUTHPLAYER_ID=? ORDER BY REPORT_DATE DESC");
 
