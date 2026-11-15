@@ -12,7 +12,7 @@ import java.util.function.UnaryOperator;
  * The coach's training comments per youth player (youthplayerdetails 1.4 TrainingReports). Not a
  * snapshot: a report is stored once and kept, a re-download adds only the new ones. The table was
  * declared long before CHPP sent the reports but never registered, so no database had it before
- * DB step 1101.
+ * DB step 1100.
 
  */
 public class YouthTrainerCommentTable extends AbstractTable {

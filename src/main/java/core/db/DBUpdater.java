@@ -96,9 +96,8 @@ final class DBUpdater {
             new Step(List.of(1006), this::updateDBv1007),
             new Step(List.of(1007), this::updateDBv1008),
             new Step(List.of(1008), this::updateDBv1009),
-            new Step(List.of(1009), this::updateDBv1100),
-            // the newest step: the next DB version appends its own, entered from 1101
-            new Step(List.of(1100), this::updateDBv1101));
+            // the newest step: the next DB version appends its own, entered from 1100
+            new Step(List.of(1009), this::updateDBv1100));
     }
 
     void updateDB(int targetVersion) {
@@ -156,25 +155,11 @@ final class DBUpdater {
     }
 
 	/**
-	 * The latest CHPP versions of the match files and of every youth file: matchdetails 3.2
-	 * (chances per side, replay flags, ExpectedResult) and the youth tables
+	 * HO 11.0, as upstream: the women's leagues, plus the latest CHPP versions of the match files
+	 * (matchdetails 3.2: chances per side, replay flags, ExpectedResult) and of every youth file
 	 * ({@link #updateYouthTables()}). Safe to re-run, which DEV builds do on every start.
-	 */
-	private void updateDBv1101(int dbVersion) throws SQLException {
-		var matchDetailsTable = dbManager.getTable(MatchDetailsTable.TABLENAME);
-		var dbInfo = Objects.requireNonNull(connectionManager.getDbInfo(), "database not connected");
-		for (var column : MatchDetailsTable.chanceAndReplayColumns()) {
-			matchDetailsTable.tryAddColumn(column.getColumnName(), dbInfo.getTypeName(column.getType()));
-		}
-		dbManager.getTable(MatchExpectedResultTable.TABLENAME).createTable();
-
-		updateYouthTables();
-
-		updateDBVersion(dbVersion, 1101);
-	}
-
-	/**
-	 * HO 11.0. Safe to re-run, which DEV builds do on every start.
+	 * Databases a fork build stored as 1101 already hold all of it: {@link #updateDB} clamps
+	 * them down to 1100.
 	 */
 	private void updateDBv1100(int dbVersion) throws SQLException {
 		// #2429: gender and league system of the women's leagues (1 male, 2 female)
@@ -184,6 +169,15 @@ final class DBUpdater {
 		dbManager.getTable(SpielerTable.TABLENAME).tryAddColumn(GENDER_ID, SQL_INTEGER);
 		dbManager.getTable(YouthPlayerTable.TABLENAME).tryAddColumn(GENDER_ID, SQL_INTEGER);
 		dbManager.getTable(WorldDetailsTable.TABLENAME).tryAddColumn("LEAGUE_SYSTEM_ID", SQL_INTEGER);
+
+		var matchDetailsTable = dbManager.getTable(MatchDetailsTable.TABLENAME);
+		var dbInfo = Objects.requireNonNull(connectionManager.getDbInfo(), "database not connected");
+		for (var column : MatchDetailsTable.chanceAndReplayColumns()) {
+			matchDetailsTable.tryAddColumn(column.getColumnName(), dbInfo.getTypeName(column.getType()));
+		}
+		dbManager.getTable(MatchExpectedResultTable.TABLENAME).createTable();
+
+		updateYouthTables();
 
 		updateDBVersion(dbVersion, 1100);
 	}

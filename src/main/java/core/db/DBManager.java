@@ -62,12 +62,12 @@ import java.util.stream.Collectors;
 public class DBManager implements PersistenceManager {
 
 	/** database versions */
-	private static final int DB_VERSION = 1101; // HO 11.0 version (fork: steps 1001-1009 come first)
+	private static final int DB_VERSION = 1100; // HO 11.0 version (fork: steps 1001-1009 come first)
 	/**
 	 * Previous db version is used by development versions to ensure that db upgrade will rerun on each
 	 * new installed preliminary version
 	 */
-	private static final int PREVIOUS_DB_VERSION = 1100;
+	private static final int PREVIOUS_DB_VERSION = 1009;
 	private static final double DBConfigVersion = 10d; // HO 10.0 version
 
 	/** 2004-06-14 11:00:00.0 */

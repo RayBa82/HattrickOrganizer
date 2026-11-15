@@ -85,14 +85,14 @@ the database (#2429, DB step 1100); the rest is not parsed.
 | 2026-02-09 | worlddetails 2.0       | `LeagueSystemID` per league | stored (`WorldDetailLeague`)               |
 | 2026-02-10 | teamdetails 3.8        | `GenderID`                  | stored (`Basics`), get_team `gender`       |
 | 2026-02-10 | youthplayerdetails 1.3 | `GenderID`                  | - (the list has it)                        |
-| 2026-02-10 | youthteamdetails 1.3   | `GenderID`                  | stored (`YOUTHTEAMDETAILS`, step 1101)     |
+| 2026-02-10 | youthteamdetails 1.3   | `GenderID`                  | stored (`YOUTHTEAMDETAILS`, step 1100)     |
 | 2026-02-11 | managercompendium 1.6  | `GenderID` per team         | -                                          |
 | 2026-02-11 | players 2.8            | `GenderID`                  | stored (`Player`, also from playerdetails) |
 | 2026-02-11 | youthplayerlist 1.3    | `GenderID`                  | stored (`YouthPlayer`)                     |
 | 2026-02-26 | managercompendium 1.7  | `LeagueSystemID`            | -                                          |
 | 2026-02-26 | teamdetails 3.9        | `LeagueSystemID`            | stored (`Basics`), get_team `leagueSystem` |
-| 2026-02-26 | youthleaguedetails 1.1 | `LeagueSystemID`            | stored (`YOUTHLEAGUE`, step 1101)          |
-| 2026-02-26 | youthteamdetails 1.4   | `LeagueSystemID`            | stored (`YOUTHTEAMDETAILS`, step 1101)     |
+| 2026-02-26 | youthleaguedetails 1.1 | `LeagueSystemID`            | stored (`YOUTHLEAGUE`, step 1100)          |
+| 2026-02-26 | youthteamdetails 1.4   | `LeagueSystemID`            | stored (`YOUTHTEAMDETAILS`, step 1100)     |
 
 `GenderID` and `LeagueSystemID` share one value set: 1 male, 2 female. This is Hattrick's women's
 league system. A null column means the snapshot was downloaded before HO read the field. The
@@ -109,7 +109,7 @@ when a request moves to the new version. Full trees in `raw/chpp/`.
 | transfersearch 1.2                | `priceMin`/`priceMax` read in SEK (1.1 read them in the manager's own currency); new inputs `salaryMin`/`salaryMax` (base salary, without the 20 % abroad surcharge) and `transferCompareAvgMin`/`transferCompareAvgMax` (estimate saved at listing; players without one are left out) | used since 2026-11-14, HO converts to SEK      |
 | training 2.3                      | `actionType=history`, inputs `teamId`, `fromDate` (default 16 weeks back): one `Training` row per change of type, intensity or stamina share, with `HattrickSeason`, `HattrickWeek`, `TrainingDate`. Gold supporter, own or mentored team, else AccessDenied                           | used: get_training `historyWeeks`              |
 | playerstats 1.0 (new)             | per match of one player: age, TSI, form, stamina, loyalty, experience, goals, cards, injury, played minutes, rating (average and end of game), minutes per position group                                                                                                              | used: `get_player_match_stats`                 |
-| matchdetails 3.2                  | `HasReplay`/`NrOfReplays` per team; `ExpectedResult` with the simulated replays (win/draw/loss, average goals, goal distribution, win margin, over/under 0.5-4.5). Only where the site shows it: national team matches, Diamond, or bought replay credits                              | stored (`MATCHDETAILS`, `MATCHEXPECTEDRESULT`, step 1101); yardstick for the match predictor |
+| matchdetails 3.2                  | `HasReplay`/`NrOfReplays` per team; `ExpectedResult` with the simulated replays (win/draw/loss, average goals, goal distribution, win margin, over/under 0.5-4.5). Only where the site shows it: national team matches, Diamond, or bought replay credits                              | stored (`MATCHDETAILS`, `MATCHEXPECTEDRESULT`, step 1100); yardstick for the match predictor |
 | playerdetails 3.3                 | `TransferCompareAverage`(+`Date`): the site's transfer estimate, only with visible skills; `FamilyRelation`; `TrophyList` (Gold club only)                                                                                                                                             | used: `hattrickEstimate`, see playerdetails    |
 | teamdetails 4.0                   | `Currency` (`CurrencyName`, `CurrencyRate` to SEK) the requesting user chose, only for that user                                                                                                                                                                                       | HO takes the rate from the league today        |
 | teamhistory 1.0 (new)             | per season since the current owner: series, position, points, goals, cup round; trophy list                                                                                                                                                                                            | used: analyze_opponent `include: [history]`    |
@@ -138,7 +138,7 @@ matchType of upcoming matches and gave them `MatchContextId`. The re-capture als
 actions the 2026-09-26 one had missed, e.g. `matchorders` `predictratings` (sector and tactic
 ratings for a sent or saved lineup) and `arenadetails` `MyArena`.
 
-### Youth files and the shared match files (2026-11-15, DB step 1101)
+### Youth files and the shared match files (2026-11-15, DB step 1100)
 
 Every youth file is on its latest version, and the shared match files with it. The team
 download's youth block (`OnlineWorker.downloadCurrentMatches`) fetches, after the youth matches:

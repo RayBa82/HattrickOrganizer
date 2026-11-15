@@ -19,7 +19,7 @@ for want of an academy (`docs/roadmap.md`).
 
 ## Youth CHPP files and the shared match files on their latest versions (2026-11-15)
 
-Branch `feature/youth-chpp`, DB step 1101; storage only, no UI. `matchesarchive` 1.5 and
+Branch `feature/youth-chpp`, DB step 1100 (folded into upstream's HO 11.0 step, as in ho-dev#2599); storage only, no UI. `matchesarchive` 1.5 and
 `matchdetails` 3.2 everywhere (senior and youth), with the chances per side, the replay pair and
 `ExpectedResult` stored. Checked on real responses of the same matches at old and new versions
 (`XMLMatchVersionRegressionTest`). All six youth files at their latest version and stored:
@@ -37,7 +37,7 @@ watch; checked on a DB copy (the next download asks once more, the one after ask
 other gone players the desktop app kept asking about since 2026-10-16 were already handled by
 `e9aaf907`: the installed desktop HO predates it, so it needs a new build.
 
-Still open: on the next upstream merge, keep our DB chain (1001–1009, 1100, then 1101; upstream
+Still open: on the next upstream merge, keep our DB chain (1001–1009, then 1100; upstream
 has `case 1000 → updateDBv1100`) and our `DBManager.instance()` helpers (headless exits). The
 #2429 gender/league system fields are not checked against a women's team. Also open from earlier pieces: compare the get_training predictions with the real training on
 2026-11-20; the #2587 season-offset fix (ho-dev#2594) was not checked on the headless server's DB.

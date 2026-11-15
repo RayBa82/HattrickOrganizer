@@ -19,11 +19,11 @@ public class YouthPlayerTable  extends AbstractTable {
      * tablename
      **/
     static final String TABLENAME = "YOUTHPLAYER";
-    /** youthplayerlist 1.4 native country, added by DB step 1101. */
+    /** youthplayerlist 1.4 native country, added by DB step 1100. */
     static final String NATIVE_COUNTRY_ID = "NativeCountryID";
     static final String NATIVE_COUNTRY_NAME = "NativeCountryName";
     static final int NATIVE_COUNTRY_NAME_LENGTH = 127;
-    /** Statement and OwnerNotes: free text, widened from 255 by DB step 1101 and cut, never refused. */
+    /** Statement and OwnerNotes: free text, widened from 255 by DB step 1100 and cut, never refused. */
     static final int FREE_TEXT_LENGTH = 2048;
     static final String STATEMENT = "Statement";
     static final String OWNER_NOTES = "OwnerNotes";
