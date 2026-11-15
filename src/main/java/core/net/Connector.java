@@ -46,6 +46,18 @@ import java.util.zip.InflaterInputStream;
 
 public class Connector {
 	private static final String htUrl = "https://chpp.hattrick.org/chppxml.ashx";
+	/**
+	 * 1.5 added SourceSystem and CupId per match. CupId is not stored: MatchContextId already
+	 * carries the cup's id for a cup match. Senior and youth archives read the same at 1.4 and 1.5
+	 * (XMLMatchVersionRegressionTest).
+	 */
+	private static final String MATCHES_ARCHIVE = "?file=matchesarchive&version=1.5";
+	/**
+	 * 3.1 added the chances per side, 3.2 the replay flags and ExpectedResult. Nothing HO read at
+	 * 3.0 changed (XMLMatchVersionRegressionTest); youth matches gained the spectator split.
+	 */
+	private static final String MATCH_DETAILS = "?file=matchdetails&version=3.2";
+	private static final String MATCH_ID = "&matchID=";
 	private static Connector m_clInstance;
 	private static final String CONSUMER_KEY = ">Ij-pDTDpCq+TDrKA^nnE9";
 	private static final String CONSUMER_SECRET = "2/Td)Cprd/?q`nAbkAL//F+eGD@KnnCc>)dQgtP,p+p";
@@ -245,9 +257,9 @@ public class Connector {
 	 *            the last date of the period of time.
 	 * @return the a string containing the matches data in XML format.
 	 */
-	public String getMatchesArchive(int teamId, HODateTime firstDate, HODateTime lastDate){
+		public String getMatchesArchive(int teamId, HODateTime firstDate, HODateTime lastDate){
 		StringBuilder url = new StringBuilder();
-		url.append(htUrl).append("?file=matchesarchive&version=1.4");
+		url.append(htUrl).append(MATCHES_ARCHIVE);
 
 		if (teamId > 0) {
 			url.append("&teamID=").append(teamId);
@@ -266,7 +278,7 @@ public class Connector {
 
 	public String getMatchesArchive(SourceSystem sourceSystem, int teamId, HODateTime firstDate, HODateTime lastDate) throws IOException {
 		StringBuilder url = new StringBuilder();
-		url.append(htUrl).append("?file=matchesarchive&version=1.4");
+		url.append(htUrl).append(MATCHES_ARCHIVE);
 
 		if (teamId > 0) {
 			url.append("&teamID=").append(teamId);
@@ -301,7 +313,7 @@ public class Connector {
 		String url = htUrl + "?file=matchlineup&version=2.2";
 
 		if (matchId > 0) {
-			url += ("&matchID=" + matchId);
+			url += (MATCH_ID + matchId);
 		}
 
 		// Had to remove check for negative team ID. Street teams used in cup have that.
@@ -320,7 +332,7 @@ public class Connector {
 		String url = getMatchOrdersURl() + "&actionType=predictratings";
 
 		if (matchId > 0) {
-			url += ("&matchID=" + matchId);
+			url += (MATCH_ID + matchId);
 		}
 
 		url += ("&teamID=" + teamId);
@@ -344,7 +356,7 @@ public class Connector {
 	 * @return The api content (xml)
 	 */
 	public String downloadMatchOrder(int matchId, MatchType matchType, int teamId) {
-		String url = getMatchOrdersURl() + "&matchID=" + matchId + "&sourceSystem=" + matchType.getSourceString();
+		String url = getMatchOrdersURl() + MATCH_ID + matchId + "&sourceSystem=" + matchType.getSourceString();
 		if (!HOVerwaltung.instance().getModel().getBasics().isNationalTeam()) {
 			url += "&teamId=" + teamId;
 		}
@@ -376,7 +388,7 @@ public class Connector {
 		}
 
 		if (matchId > 0) {
-			urlpara.append("&matchID=").append(matchId);
+			urlpara.append(MATCH_ID).append(matchId);
 		}
 		urlpara.append("&actionType=setmatchorder");
 		urlpara.append("&sourceSystem=").append(matchType.getSourceString());
@@ -466,9 +478,9 @@ public class Connector {
 	 * Download match details, including match events
 	 */
 	public String downloadMatchdetails(int matchId, MatchType matchType) {
-		String url = htUrl + "?file=matchdetails&version=3.0";
+		String url = htUrl + MATCH_DETAILS;
 		if (matchId > 0) {
-			url += ("&matchID=" + matchId);
+			url += (MATCH_ID + matchId);
 		}
 		url += "&sourceSystem=" + matchType.getSourceString();
 		url += "&matchEvents=true";
@@ -505,7 +517,7 @@ public class Connector {
 
 	public String downloadMatchDetails(String sourceSystem, int matchId){
         String urlBuilder = htUrl +
-                "?file=matchdetails&version=3.1&matchID=" + matchId +
+				MATCH_DETAILS + MATCH_ID + matchId +
                 "&sourceSystem=" + sourceSystem;
 		return getCHPPWebFile(urlBuilder);
 	}
@@ -514,7 +526,7 @@ public class Connector {
 	 * Get Matches
 	 */
 	public String getMatchesOfSeason(int teamId, int season){
-		var url = new StringBuilder(htUrl).append("?file=matchesarchive&version=1.5");
+		var url = new StringBuilder(htUrl).append(MATCHES_ARCHIVE);
 		if (teamId > 0) {
 			url.append( "&teamID=").append(teamId);
 		}

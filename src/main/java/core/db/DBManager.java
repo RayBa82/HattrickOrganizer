@@ -60,12 +60,12 @@ import java.util.stream.Collectors;
 public class DBManager implements PersistenceManager {
 
 	/** database versions */
-	private static final int DB_VERSION = 1100; // HO 11.0 version (fork: steps 1001-1009 come first)
+	private static final int DB_VERSION = 1101; // HO 11.0 version (fork: steps 1001-1009 come first)
 	/**
 	 * Previous db version is used by development versions to ensure that db upgrade will rerun on each
 	 * new installed preliminary version
 	 */
-	private static final int PREVIOUS_DB_VERSION = 1009;
+	private static final int PREVIOUS_DB_VERSION = 1100;
 	private static final double DBConfigVersion = 10d; // HO 10.0 version
 
 	/** 2004-06-14 11:00:00.0 */
@@ -304,6 +304,7 @@ public class DBManager implements PersistenceManager {
 		tables.put(MatchLineupPlayerTable.TABLENAME,new MatchLineupPlayerTable(connectionManager));
 		tables.put(MatchesKurzInfoTable.TABLENAME, new MatchesKurzInfoTable(connectionManager));
 		tables.put(MatchDetailsTable.TABLENAME, new MatchDetailsTable(connectionManager));
+		tables.put(MatchExpectedResultTable.TABLENAME, new MatchExpectedResultTable(connectionManager));
 		tables.put(MatchHighlightsTable.TABLENAME, new MatchHighlightsTable(connectionManager));
 		tables.put(TrainingsTable.TABLENAME, new TrainingsTable(connectionManager));
 		tables.put(FutureTrainingTable.TABLENAME, new FutureTrainingTable(connectionManager));
@@ -1483,6 +1484,17 @@ public class DBManager implements PersistenceManager {
 	}
 
 	/**
+	 * The simulated replays' statistics of a match (matchdetails 3.2), null when Hattrick sent none.
+	 *
+	 * @param matchId   the match id
+	 * @param matchType the match type id
+	 * @return the statistics or null
+	 */
+	public MatchExpectedResult loadMatchExpectedResult(int matchId, int matchType) {
+		return ((MatchExpectedResultTable) getTable(MatchExpectedResultTable.TABLENAME)).load(matchId, matchType);
+	}
+
+	/**
 	 * Return match statistics (Count,Win,Draw,Loss,Goals)
 	 *
 	 * @param matchtype the matchtype
@@ -1944,6 +1956,7 @@ public class DBManager implements PersistenceManager {
 		var matchType = info.getMatchType().getId();
 
 		getTable(MatchDetailsTable.TABLENAME).executePreparedDelete(matchid, matchType);
+		getTable(MatchExpectedResultTable.TABLENAME).executePreparedDelete(matchid, matchType);
 		getTable(MatchHighlightsTable.TABLENAME).executePreparedDelete(matchid, matchType);
 		getTable(MatchLineupTable.TABLENAME).executePreparedDelete(matchid, matchType);
 		getTable(MatchLineupTeamTable.TABLENAME).executePreparedDelete(matchid, matchType, info.getHomeTeamID());
@@ -2389,6 +2402,9 @@ public class DBManager implements PersistenceManager {
 	 */
 	public void storeMatchDetails(Matchdetails details) {
 		((MatchDetailsTable)getTable(MatchDetailsTable.TABLENAME)).storeMatchDetails(details);
+		if (details != null && details.getExpectedResult() != null) {
+			((MatchExpectedResultTable) getTable(MatchExpectedResultTable.TABLENAME)).store(details.getExpectedResult());
+		}
 		//Store Match Events
 		((MatchHighlightsTable)getTable(MatchHighlightsTable.TABLENAME)).storeMatchHighlights(details);
 	}

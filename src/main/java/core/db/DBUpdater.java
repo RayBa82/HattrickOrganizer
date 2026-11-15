@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Locale;
+import java.util.Objects;
 
 final class DBUpdater {
 	private static final String GENDER_ID = "GenderID";
@@ -111,6 +112,8 @@ final class DBUpdater {
 								updateDBv1009(DBVersion);
 							case 1009:
 								updateDBv1100(DBVersion);
+							case 1100:
+								updateDBv1101(DBVersion);
 								// the newest step: the next one replaces this break with its own case
 								break;
 				}
@@ -121,6 +124,22 @@ final class DBUpdater {
 		} else {
 			HOLogger.instance().log(getClass(), "No DB update necessary.");
 		}
+	}
+
+	/**
+	 * The latest CHPP versions of the match files and of every youth file: matchdetails 3.2
+	 * (chances per side, replay flags, ExpectedResult). Safe to re-run, which DEV builds do on
+	 * every start.
+	 */
+	private void updateDBv1101(int dbVersion) throws SQLException {
+		var matchDetailsTable = dbManager.getTable(MatchDetailsTable.TABLENAME);
+		var dbInfo = Objects.requireNonNull(connectionManager.getDbInfo(), "database not connected");
+		for (var column : MatchDetailsTable.chanceAndReplayColumns()) {
+			matchDetailsTable.tryAddColumn(column.getColumnName(), dbInfo.getTypeName(column.getType()));
+		}
+		dbManager.getTable(MatchExpectedResultTable.TABLENAME).createTable();
+
+		updateDBVersion(dbVersion, 1101);
 	}
 
 	private void updateDBv1100(int dbVersion) throws SQLException {

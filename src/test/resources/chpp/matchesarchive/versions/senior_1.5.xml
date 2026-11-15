@@ -1,0 +1,791 @@
+<?xml version="1.0" encoding="utf-8"?>
+<HattrickData>
+  <FileName>matchesArchive.xml</FileName>
+  <Version>1.5</Version>
+  <UserID>1357154</UserID>
+  <FetchedDate>2026-11-15 03:01:13</FetchedDate>
+  <IsYouth>False</IsYouth>
+  <Team>
+    <TeamID>2168446</TeamID>
+    <TeamName>FC GaisBeach 04</TeamName>
+    <MatchList>
+      <Match>
+        <MatchID>768523807</MatchID>
+        <HomeTeam>
+          <HomeTeamID>2168446</HomeTeamID>
+          <HomeTeamName>FC GaisBeach 04</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>3372131</AwayTeamID>
+          <AwayTeamName>1.FC 1888 München</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-08-15 18:15:00</MatchDate>
+        <MatchType>1</MatchType>
+        <MatchContextId>41421</MatchContextId>
+        <SourceSystem>Hattrick</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>3</HomeGoals>
+        <AwayGoals>0</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>771084930</MatchID>
+        <HomeTeam>
+          <HomeTeamID>2168446</HomeTeamID>
+          <HomeTeamName>FC GaisBeach 04</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>1156273</AwayTeamID>
+          <AwayTeamName>VfL Sipsdorf</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-08-18 18:45:00</MatchDate>
+        <MatchType>3</MatchType>
+        <MatchContextId>1369</MatchContextId>
+        <SourceSystem>Hattrick</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>1369</CupId>
+        <CupLevel>2</CupLevel>
+        <CupLevelIndex>3</CupLevelIndex>
+        <HomeGoals>3</HomeGoals>
+        <AwayGoals>2</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>768523815</MatchID>
+        <HomeTeam>
+          <HomeTeamID>2168446</HomeTeamID>
+          <HomeTeamName>FC GaisBeach 04</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>3307420</AwayTeamID>
+          <AwayTeamName>Erfurt ll</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-08-22 18:15:00</MatchDate>
+        <MatchType>1</MatchType>
+        <MatchContextId>41421</MatchContextId>
+        <SourceSystem>Hattrick</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>3</HomeGoals>
+        <AwayGoals>0</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>771194498</MatchID>
+        <HomeTeam>
+          <HomeTeamID>2168446</HomeTeamID>
+          <HomeTeamName>FC GaisBeach 04</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>976701</AwayTeamID>
+          <AwayTeamName>FC Loreley</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-08-25 18:45:00</MatchDate>
+        <MatchType>3</MatchType>
+        <MatchContextId>1369</MatchContextId>
+        <SourceSystem>Hattrick</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>1369</CupId>
+        <CupLevel>2</CupLevel>
+        <CupLevelIndex>3</CupLevelIndex>
+        <HomeGoals>0</HomeGoals>
+        <AwayGoals>2</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>768523819</MatchID>
+        <HomeTeam>
+          <HomeTeamID>1152673</HomeTeamID>
+          <HomeTeamName>TSV Heiligendorf</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>2168446</AwayTeamID>
+          <AwayTeamName>FC GaisBeach 04</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-08-29 18:15:00</MatchDate>
+        <MatchType>1</MatchType>
+        <MatchContextId>41421</MatchContextId>
+        <SourceSystem>Hattrick</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>0</HomeGoals>
+        <AwayGoals>5</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>771367534</MatchID>
+        <HomeTeam>
+          <HomeTeamID>2168446</HomeTeamID>
+          <HomeTeamName>FC GaisBeach 04</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>823450</AwayTeamID>
+          <AwayTeamName>Bayern Amateure</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-09-01 18:15:00</MatchDate>
+        <MatchType>4</MatchType>
+        <MatchContextId>0</MatchContextId>
+        <SourceSystem>Hattrick</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>0</HomeGoals>
+        <AwayGoals>6</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>768523823</MatchID>
+        <HomeTeam>
+          <HomeTeamID>2168446</HomeTeamID>
+          <HomeTeamName>FC GaisBeach 04</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>3254034</AwayTeamID>
+          <AwayTeamName>1.FC 1880 Hessen</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-09-05 18:15:00</MatchDate>
+        <MatchType>1</MatchType>
+        <MatchContextId>41421</MatchContextId>
+        <SourceSystem>Hattrick</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>4</HomeGoals>
+        <AwayGoals>0</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>771424338</MatchID>
+        <HomeTeam>
+          <HomeTeamID>812618</HomeTeamID>
+          <HomeTeamName>Eham Wood</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>2168446</AwayTeamID>
+          <AwayTeamName>FC GaisBeach 04</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-09-09 17:25:00</MatchDate>
+        <MatchType>9</MatchType>
+        <MatchContextId>0</MatchContextId>
+        <SourceSystem>Hattrick</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>5</HomeGoals>
+        <AwayGoals>1</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>768523825</MatchID>
+        <HomeTeam>
+          <HomeTeamID>3254034</HomeTeamID>
+          <HomeTeamName>1.FC 1880 Hessen</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>2168446</AwayTeamID>
+          <AwayTeamName>FC GaisBeach 04</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-09-12 18:15:00</MatchDate>
+        <MatchType>1</MatchType>
+        <MatchContextId>41421</MatchContextId>
+        <SourceSystem>Hattrick</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>0</HomeGoals>
+        <AwayGoals>5</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>771535594</MatchID>
+        <HomeTeam>
+          <HomeTeamID>2168446</HomeTeamID>
+          <HomeTeamName>FC GaisBeach 04</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>2131772</AwayTeamID>
+          <AwayTeamName>Creag Na Moor</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-09-15 18:30:00</MatchDate>
+        <MatchType>8</MatchType>
+        <MatchContextId>0</MatchContextId>
+        <SourceSystem>Hattrick</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>0</HomeGoals>
+        <AwayGoals>5</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>768523832</MatchID>
+        <HomeTeam>
+          <HomeTeamID>2168446</HomeTeamID>
+          <HomeTeamName>FC GaisBeach 04</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>1152673</AwayTeamID>
+          <AwayTeamName>TSV Heiligendorf</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-09-19 18:15:00</MatchDate>
+        <MatchType>1</MatchType>
+        <MatchContextId>41421</MatchContextId>
+        <SourceSystem>Hattrick</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>7</HomeGoals>
+        <AwayGoals>0</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>771621282</MatchID>
+        <HomeTeam>
+          <HomeTeamID>659586</HomeTeamID>
+          <HomeTeamName>Linux Destroyers</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>2168446</AwayTeamID>
+          <AwayTeamName>FC GaisBeach 04</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-09-23 08:00:00</MatchDate>
+        <MatchType>8</MatchType>
+        <MatchContextId>0</MatchContextId>
+        <SourceSystem>Hattrick</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>2</HomeGoals>
+        <AwayGoals>1</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>768523839</MatchID>
+        <HomeTeam>
+          <HomeTeamID>3307420</HomeTeamID>
+          <HomeTeamName>Erfurt ll</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>2168446</AwayTeamID>
+          <AwayTeamName>FC GaisBeach 04</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-09-26 18:15:00</MatchDate>
+        <MatchType>1</MatchType>
+        <MatchContextId>41421</MatchContextId>
+        <SourceSystem>Hattrick</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>0</HomeGoals>
+        <AwayGoals>5</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>771706269</MatchID>
+        <HomeTeam>
+          <HomeTeamID>2168446</HomeTeamID>
+          <HomeTeamName>FC GaisBeach 04</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>3340488</AwayTeamID>
+          <AwayTeamName>Skullteam</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-09-29 18:30:00</MatchDate>
+        <MatchType>8</MatchType>
+        <MatchContextId>0</MatchContextId>
+        <SourceSystem>Hattrick</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>2</HomeGoals>
+        <AwayGoals>3</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>768523836</MatchID>
+        <HomeTeam>
+          <HomeTeamID>3372131</HomeTeamID>
+          <HomeTeamName>1.FC 1888 München</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>2168446</AwayTeamID>
+          <AwayTeamName>FC GaisBeach 04</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-10-03 18:15:00</MatchDate>
+        <MatchType>1</MatchType>
+        <MatchContextId>41421</MatchContextId>
+        <SourceSystem>Hattrick</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>1</HomeGoals>
+        <AwayGoals>3</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>771786666</MatchID>
+        <HomeTeam>
+          <HomeTeamID>2168446</HomeTeamID>
+          <HomeTeamName>FC GaisBeach 04</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>2663726</AwayTeamID>
+          <AwayTeamName>Fussballhalunken </AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-10-06 18:15:00</MatchDate>
+        <MatchType>4</MatchType>
+        <MatchContextId>0</MatchContextId>
+        <SourceSystem>Hattrick</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>5</HomeGoals>
+        <AwayGoals>5</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>768523841</MatchID>
+        <HomeTeam>
+          <HomeTeamID>2168446</HomeTeamID>
+          <HomeTeamName>FC GaisBeach 04</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>3313083</AwayTeamID>
+          <AwayTeamName>Sparta Hillegossen</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-10-10 18:15:00</MatchDate>
+        <MatchType>1</MatchType>
+        <MatchContextId>41421</MatchContextId>
+        <SourceSystem>Hattrick</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>1</HomeGoals>
+        <AwayGoals>1</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>771815754</MatchID>
+        <HomeTeam>
+          <HomeTeamID>2168446</HomeTeamID>
+          <HomeTeamName>FC GaisBeach 04</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>1247744</AwayTeamID>
+          <AwayTeamName>VfL Wingston 1913 e.V.</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-10-13 18:15:00</MatchDate>
+        <MatchType>4</MatchType>
+        <MatchContextId>0</MatchContextId>
+        <SourceSystem>Hattrick</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>1</HomeGoals>
+        <AwayGoals>5</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>768523845</MatchID>
+        <HomeTeam>
+          <HomeTeamID>3372265</HomeTeamID>
+          <HomeTeamName>SC Saarland</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>2168446</AwayTeamID>
+          <AwayTeamName>FC GaisBeach 04</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-10-17 18:15:00</MatchDate>
+        <MatchType>1</MatchType>
+        <MatchContextId>41421</MatchContextId>
+        <SourceSystem>Hattrick</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>1</HomeGoals>
+        <AwayGoals>6</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>771907342</MatchID>
+        <HomeTeam>
+          <HomeTeamID>2168446</HomeTeamID>
+          <HomeTeamName>FC GaisBeach 04</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>1245417</AwayTeamID>
+          <AwayTeamName>Feierabend Kicker 09</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-10-20 18:15:00</MatchDate>
+        <MatchType>4</MatchType>
+        <MatchContextId>0</MatchContextId>
+        <SourceSystem>Hattrick</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>0</HomeGoals>
+        <AwayGoals>6</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>768523852</MatchID>
+        <HomeTeam>
+          <HomeTeamID>2168446</HomeTeamID>
+          <HomeTeamName>FC GaisBeach 04</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>2524225</AwayTeamID>
+          <AwayTeamName>Energie Dresden</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-10-24 18:15:00</MatchDate>
+        <MatchType>1</MatchType>
+        <MatchContextId>41421</MatchContextId>
+        <SourceSystem>Hattrick</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>8</HomeGoals>
+        <AwayGoals>2</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>771991761</MatchID>
+        <HomeTeam>
+          <HomeTeamID>2168446</HomeTeamID>
+          <HomeTeamName>FC GaisBeach 04</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>520068</AwayTeamID>
+          <AwayTeamName>BSV Bingum</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-10-27 18:15:00</MatchDate>
+        <MatchType>4</MatchType>
+        <MatchContextId>0</MatchContextId>
+        <SourceSystem>Hattrick</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>1</HomeGoals>
+        <AwayGoals>2</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>772118612</MatchID>
+        <HomeTeam>
+          <HomeTeamID>2168446</HomeTeamID>
+          <HomeTeamName>FC GaisBeach 04</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>3466399</AwayTeamID>
+          <AwayTeamName>Berry</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-10-31 18:00:00</MatchDate>
+        <MatchType>4</MatchType>
+        <MatchContextId>0</MatchContextId>
+        <SourceSystem>Hattrick</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>8</HomeGoals>
+        <AwayGoals>1</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>42722579</MatchID>
+        <HomeTeam>
+          <HomeTeamID>952334</HomeTeamID>
+          <HomeTeamName>AFC Barnes</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>2168446</AwayTeamID>
+          <AwayTeamName>FC GaisBeach 04</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-11-02 18:03:00</MatchDate>
+        <MatchType>50</MatchType>
+        <MatchContextId>2108472</MatchContextId>
+        <SourceSystem>HTOIntegrated</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>6</HomeGoals>
+        <AwayGoals>1</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>42751234</MatchID>
+        <HomeTeam>
+          <HomeTeamID>2168446</HomeTeamID>
+          <HomeTeamName>FC GaisBeach 04</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>3329847</AwayTeamID>
+          <AwayTeamName>KEK United</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-11-03 02:05:00</MatchDate>
+        <MatchType>50</MatchType>
+        <MatchContextId>2108472</MatchContextId>
+        <SourceSystem>HTOIntegrated</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>0</HomeGoals>
+        <AwayGoals>4</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>42765805</MatchID>
+        <HomeTeam>
+          <HomeTeamID>2168446</HomeTeamID>
+          <HomeTeamName>FC GaisBeach 04</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>1806594</AwayTeamID>
+          <AwayTeamName>Tiny Siege Turtles</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-11-03 10:05:00</MatchDate>
+        <MatchType>50</MatchType>
+        <MatchContextId>2108472</MatchContextId>
+        <SourceSystem>HTOIntegrated</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>2</HomeGoals>
+        <AwayGoals>6</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>42779224</MatchID>
+        <HomeTeam>
+          <HomeTeamID>2168446</HomeTeamID>
+          <HomeTeamName>FC GaisBeach 04</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>3360302</AwayTeamID>
+          <AwayTeamName>BLikeGibraltar FC</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-11-03 18:05:00</MatchDate>
+        <MatchType>50</MatchType>
+        <MatchContextId>2108472</MatchContextId>
+        <SourceSystem>HTOIntegrated</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>3</HomeGoals>
+        <AwayGoals>0</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>772180171</MatchID>
+        <HomeTeam>
+          <HomeTeamID>2168446</HomeTeamID>
+          <HomeTeamName>FC GaisBeach 04</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>1154241</AwayTeamID>
+          <AwayTeamName>IFK Gislaved</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-11-03 18:15:00</MatchDate>
+        <MatchType>4</MatchType>
+        <MatchContextId>0</MatchContextId>
+        <SourceSystem>Hattrick</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>0</HomeGoals>
+        <AwayGoals>2</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>42792124</MatchID>
+        <HomeTeam>
+          <HomeTeamID>2168446</HomeTeamID>
+          <HomeTeamName>FC GaisBeach 04</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>3439168</AwayTeamID>
+          <AwayTeamName>Chad'Minator</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-11-04 02:05:00</MatchDate>
+        <MatchType>50</MatchType>
+        <MatchContextId>2108472</MatchContextId>
+        <SourceSystem>HTOIntegrated</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>6</HomeGoals>
+        <AwayGoals>3</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>42803426</MatchID>
+        <HomeTeam>
+          <HomeTeamID>2055764</HomeTeamID>
+          <HomeTeamName>Nurmoon Porkkana</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>2168446</AwayTeamID>
+          <AwayTeamName>FC GaisBeach 04</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-11-04 10:04:00</MatchDate>
+        <MatchType>50</MatchType>
+        <MatchContextId>2108472</MatchContextId>
+        <SourceSystem>HTOIntegrated</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>8</HomeGoals>
+        <AwayGoals>4</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>42817286</MatchID>
+        <HomeTeam>
+          <HomeTeamID>2868842</HomeTeamID>
+          <HomeTeamName>TressPundos</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>2168446</AwayTeamID>
+          <AwayTeamName>FC GaisBeach 04</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-11-04 18:04:00</MatchDate>
+        <MatchType>50</MatchType>
+        <MatchContextId>2108472</MatchContextId>
+        <SourceSystem>HTOIntegrated</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>0</HomeGoals>
+        <AwayGoals>5</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>42828793</MatchID>
+        <HomeTeam>
+          <HomeTeamID>2168446</HomeTeamID>
+          <HomeTeamName>FC GaisBeach 04</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>289414</AwayTeamID>
+          <AwayTeamName>Extracción Minas FC</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-11-05 02:04:00</MatchDate>
+        <MatchType>50</MatchType>
+        <MatchContextId>2108472</MatchContextId>
+        <SourceSystem>HTOIntegrated</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>1</HomeGoals>
+        <AwayGoals>4</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>42843748</MatchID>
+        <HomeTeam>
+          <HomeTeamID>2168446</HomeTeamID>
+          <HomeTeamName>FC GaisBeach 04</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>3460432</AwayTeamID>
+          <AwayTeamName>Niebieski Batory 1920</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-11-05 10:04:00</MatchDate>
+        <MatchType>50</MatchType>
+        <MatchContextId>2108472</MatchContextId>
+        <SourceSystem>HTOIntegrated</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>0</HomeGoals>
+        <AwayGoals>6</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>42857571</MatchID>
+        <HomeTeam>
+          <HomeTeamID>2168446</HomeTeamID>
+          <HomeTeamName>FC GaisBeach 04</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>2013154</AwayTeamID>
+          <AwayTeamName>Kulmulen Oil Inc.</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-11-05 18:05:00</MatchDate>
+        <MatchType>50</MatchType>
+        <MatchContextId>2108472</MatchContextId>
+        <SourceSystem>HTOIntegrated</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>1</HomeGoals>
+        <AwayGoals>4</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>772264844</MatchID>
+        <HomeTeam>
+          <HomeTeamID>2168446</HomeTeamID>
+          <HomeTeamName>FC GaisBeach 04</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>2558011</AwayTeamID>
+          <AwayTeamName>1. F.C. AERO</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-11-07 18:00:00</MatchDate>
+        <MatchType>4</MatchType>
+        <MatchContextId>0</MatchContextId>
+        <SourceSystem>Hattrick</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>0</HomeGoals>
+        <AwayGoals>7</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>772339103</MatchID>
+        <HomeTeam>
+          <HomeTeamID>2168446</HomeTeamID>
+          <HomeTeamName>FC GaisBeach 04</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>52931</AwayTeamID>
+          <AwayTeamName>Suuupi United</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-11-10 18:00:00</MatchDate>
+        <MatchType>3</MatchType>
+        <MatchContextId>4</MatchContextId>
+        <SourceSystem>Hattrick</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>4</CupId>
+        <CupLevel>1</CupLevel>
+        <CupLevelIndex>1</CupLevelIndex>
+        <HomeGoals>1</HomeGoals>
+        <AwayGoals>3</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>773451190</MatchID>
+        <HomeTeam>
+          <HomeTeamID>2168446</HomeTeamID>
+          <HomeTeamName>FC GaisBeach 04</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>2354006</AwayTeamID>
+          <AwayTeamName>FC Freuer</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-11-14 18:00:00</MatchDate>
+        <MatchType>1</MatchType>
+        <MatchContextId>15953</MatchContextId>
+        <SourceSystem>Hattrick</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>2</HomeGoals>
+        <AwayGoals>0</AwayGoals>
+      </Match>
+    </MatchList>
+  </Team>
+</HattrickData>

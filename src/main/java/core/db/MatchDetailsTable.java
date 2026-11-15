@@ -1,5 +1,6 @@
 package core.db;
 
+import core.model.match.ChanceType;
 import core.model.match.MatchEvent;
 import core.model.enums.MatchType;
 import core.model.match.Matchdetails;
@@ -9,6 +10,10 @@ import java.sql.ResultSet;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.function.BiConsumer;
+import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 final class MatchDetailsTable extends AbstractTable {
@@ -22,7 +27,7 @@ final class MatchDetailsTable extends AbstractTable {
 
 	@Override
 	protected void initColumns() {
-		columns = new ColumnDescriptor[] {
+		final var base = new ColumnDescriptor[] {
 				ColumnDescriptor.Builder.newInstance().setColumnName("MatchID").setGetter((o) -> ((Matchdetails) o).getMatchID()).setSetter((o, v) -> ((Matchdetails) o).setMatchID((int) v)).setType(Types.INTEGER).isNullable(false).build(),
 				ColumnDescriptor.Builder.newInstance().setColumnName("MatchTyp").setGetter((o) -> ((Matchdetails) o).getMatchType().getId()).setSetter((o, v) -> ((Matchdetails) o).setMatchType(MatchType.getById((int) v))).setType(Types.INTEGER).isNullable(false).build(),
 				ColumnDescriptor.Builder.newInstance().setColumnName("ArenaId").setGetter((o) -> ((Matchdetails) o).getArenaID()).setSetter((o, v) -> ((Matchdetails) o).setArenaID((int) v)).setType(Types.INTEGER).isNullable(false).build(),
@@ -82,6 +87,39 @@ final class MatchDetailsTable extends AbstractTable {
 				ColumnDescriptor.Builder.newInstance().setColumnName("HomeFormation").setGetter((o) -> truncateString(((Matchdetails) o).getFormation(true), 5)).setSetter((o, v) -> ((Matchdetails) o).setHomeFormation((String) v)).setType(Types.VARCHAR).setLength(5).isNullable(true).build(),
 				ColumnDescriptor.Builder.newInstance().setColumnName("AwayFormation").setGetter((o) -> truncateString(((Matchdetails) o).getFormation(false), 5)).setSetter((o, v) -> ((Matchdetails) o).setAwayFormation((String) v)).setType(Types.VARCHAR).setLength(5).isNullable(true).build()
 		};
+		final var cols = new ArrayList<>(Arrays.asList(base));
+		cols.addAll(chanceAndReplayColumns());
+		columns = cols.toArray(new ColumnDescriptor[0]);
+	}
+
+	/**
+	 * HomeChancesLeft ... GuestChancesOther (matchdetails 3.1) and the replay pair per team (3.2),
+	 * all nullable: null for a match downloaded before, and the replay pair also for youth matches.
+	 */
+	static List<ColumnDescriptor> chanceAndReplayColumns() {
+		final var cols = new ArrayList<ColumnDescriptor>();
+		for (var home : new boolean[]{true, false}) {
+			final var side = home ? "Home" : "Guest";
+			for (var type : ChanceType.values()) {
+				cols.add(nullable(side + "Chances" + type.getColumnSuffix(), Types.INTEGER,
+						o -> ((Matchdetails) o).getChances(home, type),
+						(o, v) -> ((Matchdetails) o).setChances(home, type, (Integer) v)));
+			}
+		}
+		cols.add(nullable("HomeHasReplay", Types.BOOLEAN, o -> ((Matchdetails) o).getHomeHasReplay(),
+				(o, v) -> ((Matchdetails) o).setHomeHasReplay((Boolean) v)));
+		cols.add(nullable("GuestHasReplay", Types.BOOLEAN, o -> ((Matchdetails) o).getGuestHasReplay(),
+				(o, v) -> ((Matchdetails) o).setGuestHasReplay((Boolean) v)));
+		cols.add(nullable("HomeNrOfReplays", Types.INTEGER, o -> ((Matchdetails) o).getHomeNrOfReplays(),
+				(o, v) -> ((Matchdetails) o).setHomeNrOfReplays((Integer) v)));
+		cols.add(nullable("GuestNrOfReplays", Types.INTEGER, o -> ((Matchdetails) o).getGuestNrOfReplays(),
+				(o, v) -> ((Matchdetails) o).setGuestNrOfReplays((Integer) v)));
+		return cols;
+	}
+
+	private static ColumnDescriptor nullable(String name, int type, UnaryOperator<Object> getter, BiConsumer<Object, Object> setter) {
+		return ColumnDescriptor.Builder.newInstance().setColumnName(name).setGetter(getter)
+				.setSetter(setter).setType(type).isNullable(true).build();
 	}
 
 	@Override

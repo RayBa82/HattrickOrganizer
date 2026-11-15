@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="utf-8"?>
+<HattrickData>
+  <FileName>matchesArchive.xml</FileName>
+  <Version>1.5</Version>
+  <UserID>1357154</UserID>
+  <FetchedDate>2026-11-15 03:01:13</FetchedDate>
+  <IsYouth>True</IsYouth>
+  <Team>
+    <TeamID>3256333</TeamID>
+    <TeamName />
+    <MatchList>
+      <Match>
+        <MatchID>146086848</MatchID>
+        <HomeTeam>
+          <HomeTeamID>3256333</HomeTeamID>
+          <HomeTeamName>Beach Teens</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>3271684</AwayTeamID>
+          <AwayTeamName>JFC Ingersleben</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-08-17 19:15:00</MatchDate>
+        <MatchType>100</MatchType>
+        <MatchContextId>0</MatchContextId>
+        <SourceSystem>Youth</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>6</HomeGoals>
+        <AwayGoals>1</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>146086850</MatchID>
+        <HomeTeam>
+          <HomeTeamID>3271679</HomeTeamID>
+          <HomeTeamName>Thunderkittens</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>3256333</AwayTeamID>
+          <AwayTeamName>Beach Teens</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-08-24 19:15:00</MatchDate>
+        <MatchType>100</MatchType>
+        <MatchContextId>0</MatchContextId>
+        <SourceSystem>Youth</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>0</HomeGoals>
+        <AwayGoals>3</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>146086851</MatchID>
+        <HomeTeam>
+          <HomeTeamID>3256333</HomeTeamID>
+          <HomeTeamName>Beach Teens</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>3280465</AwayTeamID>
+          <AwayTeamName>Berliner JK</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-08-31 19:15:00</MatchDate>
+        <MatchType>100</MatchType>
+        <MatchContextId>0</MatchContextId>
+        <SourceSystem>Youth</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>1</HomeGoals>
+        <AwayGoals>4</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>146402046</MatchID>
+        <HomeTeam>
+          <HomeTeamID>3256333</HomeTeamID>
+          <HomeTeamName>Beach Teens</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>2835363</AwayTeamID>
+          <AwayTeamName>Sonic Youth Mini-Kicker</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-09-05 14:12:00</MatchDate>
+        <MatchType>101</MatchType>
+        <MatchContextId>0</MatchContextId>
+        <SourceSystem>Youth</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>0</HomeGoals>
+        <AwayGoals>5</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>146086853</MatchID>
+        <HomeTeam>
+          <HomeTeamID>3280465</HomeTeamID>
+          <HomeTeamName>Berliner JK</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>3256333</AwayTeamID>
+          <AwayTeamName>Beach Teens</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-09-07 19:15:00</MatchDate>
+        <MatchType>100</MatchType>
+        <MatchContextId>0</MatchContextId>
+        <SourceSystem>Youth</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>3</HomeGoals>
+        <AwayGoals>3</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>146086856</MatchID>
+        <HomeTeam>
+          <HomeTeamID>3256333</HomeTeamID>
+          <HomeTeamName>Beach Teens</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>3271679</AwayTeamID>
+          <AwayTeamName>Thunderkittens</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-09-14 19:15:00</MatchDate>
+        <MatchType>100</MatchType>
+        <MatchContextId>0</MatchContextId>
+        <SourceSystem>Youth</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>5</HomeGoals>
+        <AwayGoals>2</AwayGoals>
+      </Match>
+      <Match>
+        <MatchID>146086858</MatchID>
+        <HomeTeam>
+          <HomeTeamID>3271684</HomeTeamID>
+          <HomeTeamName>JFC Ingersleben</HomeTeamName>
+        </HomeTeam>
+        <AwayTeam>
+          <AwayTeamID>3256333</AwayTeamID>
+          <AwayTeamName>Beach Teens</AwayTeamName>
+        </AwayTeam>
+        <MatchDate>2026-09-21 19:15:00</MatchDate>
+        <MatchType>100</MatchType>
+        <MatchContextId>0</MatchContextId>
+        <SourceSystem>Youth</SourceSystem>
+        <MatchRuleId>0</MatchRuleId>
+        <CupId>0</CupId>
+        <CupLevel>0</CupLevel>
+        <CupLevelIndex>0</CupLevelIndex>
+        <HomeGoals>1</HomeGoals>
+        <AwayGoals>5</AwayGoals>
+      </Match>
+    </MatchList>
+  </Team>
+</HattrickData>
