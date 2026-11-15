@@ -5,6 +5,16 @@ accumulated; git keeps them (`git log -p -- docs/current.md`; the full history f
 2026-09-26 is `git show f5c51d0d:docs/current.md`).
 
 
+## estimate_market_value: hattrickEstimate split from live (2026-11-15)
+
+Asked for by the hattrick session: `live` bundled the transfer search (one of 20 per rolling hour)
+with the playerdetails read of Hattrick's own estimate, so the estimate cost a search. `live` is now
+the search only. The new `hattrickEstimate` argument (default true) reads it for a squad `playerId`
+or for `profile.playerId`, i.e. any team's player, which Hattrick shows when the player is listed.
+Tool and parameter descriptions say when the field is absent: no visible skills, search-only
+comparables. Unit-tested and shipped with `dockerPush`; not yet called against a live listed player.
+The hattrick session writes the price-player skill rule against these names.
+
 ## #2429 gender and league system merged from the upstream PR (2026-11-14)
 
 Upstream PR ho-dev#2595 (branch `feature/2429-gender-league-system`, against ho-dev master)
@@ -16,14 +26,5 @@ our `DBManager.instance()` helpers (headless exits) on the next upstream merge. 
 `gender` and `leagueSystem` (male/female), left out on an old snapshot. Not checked against a
 women's team: the dev DB is a men's team.
 
-## #2587 season offset 0 no longer re-derived on load (2026-11-14)
-
-On `master`, unit-tested; upstream PR ho-dev#2594 against `release/10`. `BasicsTable.loadBasics` re-derived the
-offset from the download date whenever it was 0. Germany's real offset is 0, so every load
-guessed, and a download between the league's season change and HO's Monday changeover came out
-±1 after a restart (training weeks, get_training, week_brief, level_up_report, weekStart).
-`Basics.seasonOffset` is now an `Integer`: null = unknown (only then derived), 0 stays 0.
-The local DB had no download in that window; the headless server's DB was not checked.
-
-Open from the previous piece (upstream merge, training prediction): compare the get_training
-predictions with the real training on 2026-11-20.
+Still open from earlier pieces: compare the get_training predictions with the real training on
+2026-11-20; the #2587 season-offset fix (ho-dev#2594) was not checked on the headless server's DB.

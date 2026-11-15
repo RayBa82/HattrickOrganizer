@@ -315,8 +315,10 @@ Four things about it that cost a live fetch to learn:
   `TransferCompareAverageDate`. Only where the skills are visible (own player, listed player, NT
   coach) and Hattrick has one. HO keeps it on the playerdetails rows of TRANSFERLISTING
   (`HTESTIMATE`, `HTESTIMATEDATE`, DB 1009) and shows it as `hattrickEstimate` in `list_scout`,
-  `manage_scout` add/refresh and the comparables; `estimate_market_value` reads it live for a squad
-  player. It is a second opinion beside the corpus median, not an input to it - once enough sales
+  `manage_scout` add/refresh and the comparables; `estimate_market_value` reads it from playerdetails
+  for a squad player, or for a profile carrying another team's `playerId` (e.g. a listed player),
+  through its own `hattrickEstimate` argument (default true, independent of `live`, so no transfer
+  search is spent). It is a second opinion beside the corpus median, not an input to it - once enough sales
   have both, the two can be compared.
 
 `XMLPlayersParser.parseMarketPlayerFromString` handles all of the above.
