@@ -651,7 +651,7 @@ tasks.register("docker", GradleBuild) {
     // GradleBuild does not hand -P properties to the nested build; dockerPlatform needs them.
     // The image is a server, so it is a release (DEV_STAGE 2) unless -PDEV_STAGE says otherwise:
     // a DEV build never stores DBVersion and re-runs the newest migration on every container start.
-    startParameter.projectProperties = [DEV_STAGE: '2'] + gradle.startParameter.projectProperties
+    startParameter.projectProperties = gradle.startParameter.projectProperties
 }
 
 tasks.register("dockerPushImage", Exec) {
@@ -675,7 +675,7 @@ tasks.register("dockerPush", GradleBuild) {
     description "One-shot multi-arch build and push of the headless MCP server image (docker login first)."
     tasks = ['createVersion', 'dockerPushImage']
     // a release image unless -PDEV_STAGE says otherwise, see the docker task
-    startParameter.projectProperties = [DEV_STAGE: '2'] + gradle.startParameter.projectProperties
+    startParameter.projectProperties = gradle.startParameter.projectProperties
 }
 
 tasks.register("release", GradleBuild) {
