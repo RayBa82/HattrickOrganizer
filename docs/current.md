@@ -5,6 +5,18 @@ accumulated; git keeps them (`git log -p -- docs/current.md`; the full history f
 2026-09-26 is `git show f5c51d0d:docs/current.md`).
 
 
+## MCP youth tools (2026-11-15)
+
+Branch `feature/youth-mcp`, `YouthTools`: `get_youth_squad`, `get_youth_player`,
+`get_youth_team`, `get_youth_training`, `set_youth_training` (local only: CHPP has no youth
+training, and HO's estimates rest on it), `get_youth_matches` (live `matches` with `isYouth`)
+and `send_youth_match_order` (the senior order JSON with youth ids, to the youth team, read
+back like `send_match_order`). `send_match_order` now refuses youth match types, and
+`get_match_order` reads a youth order from the youth team. Measured on a DB copy grafted with
+the last real squad (HRF 126): squad 6.2k chars, player 3.3k, training 1.5k; `set_youth_training`
+moved the estimates. **Not checked against Hattrick:** team, live matches and the order send,
+for want of an academy (`docs/roadmap.md`).
+
 ## Youth CHPP files and the shared match files on their latest versions (2026-11-15)
 
 Branch `feature/youth-chpp`, DB step 1101; storage only, no UI. `matchesarchive` 1.5 and
@@ -24,17 +36,6 @@ Merged with it: gone players on the scout list (CHPP error 56, fired or retired)
 watch; checked on a DB copy (the next download asks once more, the one after asks none). The 40
 other gone players the desktop app kept asking about since 2026-10-16 were already handled by
 `e9aaf907`: the installed desktop HO predates it, so it needs a new build.
-
-## estimate_market_value: hattrickEstimate split from live (2026-11-15)
-
-Asked for by the hattrick session: `live` bundled the transfer search (one of 20 per rolling hour)
-with the playerdetails read of Hattrick's own estimate, so the estimate cost a search. `live` is now
-the search only. The new `hattrickEstimate` argument (default true) reads it for a squad `playerId`
-or for `profile.playerId`, i.e. any team's player, which Hattrick shows when the player is listed.
-Tool and parameter descriptions say when the field is absent: no visible skills, search-only
-comparables. Unit-tested, shipped as `ho-headless:11.0.0.2`, and checked live on the server (2026-11-15): a listed
-player of another team via `profile.playerId` with `live: false` returned `hattrickEstimate` beside
-the median, no search spent. The hattrick session's price-player skill uses these names.
 
 Still open: on the next upstream merge, keep our DB chain (1001–1009, 1100, then 1101; upstream
 has `case 1000 → updateDBv1100`) and our `DBManager.instance()` helpers (headless exits). The

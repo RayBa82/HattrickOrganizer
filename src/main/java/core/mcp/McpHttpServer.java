@@ -147,6 +147,7 @@ public final class McpHttpServer {
         registerAll(MarketTools.tools());
         registerAll(MatchTools.tools());
         registerAll(BackupTools.tools());
+        registerAll(YouthTools.tools());
     }
 
     public synchronized boolean isRunning() {

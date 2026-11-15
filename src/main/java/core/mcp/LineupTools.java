@@ -124,7 +124,8 @@ public final class LineupTools {
                 new McpTool("get_match_order",
                         "The match order Hattrick holds for a match, read from Hattrick (not HO's "
                                 + "lineup), in send_match_order's order shape. Use it to check what "
-                                + "a send left at Hattrick. status hidden: Hattrick no longer shows "
+                                + "a send left at Hattrick; youth match types read the youth "
+                                + "team's order. status hidden: Hattrick no longer shows "
                                 + "the order shortly before kick-off.",
                         matchOrderSchema(),
                         LineupTools::getMatchOrder)
@@ -142,6 +143,11 @@ public final class LineupTools {
     private static JsonObject sendMatchOrder(JsonObject args) throws McpToolException {
         final var matchId = McpJson.reqInt(args, MATCH_ID);
         final var matchType = matchType(McpJson.reqInt(args, MATCH_TYPE));
+        if (matchType.isYouth()) {
+            // HO's lineup holds senior players: sent to a youth match it would be nonsense.
+            throw new IllegalArgumentException("matchType " + matchType.getId() + " is a youth "
+                    + "match; send_match_order sends HO's senior lineup. Use send_youth_match_order.");
+        }
         final var model = McpJson.model();
         final var lineupMatchId = new java.util.concurrent.atomic.AtomicInteger();
         // apply_lineup mutates the live Lineup on the EDT, so serialise it there too.
@@ -171,6 +177,15 @@ public final class LineupTools {
         if (mismatch != null) {
             out.addProperty("warning", mismatch);
         }
+        return sendAndVerify(out, matchId, matchType, orderString, echo);
+    }
+
+    /**
+     * Sends an order and re-reads it from Hattrick into {@code out}; senior and youth orders
+     * share it. Without Supporter, nothing goes out and the echo comes back as wouldSend.
+     */
+    static JsonObject sendAndVerify(JsonObject out, int matchId, core.model.enums.MatchType matchType,
+                                    String orderString, JsonObject echo) throws McpToolException {
         try {
             ChppWriteService.instance().sendMatchOrderForAgent(matchId, matchType, orderString);
         } catch (ChppWriteService.SupporterRequiredException e) {
@@ -239,7 +254,7 @@ public final class LineupTools {
         return out;
     }
 
-    private static core.model.enums.MatchType matchType(int matchTypeId) {
+    static core.model.enums.MatchType matchType(int matchTypeId) {
         final var matchType = core.model.enums.MatchType.getById(matchTypeId);
         if (matchType == null) {
             throw new IllegalArgumentException("Unknown matchType " + matchTypeId
@@ -254,7 +269,8 @@ public final class LineupTools {
      */
     static @Nullable JsonObject heldOrder(int matchId, core.model.enums.MatchType matchType)
             throws McpToolException {
-        final var teamId = McpJson.model().getBasics().getTeamId();
+        McpJson.model();
+        final var teamId = ChppWriteService.teamIdFor(matchType);
         final var connector = Connector.instance();
         final var wasSilent = connector.setSilentDownload(true);
         final String xml;

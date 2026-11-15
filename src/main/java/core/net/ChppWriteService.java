@@ -106,6 +106,15 @@ public class ChppWriteService {
         return model != null ? model.getBasics().getTeamId() : 0;
     }
 
+    /** The team a match order goes to: the youth team for a youth match, else the senior one. */
+    public static int teamIdFor(MatchType matchType) {
+        final var model = HOVerwaltung.instance().getModel();
+        if (model == null) {
+            return 0;
+        }
+        return matchType.isYouth() ? model.getBasics().getYouthTeamId() : model.getBasics().getTeamId();
+    }
+
     // ===================== training =====================
 
     /**
@@ -463,7 +472,7 @@ public class ChppWriteService {
 
     protected String fetchMatchOrder(int matchId, MatchType matchType, String orderString)
             throws Exception {
-        final var teamId = currentTeamId();
+        final var teamId = teamIdFor(matchType);
         final var was = Connector.instance().setSilentDownload(true);
         try {
             return Connector.instance().uploadMatchOrder(matchId, teamId, matchType, orderString, false);

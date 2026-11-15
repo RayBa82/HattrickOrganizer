@@ -69,7 +69,7 @@ public enum MatchType implements IMatchType {
 		return "htointegrated";
 	}
 
-	private boolean isYouth() {
+	public boolean isYouth() {
 		return switch (this) {
 			case YOUTHFRIENDLY, YOUTHFRIENDLYCUPRULES, YOUTHINTERNATIONALFRIENDLY, YOUTHINTERNATIONALFRIENDLYCUPRULES, YOUTHLEAGUE -> true;
 			default -> false;
