@@ -616,11 +616,29 @@ class TransferToolsTest {
         final var properties = tool.inputSchema().getAsJsonObject("properties");
         assertThat(properties.keySet())
                 .contains("playerId", "profile", "ageTolerance", "ageWindowDays", "primarySkillTolerance",
-                        "skillTolerance", "live");
+                        "skillTolerance", "live", "hattrickEstimate");
         // Neither is unconditionally required at the schema level - profile makes playerId
         // optional, so the mutual-exclusion / required-field checks live in estimateMarketValue
         // itself (see the validation tests below) rather than in the schema.
         assertThat(tool.inputSchema().getAsJsonArray("required")).isEmpty();
+    }
+
+    /**
+     * Hattrick's estimate is read for the squad player, or for a profile that carries a real
+     * Hattrick id (a transfer-listed player of another team shows one too); a profile without an
+     * id has nothing to look up.
+     */
+    @Test
+    void hattrickEstimateId_squadPlayerOrProfileId() {
+        final var squad = new core.model.player.Player();
+        squad.setPlayerId(4711);
+        assertThat(TransferTools.hattrickEstimateId(null, squad)).isEqualTo(4711);
+
+        final var profile = new JsonObject();
+        final var fromProfile = new core.model.player.Player();
+        assertThat(TransferTools.hattrickEstimateId(profile, fromProfile)).isZero();
+        profile.addProperty("playerId", 815);
+        assertThat(TransferTools.hattrickEstimateId(profile, fromProfile)).isEqualTo(815);
     }
 
     @Test

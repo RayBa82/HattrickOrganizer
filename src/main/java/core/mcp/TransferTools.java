@@ -228,8 +228,8 @@ public final class TransferTools {
                         "HO's local scout shortlist, filtered, one page (count = filtered "
                                 + "total). Rows: playerId, playerName, note, age, specialty, "
                                 + "price and deadline (frozen when added), askingPrice, highestBid, "
-                                + "observedAt (newest observation), salePrice, soldAt, "
-                                + "hattrickEstimate (Hattrick's own), plus each skill "
+                                + "observedAt (newest), salePrice, soldAt, "
+                                + "hattrickEstimate (Hattrick's own, absent if none shown), plus each skill "
                                 + "filtered on. full adds every frozen skill, TSI, wage and character. "
                                 + "playerIds picks entries by id.",
                         McpTool.schema(McpTool.properties(
@@ -268,8 +268,8 @@ public final class TransferTools {
                                 + "listings: the estimate, a summary per A/B skill group, and every "
                                 + "comparable as a download - reason over those, not the median. "
                                 + "Below 3 sales, see resolvedSales + listingsEstimate. Searches "
-                                + "today's market first and stores the hits (one of the session's "
-                                + "capped searches); live: false reads the stored corpus only, free.",
+                                + "today's market first and stores the hits (one capped search); "
+                                + "live: false skips it. Any playerId also gets hattrickEstimate.",
                         McpTool.schema(McpTool.properties(
                                         PLAYER_ID, McpTool.prop(INTEGER,
                                                 "the player to value - a squad player id"),
@@ -288,8 +288,9 @@ public final class TransferTools {
                                                         + "playerId or profile, not both. Also "
                                                         + "optional: playerId (this player's real "
                                                         + "Hattrick id, e.g. from get_team_transfers "
-                                                        + "or analyze_opponent - bookkeeping only, "
-                                                        + "never used to look him up in the squad) "
+                                                        + "or analyze_opponent or a transfer search - "
+                                                        + "never used to look him up in the squad, but "
+                                                        + "it gets his hattrickEstimate) "
                                                         + "and salePrice - given both, this profile "
                                                         + "is recorded into HO's local transfer-"
                                                         + "listing corpus as a real data point, so a "
@@ -318,10 +319,21 @@ public final class TransferTools {
                                                         + "call; passed explicitly, it fails the call "
                                                         + "as before. liveSearch reports itemCount, "
                                                         + "hitCount and a resultId: page the hits with "
-                                                        + "search_transfers resultId. For a squad "
-                                                        + "playerId it also reads Hattrick's own "
-                                                        + "estimate (hattrickEstimate, one playerdetails "
-                                                        + "call) - a second opinion, not in the median."),
+                                                        + "search_transfers resultId. Only the search - "
+                                                        + "hattrickEstimate is its own argument."),
+                                        McpJson.HATTRICK_ESTIMATE, McpTool.prop(BOOLEAN,
+                                                "for a squad playerId, or a profile carrying "
+                                                        + "playerId (any team's player, e.g. a "
+                                                        + "transfer-listed one): also read Hattrick's "
+                                                        + "own estimate (hattrickEstimate + "
+                                                        + "hattrickEstimateDate, one playerdetails call, "
+                                                        + "no transfer search, independent of live) - a "
+                                                        + "second opinion, not in the median. Default "
+                                                        + "true; false skips the call. Absent when "
+                                                        + "Hattrick shows none: it shows one only where "
+                                                        + "the skills are visible (own, transfer-listed "
+                                                        + "or NT players), so comparables seen only in a "
+                                                        + "search carry none."),
                                         SPECIALTY_FILTER, McpTool.prop(BOOLEAN,
                                                 "hard-filter the corpus to the target's exact specialty "
                                                         + "(the old behaviour; thin cells). Default false: "
@@ -1089,8 +1101,12 @@ public final class TransferTools {
             json.addProperty(AGE_WINDOW_DAYS, ageWindowDays);
         }
         addLiveSearch(json, liveSearch, liveSearchSkipped);
-        if (!hasProfile && McpJson.optBool(args, "live", true)) {
-            addSquadHattrickEstimate(json, player.getPlayerId());
+        // Not tied to live: playerdetails costs no transfer search, so a local-only valuation
+        // still gets Hattrick's second opinion. A profile's playerId is a real Hattrick id of
+        // any team's player - Hattrick shows a transfer-listed one's estimate too.
+        final int estimateId = hattrickEstimateId(profile, player);
+        if (estimateId > 0 && McpJson.optBool(args, McpJson.HATTRICK_ESTIMATE, true)) {
+            addLiveHattrickEstimate(json, estimateId);
         }
 
         // The evidence, not just the summary. The median below is a crude anchor: it collapses
@@ -1206,12 +1222,17 @@ public final class TransferTools {
         }
     }
 
+    /** The Hattrick id to read the estimate for: the squad player's, or the profile's own (0 = none). */
+    static int hattrickEstimateId(JsonObject profile, Player player) {
+        return profile != null ? McpJson.optInt(profile, PLAYER_ID, 0) : player.getPlayerId();
+    }
+
     /**
-     * Hattrick's own estimate of a squad player, read live from playerdetails (one CHPP call, as
-     * part of live): a second opinion beside the corpus figure, not an input to it. Best effort -
-     * left out when Hattrick has none or the call fails.
+     * Hattrick's own estimate of a player, read from playerdetails (one CHPP call, no transfer
+     * search): a second opinion beside the corpus figure, not an input to it. Best effort - left
+     * out when Hattrick has none (skills not visible to us) or the call fails.
      */
-    private static void addSquadHattrickEstimate(JsonObject json, int playerId) {
+    private static void addLiveHattrickEstimate(JsonObject json, int playerId) {
         try {
             final var m = ChppWriteService.instance().marketPlayerForAgent(playerId);
             if (m != null) {
