@@ -80,3 +80,26 @@ by all HO users.
      `get_training`.
 7. Done: `estimate_market_value` `summary` (figures, `middleHalf`, top 3 skill groups, the
    download).
+
+## MCP youth tools
+
+**Trigger:** the youth CHPP data is in (2026-11-15, DB step 1101) - start any time; the real
+check needs a club with a youth academy, which the development club has not had since
+2026-09-22.
+
+**What:** `get_youth_squad` (age, promotion date, specialty, skill estimates with known
+maxima, potential, last youth match; compact by default, `full`, `bulk`), `get_youth_player`
+(skill development, scout and coach comments), `get_youth_training` (per youth match:
+training, factor, who trained what), the youth team and league (`YouthTeamDetails`,
+`YouthLeague`), and a youth section in `week_brief`. All local reads, budgeted like the other
+tools. Then a training what-if on `YouthTrainingContext`.
+
+## Youth coach report codes
+
+**Trigger:** real youthplayerdetails 1.4 responses with `TrainingReports` (a Gold club with an
+academy).
+
+**What:** map `ReportType` to its meaning from the report texts, replace the doc-built fixtures
+under `src/test/resources/chpp/youth/`, and feed the verified level-carrying codes (18, 19,
+28-30) into `YouthSkillInfo` like `YouthPlayer.evaluateScoutComments` does. Details in
+`docs/chpp_files.md`, "Youth files".

@@ -19,6 +19,10 @@ public class YouthPlayerTable  extends AbstractTable {
      * tablename
      **/
     static final String TABLENAME = "YOUTHPLAYER";
+    /** youthplayerlist 1.2, added by DB step 1101. */
+    static final String NATIVE_COUNTRY_ID = "NativeCountryID";
+    static final String NATIVE_COUNTRY_NAME = "NativeCountryName";
+    static final int NATIVE_COUNTRY_NAME_LENGTH = 127;
 
     YouthPlayerTable(ConnectionManager adapter) {
         super(TABLENAME, adapter);
@@ -57,7 +61,9 @@ public class YouthPlayerTable  extends AbstractTable {
                 ColumnDescriptor.Builder.newInstance().setColumnName("playedMinutes").setGetter((p) -> ((YouthPlayer) p).getPlayedMinutes()).setSetter((p, v) -> ((YouthPlayer) p).setPlayedMinutes((Integer) v)).setType(Types.INTEGER).isNullable(true).build(),
                 ColumnDescriptor.Builder.newInstance().setColumnName("rating").setGetter((p) -> ((YouthPlayer) p).getRating()).setSetter((p, v) -> ((YouthPlayer) p).setRating((Double) v)).setType(Types.DOUBLE).isNullable(true).build(),
                 ColumnDescriptor.Builder.newInstance().setColumnName("YouthMatchDate").setGetter(p -> HODateTime.toDbTimestamp(((YouthPlayer) p).getYouthMatchDate())).setSetter((p, v) -> ((YouthPlayer) p).setYouthMatchDate((HODateTime) v)).setType(Types.TIMESTAMP).isNullable(true).build(),
-                ColumnDescriptor.Builder.newInstance().setColumnName("GenderID").setGetter(p -> Gender.toId(((YouthPlayer) p).getGender())).setSetter((p, v) -> ((YouthPlayer) p).setGender(Gender.fromId((Integer) v))).setType(Types.INTEGER).isNullable(true).build()
+                ColumnDescriptor.Builder.newInstance().setColumnName("GenderID").setGetter(p -> Gender.toId(((YouthPlayer) p).getGender())).setSetter((p, v) -> ((YouthPlayer) p).setGender(Gender.fromId((Integer) v))).setType(Types.INTEGER).isNullable(true).build(),
+                ColumnDescriptor.Builder.newInstance().setColumnName(NATIVE_COUNTRY_ID).setGetter(p -> ((YouthPlayer) p).getNativeCountryId()).setSetter((p, v) -> ((YouthPlayer) p).setNativeCountryId((Integer) v)).setType(Types.INTEGER).isNullable(true).build(),
+                ColumnDescriptor.Builder.newInstance().setColumnName(NATIVE_COUNTRY_NAME).setGetter(p -> truncateString(((YouthPlayer) p).getNativeCountryName(), NATIVE_COUNTRY_NAME_LENGTH)).setSetter((p, v) -> ((YouthPlayer) p).setNativeCountryName((String) v)).setType(Types.VARCHAR).setLength(NATIVE_COUNTRY_NAME_LENGTH).isNullable(true).build()
         ));
 
         for ( var skillId : YouthPlayer.skillIds) {

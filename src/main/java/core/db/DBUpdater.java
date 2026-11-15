@@ -128,7 +128,9 @@ final class DBUpdater {
 
 	/**
 	 * The latest CHPP versions of the match files and of every youth file: matchdetails 3.2
-	 * (chances per side, replay flags, ExpectedResult). Safe to re-run, which DEV builds do on
+	 * (chances per side, replay flags, ExpectedResult), youthplayerlist 1.4 (native country),
+	 * youthplayerdetails 1.4 (the coach's reports), youthteamdetails 1.5 (team and scouts),
+	 * youthleaguedetails 1.1 and youthleaguefixtures 1.0. Safe to re-run, which DEV builds do on
 	 * every start.
 	 */
 	private void updateDBv1101(int dbVersion) throws SQLException {
@@ -138,6 +140,23 @@ final class DBUpdater {
 			matchDetailsTable.tryAddColumn(column.getColumnName(), dbInfo.getTypeName(column.getType()));
 		}
 		dbManager.getTable(MatchExpectedResultTable.TABLENAME).createTable();
+
+		var youthPlayerTable = dbManager.getTable(YouthPlayerTable.TABLENAME);
+		youthPlayerTable.tryAddColumn(YouthPlayerTable.NATIVE_COUNTRY_ID, SQL_INTEGER);
+		youthPlayerTable.tryAddColumn(YouthPlayerTable.NATIVE_COUNTRY_NAME,
+				"VARCHAR(" + YouthPlayerTable.NATIVE_COUNTRY_NAME_LENGTH + ")");
+		// Declared long ago but never registered, so no database should have it. Should an old
+		// build have created it in its first shape (MATCH_ID/INDEX, never filled), replace it.
+		var trainerComments = dbManager.getTable(YouthTrainerCommentTable.TABLENAME);
+		if (!trainerComments.columnExistsInTable("REPORT_DATE")) {
+			trainerComments.tryDropTable();
+		}
+		trainerComments.createTable();
+		dbManager.getTable(YouthTeamDetailsTable.TABLENAME).createTable();
+		dbManager.getTable(YouthScoutTable.TABLENAME).createTable();
+		dbManager.getTable(YouthLeagueTable.TABLENAME).createTable();
+		dbManager.getTable(YouthLeagueTable.StandingsTable.TABLENAME).createTable();
+		dbManager.getTable(YouthLeagueTable.FixtureTable.TABLENAME).createTable();
 
 		updateDBVersion(dbVersion, 1101);
 	}
