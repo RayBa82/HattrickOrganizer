@@ -10,6 +10,12 @@ stores it in an embedded HSQLDB database, and provides analysis modules (trainin
 lineup rating, transfer scouting, statistics, …) on top of that local history.
 
 - Upstream: `https://github.com/ho-dev/HattrickOrganizer`, default branch `master`, LGPL 3.0.
+  This checkout is a fork: remote `origin` is upstream, remote `rayba`
+  (`https://github.com/RayBa82/HattrickOrganizer`) is ours, and local `master` tracks
+  `rayba/master`. **Never push to upstream (`origin`) directly, no branch, no tag, no force.**
+  Changes reach upstream only as a pull request from a branch on `rayba`. Push to `rayba` with
+  an explicit remote (`git push rayba <branch>`): a bare `git push` or the IDE's push may pick
+  `origin`.
 - User documentation: <https://ho.readthedocs.io/> (sources in `docs/*.rst`).
 - Developer notes: `docs/current.md` — state of the work currently in progress: what shipped, what is
   blocked and why, and what comes next. **Read it first when picking work back up, and update
