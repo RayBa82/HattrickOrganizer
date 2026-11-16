@@ -6,6 +6,7 @@ import core.file.xml.XMLTransferSearchParser.Hit;
 import core.model.TranslationFacility;
 import core.util.AmountOfMoney;
 import module.transfer.scout.ScoutEintrag;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Maps one hit of the CHPP <code>transfersearch</code> file to the scout entry that the transfer
@@ -55,22 +56,52 @@ public final class TransferSearchConverter {
     }
 
     /**
-     * The scout entry of a stored market observation, as {@code manage_scout} add pushes it into the
-     * transfer scout. A listing that carries no age was snapshotted after its deadline had passed
-     * (or came from {@code currentbids}), and keeps the defaults of a fresh {@link ScoutEintrag}.
-     * Nationality is not part of a listing snapshot and stays at its default.
+     * The scout entry of one stored market observation, market data and details from the same row.
+     * A listing that carries no age was snapshotted after its deadline had passed (or came from
+     * {@code currentbids}), and keeps the defaults of a fresh {@link ScoutEintrag}.
      */
     public static ScoutEintrag toScoutEintrag(TransferListing listing) {
+        return toScoutEintrag(listing, listing);
+    }
+
+    /**
+     * The scout entry {@code manage_scout} add builds: the market data from {@code market}, the
+     * player's newest observation, and his details from {@code details}, his newest observation
+     * that carries any. The two differ once we have bid on him: every {@code get_open_bids} stores a
+     * {@code currentbids} row with the bid and the deadline but no age or skills, and that row is
+     * usually the newest. Built from it alone, the entry kept a fresh {@link ScoutEintrag}'s
+     * defaults - age 17, TSI 1000, every skill 0 - which read as a real, hopeless player.
+     * <p>
+     * With {@code details} null or skill-less too, those defaults are all there is. Nationality is
+     * not part of a listing snapshot and stays at its default.
+     */
+    public static ScoutEintrag toScoutEintrag(TransferListing market,
+                                              @Nullable TransferListing details) {
         final var entry = new ScoutEintrag();
-        entry.setPlayerID(listing.getPlayerId());
-        entry.setName(listing.getPlayerName());
+        entry.setPlayerID(market.getPlayerId());
+        entry.setName(market.getPlayerName());
         entry.setPrice(new AmountOfMoney(
-                Math.max(listing.getAskingPrice(), listing.getHighestBid())));
-        if (listing.getDeadline() != null) {
-            entry.setDeadline(listing.getDeadline().toDbTimestamp());
+                Math.max(market.getAskingPrice(), market.getHighestBid())));
+        if (market.getDeadline() != null) {
+            entry.setDeadline(market.getDeadline().toDbTimestamp());
         }
+        if (details != null && applyDetails(entry, details)) {
+            entry.setInfo(notes(details.getInjuryLevel(), details.getCards()));
+        }
+        return entry;
+    }
+
+    /**
+     * Copy a stored observation's age, wage, TSI, form, experience, leadership, specialty and skills
+     * onto a scout entry. Nothing when the row carries no age - a {@code currentbids} row, or a
+     * search hit past its deadline - so a skill-less row never overwrites real values with
+     * defaults. The notes column is left alone: once the entry exists it holds the user's text.
+     *
+     * @return whether the row carried details and they were copied
+     */
+    public static boolean applyDetails(ScoutEintrag entry, TransferListing listing) {
         if (listing.getAge() == null) {
-            return entry;
+            return false;
         }
         entry.setAlter(listing.getAge());
         entry.setAgeDays(listing.getAgeDays());
@@ -90,8 +121,7 @@ public final class TransferSearchConverter {
         entry.setFluegelspiel(listing.getWinger());
         entry.setVerteidigung(listing.getDefender());
         entry.setStandards(listing.getSetPieces());
-        entry.setInfo(notes(listing.getInjuryLevel(), listing.getCards()));
-        return entry;
+        return true;
     }
 
     /**

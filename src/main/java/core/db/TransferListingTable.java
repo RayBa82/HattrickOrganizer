@@ -170,6 +170,18 @@ public class TransferListingTable extends AbstractTable {
     }
 
     /**
+     * The newest observation of this player that carries his details - age, TSI, skills - or null.
+     * Not simply the newest row: a currentbids snapshot carries the market data only and, once we
+     * have bid on him, is usually the newest.
+     */
+    public TransferListing loadLatestWithDetailsForPlayer(int playerId) {
+        final var sql = createSelectStatement("WHERE PLAYERID = " + playerId
+                + " AND AGE IS NOT NULL ORDER BY OBSERVEDAT DESC LIMIT 1");
+        final var rows = load(TransferListing.class, connectionManager.executeQuery(sql));
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
+    /**
      * The newest observation of this player that carries Hattrick's own estimate, or null. Not
      * simply the newest row: search hits and currentbids snapshots never carry one.
      */

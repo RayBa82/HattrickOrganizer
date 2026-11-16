@@ -325,8 +325,8 @@ public final class McpJson {
     }
 
     /**
-     * One entry of HO's local transfer scout list. Price and deadline are the snapshot taken when
-     * the player was added, not the live market state.
+     * One entry of HO's local transfer scout list. Price, deadline and skills are the snapshot taken
+     * when the player was added or last refreshed, not the live market state.
      * <p>
      * {@code price} is the scout table's own column, which holds the higher of the asking price and
      * the highest bid; the seller's asking price on its own lives in the TRANSFERLISTING snapshot.

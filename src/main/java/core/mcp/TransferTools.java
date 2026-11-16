@@ -212,9 +212,9 @@ public final class TransferTools {
                                 + "Hattrick bookmark. add: each player must have been seen by an "
                                 + "earlier search_transfers; re-adding replaces the entry; one CHPP "
                                 + "call each for character, echoed in list_scout's shape. remove: "
-                                + "also stops each entry's re-listing watch on team downloads. "
-                                + "refresh: current ask/bid/deadline, a CHPP read each (default: "
-                                + "open entries).",
+                                + "stops each entry's re-listing watch on team downloads. "
+                                + "refresh: current ask/bid/deadline/skills, a CHPP read each "
+                                + "(default: open entries).",
                         McpTool.schema(McpTool.properties(
                                         ACTION, McpTool.prop(STRING, "add, remove or refresh"),
                                         PLAYERS, McpTool.prop(ARRAY,
@@ -227,10 +227,10 @@ public final class TransferTools {
                 new McpTool("list_scout",
                         "HO's local scout shortlist, filtered, one page (count = filtered "
                                 + "total). Rows: playerId, playerName, note, age, specialty, "
-                                + "price and deadline (frozen when added), askingPrice, highestBid, "
+                                + "price and deadline (as of add or refresh), askingPrice, highestBid, "
                                 + "observedAt (newest), salePrice, soldAt, "
                                 + "hattrickEstimate (Hattrick's own, absent if none shown), plus each skill "
-                                + "filtered on. full adds every frozen skill, TSI, wage and character. "
+                                + "filtered on. full adds every skill, TSI, wage and character. "
                                 + "playerIds picks entries by id.",
                         McpTool.schema(McpTool.properties(
                                 PLAYER_IDS, McpTool.prop(ARRAY,
@@ -1778,26 +1778,34 @@ public final class TransferTools {
     // of those rules; see its javadoc. Everything here runs on the EDT because it does.
 
     /**
-     * Look the player up on the market as he is right now, for the three character traits.
-     * {@code playerdetails} is the only file that carries them - {@code transfersearch} does not, so
-     * the TRANSFERLISTING snapshot the entry was built from cannot supply them.
+     * The scout entry of a player {@code manage_scout} add puts on the list. It looks him up on the
+     * market as he is right now first, for the three character traits: {@code playerdetails} is the
+     * only file that carries them - {@code transfersearch} does not.
      * <p>
-     * The same call is also a fresh, character-bearing corpus observation, so it stores one rather
-     * than throwing the rest of the response away - the same sharing {@code TransferListingResolver}
-     * does. Only when he is actually listed: Hattrick prunes an unlisted player's skills down to
-     * stamina, and {@link TransferListing#fromPlayerDetails} refuses such a response for that
-     * reason.
+     * The same call is also a fresh, full corpus observation, so it stores one rather than throwing
+     * the rest of the response away - the same sharing {@code TransferListingResolver} does. Only
+     * when he is actually listed: Hattrick prunes an unlisted player's skills down to stamina, and
+     * {@link TransferListing#fromPlayerDetails} refuses such a response for that reason. That is
+     * why the read comes before the entry is built: while he is listed, the entry is built from it.
      * <p>
-     * One CHPP call per player added, and best effort throughout: character is a bonus on top of
-     * the add, so a failed or refused call leaves the three fields null and the entry is stored
-     * regardless. The resolve pass fills them in later anyway, but only once the watched deadline
-     * has passed - too late to inform the buy this entry was created for.
+     * The entry takes its market data from the newest observation and his skills from the newest
+     * one that has them, never from a skill-less {@code currentbids} row (see
+     * {@link TransferSearchConverter#toScoutEintrag(TransferListing, TransferListing)}).
+     * <p>
+     * One CHPP call per player added, and best effort throughout: a failed or refused call leaves
+     * the three traits null, the skills come from the stored rows, and the entry is stored
+     * regardless. The resolve pass fills the traits in later anyway, but only once the watched
+     * deadline has passed - too late to inform the buy this entry was created for.
      */
-    private static void observeForScout(ScoutEintrag entry) {
-        final var player = observeMarketPlayer(entry.getPlayerID());
+    private static ScoutEintrag observeForScout(int playerId) {
+        final var player = observeMarketPlayer(playerId);
+        final var entry = TransferSearchConverter.toScoutEintrag(
+                DBManager.instance().loadLatestTransferListing(playerId),
+                DBManager.instance().loadLatestTransferListingWithDetails(playerId));
         if (player != null) {
             ScoutList.applyCharacter(entry, player);
         }
+        return entry;
     }
 
     /**
@@ -1874,6 +1882,7 @@ public final class TransferTools {
 
         final var result = LineupTools.onEdt(() -> {
             listed.forEach((id, m) -> ScoutList.recordRelisting(id, m.askingPrice(), m.highestBid(), m.deadline()));
+            recordObservedDetails(listed, now);
             final var refreshed = new JsonArray();
             ScoutList.entries().stream()
                     .filter(e -> listed.containsKey(e.getPlayerID()))
@@ -1891,6 +1900,31 @@ public final class TransferTools {
         });
         addStoredHattrickEstimates(result.getAsJsonArray("refreshed"));
         return result;
+    }
+
+    /**
+     * The second half of refresh: each listed player's age, TSI, wage, skills and character, from
+     * the same {@code playerdetails} read, onto his entry. A refreshed entry shows the player as he
+     * is now rather than as he was when added, and an entry left with a fresh ScoutEintrag's
+     * defaults by a skill-less add is repaired. Sold entries are left alone, as
+     * {@link ScoutList#recordRelisting} leaves them; so is the notes column. EDT only.
+     */
+    private static void recordObservedDetails(
+            Map<Integer, core.file.xml.XMLPlayersParser.MarketPlayer> listed, java.sql.Timestamp now) {
+        final var entries = ScoutList.entries();
+        var changed = false;
+        for (final var entry : entries) {
+            final var m = listed.get(entry.getPlayerID());
+            if (m != null && !entry.isSold()) {
+                TransferSearchConverter.applyDetails(entry,
+                        TransferListing.fromPlayerDetails(m, HODateTime.fromDbTimestamp(now)));
+                ScoutList.applyCharacter(entry, m.player());
+                changed = true;
+            }
+        }
+        if (changed) {
+            ScoutList.save(entries);
+        }
     }
 
     /** A players element: a bare id or a {playerId, note} object. */
@@ -1937,12 +1971,10 @@ public final class TransferTools {
         for (final var element : requested) {
             final var playerId = element.isJsonObject()
                     ? McpJson.reqInt(element.getAsJsonObject(), PLAYER_ID) : element.getAsInt();
-            final var listing = DBManager.instance().loadLatestTransferListing(playerId);
-            if (listing == null) {
+            if (DBManager.instance().loadLatestTransferListing(playerId) == null) {
                 notFound.add(playerId);
             } else {
-                final var entry = TransferSearchConverter.toScoutEintrag(listing);
-                observeForScout(entry);
+                final var entry = observeForScout(playerId);
                 addScoutNote(entry, element);
                 entries.put(playerId, entry);
             }
@@ -2093,7 +2125,7 @@ public final class TransferTools {
         return bulk ? McpDownloads.bulk(out, PLAYERS) : out;
     }
 
-    /** list_scout's default row: the market state plus age and specialty, not the frozen skills. */
+    /** list_scout's default row: the market state plus age and specialty, not the skills. */
     private static final List<String> COMPACT_SCOUT_KEYS = List.of(PLAYER_ID, PLAYER_NAME, "note",
             "age", SPECIALTY, PRICE, DEADLINE, ASKING_PRICE, HIGHEST_BID, "observedAt",
             SALE_PRICE, "soldAt", McpJson.HATTRICK_ESTIMATE, McpJson.HATTRICK_ESTIMATE_DATE);

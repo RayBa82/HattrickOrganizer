@@ -125,4 +125,58 @@ class TransferSearchConverterTest {
         assertThat(entry.getAlter()).isEqualTo(17);
         assertThat(entry.getInfo()).isEmpty();
     }
+
+    private static TransferListing currentBidsRow() {
+        final var listing = new TransferListing();
+        listing.setPlayerId(111222333);
+        listing.setPlayerName("Sven Persson");
+        listing.setDeadline(DEADLINE);
+        listing.setHighestBid(1_900_000L);
+        return listing;
+    }
+
+    /** manage_scout add on a player we have bid on: the currentbids row is newest, and skill-less. */
+    @Test
+    void toScoutEintrag_ofTwoRows_takesTheMarketFromOneAndTheSkillsFromTheOther() {
+        final var entry = TransferSearchConverter.toScoutEintrag(
+                currentBidsRow(), TransferListing.fromHit(hit(details()), DEADLINE));
+
+        assertThat(entry.getPrice().getSwedishKrona().longValue()).isEqualTo(1_900_000L);
+        assertThat(entry.getAlter()).isEqualTo(24);
+        assertThat(entry.getTSI()).isEqualTo(29000);
+        assertThat(entry.getSpielaufbau()).isEqualTo(12);
+    }
+
+    @Test
+    void toScoutEintrag_ofTwoRows_withoutAnySkillsKeepsTheDefaults() {
+        final var entry = TransferSearchConverter.toScoutEintrag(currentBidsRow(), null);
+
+        assertThat(entry.getAlter()).isEqualTo(17);
+        assertThat(entry.getPrice().getSwedishKrona().longValue()).isEqualTo(1_900_000L);
+    }
+
+    /** What refresh relies on: a skill-less row never overwrites real skills, nor the notes. */
+    @Test
+    void applyDetails_ofASkilllessRowChangesNothing() {
+        final var entry = TransferSearchConverter.toScoutEintrag(
+                TransferListing.fromHit(hit(details()), DEADLINE));
+        entry.setInfo("target for the midfield");
+
+        assertThat(TransferSearchConverter.applyDetails(entry, currentBidsRow())).isFalse();
+        assertThat(entry.getAlter()).isEqualTo(24);
+        assertThat(entry.getSpielaufbau()).isEqualTo(12);
+        assertThat(entry.getInfo()).isEqualTo("target for the midfield");
+    }
+
+    @Test
+    void applyDetails_ofAFullRowOverwritesTheSkillsButNotTheNotes() {
+        final var entry = TransferSearchConverter.toScoutEintrag(currentBidsRow());
+        entry.setInfo("target for the midfield");
+
+        assertThat(TransferSearchConverter.applyDetails(entry,
+                TransferListing.fromHit(hit(details()), DEADLINE))).isTrue();
+        assertThat(entry.getAlter()).isEqualTo(24);
+        assertThat(entry.getStandards()).isEqualTo(10);
+        assertThat(entry.getInfo()).isEqualTo("target for the midfield");
+    }
 }

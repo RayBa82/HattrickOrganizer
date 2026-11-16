@@ -161,8 +161,9 @@ public final class ScoutList {
     }
 
     /**
-     * The fields a re-listing changes, and only those. Skills and TSI are deliberately left alone:
-     * they ride on the fresh TRANSFERLISTING row, which {@code TransferTools.listScout} joins in.
+     * The fields a re-listing changes, and only those. Skills and TSI are left alone: not every
+     * caller has them, and {@code manage_scout} refresh, which does, writes them separately
+     * ({@code TransferSearchConverter.applyDetails}).
      * <p>
      * {@code Price} may be a number the user typed themselves - a hand-added entry carries whatever
      * they entered - and this overwrites it. That is intended: the column means "what it would cost

@@ -1179,6 +1179,59 @@ class TransferToolsTest {
         assertThat(marketPlayerCalls).containsExactly(7004);
     }
 
+    /**
+     * Once we have bid on a player, get_open_bids stores a currentbids row - bid and deadline, no
+     * age or skills - and it is his newest. add used to build the entry from that row alone and
+     * echo a fresh ScoutEintrag's defaults: age 17, TSI 1000, every skill 0.
+     */
+    @Test
+    void manageScoutAdd_takesTheSkillsFromTheNewestRowThatHasThem() throws Exception {
+        final var full = new TransferListing();
+        full.setPlayerId(7020);
+        full.setPlayerName("Bid On");
+        full.setObservedAt(new HODateTime(HODateTime.now().getInstant().minus(java.time.Duration.ofHours(2))));
+        full.setDeadline(HODateTime.fromHT(FUTURE));
+        full.setAskingPrice(300_000L);
+        full.setAge(24);
+        full.setAgeDays(77);
+        full.setTsi(29_000);
+        full.setForm(6);
+        full.setExperience(4);
+        full.setLeadership(3);
+        full.setSpecialty(0);
+        full.setStamina(8);
+        full.setKeeper(1);
+        full.setPlaymaker(12);
+        full.setScorer(5);
+        full.setPassing(9);
+        full.setWinger(7);
+        full.setDefender(6);
+        full.setSetPieces(10);
+        core.db.DBManager.instance().storeTransferListing(full);
+        core.db.DBManager.instance().storeTransferListing(TransferListing.fromBidItem(
+                new XMLCurrentBidsParser.BidItem(8, 7_020, 7020, "Bid On", 388_000, 9999,
+                        "Rival FC", FUTURE), HODateTime.now()));
+        installBidsService(oneBid(8, 7020));   // marketPlayer null: the playerdetails read fails
+        final var handler = tool("manage_scout").handler();
+
+        try {
+            final var added = handler.call(JsonParser.parseString(
+                    "{\"action\":\"add\",\"players\":[7020]}").getAsJsonObject());
+
+            final var row = rowOf(added.getAsJsonArray("added"), 7020);
+            assertThat(row.get("age").getAsInt()).isEqualTo(24);
+            assertThat(row.get("ageDays").getAsInt()).isEqualTo(77);
+            assertThat(row.get("tsi").getAsInt()).isEqualTo(29_000);
+            assertThat(row.get("playmaker").getAsInt()).isEqualTo(12);
+            assertThat(row.get("setPieces").getAsInt()).isEqualTo(10);
+            // The market data is the newest row's: the standing bid, above the old asking price.
+            assertThat(row.get("price").getAsLong()).isEqualTo(388_000L);
+        } finally {
+            handler.call(JsonParser.parseString(
+                    "{\"action\":\"remove\",\"players\":[7020]}").getAsJsonObject());
+        }
+    }
+
     @Test
     void step1_issuesATokenAndPlacesNothing() throws Exception {
         installRecordingService();

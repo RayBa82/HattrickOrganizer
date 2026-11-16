@@ -1615,6 +1615,12 @@ public class DBManager implements PersistenceManager {
         return ((TransferListingTable) getTable(TransferListingTable.TABLENAME)).loadLatestForPlayer(playerId);
     }
 
+    /** The newest observation of this player that carries his age and skills, or null. */
+    public TransferListing loadLatestTransferListingWithDetails(int playerId) {
+        return ((TransferListingTable) getTable(TransferListingTable.TABLENAME))
+                .loadLatestWithDetailsForPlayer(playerId);
+    }
+
     /** The newest observation of this player that carries Hattrick's own estimate, or null. */
     public TransferListing loadLatestHattrickEstimate(int playerId) {
         return ((TransferListingTable) getTable(TransferListingTable.TABLENAME)).loadLatestHattrickEstimate(playerId);
