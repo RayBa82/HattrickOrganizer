@@ -178,6 +178,9 @@ final class DBUpdater {
 		dbManager.getTable(MatchExpectedResultTable.TABLENAME).createTable();
 
 		updateYouthTables();
+		// playerdetails 3.3, every download kept whole
+		dbManager.getTable(PlayerDetailsTable.TABLENAME).createTable();
+		dbManager.getTable(PlayerTrophyTable.TABLENAME).createTable();
 
 		updateDBVersion(dbVersion, 1100);
 	}

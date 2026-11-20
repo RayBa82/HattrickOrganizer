@@ -2,7 +2,8 @@ package module.nthrf;
 
 import core.file.xml.SafeInsertMap;
 import core.file.xml.XMLManager;
-import core.net.Connector;
+import core.net.OnlineWorker;
+import core.util.HOLogger;
 import java.util.ArrayList;
 import java.util.List;
 import org.w3c.dom.Document;
@@ -18,18 +19,18 @@ class NtPlayersParser {
 	 * Parse player details and store the IDs and Players in local objects.
 	 */
 	private static List<SafeInsertMap> parsePlayerDetails(List<String> playerIds) {
-		List<SafeInsertMap> ret = new ArrayList<>();
+		final List<SafeInsertMap> ret = new ArrayList<>();
 		try {
 			for (var playerId : playerIds) {
-				String xmlData = Connector.instance().downloadPlayerDetails(playerId);
-				Document doc = XMLManager.parseString(xmlData);
-				Element root = doc.getDocumentElement();
-				Element ele = (Element) root.getElementsByTagName("Player").item(0);
+				final String xmlData = OnlineWorker.downloadPlayerDetailsXml(playerId);
+				final Document doc = XMLManager.parseString(xmlData);
+				final Element root = doc.getDocumentElement();
+				final Element ele = (Element) root.getElementsByTagName("Player").item(0);
 				ret.add(createPlayerDetails(ele));
 			}
 		} catch (Exception e) {
-        	e.printStackTrace();
-        }
+			HOLogger.instance().log(NtPlayersParser.class, e);
+		}
 		return ret;
 	}
 
@@ -47,7 +48,7 @@ class NtPlayersParser {
 					ret.add(xmlValue(ele, "PlayerID"));
 				}
 			} catch (Exception e) {
-				e.printStackTrace();
+				HOLogger.instance().log(NtPlayersParser.class, e);
 			}
 		}
 		return ret;

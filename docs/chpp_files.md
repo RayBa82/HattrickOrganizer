@@ -41,7 +41,7 @@ and the data types are captured under [`raw/chpp/`](raw/chpp/README.md), one fil
 | nationalplayers         | National team players                                                                       | 1.5 (2022-03-04)         | 1.2          |
 | nationalprospectplayers | The national team's prospect player list.                                                   | 1.0 (2026-11-10)         | -            |
 | players                 | Players                                                                                     | 2.8 (2026-02-11)         | 2.7          |
-| playerdetails           | Detailed information for a player                                                           | 3.3 (2026-11-10)         | 3.3, 3.2     |
+| playerdetails           | Detailed information for a player                                                           | 3.3 (2026-11-10)         | 3.3          |
 | playerevents            | Player events                                                                               | 1.3 (2013-03-04)         | -            |
 | playerstats             | Detailed player development history.                                                        | 1.0 (2026-11-10)         | 1.0          |
 | regiondetails           | Detailed information about a region                                                         | 1.2                      | 1.2          |
@@ -71,8 +71,7 @@ and the data types are captured under [`raw/chpp/`](raw/chpp/README.md), one fil
 | youthplayerlist         | Youth Players.                                                                              | 1.4 (2026-11-10)         | 1.4          |
 | youthteamdetails        | Youth team information.                                                                     | 1.5 (2026-11-10)         | 1.5          |
 
-`worlddetails` 1.8 is still requested by the national-team HRF converter (`NthrfConvertXml2Hrf`);
-`playerdetails` 3.2 only for the `placeBid` write, reads are on 3.3.
+`worlddetails` 1.8 is still requested by the national-team HRF converter (`NthrfConvertXml2Hrf`).
 
 ## Changelog 2025-09 to 2026-02
 
@@ -110,7 +109,7 @@ when a request moves to the new version. Full trees in `raw/chpp/`.
 | training 2.3                      | `actionType=history`, inputs `teamId`, `fromDate` (default 16 weeks back): one `Training` row per change of type, intensity or stamina share, with `HattrickSeason`, `HattrickWeek`, `TrainingDate`. Gold supporter, own or mentored team, else AccessDenied                           | used: get_training `historyWeeks`              |
 | playerstats 1.0 (new)             | per match of one player: age, TSI, form, stamina, loyalty, experience, goals, cards, injury, played minutes, rating (average and end of game), minutes per position group                                                                                                              | used: `get_player_match_stats`                 |
 | matchdetails 3.2                  | `HasReplay`/`NrOfReplays` per team; `ExpectedResult` with the simulated replays (win/draw/loss, average goals, goal distribution, win margin, over/under 0.5-4.5). Only where the site shows it: national team matches, Diamond, or bought replay credits                              | stored (`MATCHDETAILS`, `MATCHEXPECTEDRESULT`, step 1100); yardstick for the match predictor |
-| playerdetails 3.3                 | `TransferCompareAverage`(+`Date`): the site's transfer estimate, only with visible skills; `FamilyRelation`; `TrophyList` (Gold club only)                                                                                                                                             | used: `hattrickEstimate`, see playerdetails    |
+| playerdetails 3.3                 | `TransferCompareAverage`(+`Date`): the site's transfer estimate, only with visible skills; `FamilyRelation`; `TrophyList` (Gold club only)                                                                                                                                             | all stored (`PLAYERDETAILS`, `PLAYERTROPHY`, step 1100); used: `hattrickEstimate`, see playerdetails |
 | teamdetails 4.0                   | `Currency` (`CurrencyName`, `CurrencyRate` to SEK) the requesting user chose, only for that user                                                                                                                                                                                       | HO takes the rate from the league today        |
 | teamhistory 1.0 (new)             | per season since the current owner: series, position, points, goals, cup round; trophy list                                                                                                                                                                                            | used: analyze_opponent `include: [history]`    |
 | youthplayerdetails 1.4            | `TrainingReports` (the coach's comments: skill and level); `UserId` in `OwningYouthTeam`                                                                                                                                                                                               | stored raw (`YOUTHTRAINERCOMMENT`); youth skill estimates once the codes are known |
@@ -348,6 +347,17 @@ Four things about it that cost a live fetch to learn:
   search is spent). It is a second opinion beside the corpus median, not an input to it - once enough sales
   have both, the two can be compared.
 
+**Every playerdetails response is kept whole.** All reads go through
+`OnlineWorker.downloadPlayerDetailsXml`, and the `placeBid` answer through
+`ChppWriteService.fetchPlaceBid`; both hand it to `OnlineWorker.storePlayerDetails`, which parses it
+with `XMLPlayerDetailsParser` (every element of the 3.3 `view` tree, each read from its own parent,
+since `TeamID`/`TeamName` repeat under MotherClub, OwningTeam, BidderTeam and Trophy) into a
+`PlayerDetails`. `PLAYERDETAILS` gets one row per download (key player and fetch time); absent
+elements stay NULL, so a pruned skill is NULL, never 0. `PLAYERTROPHY` keeps each trophy once (key
+player, type, season, competition). Storing is best-effort and never fails the download. What HO
+uses beyond the market fields is still open: family relation, trophies, `LastMatch` (sent because
+of `includeMatchInfo=true`), `NextBirthDay`, `PlayerLanguage`, `NationalTeamName`, `MaxBid`.
+
 `XMLPlayersParser.parseMarketPlayerFromString` handles all of the above.
 `parsePlayerDetailsFromString` is a wrapper over it that returns `null` for a foreign player.
 `XMLPlayersParser.createPlayerDetails` reads the same `TransferDetails` block a third time, into the
@@ -365,4 +375,4 @@ HO issues these write actions on behalf of the managed team (exposed over MCP, s
 | `training`      | 2.2     | `setTraining`                                                              | set senior training type / intensity (0-100) / stamina share (5-100); `teamId` required, needs the `set_training` scope                                                                                                                                                                                                                                                                                                          |
 | `matchorders`   | 3.0     | `setmatchorder`                                                            | upload the match order for an upcoming game (pre-existing); carries positions, `kickers` (always 11 slots, id 0 where empty) and `substitutions`. **Needs Supporter**, although the CHPP matchorders docs do not say so: without it Hattrick answers CHPP error 6, "setmatchorder is only available for Hattrick Supporters". A refused order can also come back as `OrdersSet="False"` with a `Reason` instead of an error code |
 | `challenges`    | 1.6     | `view` / `challengeable` / `challenge` / `accept` / `decline` / `withdraw` | list and manage friendly challenges; `view` and `challengeable` are reads                                                                                                                                                                                                                                                                                                                                                        |
-| `playerdetails` | 3.2     | `placeBid`                                                                 | place a transfer bid (`bidAmount` / `maxBidAmount` are Money in SEK; needs the `place_bid` scope and Supporter)                                                                                                                                                                                                                                                                                                                  |
+| `playerdetails` | 3.3     | `placeBid`                                                                 | place a transfer bid (`bidAmount` / `maxBidAmount` are Money in SEK; needs the `place_bid` scope and Supporter)                                                                                                                                                                                                                                                                                                                  |

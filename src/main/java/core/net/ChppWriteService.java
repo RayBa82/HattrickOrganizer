@@ -521,7 +521,7 @@ public class ChppWriteService {
                     "Hattrick did not return the player after the bid: " + reason());
         }
         // The bid state lives under <Player><TransferDetails>, the leading bidder under <BidderTeam>
-        // (playerdetails 3.2). getElementsByTagName is recursive, but <TeamName> is not unique in
+        // (playerdetails 3.3). getElementsByTagName is recursive, but <TeamName> is not unique in
         // the file, so read it from inside <BidderTeam>.
         final var bidderTeam = (Element) player.getElementsByTagName("BidderTeam").item(0);
         final var maxBid = parseLongOrZero(XMLManager.xmlValue(player, "MaxBid"));
@@ -536,7 +536,10 @@ public class ChppWriteService {
     protected String fetchPlaceBid(int playerId, int teamId, long bidAmount, Long maxBidAmount) {
         final var was = Connector.instance().setSilentDownload(true);
         try {
-            return Connector.instance().placeBid(playerId, teamId, bidAmount, maxBidAmount);
+            final var xml = Connector.instance().placeBid(playerId, teamId, bidAmount, maxBidAmount);
+            // the answer is a whole playerdetails view: keep it like every other download
+            OnlineWorker.storePlayerDetails(xml);
+            return xml;
         } finally {
             Connector.instance().setSilentDownload(was);
         }
