@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Not a captured response: built from the CHPP output tree of playerdetails 3.3
+     (docs/raw/chpp/playerdetails.md), every element filled, for a listed player who is a
+     trainer, has a relative and trophies, fetched with includeMatchInfo=true by a Supporter. -->
+<HattrickData>
+  <FileName>playerdetails.xml</FileName>
+  <Version>3.3</Version>
+  <UserID>1234567</UserID>
+  <FetchedDate>2026-11-20 12:00:00</FetchedDate>
+  <UserSupporterTier>gold</UserSupporterTier>
+  <Player>
+    <PlayerID>476487492</PlayerID>
+    <FirstName>Bruno</FirstName>
+    <NickName>Bru</NickName>
+    <LastName>Gaspar</LastName>
+    <PlayerNumber>7</PlayerNumber>
+    <PlayerCategoryID>2</PlayerCategoryID>
+    <OwnerNotes>keep an eye on him</OwnerNotes>
+    <Age>31</Age>
+    <AgeDays>77</AgeDays>
+    <NextBirthDay>2027-01-15 08:00:00</NextBirthDay>
+    <GenderID>1</GenderID>
+    <ArrivalDate>2025-04-01 10:00:00</ArrivalDate>
+    <PlayerForm>6</PlayerForm>
+    <Cards>1</Cards>
+    <InjuryLevel>-1</InjuryLevel>
+    <Statement>Ready.</Statement>
+    <PlayerLanguage>Português</PlayerLanguage>
+    <PlayerLanguageID>36</PlayerLanguageID>
+    <TrainerData>
+      <TrainerType>2</TrainerType>
+      <TrainerSkillLevel>4</TrainerSkillLevel>
+    </TrainerData>
+    <Agreeability>3</Agreeability>
+    <Aggressiveness>2</Aggressiveness>
+    <Honesty>4</Honesty>
+    <Experience>9</Experience>
+    <Loyalty>12</Loyalty>
+    <MotherClubBonus>False</MotherClubBonus>
+    <MotherClub>
+      <TeamID>111222</TeamID>
+      <TeamName>Mother FC</TeamName>
+    </MotherClub>
+    <Leadership>5</Leadership>
+    <Specialty>2</Specialty>
+    <NativeCountryID>25</NativeCountryID>
+    <NativeLeagueID>25</NativeLeagueID>
+    <NativeLeagueName>Portugal</NativeLeagueName>
+    <TSI>29000</TSI>
+    <OwningTeam>
+      <TeamID>555444</TeamID>
+      <TeamName>Selling Sam</TeamName>
+      <LeagueID>2</LeagueID>
+    </OwningTeam>
+    <Salary>57840</Salary>
+    <IsAbroad>True</IsAbroad>
+    <PlayerSkills>
+      <StaminaSkill>7</StaminaSkill>
+      <KeeperSkill>1</KeeperSkill>
+      <PlaymakerSkill>12</PlaymakerSkill>
+      <ScorerSkill>5</ScorerSkill>
+      <PassingSkill>8</PassingSkill>
+      <WingerSkill>4</WingerSkill>
+      <DefenderSkill>6</DefenderSkill>
+      <SetPiecesSkill>3</SetPiecesSkill>
+    </PlayerSkills>
+    <Caps>4</Caps>
+    <CapsU20>11</CapsU20>
+    <CareerGoals>48</CareerGoals>
+    <CareerHattricks>2</CareerHattricks>
+    <LeagueGoals>3</LeagueGoals>
+    <CupGoals Available="True">1</CupGoals>
+    <FriendliesGoals>0</FriendliesGoals>
+    <MatchesCurrentTeam>30</MatchesCurrentTeam>
+    <GoalsCurrentTeam>9</GoalsCurrentTeam>
+    <AssistsCurrentTeam>6</AssistsCurrentTeam>
+    <CareerAssists>21</CareerAssists>
+    <NationalTeamID>3025</NationalTeamID>
+    <NationalTeamName>Portugal</NationalTeamName>
+    <TransferListed>True</TransferListed>
+    <TransferDetails>
+      <AskingPrice>2850000</AskingPrice>
+      <Deadline>2026-11-22 20:08:31</Deadline>
+      <HighestBid>3000000</HighestBid>
+      <MaxBid>3500000</MaxBid>
+      <BidderTeam>
+        <TeamID>4711</TeamID>
+        <TeamName>HO FC</TeamName>
+      </BidderTeam>
+    </TransferDetails>
+    <TransferCompareAverage>3100000</TransferCompareAverage>
+    <TransferCompareAverageDate>2026-11-19 06:00:00</TransferCompareAverageDate>
+    <FamilyRelation>
+      <RelatedPlayerId>476487493</RelatedPlayerId>
+      <RelatedPlayerSourceId>1</RelatedPlayerSourceId>
+      <RelatedPlayerName>Rui Gaspar</RelatedPlayerName>
+      <RelationshipTypeId>2</RelationshipTypeId>
+    </FamilyRelation>
+    <TrophyList>
+      <Trophy>
+        <TrophyTypeId>17</TrophyTypeId>
+        <TeamId>555444</TeamId>
+        <TeamName>Selling Sam</TeamName>
+        <TrophySeason>92</TrophySeason>
+        <LeagueLevel>4</LeagueLevel>
+        <LeagueLevelUnitId>3456</LeagueLevelUnitId>
+        <LeagueLevelUnitName>IV.12</LeagueLevelUnitName>
+        <GainedDate>2026-03-14 18:00:00</GainedDate>
+      </Trophy>
+      <Trophy>
+        <TrophyTypeId>19</TrophyTypeId>
+        <TeamId>0</TeamId>
+        <TeamName />
+        <TrophySeason>91</TrophySeason>
+        <LeagueLevel>1</LeagueLevel>
+        <LeagueLevelUnitId>0</LeagueLevelUnitId>
+        <LeagueLevelUnitName />
+        <GainedDate>2025-11-02 18:00:00</GainedDate>
+      </Trophy>
+    </TrophyList>
+    <LastMatch>
+      <Date>2026-11-15 15:00:00</Date>
+      <MatchId>765432100</MatchId>
+      <PositionCode>107</PositionCode>
+      <PlayedMinutes>90</PlayedMinutes>
+      <Rating>4.5</Rating>
+      <RatingEndOfGame>4</RatingEndOfGame>
+    </LastMatch>
+  </Player>
+</HattrickData>

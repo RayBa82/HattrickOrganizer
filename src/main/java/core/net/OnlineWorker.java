@@ -1643,8 +1643,35 @@ public class OnlineWorker {
 	}
 
 	public static Player downloadPlayerDetails(String playerId) {
-		var xml = Connector.instance().downloadPlayerDetails(playerId);
+		final var xml = downloadPlayerDetailsXml(playerId);
 		return new XMLPlayersParser().parsePlayerDetailsFromString(xml);
+	}
+
+	/**
+	 * Downloads playerdetails and keeps the whole answer (PLAYERDETAILS, PLAYERTROPHY) before the
+	 * caller reads its part of it. Every playerdetails read goes through here.
+	 *
+	 * @return the response, empty after a CHPP error
+	 */
+	public static String downloadPlayerDetailsXml(String playerId) {
+		final var xml = Connector.instance().downloadPlayerDetails(playerId);
+		storePlayerDetails(xml);
+		return xml;
+	}
+
+	/**
+	 * Keeps a playerdetails response, a view or a placeBid one. Best-effort: the download already
+	 * served its caller, so a failure here is logged and never passed on.
+	 */
+	public static void storePlayerDetails(String xml) {
+		try {
+			final var details = XMLPlayerDetailsParser.parse(xml, HODateTime.now());
+			if (details != null && details.getPlayerId() > 0) {
+				DBManager.instance().storePlayerDetails(details);
+			}
+		} catch (RuntimeException e) {
+			HOLogger.instance().error(OnlineWorker.class, "playerdetails not stored: " + e);
+		}
 	}
 
 	/**
@@ -1664,7 +1691,7 @@ public class OnlineWorker {
 	public static XMLPlayersParser.MarketPlayer downloadMarketPlayer(String playerID) {
 		var silent = Connector.instance().setSilentDownload(true);
 		try {
-			var xml = Connector.instance().downloadPlayerDetails(playerID);
+			final var xml = downloadPlayerDetailsXml(playerID);
 			if (xml.isEmpty()) return null; // CHPP error, already logged - 56 = player gone (retired)
 			return new XMLPlayersParser().parseMarketPlayerFromString(xml);
 		} finally {

@@ -257,4 +257,14 @@ class XMLPlayersParserTest {
         assertThat(new XMLPlayersParser().parseMarketPlayerFromString(LISTED).player()
                 .getPlayerId()).isEqualTo(476487492);
     }
+
+    /** playerdetails 3.0 replaced TrainerSkill by TrainerData/TrainerSkillLevel; it read 0 since. */
+    @Test
+    void readsTheTrainerSkillLevel() throws java.io.IOException {
+        final var xml = core.util.ResourceUtils.getResourceFileAsString("chpp/playerdetails_3.3.xml");
+        final var p = new XMLPlayersParser().parseMarketPlayerFromString(xml).player();
+
+        assertThat(p.getCoachSkill()).isEqualTo(4);
+        assertThat(p.getMotherClubId()).isEqualTo(111222);
+    }
 }

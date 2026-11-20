@@ -33,6 +33,7 @@
  * @property {ChppDocNode|string} [ref]
  * @property {number} [firstVersion]
  * @property {number} [lastVersion]
+ * @property {boolean} [onlySupporters]
  */
 
 /**
@@ -116,7 +117,9 @@ const chppOutput = (F, latest) => {
   const describe = o => {
     const attrs = (o.attr || []).map(x => "Attribute: '" + x.id + "' : " + typeName(x.type) + ' ' + chppClean(x.desc));
     const ref = o.ref ? '# See table ' + (o.ref.id || o.ref) : '';
-    return chppClean([...attrs, chppClean(o.desc), ref].join(' '));
+    // the page's own wording, rendered before the description
+    const supporters = o.onlySupporters ? 'This container and its elements is only shown if the user has supporter' : '';
+    return chppClean([...attrs, supporters, chppClean(o.desc), ref].join(' '));
   };
   const tree = (o, depth, acc) => {
     const indent = '  '.repeat(depth);

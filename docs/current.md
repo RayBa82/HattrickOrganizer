@@ -5,6 +5,20 @@ accumulated; git keeps them (`git log -p -- docs/current.md`; the full history f
 2026-09-26 is `git show f5c51d0d:docs/current.md`).
 
 
+## playerdetails 3.3 stored whole (2026-11-20)
+
+Checked against the live CHPP docs: 3.3 is current, `docs/raw/chpp/playerdetails.md` matches the
+page except for the `onlySupporters` note (PlayerLanguage, PlayerLanguageID), which `capture.js`
+dropped for every file. `capture.js` now writes it; **the docs are not re-captured yet**.
+Every playerdetails download (reads, NT HRF, the placeBid answer, now on 3.3 too) is parsed in full
+by `XMLPlayerDetailsParser` and kept in `PLAYERDETAILS` (one row per download) and `PLAYERTROPHY`
+(created in step 1100, so only a DEV build or a new DB gets them on an existing 1100 database).
+Nothing reads them yet: what to use (family relation, trophies, LastMatch, ...) is open. Fixed on
+the way: the trainer level was read from `TrainerSkill`, gone since playerdetails 3.0 / players
+2.8, so it was 0 on every playerdetails parse and missing from the players HRF hash; the NT path
+missed `PlayerCategoryID`. Unit-tested with a fixture built from the docs; **not checked against a
+live download**.
+
 ## Scout entries no longer built from a skill-less currentbids row (2026-11-16)
 
 Reported by the hattrick session: `manage_scout` add/refresh and `list_scout` gave Simone

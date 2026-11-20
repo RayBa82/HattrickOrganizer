@@ -19,6 +19,7 @@ import core.model.misc.Basics;
 import core.model.misc.Economy;
 import core.model.misc.Verein;
 import core.model.player.Player;
+import core.model.player.PlayerDetails;
 import core.model.series.Liga;
 import core.model.series.Paarung;
 import core.model.tournament.TournamentDetails;
@@ -293,6 +294,8 @@ public class DBManager implements PersistenceManager {
 		tables.put(YouthPlayerTable.TABLENAME, new YouthPlayerTable(connectionManager));
 		tables.put(YouthScoutCommentTable.TABLENAME, new YouthScoutCommentTable(connectionManager));
 		tables.put(YouthTrainerCommentTable.TABLENAME, new YouthTrainerCommentTable(connectionManager));
+		tables.put(PlayerDetailsTable.TABLENAME, new PlayerDetailsTable(connectionManager));
+		tables.put(PlayerTrophyTable.TABLENAME, new PlayerTrophyTable(connectionManager));
 		tables.put(YouthTeamDetailsTable.TABLENAME, new YouthTeamDetailsTable(connectionManager));
 		tables.put(YouthScoutTable.TABLENAME, new YouthScoutTable(connectionManager));
 		tables.put(YouthLeagueTable.TABLENAME, new YouthLeagueTable(connectionManager));
@@ -2380,6 +2383,16 @@ public class DBManager implements PersistenceManager {
 	 */
 	public void storeYouthTrainerComments(List<YouthTrainerComment> reports) {
 		((YouthTrainerCommentTable) getTable(YouthTrainerCommentTable.TABLENAME)).storeYouthTrainerComments(reports);
+	}
+
+	/**
+	 * Stores one playerdetails download as a new row, and adds its trophies not stored yet.
+	 *
+	 * @param details the parsed download
+	 */
+	public void storePlayerDetails(PlayerDetails details) {
+		((PlayerDetailsTable) getTable(PlayerDetailsTable.TABLENAME)).storePlayerDetails(details);
+		((PlayerTrophyTable) getTable(PlayerTrophyTable.TABLENAME)).storePlayerTrophies(details.getTrophies());
 	}
 
 	/**

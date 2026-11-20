@@ -26,6 +26,8 @@ import static core.file.xml.XMLManager.*;
 
 public class XMLPlayersParser {
     private static final String GENDER_ID = "GenderID";
+    private static final String PLAYER_CATEGORY_ID = "PlayerCategoryID";
+    private static final String TRAINER_SKILL_LEVEL = "TrainerSkillLevel";
     /** youthplayerlist 1.4; OwningYouthTeam/UserId (1.4) is the team's and lives in YouthTeamDetails. */
 
     public static final String YOUTH_NATIVE_COUNTRY_ID = "NativeCountryID";
@@ -136,8 +138,10 @@ public class XMLPlayersParser {
         hash.put("MarketValue", (XMLManager.getFirstChildNodeValue(ele)));
         ele = (Element) root.getElementsByTagName("PlayerForm").item(0);
         hash.put("PlayerForm", (XMLManager.getFirstChildNodeValue(ele)));
-        ele = (Element) root.getElementsByTagName("PlayerCategoryId").item(0);
-        hash.put("PlayerCategoryId", (XMLManager.getFirstChildNodeValue(ele)));
+        // players spells it PlayerCategoryId, playerdetails PlayerCategoryID
+        if (xmlValue2Hash(hash, root, "PlayerCategoryId").isEmpty()) {
+            xmlValue2Hash(hash, root, PLAYER_CATEGORY_ID, "PlayerCategoryId");
+        }
         ele = (Element) root.getElementsByTagName("Experience").item(0);
         hash.put("Experience", (XMLManager.getFirstChildNodeValue(ele)));
         ele = (Element) root.getElementsByTagName("Loyalty").item(0);
@@ -208,8 +212,9 @@ public class XMLPlayersParser {
             Element tmp_Trainer = (Element) trainerData.item(0);
             ele = (Element) tmp_Trainer.getElementsByTagName("TrainerType").item(0);
             hash.put("TrainerType", (XMLManager.getFirstChildNodeValue(ele)));
-            ele = (Element) tmp_Trainer.getElementsByTagName("TrainerSkill").item(0);
-            hash.put("TrainerSkill", (XMLManager.getFirstChildNodeValue(ele)));
+            // TrainerSkill until players 2.8 / playerdetails 3.0, which replaced it
+            ele = (Element) tmp_Trainer.getElementsByTagName(TRAINER_SKILL_LEVEL).item(0);
+            hash.put(TRAINER_SKILL_LEVEL, (XMLManager.getFirstChildNodeValue(ele)));
         }
 
         //LastMatch #461
@@ -306,7 +311,7 @@ public class XMLPlayersParser {
                 //      <OwnerNotes />
                 xmlValue2Hash(hash, root, "OwnerNotes");
                 //      <PlayerCategoryID>0</PlayerCategoryID>
-                xmlValue2Hash(hash, root, "PlayerCategoryID");
+                xmlValue2Hash(hash, root, PLAYER_CATEGORY_ID);
                 //      <Cards>0</Cards>
                 xmlValue2Hash(hash, root, "Cards");
                 //      <InjuryLevel>-1</InjuryLevel>
@@ -458,7 +463,7 @@ public class XMLPlayersParser {
         player.setNickName(xmlValue(root, "NickName"));
         player.setLastName(xmlValue(root, "LastName"));
         player.setShirtNumber(xmlIntValue(root, "PlayerNumber"));
-        player.setPlayerCategory(PlayerCategory.fromId(xmlIntegerValue(root, "PlayerCategoryID")));
+        player.setPlayerCategory(PlayerCategory.fromId(xmlIntegerValue(root, PLAYER_CATEGORY_ID)));
         player.setOwnerNotes(xmlValue(root, "OwnerNotes"));
         player.setAge(xmlIntValue(root, "Age"));
         player.setAgeDays(xmlIntValue(root, "AgeDays"));
@@ -559,11 +564,9 @@ public class XMLPlayersParser {
         var ele = (Element) root.getElementsByTagName("TrainerData").item(0);
         if ( ele != null) {
             player.setTrainerType(TrainerType.fromInt(xmlIntegerValue(ele, "TrainerType")));
-            var trainerSkill = xmlIntegerValue(root, "TrainerSkill");
-            if ( trainerSkill == null){
-                trainerSkill=0;
-            }
-            player.setCoachSkill(trainerSkill);
+            // playerdetails 3.0 replaced TrainerSkill by TrainerSkillLevel, inside TrainerData
+            final var trainerSkill = xmlIntegerValue(ele, TRAINER_SKILL_LEVEL);
+            player.setCoachSkill(trainerSkill == null ? 0 : trainerSkill);
         }
 
         ele = (Element) root.getElementsByTagName("MotherClub").item(0);
