@@ -6,6 +6,7 @@ import core.constants.player.PlayerSkill;
 import core.db.DBManager;
 import core.file.xml.XMLCHPPPreParser;
 import core.file.xml.XMLMatchesParser;
+import core.gui.theme.ThemeManager;
 import core.model.HOModel;
 import core.model.match.MatchKurzInfo;
 import core.model.player.IMatchRoleID;
@@ -25,6 +26,8 @@ import module.youth.YouthTrainingDevelopmentEntry;
 import module.youth.YouthTrainingType;
 import org.jetbrains.annotations.Nullable;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -125,8 +128,9 @@ public final class YouthTools {
                         YouthTools::youthTeam)
                         .withBudget("Leave allFixtures off.", McpTool.OptionalSection.top(FIXTURES)),
                 new McpTool("get_youth_training",
-                        "The training HO holds per youth match, newest first: primary and "
-                                + "secondary type, or null where none is filed. Hattrick does not "
+                        "The training HO holds per match of the current youth academy, newest "
+                                + "first: primary and secondary type, or null where none is filed. "
+                                + "Matches of a closed earlier academy are left out. Hattrick does not "
                                 + "hand youth training to CHPP, so HO's skill estimates rest on "
                                 + "these; set_youth_training files them.",
                         McpTool.schema(McpTool.properties(
@@ -143,6 +147,12 @@ public final class YouthTools {
                                 SECONDARY, McpTool.prop(STRING, "secondary training type")),
                                 MATCH_ID, PRIMARY, SECONDARY),
                         YouthTools::setYouthTraining),
+                new McpTool("get_youth_avatars",
+                        "Per youth player of the academy, whether HO has stored his avatar "
+                                + "(youthavatars, fetched by download_team) and the PNG's size in "
+                                + "bytes. The image itself is not returned.",
+                        McpTool.schema(new JsonObject()),
+                        args -> youthAvatars()),
                 new McpTool("get_youth_matches",
                         "The youth team's recent and upcoming matches, read live from Hattrick "
                                 + "(friendlies included): matchId and matchType for "
@@ -203,6 +213,34 @@ public final class YouthTools {
                 .forEach(p -> players.add(playerRow(p, false)));
         final var out = new JsonObject();
         out.addProperty(COUNT, players.size());
+        out.add(PLAYERS, players);
+        return out;
+    }
+
+    private static JsonObject youthAvatars() throws McpToolException {
+        final var model = youthModel();
+        final var players = new JsonArray();
+        int stored = 0;
+        for (final var p : model.getCurrentYouthPlayers()) {
+            final var file = ThemeManager.youthPlayerAvatarFile(p.getId());
+            final var row = new JsonObject();
+            row.addProperty("id", p.getId());
+            row.addProperty(NAME, p.getFullName());
+            final boolean exists = Files.isRegularFile(file);
+            row.addProperty("stored", exists);
+            if (exists) {
+                stored++;
+                try {
+                    row.addProperty("bytes", Files.size(file));
+                } catch (IOException e) {
+                    row.addProperty("error", e.getMessage());
+                }
+            }
+            players.add(row);
+        }
+        final var out = new JsonObject();
+        out.addProperty(COUNT, players.size());
+        out.addProperty("stored", stored);
         out.add(PLAYERS, players);
         return out;
     }
@@ -539,7 +577,7 @@ public final class YouthTools {
     private static JsonObject youthTraining(JsonObject args) throws McpToolException {
         final var model = youthModel();
         final var limit = Math.max(1, Math.min(MAX_TRAININGS, McpJson.optInt(args, LIMIT, DEFAULT_TRAININGS)));
-        final var trainings = model.getYouthTrainings().stream()
+        final var trainings = currentAcademyTrainings(model).stream()
                 .filter(t -> t.getMatchDate() != null)
                 .sorted(Comparator.comparing(YouthTraining::getMatchDate).reversed())
                 .toList();
@@ -563,6 +601,20 @@ public final class YouthTools {
         return out;
     }
 
+    /**
+     * The youth trainings of the matches the current academy played. A closed and reopened academy
+     * gets a new youth team id, and the matches of the old one stay in the database.
+     */
+    private static List<YouthTraining> currentAcademyTrainings(HOModel model) {
+        final Integer youthTeamId = model.getBasics().getYouthTeamId();
+        if (youthTeamId == null) {
+            return List.of();
+        }
+        return model.getYouthTrainings().stream()
+                .filter(t -> t.getTeam(youthTeamId) != null)
+                .toList();
+    }
+
     private static void addTraining(JsonObject json, YouthTraining t) {
         final var primary = t.getTraining(YouthTraining.Priority.Primary);
         final var secondary = t.getTraining(YouthTraining.Priority.Secondary);
@@ -575,11 +627,11 @@ public final class YouthTools {
         final var matchId = McpJson.reqInt(args, MATCH_ID);
         final var primary = trainingType(McpJson.reqString(args, PRIMARY), PRIMARY);
         final var secondary = trainingType(McpJson.reqString(args, SECONDARY), SECONDARY);
-        final var training = model.getYouthTrainings().stream()
+        final var training = currentAcademyTrainings(model).stream()
                 .filter(t -> t.getYouthMatchId() == matchId)
                 .findFirst()
-                .orElseThrow(() -> new McpToolException("HO holds no youth match " + matchId
-                        + "; get_youth_training lists the ones it has."));
+                .orElseThrow(() -> new McpToolException("HO holds no match " + matchId
+                        + " of the current youth academy; get_youth_training lists the ones it has."));
         final var changed = training.getTraining(YouthTraining.Priority.Primary) != primary
                 || training.getTraining(YouthTraining.Priority.Secondary) != secondary;
         if (changed) {

@@ -16,7 +16,7 @@ class McpServerToolsTest {
                         {"jsonrpc":"2.0","id":1,"method":"tools/list"}""").getAsJsonObject())
                 .getAsJsonObject("result").getAsJsonArray("tools");
 
-        assertThat(tools).hasSize(41);
+        assertThat(tools).hasSize(42);
         assertThat(tools).extracting(t -> t.getAsJsonObject().get("name").getAsString())
                 .containsExactlyInAnyOrder("get_team", "get_squad", "analyze_opponent", "get_series",
                         "search_transfers",
@@ -32,6 +32,7 @@ class McpServerToolsTest {
                         "estimate_market_value", "download_team", "database_backup",
                         "get_youth_squad", "get_youth_player", "get_youth_team",
                         "get_youth_training", "set_youth_training", "get_youth_matches",
+                        "get_youth_avatars",
                         "send_youth_match_order");
     }
 

@@ -1,9 +1,11 @@
 package core.mcp;
 
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import core.HOModelBuilder;
+import core.gui.theme.ThemeManager;
 import core.model.HOModel;
 import core.model.HOVerwaltung;
 import core.model.enums.MatchType;
@@ -12,6 +14,8 @@ import core.net.ChppWriteService;
 import module.youth.YouthPlayer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.nio.file.Files;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -130,6 +134,33 @@ class YouthToolsTest {
                 "{\"positions\": [{\"roleId\": 100, \"playerId\": 20}], \"allowUnavailable\": true}"), model);
         assertThat(java.util.Objects.requireNonNull(lineup.getPositionById(IMatchRoleID.keeper))
                 .getPlayerId()).isEqualTo(20);
+    }
+
+    @Test
+    void youthAvatars_reportsWhichPlayersHaveAStoredAvatar() throws Exception {
+        final var avatar = ThemeManager.youthPlayerAvatarFile(1);
+        Files.createDirectories(avatar.getParent());
+        Files.write(avatar, new byte[]{1, 2, 3});
+        try {
+            final var tool = YouthTools.tools().stream()
+                    .filter(t -> t.name().equals("get_youth_avatars")).findFirst().orElseThrow();
+
+            final var out = tool.handler().call(new JsonObject());
+
+            assertThat(out.get("count").getAsInt()).isEqualTo(15);
+            assertThat(out.get("stored").getAsInt()).isEqualTo(1);
+            final var rows = out.getAsJsonArray("players");
+            final var first = rows.asList().stream().map(JsonElement::getAsJsonObject)
+                    .filter(r -> r.get("id").getAsInt() == 1).findFirst().orElseThrow();
+            assertThat(first.get("stored").getAsBoolean()).isTrue();
+            assertThat(first.get("bytes").getAsLong()).isEqualTo(3);
+            final var second = rows.asList().stream().map(JsonElement::getAsJsonObject)
+                    .filter(r -> r.get("id").getAsInt() == 2).findFirst().orElseThrow();
+            assertThat(second.get("stored").getAsBoolean()).isFalse();
+            assertThat(second.has("bytes")).isFalse();
+        } finally {
+            Files.deleteIfExists(avatar);
+        }
     }
 
     @Test

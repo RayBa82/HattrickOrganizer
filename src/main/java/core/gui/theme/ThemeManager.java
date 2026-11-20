@@ -293,6 +293,11 @@ public final class ThemeManager {
 		generateMissingAvatars(youthPlayersAvatar, progress, youthPlayerAvatarPath);
 	}
 
+	/** The PNG file generateAllYouthPlayerAvatar writes for this youth player; it may not exist. */
+	public static Path youthPlayerAvatarFile(int youthPlayerId) {
+		return youthPlayerAvatarPath.resolve(youthPlayerId + ".png");
+	}
+
 	private void generateMissingAvatars(List<PlayerAvatar> playersAvatar, int progress, Path folder) {
 		//1. estimate number of avatar to download
 		List<PlayerAvatar> missingAvatars = new ArrayList<>();
